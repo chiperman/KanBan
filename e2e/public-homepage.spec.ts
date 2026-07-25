@@ -18,8 +18,20 @@ test("公开主页渲染测试数据存储中的卡片", async ({ page, request 
   await request.post("/test-doubles/cards", {
     data: {
       cards: [
-        { id: "identity", title: "身份", body: "所有者的一句话介绍", span: 2 },
-        { id: "now", title: "Now", body: "正在关注的事", span: 1 },
+        {
+          id: "identity",
+          title: "身份",
+          body: "所有者的一句话介绍",
+          span: 2,
+          access: "public",
+        },
+        {
+          id: "now",
+          title: "Now",
+          body: "正在关注的事",
+          span: 1,
+          access: "public",
+        },
       ],
     },
   });

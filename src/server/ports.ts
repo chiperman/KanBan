@@ -12,6 +12,7 @@ export interface Card {
   title: string;
   body: string;
   span: 1 | 2 | 3;
+  access: "public" | "restricted";
 }
 
 export interface CardStore {
@@ -50,6 +51,20 @@ export interface OwnerSession {
 /** 所有者身份认证；未验证身份时返回 null（访客）。 */
 export interface OwnerAuth {
   currentSession(): Promise<OwnerSession | null>;
+}
+
+/** 预置唯一所有者的 Passkey 凭证（公钥，非秘密）。 */
+export interface OwnerCredential {
+  id: string;
+  publicKey: string;
+  counter: number;
+  transports?: string[];
+}
+
+/** 所有者 Passkey 凭证存储；最多保存一个凭证，不提供公开注册。 */
+export interface OwnerCredentialStore {
+  get(): Promise<OwnerCredential | null>;
+  save(credential: OwnerCredential): Promise<void>;
 }
 
 /** 安全存储：只读凭证等服务端秘密的写入与读取，浏览器不可达。 */

@@ -3,10 +3,12 @@ import type {
   CardStore,
   Clock,
   OwnerAuth,
+  OwnerCredentialStore,
   Prices,
   SecretStore,
 } from "@/server/ports";
 import { createProductionServices } from "@/server/production";
+import { clearAllSessions } from "@/server/auth/session";
 import {
   createTestServices,
   type TestServices,
@@ -21,6 +23,7 @@ export interface AppServices {
   assetSources: AssetSources;
   prices: Prices;
   auth: OwnerAuth;
+  ownerCredentials: OwnerCredentialStore;
   secrets: SecretStore;
 }
 
@@ -63,4 +66,5 @@ export function resetTestServices(): void {
     throw new Error("测试替身仅在 APP_ENV=test 时可用");
   }
   slot().current = createTestServices();
+  clearAllSessions();
 }

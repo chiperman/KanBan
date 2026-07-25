@@ -12,11 +12,13 @@ import type {
   CardStore,
   Clock,
   OwnerAuth,
-  OwnerSession,
+  OwnerCredential,
+  OwnerCredentialStore,
   Prices,
   PriceQuote,
   SecretStore,
 } from "@/server/ports";
+import { SessionOwnerAuth } from "@/server/auth/session-auth";
 
 class SystemClock implements Clock {
   now(): Date {
@@ -31,7 +33,8 @@ function isCard(value: unknown): value is Card {
     typeof card.id === "string" &&
     typeof card.title === "string" &&
     typeof card.body === "string" &&
-    (card.span === 1 || card.span === 2 || card.span === 3)
+    (card.span === 1 || card.span === 2 || card.span === 3) &&
+    (card.access === "public" || card.access === "restricted")
   );
 }
 
@@ -77,10 +80,36 @@ class NoPrices implements Prices {
   }
 }
 
-/** 首版尚未实现登录；任何访问均为访客。 */
-class AnonymousAuth implements OwnerAuth {
-  async currentSession(): Promise<OwnerSession | null> {
-    return null;
+function isOwnerCredential(value: unknown): value is OwnerCredential {
+  if (typeof value !== "object" || value === null) return false;
+  const credential = value as Record<string, unknown>;
+  return (
+    typeof credential.id === "string" &&
+    typeof credential.publicKey === "string" &&
+    typeof credential.counter === "number"
+  );
+}
+
+class FileOwnerCredentialStore implements OwnerCredentialStore {
+  constructor(private readonly filePath: string) {}
+
+  async get(): Promise<OwnerCredential | null> {
+    let raw: string;
+    try {
+      raw = await readFile(this.filePath, "utf8");
+    } catch {
+      return null;
+    }
+    const value: unknown = JSON.parse(raw);
+    if (!isOwnerCredential(value)) {
+      throw new Error(`所有者凭证文件格式无效: ${this.filePath}`);
+    }
+    return value;
+  }
+
+  async save(credential: OwnerCredential): Promise<void> {
+    await mkdir(path.dirname(this.filePath), { recursive: true });
+    await writeFile(this.filePath, JSON.stringify(credential, null, 2), "utf8");
   }
 }
 
@@ -130,7 +159,10 @@ export function createProductionServices(): AppServices {
     cards: new FileCardStore(path.join(dataDir, "cards.json")),
     assetSources: new EmptyAssetSources(),
     prices: new NoPrices(),
-    auth: new AnonymousAuth(),
+    auth: new SessionOwnerAuth(),
+    ownerCredentials: new FileOwnerCredentialStore(
+      path.join(dataDir, "owner-credential.json"),
+    ),
     secrets: new FileSecretStore(path.join(dataDir, "secrets.json")),
   };
 }

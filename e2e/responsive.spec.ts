@@ -11,9 +11,27 @@ test.beforeEach(async ({ request }) => {
   await request.post("/test-doubles/cards", {
     data: {
       cards: [
-        { id: "wide", title: "宽卡片", body: "占据三列的内容卡片", span: 3 },
-        { id: "mid", title: "中卡片", body: "占据两列的内容卡片", span: 2 },
-        { id: "narrow", title: "窄卡片", body: "占据一列的内容卡片", span: 1 },
+        {
+          id: "wide",
+          title: "宽卡片",
+          body: "占据三列的内容卡片",
+          span: 3,
+          access: "public",
+        },
+        {
+          id: "mid",
+          title: "中卡片",
+          body: "占据两列的内容卡片",
+          span: 2,
+          access: "public",
+        },
+        {
+          id: "narrow",
+          title: "窄卡片",
+          body: "占据一列的内容卡片",
+          span: 1,
+          access: "public",
+        },
       ],
     },
   });

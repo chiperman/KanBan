@@ -225,3 +225,148 @@ body {
   color: var(--text-dim);
   font-size: 13px;
 }
+
+/* 受限卡片：设计化遮罩，仅渲染安全占位模型，不含真实数据。 */
+.card-restricted {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-height: 120px;
+}
+
+.restricted-mask {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(
+    var(--border-strong) 1px,
+    transparent 1.5px
+  );
+  background-size: 10px 10px;
+  opacity: 0.35;
+}
+
+.restricted-hint {
+  position: relative;
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.restricted-unlock {
+  position: relative;
+  appearance: none;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--card-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+.restricted-unlock:hover {
+  border-color: var(--text-dim);
+}
+
+.login-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+}
+
+.login-dialog {
+  width: 100%;
+  max-width: 360px;
+  padding: 24px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--card-bg);
+}
+
+.login-copy {
+  margin: 10px 0 0;
+  font-size: 13px;
+}
+
+.login-error {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: #b3402e;
+}
+
+[data-theme="dark"] .login-error {
+  color: #e08a7a;
+}
+
+.login-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.login-primary,
+.login-cancel,
+.logout-button {
+  appearance: none;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+.login-primary {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+}
+
+.login-primary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.login-cancel,
+.logout-button {
+  background: transparent;
+  color: var(--text);
+}
+
+.setup-panel {
+  max-width: 480px;
+  margin: 48px auto 0;
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card-bg);
+}
+
+.setup-title {
+  margin: 10px 0 0;
+  font-size: 18px;
+}
+
+.setup-copy {
+  margin: 10px 0 0;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.setup-actions {
+  margin-top: 16px;
+}
+
+.setup-done {
+  margin: 16px 0 0;
+  font-size: 13px;
+}

@@ -4,13 +4,14 @@ import type {
   Card,
   CardStore,
   Clock,
-  OwnerAuth,
-  OwnerSession,
+  OwnerCredential,
+  OwnerCredentialStore,
   Prices,
   PriceQuote,
   SecretStore,
 } from "@/server/ports";
 import type { AppServices } from "@/server/composition";
+import { SessionOwnerAuth } from "@/server/auth/session-auth";
 
 export class FakeClock implements Clock {
   private current = new Date("2026-01-01T00:00:00.000Z");
@@ -48,9 +49,15 @@ export class FakePrices implements Prices {
   }
 }
 
-export class FakeOwnerAuth implements OwnerAuth {
-  async currentSession(): Promise<OwnerSession | null> {
-    return null;
+export class InMemoryOwnerCredentialStore implements OwnerCredentialStore {
+  private credential: OwnerCredential | null = null;
+
+  async get(): Promise<OwnerCredential | null> {
+    return this.credential;
+  }
+
+  async save(credential: OwnerCredential): Promise<void> {
+    this.credential = credential;
   }
 }
 
@@ -79,7 +86,8 @@ export interface TestServices extends AppServices {
   cards: InMemoryCardStore;
   assetSources: FakeAssetSources;
   prices: FakePrices;
-  auth: FakeOwnerAuth;
+  auth: SessionOwnerAuth;
+  ownerCredentials: InMemoryOwnerCredentialStore;
   secrets: InMemorySecretStore;
 }
 
@@ -89,7 +97,8 @@ export function createTestServices(): TestServices {
     cards: new InMemoryCardStore(),
     assetSources: new FakeAssetSources(),
     prices: new FakePrices(),
-    auth: new FakeOwnerAuth(),
+    auth: new SessionOwnerAuth(),
+    ownerCredentials: new InMemoryOwnerCredentialStore(),
     secrets: new InMemorySecretStore(),
   };
 }

@@ -10,6 +10,8 @@
     "test": "next build && playwright test"
   },
   "dependencies": {
+    "@simplewebauthn/browser": "^13.3.0",
+    "@simplewebauthn/server": "^13.3.2",
     "next": "^16.2.11",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"

@@ -18,7 +18,8 @@ export async function GET() {
       clock: "fake-clock",
       assetSources: "fake-asset-sources",
       prices: "fake-prices",
-      auth: "fake-owner-auth",
+      auth: "in-memory-session-auth",
+      ownerCredentials: "in-memory-owner-credential-store",
       secrets: "in-memory-secret-store",
     },
   });
