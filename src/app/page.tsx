@@ -3,6 +3,8 @@ import { CardContent } from "@/ui/card-content";
 import { LogoutButton } from "@/ui/logout-button";
 import { OwnerDashboard } from "@/ui/owner-dashboard";
 import { RestrictedCard } from "@/ui/restricted-card";
+import { RecoverySetup } from "@/ui/recovery-setup";
+import { SessionGuard } from "@/ui/session-guard";
 import { ThemeSwitcher } from "@/ui/theme-switcher";
 
 export const dynamic = "force-dynamic";
@@ -17,8 +19,8 @@ export default async function PublicHomePage() {
   const session = await services.auth.currentSession();
   const now = services.clock.now();
 
-  return (
-    <div className="page">
+  const content = (
+    <>
       <header className="page-header">
         <div className="header-title">
           <p className="header-label">PERSONAL ASSET DASHBOARD · 公开主页</p>
@@ -30,6 +32,7 @@ export default async function PublicHomePage() {
           <span className="header-time" data-testid="server-time">
             {formatUtc(now)}
           </span>
+          {session ? <RecoverySetup /> : null}
           {session ? <LogoutButton /> : null}
           <ThemeSwitcher />
         </div>
@@ -66,6 +69,12 @@ export default async function PublicHomePage() {
           </section>
         )}
       </main>
+    </>
+  );
+
+  return (
+    <div className="page">
+      {session ? <SessionGuard>{content}</SessionGuard> : content}
     </div>
   );
 }

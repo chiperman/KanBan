@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     counter: authenticationInfo.newCounter,
   });
 
-  const token = createSession("owner");
+  const token = createSession("owner", services.clock.now());
   const headers = new Headers();
   headers.append("Set-Cookie", sessionCookieHeader(token));
   headers.append("Set-Cookie", clearChallengeCookieHeader());

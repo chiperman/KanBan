@@ -1,4 +1,8 @@
-import { CHALLENGE_COOKIE, SESSION_COOKIE } from "@/server/auth/session";
+import {
+  CHALLENGE_COOKIE,
+  RECOVERY_PENDING_COOKIE,
+  SESSION_COOKIE,
+} from "@/server/auth/session";
 
 const COOKIE_BASE = "Path=/; HttpOnly; SameSite=Strict";
 
@@ -18,6 +22,14 @@ export function sessionCookieHeader(token: string): string {
 
 export function clearSessionCookieHeader(): string {
   return `${SESSION_COOKIE}=; ${COOKIE_BASE}; Max-Age=0`;
+}
+
+export function recoveryPendingCookieHeader(token: string): string {
+  return `${RECOVERY_PENDING_COOKIE}=${token}; ${COOKIE_BASE}; Max-Age=300`;
+}
+
+export function clearRecoveryPendingCookieHeader(): string {
+  return `${RECOVERY_PENDING_COOKIE}=; ${COOKIE_BASE}; Max-Age=0`;
 }
 
 export function readCookie(request: Request, name: string): string | null {

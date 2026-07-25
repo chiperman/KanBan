@@ -4,6 +4,7 @@ import type {
   Clock,
   OwnerAuth,
   OwnerCredentialStore,
+  OwnerRecoveryCredentialStore,
   Prices,
   SecretStore,
 } from "@/server/ports";
@@ -24,6 +25,7 @@ export interface AppServices {
   prices: Prices;
   auth: OwnerAuth;
   ownerCredentials: OwnerCredentialStore;
+  ownerRecoveryCredentials: OwnerRecoveryCredentialStore;
   secrets: SecretStore;
 }
 

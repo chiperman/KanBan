@@ -89,6 +89,7 @@ export interface Prices {
 export interface OwnerSession {
   ownerId: string;
   authenticatedAt: Date;
+  lastActivityAt: Date;
 }
 
 /** 所有者身份认证；未验证身份时返回 null（访客）。 */
@@ -108,6 +109,21 @@ export interface OwnerCredential {
 export interface OwnerCredentialStore {
   get(): Promise<OwnerCredential | null>;
   save(credential: OwnerCredential): Promise<void>;
+}
+
+export interface OwnerRecoveryCredential {
+  email: string;
+  passwordSalt: string;
+  passwordHash: string;
+  encryptedTotpSecret: string;
+  totpIv: string;
+  totpAuthTag: string;
+}
+
+/** 恢复认证元数据；TOTP 密钥仅以恢复密码派生密钥加密后持久化。 */
+export interface OwnerRecoveryCredentialStore {
+  get(): Promise<OwnerRecoveryCredential | null>;
+  save(credential: OwnerRecoveryCredential): Promise<void>;
 }
 
 /** 安全存储：只读凭证等服务端秘密的写入与读取，浏览器不可达。 */

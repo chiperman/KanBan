@@ -6,6 +6,8 @@ import type {
   Clock,
   OwnerCredential,
   OwnerCredentialStore,
+  OwnerRecoveryCredential,
+  OwnerRecoveryCredentialStore,
   Prices,
   PriceQuote,
   SecretStore,
@@ -61,6 +63,20 @@ export class InMemoryOwnerCredentialStore implements OwnerCredentialStore {
   }
 }
 
+export class InMemoryOwnerRecoveryCredentialStore
+  implements OwnerRecoveryCredentialStore
+{
+  private credential: OwnerRecoveryCredential | null = null;
+
+  async get(): Promise<OwnerRecoveryCredential | null> {
+    return this.credential;
+  }
+
+  async save(credential: OwnerRecoveryCredential): Promise<void> {
+    this.credential = credential;
+  }
+}
+
 export class InMemorySecretStore implements SecretStore {
   private readonly values = new Map<string, string>();
   private sequence = 0;
@@ -88,17 +104,20 @@ export interface TestServices extends AppServices {
   prices: FakePrices;
   auth: SessionOwnerAuth;
   ownerCredentials: InMemoryOwnerCredentialStore;
+  ownerRecoveryCredentials: InMemoryOwnerRecoveryCredentialStore;
   secrets: InMemorySecretStore;
 }
 
 export function createTestServices(): TestServices {
+  const clock = new FakeClock();
   return {
-    clock: new FakeClock(),
+    clock,
     cards: new InMemoryCardStore(),
     assetSources: new FakeAssetSources(),
     prices: new FakePrices(),
-    auth: new SessionOwnerAuth(),
+    auth: new SessionOwnerAuth(clock),
     ownerCredentials: new InMemoryOwnerCredentialStore(),
+    ownerRecoveryCredentials: new InMemoryOwnerRecoveryCredentialStore(),
     secrets: new InMemorySecretStore(),
   };
 }

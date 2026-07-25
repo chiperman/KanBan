@@ -14,6 +14,8 @@ import type {
   OwnerAuth,
   OwnerCredential,
   OwnerCredentialStore,
+  OwnerRecoveryCredential,
+  OwnerRecoveryCredentialStore,
   Prices,
   PriceQuote,
   SecretStore,
@@ -97,6 +99,46 @@ class FileOwnerCredentialStore implements OwnerCredentialStore {
   }
 }
 
+function isOwnerRecoveryCredential(
+  value: unknown,
+): value is OwnerRecoveryCredential {
+  if (typeof value !== "object" || value === null) return false;
+  const credential = value as Record<string, unknown>;
+  return (
+    typeof credential.email === "string" &&
+    typeof credential.passwordSalt === "string" &&
+    typeof credential.passwordHash === "string" &&
+    typeof credential.encryptedTotpSecret === "string" &&
+    typeof credential.totpIv === "string" &&
+    typeof credential.totpAuthTag === "string"
+  );
+}
+
+class FileOwnerRecoveryCredentialStore
+  implements OwnerRecoveryCredentialStore
+{
+  constructor(private readonly filePath: string) {}
+
+  async get(): Promise<OwnerRecoveryCredential | null> {
+    let raw: string;
+    try {
+      raw = await readFile(this.filePath, "utf8");
+    } catch {
+      return null;
+    }
+    const value: unknown = JSON.parse(raw);
+    if (!isOwnerRecoveryCredential(value)) {
+      throw new Error(`恢复认证文件格式无效: ${this.filePath}`);
+    }
+    return value;
+  }
+
+  async save(credential: OwnerRecoveryCredential): Promise<void> {
+    await mkdir(path.dirname(this.filePath), { recursive: true });
+    await writeFile(this.filePath, JSON.stringify(credential, null, 2), "utf8");
+  }
+}
+
 class FileSecretStore implements SecretStore {
   constructor(private readonly filePath: string) {}
 
@@ -138,14 +180,18 @@ class FileSecretStore implements SecretStore {
 
 export function createProductionServices(): AppServices {
   const dataDir = path.join(process.cwd(), "data");
+  const clock = new SystemClock();
   return {
-    clock: new SystemClock(),
+    clock,
     cards: new FileCardStore(path.join(dataDir, "cards.json")),
     assetSources: new EmptyAssetSources(),
     prices: new NoPrices(),
-    auth: new SessionOwnerAuth(),
+    auth: new SessionOwnerAuth(clock),
     ownerCredentials: new FileOwnerCredentialStore(
       path.join(dataDir, "owner-credential.json"),
+    ),
+    ownerRecoveryCredentials: new FileOwnerRecoveryCredentialStore(
+      path.join(dataDir, "owner-recovery.json"),
     ),
     secrets: new FileSecretStore(path.join(dataDir, "secrets.json")),
   };
