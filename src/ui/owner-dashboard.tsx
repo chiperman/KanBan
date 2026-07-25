@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type DragEvent, type FormEvent } from "react";
 
-import type { Card, LinkItem } from "@/server/ports";
+import type { Card, CardSpan, LinkItem } from "@/server/ports";
 import { CardContent } from "@/ui/card-content";
 
 type OrdinaryKind = "identity" | "now" | "links" | "markdown";
@@ -21,6 +21,20 @@ function actionName(action: string, kind: OrdinaryKind): string {
   return kind === "now" || kind === "markdown"
     ? `${action} ${CARD_NAMES[kind]}`
     : `${action}${CARD_NAMES[kind]}`;
+}
+
+function cardName(card: Card): string {
+  switch (card.kind) {
+    case "identity":
+      return card.nickname || "身份卡片";
+    case "now":
+      return "Now 卡片";
+    case "links":
+      return "链接卡片";
+    case "markdown":
+    case "asset":
+      return card.title;
+  }
 }
 
 async function cardRequest(url: string, method: string, body?: unknown) {
@@ -189,6 +203,64 @@ function CardEditor({
 export function OwnerDashboard({ cards }: { cards: Card[] }) {
   const [editor, setEditor] = useState<EditorTarget | null>(null);
   const [error, setError] = useState("");
+  const [layoutEditing, setLayoutEditing] = useState(false);
+  const [layoutCards, setLayoutCards] = useState(cards);
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+
+  function enterLayoutEditing() {
+    setLayoutCards(cards);
+    setError("");
+    setLayoutEditing(true);
+  }
+
+  function cancelLayoutEditing() {
+    setLayoutCards(cards);
+    setDraggedId(null);
+    setLayoutEditing(false);
+  }
+
+  function startDragging(event: DragEvent<HTMLElement>, id: string) {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", id);
+    setDraggedId(id);
+  }
+
+  function dropBefore(event: DragEvent<HTMLElement>, targetId: string) {
+    event.preventDefault();
+    const sourceId = event.dataTransfer.getData("text/plain") || draggedId;
+    setDraggedId(null);
+    if (!sourceId || sourceId === targetId) return;
+    setLayoutCards((current) => {
+      const source = current.find((card) => card.id === sourceId);
+      if (!source) return current;
+      const remaining = current.filter((card) => card.id !== sourceId);
+      const targetIndex = remaining.findIndex((card) => card.id === targetId);
+      if (targetIndex === -1) return current;
+      return [
+        ...remaining.slice(0, targetIndex),
+        source,
+        ...remaining.slice(targetIndex),
+      ];
+    });
+  }
+
+  function changeSpan(id: string, span: CardSpan) {
+    setLayoutCards((current) =>
+      current.map((card) => (card.id === id ? { ...card, span } : card)),
+    );
+  }
+
+  async function saveLayout() {
+    setError("");
+    try {
+      await cardRequest("/api/cards/layout", "PUT", {
+        cards: layoutCards.map(({ id, span }) => ({ id, span })),
+      });
+      window.location.reload();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "保存失败，请重试");
+    }
+  }
 
   async function toggleAccess(card: Exclude<Card, { kind: "asset" }>) {
     setError("");
@@ -214,26 +286,71 @@ export function OwnerDashboard({ cards }: { cards: Card[] }) {
   }
 
   const existingKinds = new Set(cards.map((card) => card.kind));
+  const visibleCards = layoutEditing ? layoutCards : cards;
   return (
     <>
       <div className="owner-toolbar" aria-label="内容管理">
-        {!existingKinds.has("identity") ? <button type="button" onClick={() => setEditor({ mode: "create", kind: "identity" })}>新建身份卡片</button> : null}
-        {!existingKinds.has("now") ? <button type="button" onClick={() => setEditor({ mode: "create", kind: "now" })}>新建 Now 卡片</button> : null}
-        {!existingKinds.has("links") ? <button type="button" onClick={() => setEditor({ mode: "create", kind: "links" })}>新建链接卡片</button> : null}
-        <button type="button" onClick={() => setEditor({ mode: "create", kind: "markdown" })}>新建 Markdown 卡片</button>
+        {layoutEditing ? (
+          <>
+            <button type="button" onClick={() => void saveLayout()}>保存布局</button>
+            <button type="button" onClick={cancelLayoutEditing}>取消布局编辑</button>
+          </>
+        ) : (
+          <>
+            {!existingKinds.has("identity") ? <button type="button" onClick={() => setEditor({ mode: "create", kind: "identity" })}>新建身份卡片</button> : null}
+            {!existingKinds.has("now") ? <button type="button" onClick={() => setEditor({ mode: "create", kind: "now" })}>新建 Now 卡片</button> : null}
+            {!existingKinds.has("links") ? <button type="button" onClick={() => setEditor({ mode: "create", kind: "links" })}>新建链接卡片</button> : null}
+            <button type="button" onClick={() => setEditor({ mode: "create", kind: "markdown" })}>新建 Markdown 卡片</button>
+            <button type="button" onClick={enterLayoutEditing}>编辑布局</button>
+          </>
+        )}
       </div>
+      {layoutEditing ? (
+        <p className="layout-mode-status" role="status">
+          布局编辑模式：拖拽卡片排序，并选择卡片宽度。
+        </p>
+      ) : null}
       {error ? <p className="content-error" role="alert">{error}</p> : null}
-      <section className="card-grid" data-testid="card-grid">
-        {cards.length === 0 ? (
+      <section
+        className={`card-grid${layoutEditing ? " layout-editing" : ""}`}
+        data-testid="card-grid"
+      >
+        {visibleCards.length === 0 ? (
           <div className="empty-state" data-testid="empty-state">
             <p className="empty-title">暂无卡片</p>
             <p className="empty-hint">使用上方内容管理入口创建公开主页内容。</p>
           </div>
         ) : (
-          cards.map((card) => (
-            <article key={card.id} className={`card span-${card.span}`} data-testid="card">
+          visibleCards.map((card) => (
+            <article
+              key={card.id}
+              className={`card span-${card.span}${draggedId === card.id ? " card-dragging" : ""}`}
+              data-testid="card"
+              draggable={layoutEditing}
+              onDragStart={layoutEditing ? (event) => startDragging(event, card.id) : undefined}
+              onDragEnd={layoutEditing ? () => setDraggedId(null) : undefined}
+              onDragOver={layoutEditing ? (event) => event.preventDefault() : undefined}
+              onDrop={layoutEditing ? (event) => dropBefore(event, card.id) : undefined}
+            >
               <CardContent card={card} />
-              {card.kind === "asset" ? (
+              {layoutEditing ? (
+                <label className="layout-span-control">
+                  {cardName(card)}宽度
+                  <select
+                    value={card.span}
+                    onChange={(event) => {
+                      const span = Number(event.target.value);
+                      if (span === 1 || span === 2 || span === 3) {
+                        changeSpan(card.id, span);
+                      }
+                    }}
+                  >
+                    <option value="1">一格</option>
+                    <option value="2">两格</option>
+                    <option value="3">三格</option>
+                  </select>
+                </label>
+              ) : card.kind === "asset" ? (
                 <p className="access-status">私密 · 资产卡片不可发布</p>
               ) : (
                 <div className="card-actions">

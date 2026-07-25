@@ -287,3 +287,33 @@ export function updateCard(card: Card, value: unknown): Card {
       return card;
   }
 }
+
+export function updateCardLayout(cards: Card[], value: unknown): Card[] {
+  if (!isRecord(value) || !Array.isArray(value.cards)) {
+    throw new Error("布局数据格式无效");
+  }
+
+  const layout = value.cards;
+  if (layout.length !== cards.length) {
+    throw new Error("布局必须包含全部卡片");
+  }
+
+  const cardsById = new Map(cards.map((card) => [card.id, card]));
+  const seen = new Set<string>();
+  return layout.map((item) => {
+    if (
+      !isRecord(item) ||
+      typeof item.id !== "string" ||
+      !isSpan(item.span) ||
+      seen.has(item.id)
+    ) {
+      throw new Error("布局卡片或宽度无效");
+    }
+    const card = cardsById.get(item.id);
+    if (card === undefined) {
+      throw new Error("布局包含未知卡片");
+    }
+    seen.add(item.id);
+    return { ...card, span: item.span };
+  });
+}
