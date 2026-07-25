@@ -7,13 +7,56 @@ export interface Clock {
   now(): Date;
 }
 
-export interface Card {
+export type CardAccess = "public" | "private";
+export type CardSpan = 1 | 2 | 3;
+
+interface BaseCard {
   id: string;
+  span: CardSpan;
+  access: CardAccess;
+}
+
+export interface IdentityCard extends BaseCard {
+  kind: "identity";
+  avatarUrl: string;
+  nickname: string;
+  introduction: string;
+}
+
+export interface NowCard extends BaseCard {
+  kind: "now";
+  content: string;
+}
+
+export interface LinkItem {
+  label: string;
+  url: string;
+}
+
+export interface LinksCard extends BaseCard {
+  kind: "links";
+  links: LinkItem[];
+}
+
+export interface MarkdownCard extends BaseCard {
+  kind: "markdown";
+  title: string;
+  markdown: string;
+}
+
+export interface AssetCard extends Omit<BaseCard, "access"> {
+  kind: "asset";
+  access: "private";
   title: string;
   body: string;
-  span: 1 | 2 | 3;
-  access: "public" | "restricted";
 }
+
+export type Card =
+  | IdentityCard
+  | NowCard
+  | LinksCard
+  | MarkdownCard
+  | AssetCard;
 
 export interface CardStore {
   list(): Promise<Card[]>;

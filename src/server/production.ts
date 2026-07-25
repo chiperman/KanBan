@@ -19,28 +19,12 @@ import type {
   SecretStore,
 } from "@/server/ports";
 import { SessionOwnerAuth } from "@/server/auth/session-auth";
+import { parseCards } from "@/server/cards";
 
 class SystemClock implements Clock {
   now(): Date {
     return new Date();
   }
-}
-
-function isCard(value: unknown): value is Card {
-  if (typeof value !== "object" || value === null) return false;
-  const card = value as Record<string, unknown>;
-  return (
-    typeof card.id === "string" &&
-    typeof card.title === "string" &&
-    typeof card.body === "string" &&
-    (card.span === 1 || card.span === 2 || card.span === 3) &&
-    (card.access === "public" || card.access === "restricted")
-  );
-}
-
-export function parseCards(value: unknown): Card[] | null {
-  if (!Array.isArray(value) || !value.every(isCard)) return null;
-  return value;
 }
 
 class FileCardStore implements CardStore {

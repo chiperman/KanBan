@@ -1,5 +1,5 @@
 import { getTestServices, isTestEnv } from "@/server/composition";
-import { parseCards } from "@/server/production";
+import { parseCards } from "@/server/cards";
 
 export const dynamic = "force-dynamic";
 

@@ -13,22 +13,25 @@ test.beforeEach(async ({ request }) => {
       cards: [
         {
           id: "wide",
+          kind: "markdown",
           title: "宽卡片",
-          body: "占据三列的内容卡片",
+          markdown: "占据三列的内容卡片",
           span: 3,
           access: "public",
         },
         {
           id: "mid",
+          kind: "markdown",
           title: "中卡片",
-          body: "占据两列的内容卡片",
+          markdown: "占据两列的内容卡片",
           span: 2,
           access: "public",
         },
         {
           id: "narrow",
+          kind: "markdown",
           title: "窄卡片",
-          body: "占据一列的内容卡片",
+          markdown: "占据一列的内容卡片",
           span: 1,
           access: "public",
         },

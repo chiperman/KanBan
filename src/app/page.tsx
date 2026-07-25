@@ -1,5 +1,7 @@
 import { getServices } from "@/server/composition";
+import { CardContent } from "@/ui/card-content";
 import { LogoutButton } from "@/ui/logout-button";
+import { OwnerDashboard } from "@/ui/owner-dashboard";
 import { RestrictedCard } from "@/ui/restricted-card";
 import { ThemeSwitcher } from "@/ui/theme-switcher";
 
@@ -33,33 +35,36 @@ export default async function PublicHomePage() {
         </div>
       </header>
       <main>
-        <section className="card-grid" data-testid="card-grid">
-          {cards.length === 0 ? (
-            <div className="empty-state" data-testid="empty-state">
-              <p className="empty-title">暂无公开内容</p>
-              <p className="empty-hint">
-                所有者还没有发布任何卡片，公开主页将在内容发布后展示在这里。
-              </p>
-            </div>
-          ) : (
-            cards.map((card) =>
-              // 服务端数据边界：访客永远不会收到受限卡片的真实内容，
-              // 占位模型只包含 id 与宽度。
-              card.access === "restricted" && !session ? (
-                <RestrictedCard key={card.id} span={card.span} />
-              ) : (
+        {session ? (
+          <OwnerDashboard cards={cards} />
+        ) : (
+          <section className="card-grid" data-testid="card-grid">
+            {cards.length === 0 ? (
+              <div className="empty-state" data-testid="empty-state">
+                <p className="empty-title">暂无公开内容</p>
+                <p className="empty-hint">
+                  所有者还没有发布任何卡片，公开主页将在内容发布后展示在这里。
+                </p>
+              </div>
+            ) : (
+              cards.map((card) =>
+                // 服务端数据边界：访客永远不会收到私密卡片的真实内容，
+                // 占位模型只包含宽度。
+                card.access === "private" ? (
+                  <RestrictedCard key={card.id} span={card.span} />
+                ) : (
                 <article
                   key={card.id}
                   className={`card span-${card.span}`}
                   data-testid="card"
                 >
-                  <p className="card-label">{card.title}</p>
-                  <p className="card-body">{card.body}</p>
+                  <CardContent card={card} />
                 </article>
               ),
             )
-          )}
-        </section>
+            )}
+          </section>
+        )}
       </main>
     </div>
   );

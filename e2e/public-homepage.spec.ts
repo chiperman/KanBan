@@ -20,15 +20,17 @@ test("公开主页渲染测试数据存储中的卡片", async ({ page, request 
       cards: [
         {
           id: "identity",
-          title: "身份",
-          body: "所有者的一句话介绍",
+          kind: "identity",
+          avatarUrl: "",
+          nickname: "所有者",
+          introduction: "所有者的一句话介绍",
           span: 2,
           access: "public",
         },
         {
           id: "now",
-          title: "Now",
-          body: "正在关注的事",
+          kind: "now",
+          content: "正在关注的事",
           span: 1,
           access: "public",
         },

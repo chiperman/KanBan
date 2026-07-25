@@ -6,17 +6,20 @@ const SENSITIVE_BODY = "SENSITIVE-BODY-1234567.89";
 const CARDS = [
   {
     id: "identity",
-    title: "身份",
-    body: "所有者的一句话介绍",
+    kind: "identity",
+    avatarUrl: "",
+    nickname: "所有者",
+    introduction: "所有者的一句话介绍",
     span: 2,
     access: "public",
   },
   {
     id: "assets",
+    kind: "asset",
     title: SENSITIVE_TITLE,
     body: SENSITIVE_BODY,
     span: 2,
-    access: "restricted",
+    access: "private",
   },
 ];
 
