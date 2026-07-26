@@ -4,7 +4,7 @@
 
 **Blocked by:** 09 — 每日资产快照与今日资产变动；10 — Binance 只读资产来源；11 — OKX 只读资产来源；12 — Bitget 只读资产来源；13 — Ethereum 与 BNB Smart Chain 观察钱包；16 — 隐藏、断开与删除资产来源；17 — 命令菜单与完整视觉语言
 
-**Status:** ready-for-manual-acceptance
+**Status:** ready-for-human
 
 - [x] 长桥、Binance、OKX、Bitget、Ethereum 与 BNB Smart Chain 可以同时存在，并形成正确的总资产与分布。
 - [x] 来源原生价格差异、稳定币实际价格、CNY 切换、未估值资产和过期数据可以在同一组合场景中正确表达。

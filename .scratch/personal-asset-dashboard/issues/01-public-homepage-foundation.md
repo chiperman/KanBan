@@ -4,7 +4,7 @@
 
 **Blocked by:** None — can start immediately
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] 个人终端可在本地启动，访客无需账户即可打开公开主页。
 - [x] 公开主页具备可承载后续身份、内容和受限卡片的基础卡片结构，并提供明确的空状态。

@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 — 所有者登录与受限卡片隔离
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] 所有者可以编辑头像、昵称和一句话介绍组成的身份卡片。
 - [x] 所有者可以编辑 Now 卡片和包含外部链接的链接卡片。

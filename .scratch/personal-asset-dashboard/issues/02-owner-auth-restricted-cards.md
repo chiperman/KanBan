@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 — 公开主页与应用验证骨架
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
 - [x] 系统只允许预置的唯一所有者登录，不提供公开注册入口。
 - [x] 所有者可以使用 Passkey 完成登录，失败或取消后仍停留在安全的访客状态。

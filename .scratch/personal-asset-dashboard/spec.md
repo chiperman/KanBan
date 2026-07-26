@@ -1,4 +1,4 @@
-Status: ready-for-agent
+Status: ready-for-human
 
 # Personal Asset Dashboard
 
@@ -15,6 +15,10 @@ Status: ready-for-agent
 个人终端只读取并展示投资资产，不执行交易、划转、提现、签名或调仓。首版接入长桥、Binance、OKX、Bitget，以及品牌无关的观察钱包。资产按来源原生定价，默认折算为 USD，并可切换为 CNY。系统定时同步、保存每日资产快照，并明确区分今日资产变动、平台盈亏、过期数据和未估值资产。
 
 公开内容、卡片布局、历史快照和设置为将来接入 Supabase 做准备；只读凭证始终与浏览器及普通同步数据隔离。视觉以 Efferd Dashboard 的清晰卡片结构为基础，结合 Nothing 点阵像素语言和 Bloomberg Terminal 的等宽数字、ASCII 分隔及高信息密度。
+
+## 当前基线
+
+实现、自动化验收与待人工确认事项见 [`docs/current-baseline.md`](../../docs/current-baseline.md)。本规格继续作为产品范围与验收条件的边界；其中未列出的交易、划转、提现、签名、多用户和公开注册不因视觉或文档调整而进入范围。
 
 ## User Stories
 

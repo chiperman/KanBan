@@ -1,6 +1,6 @@
 # Personal Asset Dashboard Design System
 
-Status: active
+Status: active baseline
 
 Reference: [Vibe-Nothing-UI-Design](https://github.com/wangbh030722/vibe-nothing-ui-design)
 
@@ -53,7 +53,7 @@ Rules:
 | Data | Geist Mono | 11px | 400 or 500 | normal | Prices, quantities, timestamps, tables |
 | Label | Geist Mono | 9px | 500 | `0.12em` | Uppercase labels and statuses |
 
-- Every standalone amount, count, percentage, date number, and module number uses Doto.
+- Use Doto for hero totals, primary changes, and module counters. Dates, timestamps, table cells, and compact list data remain Geist Mono for scanning accuracy.
 - Data columns use Geist Mono with tabular numerals and right alignment.
 - Chinese body copy stays in a readable sans-serif fallback and uses line-height 1.7.
 - Negative tracking is never applied to Chinese text.
@@ -138,7 +138,7 @@ Do not:
 - Phone controls wrap without reducing the 40px hit target.
 - Detail tables scroll horizontally rather than compressing numeric columns.
 - `prefers-reduced-motion` disables card movement and stepped refresh animation.
-- Visual acceptance covers 1280px, 768px, and 375px in light and dark themes.
+- Visual acceptance covers 1280px, 800px, and 375px in light and dark themes.
 
 ## 9. Agent prompt guide
 
