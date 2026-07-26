@@ -77,10 +77,13 @@ function dayLabel(day: string): string {
 function HoldingRow({
   holding,
   showPlatformProfit,
+  showSensitiveInfo,
 }: {
   holding: AssetHolding;
   showPlatformProfit: boolean;
+  showSensitiveInfo: boolean;
 }) {
+  const masked = "••••••";
   const valuationDetail = holding.valuation.status === "valued"
     ? `${holding.valuation.priceSource} · ${holding.valuation.pricedAt.slice(0, 16).replace("T", " ")} UTC`
     : holding.valuation.reason;
@@ -93,20 +96,20 @@ function HoldingRow({
           {valuationDetail}
         </span>
       </td>
-      <td>{amount(holding.quantity)}</td>
+      <td>{showSensitiveInfo ? amount(holding.quantity) : masked}</td>
       <td>
         {holding.currentPrice
-          ? `${amount(holding.currentPrice.amount)} ${holding.currentPrice.currency}`
+          ? `${showSensitiveInfo ? amount(holding.currentPrice.amount) : masked} ${holding.currentPrice.currency}`
           : holding.valuation.status === "unvalued"
             ? `未估值（${holding.currency}）`
             : "—"}
       </td>
-      <td>{holding.marketValue === null ? `未估值（${holding.currency}）` : `${amount(holding.marketValue)} ${holding.currency}`}</td>
-      <td>{holding.costPrice === null ? "—" : amount(holding.costPrice)}</td>
+      <td>{holding.marketValue === null ? `未估值（${holding.currency}）` : `${showSensitiveInfo ? amount(holding.marketValue) : masked} ${holding.currency}`}</td>
+      <td>{holding.costPrice === null ? "—" : showSensitiveInfo ? amount(holding.costPrice) : masked}</td>
       {showPlatformProfit ? (
-        <td>{holding.platformProfit === null ? "—" : amount(holding.platformProfit)}</td>
+        <td>{holding.platformProfit === null ? "—" : showSensitiveInfo ? amount(holding.platformProfit) : masked}</td>
       ) : null}
-      <td>{holding.changePercent === null ? "—" : `${holding.changePercent}%`}</td>
+      <td>{holding.changePercent === null ? "—" : showSensitiveInfo ? `${holding.changePercent}%` : masked}</td>
     </tr>
   );
 }
@@ -114,9 +117,11 @@ function HoldingRow({
 export function AssetSourceCard({
   source,
   history,
+  showSensitiveInfo,
 }: {
   source: AssetSourceView;
   history: DailyAssetSnapshot[];
+  showSensitiveInfo: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [sort, setSort] = useState("market-value");
@@ -173,7 +178,7 @@ export function AssetSourceCard({
       >
         <p className="card-label">{providerCardLabel(source)}</p>
         {source.kind === "longbridge" ? null : <h2 className="asset-source-title">{source.label}</h2>}
-        <p className="asset-total" data-testid="asset-source-total">{amount(source.snapshot.total.amount)} <span>{source.snapshot.total.currency}</span></p>
+        <p className="asset-total" data-testid="asset-source-total">{showSensitiveInfo ? amount(source.snapshot.total.amount) : "••••••"} <span>{source.snapshot.total.currency}</span></p>
         <ol className="holding-top-list" data-testid="holding-top-list">
           {source.snapshot.holdings.slice(0, 5).map((holding) => (
             <li key={`${holding.sourceAccount ?? "default"}:${holding.sourceAsset ?? holding.symbol}`}>
@@ -181,7 +186,7 @@ export function AssetSourceCard({
               <strong>
                 {holding.marketValue === null
                   ? `未估值（${holding.currency}）`
-                  : `${amount(holding.marketValue)} ${holding.currency}`}
+                  : `${showSensitiveInfo ? amount(holding.marketValue) : "••••••"} ${holding.currency}`}
               </strong>
             </li>
           ))}
@@ -204,7 +209,7 @@ export function AssetSourceCard({
                   <strong>
                     {snapshot.total.USD === null
                       ? "未估值"
-                      : `${amount(snapshot.total.USD)} USD`}
+                      : `${showSensitiveInfo ? amount(snapshot.total.USD) : "••••••"} USD`}
                   </strong>
                   <span>{snapshot.complete ? "完整" : "不完整"}</span>
                 </li>
@@ -251,7 +256,7 @@ export function AssetSourceCard({
             <div className="asset-table-wrap">
               <table className="asset-table">
                 <thead><tr><th>名称</th><th>数量</th><th>当前价格</th><th>原始市值</th><th>成本</th>{showPlatformProfit ? <th>平台盈亏（来源提供）</th> : null}<th>涨跌</th></tr></thead>
-                <tbody>{holdings.map((holding) => <HoldingRow key={`${holding.sourceAccount ?? "default"}:${holding.sourceAsset ?? holding.symbol}`} holding={holding} showPlatformProfit={showPlatformProfit} />)}</tbody>
+                <tbody>{holdings.map((holding) => <HoldingRow key={`${holding.sourceAccount ?? "default"}:${holding.sourceAsset ?? holding.symbol}`} holding={holding} showPlatformProfit={showPlatformProfit} showSensitiveInfo={showSensitiveInfo} />)}</tbody>
               </table>
             </div>
           </div>

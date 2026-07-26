@@ -235,6 +235,7 @@ export function OwnerDashboard({
 }) {
   const [editor, setEditor] = useState<EditorTarget | null>(null);
   const [error, setError] = useState("");
+  const [showSensitiveInfo, setShowSensitiveInfo] = useState(true);
   const [layoutEditing, setLayoutEditing] = useState(false);
   const [layoutCards, setLayoutCards] = useState(cards);
   const [draggedId, setDraggedId] = useState<string | null>(null);
@@ -385,6 +386,14 @@ export function OwnerDashboard({
           </>
         ) : (
           <>
+            <button
+              type="button"
+              aria-pressed={showSensitiveInfo}
+              data-testid="sensitive-info-toggle"
+              onClick={() => setShowSensitiveInfo((current) => !current)}
+            >
+              {showSensitiveInfo ? "隐藏关键信息" : "显示关键信息"}
+            </button>
             {!existingKinds.has("identity") ? <button type="button" onClick={() => setEditor({ mode: "create", kind: "identity" })}>新建身份卡片</button> : null}
             {!existingKinds.has("now") ? <button type="button" onClick={() => setEditor({ mode: "create", kind: "now" })}>新建 Now 卡片</button> : null}
             {!existingKinds.has("links") ? <button type="button" onClick={() => setEditor({ mode: "create", kind: "links" })}>新建链接卡片</button> : null}
@@ -419,6 +428,7 @@ export function OwnerDashboard({
               sources={assetSources}
               history={dailyAssetSnapshots}
               currentDay={currentDay}
+              showSensitiveInfo={showSensitiveInfo}
             />
           </article>
         ) : null}
@@ -451,6 +461,7 @@ export function OwnerDashboard({
                     <AssetSourceCard
                       source={source}
                       history={dailyAssetSnapshots}
+                      showSensitiveInfo={showSensitiveInfo}
                     />
                   ) : (
                     <CardContent card={card} />

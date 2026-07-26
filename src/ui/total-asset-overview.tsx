@@ -33,10 +33,12 @@ export function TotalAssetOverview({
   sources,
   history,
   currentDay,
+  showSensitiveInfo,
 }: {
   sources: ValuationSource[];
   history: DailyAssetSnapshot[];
   currentDay: string;
+  showSensitiveInfo: boolean;
 }) {
   const [currency, setCurrency] = useState<ReportingCurrency>("USD");
   const [dimension, setDimension] = useState<DistributionDimension>("class");
@@ -87,7 +89,11 @@ export function TotalAssetOverview({
         <div>
           <p className="card-label">总资产概览</p>
           <p className="total-overview-amount" data-testid="total-asset-amount">
-            {valuation.amount === null ? "无法折算" : amount(valuation.amount)}{" "}
+            {valuation.amount === null
+              ? "无法折算"
+              : showSensitiveInfo
+                ? amount(valuation.amount)
+                : "••••••"}{" "}
             <span>{valuation.currency}</span>
           </p>
           <p className={`total-status${valuation.incomplete ? " incomplete" : ""}${valuation.expiredCount > 0 ? " expired" : ""}`}>
@@ -143,7 +149,7 @@ export function TotalAssetOverview({
           </p>
         ) : (
           <p className="today-change-amount">
-            {signedAmount(todayChange)} {currency}
+            {showSensitiveInfo ? signedAmount(todayChange) : "••••••"} {currency}
             {changeIncomplete ? <span> · 数据不完整</span> : null}
           </p>
         )}
@@ -153,7 +159,12 @@ export function TotalAssetOverview({
           <div key={group.key} className="distribution-item">
             <span>{group.label}</span>
             <strong>
-              {group.amount === null ? "未折算" : amount(group.amount)} {valuation.currency}
+              {group.amount === null
+                ? "未折算"
+                : showSensitiveInfo
+                  ? amount(group.amount)
+                  : "••••••"}{" "}
+              {valuation.currency}
             </strong>
           </div>
         ))}
@@ -170,7 +181,7 @@ export function TotalAssetOverview({
                 <strong>
                   {snapshot.total[currency] === null
                     ? "未估值"
-                    : `${amount(snapshot.total[currency])} ${currency}`}
+                    : `${showSensitiveInfo ? amount(snapshot.total[currency]) : "••••••"} ${currency}`}
                 </strong>
                 <span>
                   {snapshot.complete && snapshot.total[currency] !== null

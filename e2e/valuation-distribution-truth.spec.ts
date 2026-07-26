@@ -133,6 +133,37 @@ test("访客只收到总资产安全占位，不含估值、来源或持仓信�
   }
 });
 
+test("所有者可随时隐藏或重新显示资产金额与持仓数值", async ({ page }) => {
+  await loginAsOwner(page);
+
+  const overview = page.getByTestId("total-asset-overview");
+  const alpha = page.getByTestId("asset-source-card-source-alpha");
+  await expect(overview).toContainText("561.34 USD");
+  await expect(alpha.getByTestId("asset-source-total")).toContainText("264.01");
+
+  await page.getByTestId("sensitive-info-toggle").click();
+  await expect(page.getByTestId("sensitive-info-toggle")).toHaveAccessibleName(
+    "显示关键信息",
+  );
+  await expect(overview).not.toContainText("561.34 USD");
+  await expect(overview).toContainText("•••••• USD");
+  await expect(alpha.getByTestId("asset-source-total")).not.toContainText("264.01");
+  await expect(alpha).toContainText("•••••• USD");
+
+  await alpha.getByRole("button", { name: "查看全部持仓" }).click();
+  const detail = page.getByRole("dialog", { name: "Alpha Securities 全部持仓" });
+  await expect(detail).not.toContainText("200.01 USD");
+  await expect(detail).toContainText("•••••• USD");
+  await detail.getByRole("button", { name: "关闭详情" }).click();
+
+  await page.getByTestId("sensitive-info-toggle").click();
+  await expect(page.getByTestId("sensitive-info-toggle")).toHaveAccessibleName(
+    "隐藏关键信息",
+  );
+  await expect(overview).toContainText("561.34 USD");
+  await expect(alpha.getByTestId("asset-source-total")).toContainText("264.01");
+});
+
 test("反向汇率观察按正确方向折算总额与每个分组", async ({ page, request }) => {
   const configured = await request.post("/test-doubles/valuation?fx=inverse");
   expect(configured.ok()).toBeTruthy();
