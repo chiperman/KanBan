@@ -8,6 +8,7 @@ import { RecoverySetup } from "@/ui/recovery-setup";
 import { SessionGuard } from "@/ui/session-guard";
 import { ThemeSwitcher } from "@/ui/theme-switcher";
 import { TotalOverviewPlaceholder } from "@/ui/total-asset-overview";
+import { CommandMenu } from "@/ui/command-menu";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,13 @@ export default async function PublicHomePage() {
             {formatUtc(now)}
           </span>
           {session ? <RecoverySetup /> : null}
+          {session ? (
+            <CommandMenu
+              refreshEnabled={assetSources.some(
+                (source) => source.lifecycle !== "disconnected",
+              )}
+            />
+          ) : null}
           {session ? <LogoutButton /> : null}
           <ThemeSwitcher />
         </div>

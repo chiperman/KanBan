@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { AssetRefreshMode, AssetRefreshReport } from "@/server/ports";
+import { ASSET_MANUAL_REFRESH_EVENT } from "@/shared/command-events";
 
 export function AssetRefreshControls({ enabled }: { enabled: boolean }) {
   const router = useRouter();
@@ -94,6 +95,13 @@ export function AssetRefreshControls({ enabled }: { enabled: boolean }) {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", visibilityChanged);
     };
+  }, [enabled, runAndMark]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const manualRefresh = () => void runAndMark("all", true);
+    window.addEventListener(ASSET_MANUAL_REFRESH_EVENT, manualRefresh);
+    return () => window.removeEventListener(ASSET_MANUAL_REFRESH_EVENT, manualRefresh);
   }, [enabled, runAndMark]);
 
   if (!enabled) return null;

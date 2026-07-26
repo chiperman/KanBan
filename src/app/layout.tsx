@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import "./globals.css";
+import "./command-menu.css";
 
 export const metadata: Metadata = {
   title: "个人终端 · 公开主页",

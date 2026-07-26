@@ -408,7 +408,13 @@ export function OwnerDashboard({
         data-testid="card-grid"
       >
         {assetSources.length > 0 ? (
-          <article className="card span-3 total-overview-card" data-testid="total-overview-card">
+          <article
+            className="card span-3 total-overview-card"
+            data-testid="total-overview-card"
+            data-command-target="total-overview"
+            data-command-label="总资产概览"
+            tabIndex={-1}
+          >
             <TotalAssetOverview
               sources={assetSources}
               history={dailyAssetSnapshots}
@@ -431,6 +437,9 @@ export function OwnerDashboard({
               key={card.id}
               className={`card span-${card.span}${draggedId === card.id ? " card-dragging" : ""}`}
               data-testid="card"
+              data-command-target={card.id}
+              data-command-label={source ? sourceName(source) : cardName(card)}
+              tabIndex={-1}
               draggable={layoutEditing}
               onDragStart={layoutEditing ? (event) => startDragging(event, card.id) : undefined}
               onDragEnd={layoutEditing ? () => setDraggedId(null) : undefined}

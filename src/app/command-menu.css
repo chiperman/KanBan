@@ -1,0 +1,190 @@
+.command-menu-trigger,
+.command-menu-close {
+  appearance: none;
+  min-height: 40px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--card-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.command-menu-trigger {
+  padding: 7px 12px;
+}
+
+.command-menu-trigger kbd {
+  margin-left: 6px;
+  color: var(--text-dim);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 10px;
+}
+
+.command-menu-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: start center;
+  padding: min(14vh, 120px) 20px 20px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: color-mix(in srgb, var(--bg) 76%, transparent);
+}
+
+.command-menu-panel {
+  width: min(620px, 100%);
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--card-bg);
+  box-shadow: 0 18px 60px color-mix(in srgb, var(--text) 16%, transparent);
+}
+
+.command-menu-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.command-menu-eyebrow,
+.command-menu-hint,
+.command-menu-empty {
+  margin: 0;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.command-menu-eyebrow {
+  color: var(--text);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}
+
+.command-menu-hint {
+  margin-top: 3px;
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
+.command-menu-close {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+}
+
+.command-menu-search {
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px 10px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.command-menu-search input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  padding: 10px 12px;
+}
+
+.command-menu-results {
+  display: grid;
+  gap: 4px;
+  max-height: min(52vh, 420px);
+  padding: 6px 10px 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.command-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 46px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  padding: 9px 10px;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.command-menu-item small {
+  color: var(--text-dim);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.command-menu-item[data-active="true"] {
+  background: var(--bg-subtle);
+  outline: 1px solid var(--border);
+}
+
+.command-menu-empty {
+  padding: 22px 10px;
+  color: var(--text-dim);
+  font-size: 11px;
+  text-align: center;
+}
+
+[data-command-target]:focus-visible,
+[data-command-highlight="true"] {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.command-menu-trigger:active,
+.command-menu-close:active,
+.command-menu-item:active {
+  transform: scale(0.96);
+}
+
+@media (hover: hover) {
+  .command-menu-trigger:hover,
+  .command-menu-close:hover {
+    background: var(--bg-subtle);
+  }
+}
+
+@media (max-width: 639px) {
+  .command-menu-overlay {
+    place-items: end center;
+    padding: 16px;
+  }
+
+  .command-menu-panel {
+    max-height: calc(100dvh - 32px);
+  }
+
+  .command-menu-head,
+  .command-menu-search {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .command-menu-item {
+    align-items: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .command-menu-trigger:active,
+  .command-menu-close:active,
+  .command-menu-item:active {
+    transform: none;
+  }
+}
