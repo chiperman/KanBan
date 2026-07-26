@@ -36,7 +36,7 @@ function previewScope(
   if (provider === "bitget") {
     return `${accountMode === "uta" ? "UTA 纯现金" : "Classic Account"} · 现货、资金、Earn（只读）`;
   }
-  return "行情、账户、持仓（只读）";
+  return "账户、持仓（只读）";
 }
 
 function formatAmount(amount: string): string {

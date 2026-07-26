@@ -233,16 +233,24 @@ test("生产长桥刷新保持只读边界，并在读取前拒绝非纯 scope 6
   expect(prices.ok()).toBeTruthy();
   await expect(prices.json()).resolves.toMatchObject({
     snapshot: {
-      total: { amount: "20000", currency: "USD" },
+      total: { amount: "1000", currency: "USD" },
       holdings: [{
         symbol: "AAPL.US",
-        currentPrice: { amount: "2000", currency: "USD" },
+        currentPrice: { amount: "100", currency: "USD" },
       }],
     },
     assetRequests: [],
-    quotedSymbols: ["AAPL.US"],
-    quoteEngine: "longbridge@4.4.1 QuoteContext",
-    quoteContextCalls: 1,
+  });
+
+  const expiredPrices = await request.post(
+    "/test-doubles/longbridge/production-start",
+    { data: { action: "refresh-prices-expired" } },
+  );
+  expect(expiredPrices.ok()).toBeTruthy();
+  await expect(expiredPrices.json()).resolves.toMatchObject({
+    assetRequests: [],
+    credentialsRotated: false,
+    tokenRequests: 0,
   });
 
   const holdings = await request.post(
@@ -260,13 +268,10 @@ test("生产长桥刷新保持只读边界，并在读取前拒绝非纯 scope 6
     "GET /v1/portfolio/profit-analysis/by-market?page=2&size=100",
   ]);
   expect(holdingsBody.snapshot.total).toEqual({
-    amount: "123456.7891",
+    amount: "0",
     currency: "USD",
   });
-  expect(holdingsBody).toMatchObject({
-    quoteEngine: "longbridge@4.4.1 QuoteContext",
-    quoteContextCalls: 1,
-  });
+  expect(holdingsBody.quotedSymbols).toEqual([]);
 
   const rejected = await request.post(
     "/test-doubles/longbridge/production-start",
@@ -276,40 +281,6 @@ test("生产长桥刷新保持只读边界，并在读取前拒绝非纯 scope 6
   await expect(rejected.json()).resolves.toMatchObject({
     error: expect.stringContaining("交易写权限"),
     assetRequests: [],
-  });
-
-  const missingQuote = await request.post(
-    "/test-doubles/longbridge/production-start",
-    { data: { action: "refresh-missing-quote" } },
-  );
-  expect(missingQuote.status()).toBe(400);
-  await expect(missingQuote.json()).resolves.toMatchObject({
-    error: expect.stringContaining("AAPL.US"),
-    assetRequests: [],
-  });
-
-  const negativeResidual = await request.post(
-    "/test-doubles/longbridge/production-start",
-    { data: { action: "refresh-negative-residual" } },
-  );
-  expect(negativeResidual.ok()).toBeTruthy();
-  await expect(negativeResidual.json()).resolves.toMatchObject({
-    snapshot: { total: { amount: "900", currency: "USD" } },
-    quotedSymbols: ["AAPL.US"],
-  });
-
-  const accountEstimate = await request.post(
-    "/test-doubles/longbridge/production-start",
-    { data: { action: "refresh-account-estimate" } },
-  );
-  expect(accountEstimate.ok()).toBeTruthy();
-  await expect(accountEstimate.json()).resolves.toMatchObject({
-    quotedSymbols: ["AAPL.US"],
-    snapshot: {
-      holdings: [{
-        valuation: { priceSource: "Longbridge QuoteContext" },
-      }],
-    },
   });
 
   const rotated = await request.post(
@@ -329,18 +300,6 @@ test("生产长桥刷新保持只读边界，并在读取前拒绝非纯 scope 6
   expect(rotatedToTrade.status()).toBe(400);
   await expect(rotatedToTrade.json()).resolves.toMatchObject({
     error: expect.stringContaining("交易写权限"),
-    assetRequests: [],
-    tokenRequests: 1,
-  });
-
-  const rotatedThenFailed = await request.post(
-    "/test-doubles/longbridge/production-start",
-    { data: { action: "refresh-expired-downstream-fail" } },
-  );
-  expect(rotatedThenFailed.status()).toBe(400);
-  await expect(rotatedThenFailed.json()).resolves.toMatchObject({
-    error: expect.stringContaining("AAPL.US"),
-    credentialsRotated: true,
     assetRequests: [],
     tokenRequests: 1,
   });

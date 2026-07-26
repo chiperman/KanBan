@@ -93,10 +93,10 @@ function HoldingRow({
         {holding.currentPrice
           ? `${amount(holding.currentPrice.amount)} ${holding.currentPrice.currency}`
           : holding.valuation.status === "unvalued"
-            ? "未估值"
+            ? `未估值（${holding.currency}）`
             : "—"}
       </td>
-      <td>{holding.marketValue === null ? "未估值" : `${amount(holding.marketValue)} ${holding.currency}`}</td>
+      <td>{holding.marketValue === null ? `未估值（${holding.currency}）` : `${amount(holding.marketValue)} ${holding.currency}`}</td>
       <td>{holding.costPrice === null ? "—" : amount(holding.costPrice)}</td>
       {showPlatformProfit ? (
         <td>{holding.platformProfit === null ? "—" : amount(holding.platformProfit)}</td>
@@ -168,7 +168,7 @@ export function AssetSourceCard({
               <span>{holding.name}</span>
               <strong>
                 {holding.marketValue === null
-                  ? "未估值"
+                  ? `未估值（${holding.currency}）`
                   : `${amount(holding.marketValue)} ${holding.currency}`}
               </strong>
             </li>

@@ -5,10 +5,9 @@ import {
   randomBytes,
   randomUUID,
 } from "node:crypto";
-import { spawn } from "node:child_process";
-import path from "node:path";
 
-import { decimalAdd, decimalSubtract } from "@/domain/decimal";
+import { decimalAdd } from "@/domain/decimal";
+
 import type {
   AssetSourceRefreshResult,
   AssetSourceRefresher,
@@ -106,9 +105,6 @@ export function mapLongbridgeSnapshot(input: {
   accountPages: unknown[];
   positionPages: unknown[];
   syncedAt: string;
-  quotePrices?: Record<string, string>;
-  quotePrevious?: Record<string, string>;
-  quoteTimes?: Record<string, string>;
   exchangeRatePages?: unknown[];
   profitPages?: unknown[];
 }): AssetSnapshot {
@@ -161,7 +157,7 @@ export function mapLongbridgeSnapshot(input: {
       const symbol = text(item.symbol, "symbol");
       const quantity = text(item.quantity ?? item.holding_units, "quantity");
       const nativePrice = optionalText(item.current_net_asset_value);
-      const price = input.quotePrices?.[symbol] ?? nativePrice;
+      const price = nativePrice;
       const currency = text(item.currency, "currency");
       const marketValue =
         optionalText(item.market_value) ??
@@ -179,14 +175,12 @@ export function mapLongbridgeSnapshot(input: {
             : null;
       const pricedAt = nativePrice
         ? optionalText(item.net_asset_value_day) ?? input.syncedAt
-        : input.quoteTimes?.[symbol] ?? input.syncedAt;
+        : input.syncedAt;
       const priceSource = nativePrice
         ? "Longbridge 基金净值"
-        : price
-          ? "Longbridge QuoteContext"
-          : optionalText(item.market_value)
-            ? "Longbridge 账户估值"
-            : null;
+        : optionalText(item.market_value)
+          ? "Longbridge 账户估值"
+          : null;
       return {
         symbol,
         name: text(item.symbol_name ?? item.name ?? item.fund_name, "symbol_name"),
@@ -213,11 +207,7 @@ export function mapLongbridgeSnapshot(input: {
           item.unrealized_pl ?? item.platform_profit,
         ) ?? platformProfits[symbol] ?? null,
         changePercent:
-          optionalText(item.change_rate ?? item.change_percent) ??
-          percentageChange(
-            input.quotePrices?.[symbol],
-            input.quotePrevious?.[symbol],
-          ),
+          optionalText(item.change_rate ?? item.change_percent),
       };
     })
     .sort((left, right) => {
@@ -243,35 +233,6 @@ export function mapLongbridgeSnapshot(input: {
     exchangeRates: exchangeRateObservations,
     syncedAt: input.syncedAt,
   };
-}
-
-function percentageChange(
-  current: string | undefined,
-  previous: string | undefined,
-): string | null {
-  if (!current || !previous) return null;
-  const scaled = (value: string, scale: number) => {
-    const negative = value.startsWith("-");
-    const [integer = "0", fraction = ""] = value.replace(/^[+-]/, "").split(".");
-    const digits = BigInt(`${integer}${fraction.padEnd(scale, "0")}` || "0");
-    return negative ? -digits : digits;
-  };
-  const scale = Math.max(
-    current.split(".")[1]?.length ?? 0,
-    previous.split(".")[1]?.length ?? 0,
-  );
-  const currentValue = scaled(current, scale);
-  const previousValue = scaled(previous, scale);
-  if (previousValue === 0n) return null;
-  const outputScale = 4;
-  const factor = 10n ** BigInt(outputScale);
-  const basisPoints = ((currentValue - previousValue) * 100n * factor) / previousValue;
-  const negative = basisPoints < 0n;
-  const digits = (negative ? -basisPoints : basisPoints)
-    .toString()
-    .padStart(outputScale + 1, "0");
-  const fraction = digits.slice(-outputScale).replace(/0+$/, "");
-  return `${negative ? "-" : ""}${digits.slice(0, -outputScale)}${fraction ? `.${fraction}` : ""}`;
 }
 
 function multiplyDecimal(left: string, right: string): string {
@@ -674,215 +635,12 @@ function jwtAccountIdentity(
   }
 }
 
-export interface LongbridgeMarketData {
-  quote(
-    accessToken: string,
-    symbols: string[],
-    signal?: AbortSignal,
-  ): Promise<{
-    prices: Record<string, string>;
-    previous: Record<string, string>;
-    times: Record<string, string>;
-  }>;
-}
-
-interface LongbridgeSdkQuote {
-  symbol: string;
-  lastDone: string;
-  prevClose: string;
-  timestamp: string;
-}
-
-export type LongbridgeSdkQuoteRunner = (input: {
-  accessToken: string;
-  clientId: string;
-  symbols: string[];
-  signal?: AbortSignal;
-}) => Promise<LongbridgeSdkQuote[]>;
-
-interface LongbridgeSdkWorkerOptions {
-  workerPath?: string;
-  testSdkModule?: string;
-  timeoutMs?: number;
-}
-
-export function runLongbridgeSdkQuoteWorker({
-  accessToken,
-  clientId,
-  symbols,
-  signal,
-}: Parameters<LongbridgeSdkQuoteRunner>[0], options: LongbridgeSdkWorkerOptions = {}): Promise<LongbridgeSdkQuote[]> {
-  if (process.platform === "win32") {
-    throw new Error("长桥 SDK 内存 Token 通道暂不支持 Windows");
-  }
-  if (options.workerPath !== undefined && process.env.APP_ENV !== "test") {
-    throw new Error("长桥 SDK worker 覆盖仅允许在测试环境使用");
-  }
-  if (signal?.aborted) {
-    throw new Error("长桥 SDK 行情请求已取消");
-  }
-  return new Promise((resolve, reject) => {
-    const workerEnv: NodeJS.ProcessEnv = {
-      NODE_ENV: process.env.NODE_ENV,
-      PATH: process.env.PATH,
-      TMPDIR: process.env.TMPDIR,
-      LONGBRIDGE_REGION: process.env.LONGBRIDGE_REGION,
-      LONGBRIDGE_ENABLE_OVERNIGHT:
-        process.env.LONGBRIDGE_ENABLE_OVERNIGHT,
-      LONGBRIDGE_PRINT_QUOTE_PACKAGES: "false",
-    };
-    if (options.testSdkModule !== undefined) {
-      if (process.env.APP_ENV !== "test") {
-        throw new Error("长桥 SDK 测试模块仅允许在测试环境使用");
-      }
-      workerEnv.APP_ENV = "test";
-      workerEnv.LONGBRIDGE_SDK_TEST_MODULE = options.testSdkModule;
-    }
-    const worker = spawn(
-      process.execPath,
-      [options.workerPath ?? path.join(process.cwd(), "scripts", "longbridge-quote-worker.mjs")],
-      {
-        cwd: process.cwd(),
-        env: workerEnv,
-        stdio: ["pipe", "pipe", "pipe", "pipe"],
-        windowsHide: true,
-      },
-    );
-    const output: Buffer[] = [];
-    let outputBytes = 0;
-    let settled = false;
-    let stopError: Error | null = null;
-    let forceKill: ReturnType<typeof setTimeout> | undefined;
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-    const finish = (error?: Error) => {
-      if (settled) return;
-      settled = true;
-      if (timeout) clearTimeout(timeout);
-      if (forceKill) clearTimeout(forceKill);
-      signal?.removeEventListener("abort", abort);
-      if (error) reject(error);
-    };
-    const stop = (error: Error) => {
-      if (settled || stopError) return;
-      stopError = error;
-      worker.kill("SIGTERM");
-      forceKill = setTimeout(() => worker.kill("SIGKILL"), 1_000);
-      forceKill.unref();
-    };
-    const abort = () => {
-      stop(new Error("长桥 SDK 行情请求已取消"));
-    };
-    worker.once("error", () => finish(new Error("无法启动长桥 Node SDK 行情进程")));
-    worker.stdin.on("error", () => {
-      stop(new Error("长桥 SDK 行情输入通道中断"));
-    });
-    worker.stdout.on("error", () => {
-      stop(new Error("长桥 SDK 行情输出通道中断"));
-    });
-    worker.stderr.on("error", () => undefined);
-    worker.stderr.resume();
-    worker.stdout.on("data", (chunk: Buffer) => {
-      outputBytes += chunk.length;
-      if (outputBytes > 1_000_000) {
-        stop(new Error("长桥 SDK 行情响应超过安全上限"));
-        return;
-      }
-      output.push(chunk);
-    });
-    worker.once("close", (code) => {
-      if (settled) return;
-      signal?.removeEventListener("abort", abort);
-      if (stopError) {
-        finish(stopError);
-        return;
-      }
-      if (code !== 0) {
-        finish(new Error("长桥 Node SDK 行情读取失败"));
-        return;
-      }
-      try {
-        const value: unknown = JSON.parse(Buffer.concat(output).toString("utf8"));
-        if (!Array.isArray(value)) throw new Error("invalid response");
-        const quotes = value.map((raw) => {
-          const quote = record(raw);
-          return {
-            symbol: text(quote.symbol, "symbol"),
-            lastDone: text(quote.lastDone, "lastDone"),
-            prevClose: text(quote.prevClose, "prevClose"),
-            timestamp: text(quote.timestamp, "timestamp"),
-          };
-        });
-        settled = true;
-        if (timeout) clearTimeout(timeout);
-        if (forceKill) clearTimeout(forceKill);
-        resolve(quotes);
-      } catch {
-        finish(new Error("长桥 SDK 行情响应格式无效"));
-      }
-    });
-    timeout = setTimeout(() => {
-      stop(new Error("长桥 Node SDK 行情读取超时"));
-    }, options.timeoutMs ?? 30_000);
-    timeout.unref();
-    signal?.addEventListener("abort", abort, { once: true });
-    if (signal?.aborted) {
-      abort();
-      return;
-    }
-    worker.stdin.end(JSON.stringify({ clientId, symbols }));
-    const tokenPipe = worker.stdio[3];
-    if (!tokenPipe || !("end" in tokenPipe)) {
-      stop(new Error("无法建立长桥 SDK 内存 Token 通道"));
-      return;
-    }
-    tokenPipe.on("error", () => {
-      stop(new Error("长桥 SDK 内存 Token 通道中断"));
-    });
-    tokenPipe.end(JSON.stringify({
-      client_id: clientId,
-      access_token: accessToken,
-      refresh_token: null,
-      expires_at: Math.floor(Date.now() / 1000) + 3600,
-    }));
-  });
-}
-
-/**
- * 行情只使用官方 Node SDK QuoteContext。SDK 的默认明文 token 文件改为
- * `/dev/fd/3` 匿名管道；受控 OAuth 与加密 SecretStore 仍是唯一持久化边界。
- */
-export class LongbridgeSdkMarketData implements LongbridgeMarketData {
-  constructor(private readonly run: LongbridgeSdkQuoteRunner = runLongbridgeSdkQuoteWorker) {}
-
-  async quote(accessToken: string, symbols: string[], signal?: AbortSignal) {
-    if (symbols.length === 0) return { prices: {}, previous: {}, times: {} };
-    const quotes = await this.run({
-      accessToken,
-      clientId: oauthClientId(),
-      symbols,
-      signal,
-    });
-    const prices: Record<string, string> = {};
-    const previous: Record<string, string> = {};
-    const times: Record<string, string> = {};
-    for (const quote of quotes) {
-      prices[quote.symbol] = quote.lastDone;
-      previous[quote.symbol] = quote.prevClose;
-      times[quote.symbol] = quote.timestamp;
-    }
-    return { prices, previous, times };
-  }
-}
-
 /**
  * 受控 OAuth 只请求官方 account.read(6)，并以 token 响应中的实际 scope
  * 作为保存前的权限证明。外部数据请求固定为三个 GET 资产端点。
  */
 export class ProductionLongbridgeOAuth implements LongbridgeOAuth {
-  constructor(
-    private readonly request: LongbridgeFetch = globalThis.fetch,
-    private readonly marketData: LongbridgeMarketData = new LongbridgeSdkMarketData(),
-  ) {}
+  constructor(private readonly request: LongbridgeFetch = globalThis.fetch) {}
 
   async start(redirectUri: string): Promise<{
     authorizationUrl: string;
@@ -945,10 +703,6 @@ export class ProductionLongbridgeOAuth implements LongbridgeOAuth {
     }
     const [accountPage, stockPage, fundPage] = pages;
     const positionPages = [stockPage, fundPage];
-    const symbols = positionPages
-      .flatMap(listFromPage)
-      .flatMap((item) => optionalText(item.current_net_asset_value) ? [] : [text(item.symbol, "symbol")]);
-    const quotes = await this.marketData.quote(token.accessToken, symbols);
     const exchangeRateResponse = await this.request(
       `${LONGBRIDGE_API_ORIGIN}/v1/asset/exchange_rates`,
       {
@@ -998,7 +752,7 @@ export class ProductionLongbridgeOAuth implements LongbridgeOAuth {
         obtainedAt: syncedAt,
         validatedScopes: token.scopes,
       }),
-      permissions: ["market-data", "account", "positions"],
+      permissions: ["account", "positions"],
       account: {
         id: `longbridge:${identity.fingerprint}`,
         label: `长桥账户（类型 ${identity.channel} · ${accountCurrency} · ${identity.fingerprint}）`,
@@ -1007,97 +761,11 @@ export class ProductionLongbridgeOAuth implements LongbridgeOAuth {
         accountPages: [accountPage],
         positionPages,
         syncedAt,
-        quotePrices: quotes.prices,
-        quotePrevious: quotes.previous,
-        quoteTimes: quotes.times,
         exchangeRatePages: [exchangeRatePage],
         profitPages,
       }),
     };
   }
-}
-
-function longbridgeSourceValue(
-  marketValue: string,
-  currency: string,
-  snapshot: AssetSnapshot,
-): string | null {
-  const accountCurrency = snapshot.total.currency;
-  if (currency === accountCurrency) return marketValue;
-  const direct = snapshot.exchangeRates.find(
-    (rate) =>
-      rate.baseCurrency === accountCurrency &&
-      rate.quoteCurrency === currency,
-  );
-  if (direct) return divideDecimal(marketValue, direct.rate);
-  const inverse = snapshot.exchangeRates.find(
-    (rate) =>
-      rate.baseCurrency === currency &&
-      rate.quoteCurrency === accountCurrency,
-  );
-  return inverse ? multiplyDecimal(marketValue, inverse.rate) : null;
-}
-
-function applyLongbridgePrices(
-  snapshot: AssetSnapshot,
-  quotes: Awaited<ReturnType<LongbridgeMarketData["quote"]>>,
-  syncedAt: string,
-): AssetSnapshot {
-  const previousHoldingTotal = snapshot.holdings.reduce(
-    (sum, holding) =>
-      holding.sourceMarketValue
-        ? decimalAdd(sum, holding.sourceMarketValue.amount)
-        : sum,
-    "0",
-  );
-  const residual = decimalSubtract(
-    snapshot.total.amount,
-    previousHoldingTotal,
-  );
-  const holdings = snapshot.holdings.map((holding) => {
-    const price = quotes.prices[holding.symbol];
-    if (!price) return holding;
-    const marketValue = multiplyDecimal(holding.quantity, price);
-    const sourceAmount = longbridgeSourceValue(
-      marketValue,
-      holding.currency,
-      snapshot,
-    );
-    return {
-      ...holding,
-      currentPrice: { amount: price, currency: holding.currency },
-      marketValue,
-      sourceMarketValue: sourceAmount === null
-        ? null
-        : { amount: sourceAmount, currency: snapshot.total.currency },
-      valuation: sourceAmount === null
-        ? {
-            status: "unvalued" as const,
-            reason: `缺少 ${holding.currency}/${snapshot.total.currency} 来源汇率`,
-          }
-        : {
-            status: "valued" as const,
-            priceSource: "Longbridge QuoteContext",
-            pricedAt: quotes.times[holding.symbol] ?? syncedAt,
-          },
-      changePercent:
-        percentageChange(price, quotes.previous[holding.symbol]) ??
-        holding.changePercent,
-    };
-  });
-  const total = holdings.reduce(
-    (sum, holding) =>
-      holding.sourceMarketValue
-        ? decimalAdd(sum, holding.sourceMarketValue.amount)
-        : sum,
-    residual,
-  );
-  return {
-    ...snapshot,
-    total: { amount: total, currency: snapshot.total.currency },
-    holdings,
-    syncedAt,
-  };
 }
 
 function needsCredentialRefresh(
@@ -1113,25 +781,11 @@ function needsCredentialRefresh(
   return attempted >= obtainedAt + credentials.expiresIn * 1000 - 5 * 60_000;
 }
 
-function assertCompleteQuotes(
-  symbols: string[],
-  quotes: Awaited<ReturnType<LongbridgeMarketData["quote"]>>,
-): void {
-  const missing = symbols.filter((symbol) => quotes.prices[symbol] === undefined);
-  if (missing.length > 0) {
-    throw new Error(`长桥行情缺少请求代码：${missing.join(", ")}`);
-  }
-}
-
-/** 已保存来源的只读刷新器；行情刷新不读取私有持仓端点。 */
+/** 已保存来源的只读刷新器；30 秒价格周期不访问长桥。 */
 export class ProductionLongbridgeSourceRefresher
   implements AssetSourceRefresher
 {
-  constructor(
-    private readonly request: LongbridgeFetch = globalThis.fetch,
-    private readonly marketData: LongbridgeMarketData =
-      new LongbridgeSdkMarketData(),
-  ) {}
+  constructor(private readonly request: LongbridgeFetch = globalThis.fetch) {}
 
   private async rotateCredentials(
     previous: StoredLongbridgeCredentials,
@@ -1174,27 +828,15 @@ export class ProductionLongbridgeSourceRefresher
     if (source.kind !== "longbridge") {
       throw new Error(`暂不支持刷新来源类型：${source.kind}`);
     }
+    if (mode === "prices") {
+      return { snapshot: source.snapshot };
+    }
     let stored = parseStoredCredentials(credentials);
     if (needsCredentialRefresh(stored, attemptedAt)) {
       stored = await this.rotateCredentials(stored, attemptedAt, signal);
       await persistCredentials(JSON.stringify(stored));
     }
     const accessToken = stored.accessToken;
-    if (mode === "prices") {
-      const symbols = [...new Set(source.snapshot.holdings
-        .filter(
-          (holding) =>
-            holding.valuation.status === "unvalued" ||
-            holding.valuation.priceSource !== "Longbridge 基金净值",
-        )
-        .map((holding) => holding.symbol))];
-      const quotes = await this.marketData.quote(accessToken, symbols, signal);
-      assertCompleteQuotes(symbols, quotes);
-      return {
-        snapshot: applyLongbridgePrices(source.snapshot, quotes, attemptedAt),
-      };
-    }
-
     const pages: unknown[] = [];
     for (const path of ASSET_PATHS) {
       const response = await this.request(`${LONGBRIDGE_API_ORIGIN}${path}`, {
@@ -1213,15 +855,6 @@ export class ProductionLongbridgeSourceRefresher
     }
     const [accountPage, stockPage, fundPage] = pages;
     const positionPages = [stockPage, fundPage];
-    const symbols = positionPages
-      .flatMap(listFromPage)
-      .flatMap((item) =>
-        optionalText(item.current_net_asset_value)
-          ? []
-          : [text(item.symbol, "symbol")],
-      );
-    const quotes = await this.marketData.quote(accessToken, symbols, signal);
-    assertCompleteQuotes(symbols, quotes);
     const exchangeRateResponse = await this.request(
       `${LONGBRIDGE_API_ORIGIN}/v1/asset/exchange_rates`,
       {
@@ -1264,9 +897,6 @@ export class ProductionLongbridgeSourceRefresher
         accountPages: [accountPage],
         positionPages,
         syncedAt: attemptedAt,
-        quotePrices: quotes.prices,
-        quotePrevious: quotes.previous,
-        quoteTimes: quotes.times,
         exchangeRatePages: [exchangeRatePage],
         profitPages,
       }),

@@ -3,7 +3,7 @@ import type { AssetPermission } from "@/server/ports";
 
 export const dynamic = "force-dynamic";
 
-const REQUIRED: AssetPermission[] = ["market-data", "account", "positions"];
+const REQUIRED: AssetPermission[] = ["account", "positions"];
 const FORBIDDEN: AssetPermission[] = ["trade", "transfer", "withdraw"];
 
 function home(request: Request, key: string, value: string): Response {
@@ -34,14 +34,14 @@ export async function GET(request: Request) {
       return home(
         request,
         "longbridge_error",
-        "检测到交易权限，已拒绝连接；请仅授权行情、账户和持仓读取权限",
+        "检测到交易权限，已拒绝连接；请仅授权账户和持仓读取权限",
       );
     }
     if (!REQUIRED.every((permission) => result.permissions.includes(permission))) {
       return home(
         request,
         "longbridge_error",
-        "授权范围不足，需要行情、账户和持仓读取权限",
+        "授权范围不足，需要账户和持仓读取权限",
       );
     }
     const previewId = services.longbridgeConnections.rememberPreview(result);

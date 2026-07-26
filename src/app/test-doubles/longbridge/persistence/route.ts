@@ -21,7 +21,7 @@ const ROTATED_SECRET = "production-rotated-refresh-secret";
 
 const RESULT: LongbridgeAuthorizationResult = {
   credentials: PROBE_SECRET,
-  permissions: ["market-data", "account", "positions"],
+  permissions: ["account", "positions"],
   account: { id: "probe-account", label: "长桥测试账户" },
   snapshot: {
     total: { amount: "1", currency: "USD" },

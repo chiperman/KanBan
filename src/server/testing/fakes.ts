@@ -136,7 +136,6 @@ export interface FakeLongbridgeConfig {
   account: { id: string; label: string };
   accountPages: unknown[];
   positionPages: unknown[];
-  quotePages?: unknown[];
   exchangeRatePages?: unknown[];
   profitPages?: unknown[];
   previewError?: string;
@@ -178,39 +177,6 @@ export class FakeLongbridgeOAuth implements LongbridgeOAuth {
       this.fetchedProfitPages += 1;
       return value;
     });
-    const quotePrices = Object.fromEntries(
-      (config.quotePages ?? []).flatMap((page) => {
-        if (typeof page !== "object" || page === null) return [];
-        const root = page as { data?: { list?: Array<{ symbol?: unknown; last_done?: unknown }> } };
-        return (root.data?.list ?? []).flatMap((quote) =>
-          typeof quote.symbol === "string" && typeof quote.last_done === "string"
-            ? [[quote.symbol, quote.last_done] as const]
-            : [],
-        );
-      }),
-    );
-    const quotePrevious = Object.fromEntries(
-      (config.quotePages ?? []).flatMap((page) => {
-        if (typeof page !== "object" || page === null) return [];
-        const root = page as { data?: { list?: Array<{ symbol?: unknown; prev_close?: unknown }> } };
-        return (root.data?.list ?? []).flatMap((quote) =>
-          typeof quote.symbol === "string" && typeof quote.prev_close === "string"
-            ? [[quote.symbol, quote.prev_close] as const]
-            : [],
-        );
-      }),
-    );
-    const quoteTimes = Object.fromEntries(
-      (config.quotePages ?? []).flatMap((page) => {
-        if (typeof page !== "object" || page === null) return [];
-        const root = page as { data?: { list?: Array<{ symbol?: unknown; timestamp?: unknown }> } };
-        return (root.data?.list ?? []).flatMap((quote) =>
-          typeof quote.symbol === "string" && typeof quote.timestamp === "string"
-            ? [[quote.symbol, quote.timestamp] as const]
-            : [],
-        );
-      }),
-    );
     return {
       credentials: JSON.stringify(config.credentials),
       permissions: config.permissions,
@@ -219,9 +185,6 @@ export class FakeLongbridgeOAuth implements LongbridgeOAuth {
         accountPages: config.accountPages,
         positionPages,
         syncedAt: "2026-01-01T00:00:00.000Z",
-        quotePrices,
-        quotePrevious,
-        quoteTimes,
         exchangeRatePages: config.exchangeRatePages,
         profitPages,
       }),

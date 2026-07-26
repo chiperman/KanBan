@@ -66,7 +66,7 @@ async function configureLongbridge(
         accessToken: SECRET_TOKEN,
         refreshToken: "refresh-token-must-never-reach-browser",
       },
-      permissions: ["market-data", "account", "positions"],
+      permissions: ["account", "positions"],
       account: { id: "U12345", label: "长桥证券账户 U12345" },
       accountPages: [
         {
@@ -142,19 +142,6 @@ async function configureLongbridge(
           }] },
         },
       ],
-      quotePages: [{
-        code: 0,
-        data: {
-          list: [
-            { symbol: "AAPL.US", last_done: "2000", prev_close: "1950" },
-            { symbol: "NVDA.US", last_done: "2000.025", prev_close: "1900" },
-            { symbol: "0700.HK", last_done: "500", prev_close: "490" },
-            { symbol: "MSFT.US", last_done: "1500", prev_close: "1504" },
-            { symbol: "9988.HK", last_done: "112.5", prev_close: "111" },
-            { symbol: "TSLA.US", last_done: "400", prev_close: "416" },
-          ],
-        },
-      }],
       exchangeRatePages: [{
         code: 0,
         data: {
@@ -209,6 +196,12 @@ test("长桥 OAuth 先预览后原子保存，并展示总额、前五持仓与�
   await loginAsOwner(page);
 
   const responseBodies: string[] = [];
+  const consoleErrors: string[] = [];
+  const browserRequests: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+  page.on("request", (request) => browserRequests.push(request.url()));
   page.on("response", async (response) => {
     if (response.url().startsWith("http://localhost:3101")) {
       responseBodies.push(await response.text().catch(() => ""));
@@ -219,8 +212,8 @@ test("长桥 OAuth 先预览后原子保存，并展示总额、前五持仓与�
 
   const preview = page.getByRole("dialog", { name: "确认长桥资产来源" });
   await expect(preview).toContainText("长桥证券账户 U12345");
-  await expect(preview).toContainText("行情、账户、持仓（只读）");
-  await expect(preview).toContainText("123,456.7891 USD");
+  await expect(preview).toContainText("账户、持仓（只读）");
+  await expect(preview).toContainText("152.2 USD");
   await expect(page.getByText("oauth-access-token")).toHaveCount(0);
 
   const beforeConfirm = await page.request.get("/test-doubles/longbridge");
@@ -232,11 +225,11 @@ test("长桥 OAuth 先预览后原子保存，并展示总额、前五持仓与�
   await preview.getByRole("button", { name: "确认并保存" }).click();
 
   const card = page.getByTestId("longbridge-card");
-  await expect(card).toContainText("123,456.7891 USD");
+  await expect(card).toContainText("152.2 USD");
   await expect(card).toContainText("最后更新：2026-01-01 00:00 UTC");
   const topHoldings = card.getByTestId("holding-top-list").getByRole("listitem");
   await expect(topHoldings).toHaveCount(5);
-  await expect(topHoldings.first()).toContainText("NVIDIA");
+  await expect(topHoldings.first()).toContainText("高腾微金");
   await expect(card).not.toContainText("Tesla");
 
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
@@ -244,11 +237,11 @@ test("长桥 OAuth 先预览后原子保存，并展示总额、前五持仓与�
   await card.getByRole("button", { name: "查看全部持仓" }).click();
   const detail = page.getByRole("dialog", { name: "长桥全部持仓" });
   await expect(detail.getByRole("row")).toHaveCount(8);
-  await expect(detail.getByRole("row").nth(1)).toContainText("NVIDIA");
+  await expect(detail.getByRole("row").nth(1)).toContainText("高腾微金");
   await detail.getByLabel("持仓排序").selectOption("change");
-  await expect(detail.getByRole("row").nth(1)).toContainText("NVIDIA");
-  await expect(detail.getByRole("row").nth(6)).toContainText("Tesla");
-  await expect(detail.getByRole("row").last()).toContainText("高腾微金");
+  await expect(detail.getByRole("row").nth(1)).toContainText("高腾微金");
+  await expect(detail.getByRole("row").nth(6)).toContainText("Alibaba");
+  await expect(detail.getByRole("row").last()).toContainText("Tesla");
   await detail.getByLabel("持仓排序").selectOption("name");
   await expect(detail.getByRole("row").nth(1)).toContainText("Alibaba");
   await expect(detail.getByRole("row").filter({ hasText: "Apple" })).toContainText("190.1234");
@@ -267,9 +260,11 @@ test("长桥 OAuth 先预览后原子保存，并展示总额、前五持仓与�
 
   expect(responseBodies.join("\n")).not.toContain(SECRET_TOKEN);
   expect(await page.content()).not.toContain(SECRET_TOKEN);
+  expect(consoleErrors).toEqual([]);
+  expect(browserRequests).not.toContainEqual(expect.stringContaining("mcp.longbridge.com"));
 });
 
-test("长桥行情与持仓刷新失败时保留最后成功数据并明确标记过期", async ({
+test("长桥持仓刷新失败时保留最后成功数据并明确标记过期", async ({
   page,
 }) => {
   await configureLongbridge(page);
@@ -282,7 +277,7 @@ test("长桥行情与持仓刷新失败时保留最后成功数据并明确标�
 
   const card = page.getByTestId("longbridge-card");
   await expect(card.getByTestId("asset-source-total")).toHaveText(
-    "123,456.7891 USD",
+    "152.2 USD",
   );
   const configured = await page.request.post("/test-doubles/longbridge", {
     data: { scenario: "refresh-failure" },
@@ -294,7 +289,7 @@ test("长桥行情与持仓刷新失败时保留最后成功数据并明确标�
     "1 个来源失败",
   );
   await expect(card.getByTestId("asset-source-total")).toHaveText(
-    "123,456.7891 USD",
+    "152.2 USD",
   );
   await expect(card).toContainText("过期数据");
   await expect(card).toContainText("长桥同步失败");
@@ -307,7 +302,7 @@ test("交易权限与授权或预览失败都被拒绝且不留下来源或凭�
   page,
 }) => {
   await configureLongbridge(page, {
-    permissions: ["market-data", "account", "positions", "trade"],
+    permissions: ["account", "positions", "trade"],
   });
   await loginAsOwner(page);
   const started = await page.request.post(
@@ -420,17 +415,17 @@ test("生产 OAuth 只申请并接受 account.read，交易、缺失或未知 sc
   expect(finished.ok()).toBeTruthy();
   const finishBody = await finished.json();
   expect(finishBody).toMatchObject({
-    permissions: ["market-data", "account", "positions"],
+    permissions: ["account", "positions"],
     account: {
       id: expect.stringMatching(/^longbridge:[a-f0-9]{12}$/),
       label: expect.stringMatching(/^长桥账户（类型 lb · USD · [a-f0-9]{12}）$/),
     },
     snapshot: {
-      total: { amount: "123456.7891", currency: "USD" },
+      total: { amount: "0", currency: "USD" },
       holdings: [
         {
           symbol: "AAPL.US",
-          marketValue: "20250",
+          marketValue: null,
           currency: "USD",
           costPrice: "190.1234",
           platformProfit: "100.25",
@@ -445,9 +440,6 @@ test("生产 OAuth 只申请并接受 account.read，交易、缺失或未知 sc
       "GET /v1/portfolio/profit-analysis/by-market?page=1&size=100",
       "GET /v1/portfolio/profit-analysis/by-market?page=2&size=100",
     ],
-    quotedSymbols: ["AAPL.US"],
-    quoteEngine: "longbridge@4.4.1 QuoteContext",
-    quoteContextCalls: 1,
   });
   expect(finishBody.assetRequests).toEqual(
     expect.arrayContaining([
@@ -465,49 +457,17 @@ test("生产 OAuth 只申请并接受 account.read，交易、缺失或未知 sc
   expect(JSON.stringify(finishBody)).not.toContain(PRODUCTION_ACCESS_TOKEN);
   expect(JSON.stringify(finishBody)).not.toContain(PRODUCTION_REFRESH_TOKEN);
 
-  const workerProbe = await request.post(
-    "/test-doubles/longbridge/production-start",
-    { data: { action: "sdk-worker-probe" } },
-  );
-  expect(workerProbe.ok()).toBeTruthy();
-  const workerProbeText = await workerProbe.text();
-  expect(workerProbeText).not.toContain("sdk-worker-probe-token-must-not-leak");
-  expect(JSON.parse(workerProbeText)).toEqual({
-    quotes: [{
-      symbol: "AAPL.US",
-      lastDone: "2000",
-      prevClose: "1950",
-      timestamp: "2026-05-29T00:00:00.000Z",
-    }],
-    aborted: "长桥 SDK 行情请求已取消",
-    timedOut: "长桥 Node SDK 行情读取超时",
-    malformed: "长桥 SDK 行情响应格式无效",
-    missingWorker: "长桥 Node SDK 行情读取失败",
-    temporaryHomesLeft: [],
-  });
-
   const sourceAudit = await request.post(
     "/test-doubles/longbridge/production-start",
-    { data: { action: "sdk-source-audit" } },
+    { data: { action: "rest-source-audit" } },
   );
   expect(sourceAudit.ok()).toBeTruthy();
   await expect(sourceAudit.json()).resolves.toEqual({
     forbidden: [],
     hasMcpDependency: false,
     hasMcpEndpoint: false,
-    usesQuoteContext: true,
-  });
-
-  const buildAudit = await request.post(
-    "/test-doubles/longbridge/production-start",
-    { data: { action: "sdk-build-audit" } },
-  );
-  expect(buildAudit.ok()).toBeTruthy();
-  await expect(buildAudit.json()).resolves.toEqual({
-    routes: [
-      { worker: true, sdk: true, native: true },
-      { worker: true, sdk: true, native: true },
-    ],
+    hasSdkDependency: false,
+    hasSdkReference: false,
   });
 
   const persistence = await request.post(

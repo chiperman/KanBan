@@ -14,9 +14,6 @@ importers:
       '@simplewebauthn/server':
         specifier: ^13.3.2
         version: 13.3.2
-      longbridge:
-        specifier: 4.4.1
-        version: 4.4.1
       next:
         specifier: ^16.2.11
         version: 16.2.11(@playwright/test@1.61.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -458,42 +455,6 @@ packages:
   is-plain-obj@4.1.0:
     resolution: {integrity: sha512-+Pgi+vMuUNkJyExiMBt5IlFoMyKnr5zhJ4Uspz58WOhBF5QoIZkFyNHIbBAtHwzVAgk5RtndVNsDRN61/mmDqg==}
     engines: {node: '>=12'}
-
-  longbridge-darwin-arm64@4.4.1:
-    resolution: {integrity: sha512-iTYND4PZe+yAD22cAMgKCqx8O85T2fQMCPfYldq8LFcmPlUjDvBVPtto7AyzpVXt4ppA5DPpEWS9P7yKe3ksNA==}
-    engines: {node: '>= 10'}
-    cpu: [arm64]
-    os: [darwin]
-
-  longbridge-darwin-x64@4.4.1:
-    resolution: {integrity: sha512-OyxQmr8jOwpKKssT6j0sN5GgXFSZmxLSVGVaN8xZVeQf+fj04mRUYS85Y95dsGB/6ZkwhgUM71fXm0Ld8/STww==}
-    engines: {node: '>= 10'}
-    cpu: [x64]
-    os: [darwin]
-
-  longbridge-linux-arm64-gnu@4.4.1:
-    resolution: {integrity: sha512-b72WTFWW+4qiP+6pkVYKojBufXBQsOwuyAQjT05KYgi8P48BQ1V2gFxU1AA1QUbdyFLfXdRSOYA4iMalQs7pcQ==}
-    engines: {node: '>= 10'}
-    cpu: [arm64]
-    os: [linux]
-    libc: [glibc]
-
-  longbridge-linux-x64-gnu@4.4.1:
-    resolution: {integrity: sha512-Ygyk+1qEuWA1KyaXdzSd+eYfeV90KVZmHA4IiXnLMdh6UM0fSOUGIuKpi6jBD7dNkgQSqqhhaxWyIgE5FKetqA==}
-    engines: {node: '>= 10'}
-    cpu: [x64]
-    os: [linux]
-    libc: [glibc]
-
-  longbridge-win32-x64-msvc@4.4.1:
-    resolution: {integrity: sha512-P5yrgi1goxzlYRqO+xEyXf35V3YQ2Hvt5LHS1V6xDdZx5cIKM+15cbYZl5AUB7EEitQQGuo+N1HZPyH4hiJfXA==}
-    engines: {node: '>= 10'}
-    cpu: [x64]
-    os: [win32]
-
-  longbridge@4.4.1:
-    resolution: {integrity: sha512-6yZ0U7V0PdhxfYJrihMhSfbjVnK/KPxXH+4VZTkazffeHWohOrmJdiemDkvSnF8wN6JAzeTNZtlAoraCBmB9yw==}
-    engines: {node: '>= 10'}
 
   longest-streak@3.1.0:
     resolution: {integrity: sha512-9Ri+o0JYgehTaVBBDoMqIl8GXtbWg711O3srftcHhZ0dqnETqLaoIK0x17fUw9rFSlK/0NlsKe0Ahhyl5pXE2g==}
@@ -1145,29 +1106,6 @@ snapshots:
   is-hexadecimal@2.0.1: {}
 
   is-plain-obj@4.1.0: {}
-
-  longbridge-darwin-arm64@4.4.1:
-    optional: true
-
-  longbridge-darwin-x64@4.4.1:
-    optional: true
-
-  longbridge-linux-arm64-gnu@4.4.1:
-    optional: true
-
-  longbridge-linux-x64-gnu@4.4.1:
-    optional: true
-
-  longbridge-win32-x64-msvc@4.4.1:
-    optional: true
-
-  longbridge@4.4.1:
-    optionalDependencies:
-      longbridge-darwin-arm64: 4.4.1
-      longbridge-darwin-x64: 4.4.1
-      longbridge-linux-arm64-gnu: 4.4.1
-      longbridge-linux-x64-gnu: 4.4.1
-      longbridge-win32-x64-msvc: 4.4.1
 
   longest-streak@3.1.0: {}
 
