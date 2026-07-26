@@ -213,6 +213,17 @@ export interface OkxAuthorizationResult {
   snapshot: AssetSnapshot;
 }
 
+export interface BitgetAuthorizationResult {
+  credentials: string;
+  accountMode: BitgetAccountMode;
+  permissions: AssetPermission[];
+  account: { id: string; label: string };
+  scopeFingerprint: string;
+  snapshot: AssetSnapshot;
+}
+
+export type BitgetAccountMode = "classic" | "uta";
+
 export type OkxRegion = "global" | "us" | "eea";
 
 export interface BinanceReadOnly {
@@ -241,6 +252,20 @@ export interface OkxReadOnly {
   }): Promise<OkxAuthorizationResult>;
 }
 
+export interface BitgetReadOnly {
+  preview(input: {
+    apiKey: string;
+    apiSecret: string;
+    passphrase: string;
+    accountMode: BitgetAccountMode;
+    observedAt: string;
+  }): Promise<BitgetAuthorizationResult>;
+  revalidate(input: {
+    credentials: string;
+    observedAt: string;
+  }): Promise<BitgetAuthorizationResult>;
+}
+
 export interface LongbridgeOAuth {
   start(redirectUri: string): Promise<{
     authorizationUrl: string;
@@ -258,6 +283,7 @@ export interface AssetSourceConnections {
   connectLongbridge(result: LongbridgeAuthorizationResult): Promise<void>;
   connectBinance(result: BinanceAuthorizationResult): Promise<void>;
   connectOkx(result: OkxAuthorizationResult): Promise<void>;
+  connectBitget(result: BitgetAuthorizationResult): Promise<void>;
 }
 
 /** 外部资产来源仅保存服务端凭证引用；凭证正文只能进入 SecretStore。 */

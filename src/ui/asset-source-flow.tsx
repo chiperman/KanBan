@@ -5,15 +5,17 @@ import { useEffect, useState } from "react";
 import type {
   AssetMoney,
   AssetPermission,
+  BitgetAccountMode,
   OkxRegion,
 } from "@/server/ports";
 
 interface Preview {
   id: string;
-  provider: "longbridge" | "binance" | "okx";
+  provider: "longbridge" | "binance" | "okx" | "bitget";
   account: { id: string; label: string };
   permissions: AssetPermission[];
   total: AssetMoney;
+  accountMode?: BitgetAccountMode;
 }
 
 type Provider = Preview["provider"] | "";
@@ -21,12 +23,19 @@ type Provider = Preview["provider"] | "";
 function providerLabel(provider: Preview["provider"]): string {
   if (provider === "binance") return "Binance";
   if (provider === "okx") return "OKX";
+  if (provider === "bitget") return "Bitget";
   return "长桥";
 }
 
-function previewScope(provider: Preview["provider"]): string {
+function previewScope(
+  provider: Preview["provider"],
+  accountMode?: BitgetAccountMode,
+): string {
   if (provider === "binance") return "现货、资金、Simple Earn（只读）";
   if (provider === "okx") return "现货、资金、Simple Earn Flexible（只读）";
+  if (provider === "bitget") {
+    return `${accountMode === "uta" ? "UTA 纯现金" : "Classic Account"} · 现货、资金、Earn（只读）`;
+  }
   return "行情、账户、持仓（只读）";
 }
 
@@ -46,6 +55,8 @@ export function AssetSourceFlow() {
   const [apiSecret, setApiSecret] = useState("");
   const [passphrase, setPassphrase] = useState("");
   const [okxRegion, setOkxRegion] = useState<OkxRegion>("global");
+  const [bitgetAccountMode, setBitgetAccountMode] =
+    useState<BitgetAccountMode>("classic");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -76,7 +87,11 @@ export function AssetSourceFlow() {
   }
 
   async function start() {
-    if (provider === "binance" || provider === "okx") {
+    if (
+      provider === "binance" ||
+      provider === "okx" ||
+      provider === "bitget"
+    ) {
       setPending(true);
       setError("");
       const response = await fetch(`/api/asset-sources/${provider}/preview`, {
@@ -86,6 +101,9 @@ export function AssetSourceFlow() {
           apiKey,
           apiSecret,
           ...(provider === "okx" ? { passphrase, region: okxRegion } : {}),
+          ...(provider === "bitget"
+            ? { passphrase, accountMode: bitgetAccountMode }
+            : {}),
         }),
       });
       const body = (await response.json().catch(() => null)) as
@@ -197,8 +215,33 @@ export function AssetSourceFlow() {
               />
               OKX
             </label>
-            {provider === "binance" || provider === "okx" ? (
+            <label className="source-option">
+              <input
+                type="radio"
+                name="asset-provider"
+                value="bitget"
+                checked={provider === "bitget"}
+                onChange={(event) => setProvider(event.target.value as Provider)}
+              />
+              Bitget
+            </label>
+            {provider === "binance" || provider === "okx" || provider === "bitget" ? (
               <div className="source-credential-fields">
+                {provider === "bitget" ? (
+                  <label className="field-label">
+                    Bitget 账户类型
+                    <select
+                      value={bitgetAccountMode}
+                      onChange={(event) =>
+                        setBitgetAccountMode(
+                          event.target.value as BitgetAccountMode,
+                        )}
+                    >
+                      <option value="classic">Classic Account</option>
+                      <option value="uta">Unified Trading Account (UTA)</option>
+                    </select>
+                  </label>
+                ) : null}
                 {provider === "okx" ? (
                   <label className="field-label">
                     OKX 注册区域
@@ -230,9 +273,9 @@ export function AssetSourceFlow() {
                     onChange={(event) => setApiSecret(event.target.value)}
                   />
                 </label>
-                {provider === "okx" ? (
+                {provider === "okx" || provider === "bitget" ? (
                   <label className="field-label">
-                    OKX Passphrase
+                    {providerLabel(provider)} Passphrase
                     <input
                       type="password"
                       value={passphrase}
@@ -250,14 +293,14 @@ export function AssetSourceFlow() {
                 disabled={
                   pending ||
                   provider === "" ||
-                  ((provider === "binance" || provider === "okx") &&
+                  ((provider === "binance" || provider === "okx" || provider === "bitget") &&
                     (!apiKey.trim() ||
                       !apiSecret.trim() ||
-                      (provider === "okx" && !passphrase.trim())))
+                      ((provider === "okx" || provider === "bitget") && !passphrase.trim())))
                 }
                 onClick={() => void start()}
               >
-                {provider === "binance" || provider === "okx"
+                {provider === "binance" || provider === "okx" || provider === "bitget"
                   ? "验证只读凭证"
                   : "开始 OAuth 授权"}
               </button>
@@ -289,7 +332,7 @@ export function AssetSourceFlow() {
             <dl className="source-preview-list">
               <div>
                 <dt>可读取范围</dt>
-                <dd>{previewScope(preview.provider)}</dd>
+                <dd>{previewScope(preview.provider, preview.accountMode)}</dd>
               </div>
               <div><dt>账户总额</dt><dd>{formatAmount(preview.total.amount)} {preview.total.currency}</dd></div>
             </dl>

@@ -22,6 +22,7 @@ function providerCardLabel(source: AssetSourceView): string {
   if (source.kind === "longbridge") return "长桥资产";
   if (source.kind === "binance") return "Binance 资产";
   if (source.kind === "okx") return "OKX 资产";
+  if (source.kind === "bitget") return "Bitget 资产";
   return "资产来源";
 }
 
@@ -29,6 +30,7 @@ function providerHoldingsLabel(source: AssetSourceView): string {
   if (source.kind === "longbridge") return "长桥全部持仓";
   if (source.kind === "binance") return "Binance 全部持仓";
   if (source.kind === "okx") return "OKX 全部持仓";
+  if (source.kind === "bitget") return "Bitget 全部持仓";
   return `${source.label} 全部持仓`;
 }
 
@@ -152,6 +154,8 @@ export function AssetSourceCard({
               ? "binance-card"
               : source.kind === "okx"
                 ? "okx-card"
+                : source.kind === "bitget"
+                  ? "bitget-card"
               : `asset-source-card-${source.id}`
         }
       >

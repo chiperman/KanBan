@@ -9,6 +9,9 @@ import type {
   AssetSynchronization,
   BinanceAuthorizationResult,
   BinanceReadOnly,
+  BitgetAuthorizationResult,
+  BitgetAccountMode,
+  BitgetReadOnly,
   OkxAuthorizationResult,
   OkxReadOnly,
   OkxRegion,
@@ -50,6 +53,11 @@ import {
   validateOkxReadOnlyPermission,
 } from "@/server/asset-sources/okx";
 import { okxFixtureSnapshot } from "@/server/testing/okx-fixtures";
+import {
+  BitgetConnectionState,
+  validateBitgetReadOnlyPermission,
+} from "@/server/asset-sources/bitget";
+import { bitgetFixtureSnapshot } from "@/server/testing/bitget-fixtures";
 
 export class FakeClock implements Clock {
   private current = new Date("2026-01-01T00:00:00.000Z");
@@ -351,6 +359,68 @@ export class FakeOkxReadOnly implements OkxReadOnly {
   }
 }
 
+export class FakeBitgetReadOnly implements BitgetReadOnly {
+  private scenario = "valid";
+
+  configure(scenario: string): void {
+    this.scenario = scenario;
+  }
+
+  private authorities(): unknown {
+    const values: Record<string, unknown> = {
+      valid: ["stor", "wtor"],
+      trade: ["stor", "stow"],
+      transfer: ["stor", "wtow"],
+      withdraw: ["stor", "wow"],
+      "read-and-write": ["stor", "stow", "wtow"],
+      "unknown-permission": ["stor", "future_new_scope"],
+      "missing-read": [],
+      "commit-failure": ["stor", "wtor"],
+    };
+    return values[this.scenario] ?? ["stor", "wtor"];
+  }
+
+  preview(input: {
+    apiKey: string;
+    apiSecret: string;
+    passphrase: string;
+    accountMode: BitgetAccountMode;
+    observedAt: string;
+  }): Promise<BitgetAuthorizationResult> {
+    const permissions = validateBitgetReadOnlyPermission(this.authorities());
+    const userId = this.scenario === "identity-changed" ? "770002" : "770001";
+    return Promise.resolve({
+      credentials: JSON.stringify({
+        apiKey: input.apiKey,
+        apiSecret: input.apiSecret,
+        passphrase: input.passphrase,
+        accountMode: input.accountMode,
+      }),
+      accountMode: input.accountMode,
+      permissions,
+      account: {
+        id: `bitget:${userId}`,
+        label: `Bitget 账户 · UID ${userId}`,
+      },
+      scopeFingerprint: `${userId}:770001:${input.accountMode}:stor,wtor`,
+      snapshot: bitgetFixtureSnapshot(input.observedAt),
+    });
+  }
+
+  revalidate(input: {
+    credentials: string;
+    observedAt: string;
+  }): Promise<BitgetAuthorizationResult> {
+    const credentials = JSON.parse(input.credentials) as {
+      apiKey: string;
+      apiSecret: string;
+      passphrase: string;
+      accountMode: BitgetAccountMode;
+    };
+    return this.preview({ ...credentials, observedAt: input.observedAt });
+  }
+}
+
 export type FakeRefreshScenario =
   | "passthrough"
   | "schedule"
@@ -358,7 +428,8 @@ export type FakeRefreshScenario =
   | "timeout-isolation"
   | "all-failure"
   | "binance-refresh-failure"
-  | "okx-refresh-failure";
+  | "okx-refresh-failure"
+  | "bitget-refresh-failure";
 
 export class FakeAssetSourceRefresher implements AssetSourceRefresher {
   private scenario: FakeRefreshScenario = "passthrough";
@@ -399,6 +470,12 @@ export class FakeAssetSourceRefresher implements AssetSourceRefresher {
       source.kind === "okx"
     ) {
       throw new Error("OKX 同步失败");
+    }
+    if (
+      this.scenario === "bitget-refresh-failure" &&
+      source.kind === "bitget"
+    ) {
+      throw new Error("Bitget 同步失败");
     }
     if (source.id === "source-unvalued") {
       return {
@@ -577,7 +654,8 @@ export class InMemoryAssetSourceConnections implements AssetSourceConnections {
     result:
       | LongbridgeAuthorizationResult
       | BinanceAuthorizationResult
-      | OkxAuthorizationResult,
+      | OkxAuthorizationResult
+      | BitgetAuthorizationResult,
     config: { kind: string; title: string; body: string },
   ): Promise<void> {
     const credentialReference = await this.secrets.put(result.credentials);
@@ -647,6 +725,14 @@ export class InMemoryAssetSourceConnections implements AssetSourceConnections {
       body: "现货、资金与 Earn 只读账户",
     });
   }
+
+  connectBitget(result: BitgetAuthorizationResult): Promise<void> {
+    return this.connect(result, {
+      kind: "bitget",
+      title: "Bitget 资产",
+      body: "现货、资金与 Earn 只读账户",
+    });
+  }
 }
 
 export interface TestServices extends AppServices {
@@ -666,6 +752,8 @@ export interface TestServices extends AppServices {
   binanceConnections: BinanceConnectionState;
   okx: FakeOkxReadOnly;
   okxConnections: OkxConnectionState;
+  bitget: FakeBitgetReadOnly;
+  bitgetConnections: BitgetConnectionState;
   assetSourceConnections: InMemoryAssetSourceConnections;
 }
 
@@ -705,6 +793,8 @@ export function createTestServices(): TestServices {
     binanceConnections: new BinanceConnectionState(),
     okx: new FakeOkxReadOnly(),
     okxConnections: new OkxConnectionState(),
+    bitget: new FakeBitgetReadOnly(),
+    bitgetConnections: new BitgetConnectionState(),
     assetSourceConnections: new InMemoryAssetSourceConnections(
       assetSources,
       cards,

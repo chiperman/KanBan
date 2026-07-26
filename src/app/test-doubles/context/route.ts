@@ -23,6 +23,8 @@ export async function GET() {
       binanceConnections: "in-memory-binance-preview-state",
       okx: "fake-okx-read-only",
       okxConnections: "in-memory-okx-preview-state",
+      bitget: "fake-bitget-read-only",
+      bitgetConnections: "in-memory-bitget-preview-state",
       prices: "fake-prices",
       auth: "in-memory-session-auth",
       ownerCredentials: "in-memory-owner-credential-store",
