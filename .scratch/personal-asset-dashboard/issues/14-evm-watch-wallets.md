@@ -1,17 +1,5 @@
-# 14 — BNB Chain、Base 与 Arbitrum 观察钱包
+# 14 — BNB Chain、Base 与 Arbitrum 观察钱包（不再实施）
 
-**What to build:** 在 Ethereum 观察钱包闭环上扩展 BNB Smart Chain、Base 和 Arbitrum，使所有者能够以相同方式读取三条链的原生币与同质化代币，同时保持链级身份和故障隔离。
+**Status:** wontfix
 
-**Blocked by:** 13 — Ethereum 观察钱包与参考定价
-
-**Status:** ready-for-agent
-
-- [ ] 所有者可以分别添加 BNB Smart Chain、Base 和 Arbitrum 的公开地址。
-- [ ] 每条链读取原生币和同质化代币，并以链与合约地址共同标识资产。
-- [ ] 相同十六进制地址在不同链上保持独立来源和独立余额，不被错误合并。
-- [ ] 同名、同符号但不同链或合约的代币保持独立。
-- [ ] 每条链使用匹配的参考价格网络标识，价格来源与更新时间可见。
-- [ ] 单条链的 RPC 或定价失败不会阻止其他链更新，失败链遵循过期或未估值规则。
-- [ ] 新链资产完整进入总资产、分布、详情、刷新和快照流程。
-- [ ] 自动测试分别覆盖三条链的原生币、代币、空地址和部分失败样本。
-
+**Resolution:** 2026-07-26，BNB Smart Chain 已并入 Ticket 13，由同一个链配置驱动的 EVM 适配器与 Ethereum 一起交付。所有者当前不使用 Base 与 Arbitrum，两条链移出首版范围。本 Ticket 没有剩余验收项，也不再阻塞后续 Ticket。

@@ -40,11 +40,11 @@ Status: ready-for-agent
 20. As an 所有者, I want margin, futures, borrowing, and other leveraged accounts excluded, so that liabilities and leveraged positions do not blur the defined investment-asset boundary.
 21. As an 所有者, I want to add an observation wallet using public addresses, so that I can see chain assets without connecting a wallet.
 22. As an 所有者, I want observation wallets to be independent of wallet brand, so that MetaMask, OKX Wallet, Trust Wallet, Ledger, Binance Web3 Wallet, and similar products can be represented by their addresses.
-23. As an 所有者, I want Ethereum addresses supported, so that Ethereum native and fungible-token balances can be displayed.
-24. As an 所有者, I want BNB Smart Chain addresses supported, so that BNB Chain native and fungible-token balances can be displayed.
-25. As an 所有者, I want Base addresses supported, so that Base native and fungible-token balances can be displayed.
-26. As an 所有者, I want Arbitrum addresses supported, so that Arbitrum native and fungible-token balances can be displayed.
-27. As an 所有者, I want Solana addresses supported, so that SOL and SPL token balances can be displayed.
+23. As an 所有者, I want Ethereum addresses supported, so that ETH and ERC-20 balances can be displayed.
+24. As an 所有者, I want BNB Smart Chain addresses supported, so that BNB and BEP-20 balances can be displayed.
+25. As an 所有者, I want Ethereum and BNB Smart Chain to share one configurable EVM watch-wallet adapter, so that supporting the two chains does not duplicate the complete integration.
+26. As an 所有者, I want Base and Arbitrum excluded until I actually use them, so that unused chains do not add RPC and maintenance complexity.
+27. As an 所有者, I want Solana deferred until I actually use it, so that the first version does not carry a separate SPL Token implementation without product value.
 28. As an 所有者, I want observation wallets to remain watch-only, so that the personal terminal never needs a private key, seed phrase, MPC recovery material, signature, or transaction permission.
 29. As an 所有者, I want NFT, staking, LP, lending, and other DeFi positions excluded from the first version, so that chain valuation remains understandable and reliable.
 30. As an 所有者, I want assets held on a platform to use that platform's native quote or valuation, so that platform cards remain consistent with their source.
@@ -138,7 +138,8 @@ Status: ready-for-agent
 - Treat platform credentials as server-only secrets. Persist only an opaque secret reference alongside ordinary source configuration; never return secret material through browser APIs, logs, snapshots, or Supabase-synchronized records.
 - In the local-first version, use operating-system-backed or equivalently secure server-side secret storage. A future hosted deployment must configure credentials independently in its server-side secret store.
 - Model observation wallets as one or more public chain addresses. No wallet-connect protocol, seed phrase, private key, MPC recovery material, signature, or transaction API is permitted.
-- Support Ethereum, BNB Smart Chain, Base, Arbitrum, and Solana in the first version. Resolve native balances and fungible tokens only.
+- Support only Ethereum mainnet (chain ID 1) and BNB Smart Chain mainnet (chain ID 56) in the first version through one chain-configured EVM observation-wallet adapter. Resolve ETH/BNB and ERC-20/BEP-20 balances only; do not implement Base, Arbitrum, Solana, SPL Token, or separate per-chain business flows.
+- Use a server-configured indexed EVM provider to discover fungible-token balances because standard Ethereum JSON-RPC cannot enumerate every token held by an address. Keep provider API keys and full RPC URLs server-only. CoinGecko supplies reference prices only and is not a wallet-balance source.
 - Exclude Bitcoin, NFTs, staking, liquidity-pool positions, lending, and other DeFi protocol positions from the first version.
 - Include spot, funding, and Earn balances for supported centralized crypto platforms. Exclude futures, margin, leveraged, borrowing, and lending accounts.
 - Use source-native valuation for assets held by Longbridge, Binance, OKX, and Bitget. For Longbridge, trust `/v1/asset/account` `net_assets` as the source total; funds may use native NAV fields, while stocks without a price in the three allowed responses remain unvalued. Do not fabricate a holding price, market value, exchange rate, or platform profit.
@@ -184,7 +185,7 @@ Status: ready-for-agent
 - Verify authentication outcomes for Passkey success and failure, recovery authentication, TOTP challenge, manual lock, 30-minute inactivity lock using a fake clock, browser-session termination, and disabled registration.
 - Verify source onboarding as an atomic flow: valid read-only credentials succeed; credentials with trade, transfer, or withdrawal permission are rejected; failed checks leave no source or secret reference behind.
 - Verify that browser-accessible responses and logs never contain platform credentials, secret references that can be dereferenced by the client, seed phrases, private keys, or wallet-signing material.
-- Use provider response fixtures for Longbridge, Binance, OKX, Bitget, EVM chains, Solana, and CoinGecko. Longbridge browser tests must assert exact scope 6, exactly the three allowlisted GET asset endpoints during holdings sync, zero Longbridge network/Token activity during the 30-second price cycle, no order interface or request, no Token disclosure, source-native mapping, and stale-data retention on failure. Other adapters should confirm mapping, precision, pagination, account-scope inclusion, and error normalization without calling real accounts.
+- Use provider response fixtures for Longbridge, Binance, OKX, Bitget, Ethereum, BNB Smart Chain, and CoinGecko. EVM tests must prove that one adapter keeps chain ID and contract identity separate across Ethereum and BNB Smart Chain, handles token-index pagination and rate/error responses, and never exposes provider API keys. Longbridge browser tests must assert exact scope 6, exactly the three allowlisted GET asset endpoints during holdings sync, zero Longbridge network/Token activity during the 30-second price cycle, no order interface or request, no Token disclosure, source-native mapping, and stale-data retention on failure. Other adapters should confirm mapping, precision, pagination, account-scope inclusion, and error normalization without calling real accounts.
 - Verify that spot, funding, and Earn assets are included and that futures, margin, leverage, borrowing, lending, NFTs, staking, LP, and DeFi positions are excluded.
 - Verify source-native pricing with controlled cross-platform price differences. Confirm that the same asset may have different values per source and that the total sums those source values correctly.
 - Verify stablecoins use the supplied actual price rather than a hardcoded peg.
@@ -208,6 +209,7 @@ Status: ready-for-agent
 - Public registration, additional owners, teams, roles, collaboration, or a multi-user product model.
 - Futures, options, perpetual contracts, margin, leverage, borrowing, lending, liabilities, credit cards, loans, income, expenses, or complete personal finance.
 - Bitcoin observation wallets in the first version.
+- Base, Arbitrum, Solana, and SPL Token observation-wallet support in the first version.
 - NFTs, staking, liquidity pools, lending positions, protocol rewards, and other DeFi position parsing.
 - Historical transaction import, automatic history backfill, tax lots, realized-return reconstruction, or a cross-platform profit calculation.
 - Active price alerts, asset-change alerts, push notifications, email notifications, or operating-system notifications.
