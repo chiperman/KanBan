@@ -9,6 +9,7 @@ import {
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
+import { decimalAdd } from "@/domain/decimal";
 import type {
   AssetHolding,
   AssetSnapshot,
@@ -34,6 +35,19 @@ function text(value: unknown, field: string): string {
 
 function optionalText(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function decimalText(value: unknown, field: string): string {
+  const output =
+    typeof value === "number" && Number.isFinite(value)
+      ? String(value)
+      : typeof value === "string"
+        ? value
+        : "";
+  if (!/^[+-]?\d+(?:\.\d+)?$/.test(output)) {
+    throw new Error(`长桥响应缺少 ${field}`);
+  }
+  return output;
 }
 
 function listFromPage(page: unknown): JsonRecord[] {
@@ -93,28 +107,36 @@ export function mapLongbridgeSnapshot(input: {
   syncedAt: string;
   quotePrices?: Record<string, string>;
   quotePrevious?: Record<string, string>;
+  quoteTimes?: Record<string, string>;
   exchangeRatePages?: unknown[];
   profitPages?: unknown[];
 }): AssetSnapshot {
   const account = listFromPage(input.accountPages[0] ?? {}).at(0);
   if (!account) throw new Error("长桥账户预览为空");
   const accountCurrency = text(account.currency, "currency");
+  const exchangeRateObservations = (input.exchangeRatePages ?? []).flatMap((page) => {
+    const root = record(page);
+    const data =
+      typeof root.data === "object" && root.data !== null
+        ? record(root.data)
+        : root;
+    return (Array.isArray(data.exchanges) ? data.exchanges : []).map((raw) => {
+      const rate = record(raw);
+      return {
+        baseCurrency: text(rate.base_currency, "base_currency"),
+        quoteCurrency: text(rate.other_currency, "other_currency"),
+        rate: decimalText(rate.average_rate, "average_rate"),
+        source: "Longbridge 账户汇率",
+        observedAt: input.syncedAt,
+      };
+    });
+  });
   const exchangeRates = Object.fromEntries(
-    (input.exchangeRatePages ?? []).flatMap((page) => {
-      const root = record(page);
-      const data =
-        typeof root.data === "object" && root.data !== null
-          ? record(root.data)
-          : root;
-      return (Array.isArray(data.exchanges) ? data.exchanges : []).flatMap((raw) => {
-        const rate = record(raw);
-        return text(rate.base_currency, "base_currency") === accountCurrency &&
-          typeof rate.average_rate === "number" &&
-          Number.isFinite(rate.average_rate)
-          ? [[text(rate.other_currency, "other_currency"), String(rate.average_rate)] as const]
-          : [];
-      });
-    }),
+    exchangeRateObservations.flatMap((rate) =>
+      rate.baseCurrency === accountCurrency
+        ? [[rate.quoteCurrency, rate.rate] as const]
+        : [],
+    ),
   );
   const platformProfits = Object.fromEntries(
     (input.profitPages ?? []).flatMap((page) => {
@@ -142,21 +164,49 @@ export function mapLongbridgeSnapshot(input: {
       const currency = text(item.currency, "currency");
       const marketValue =
         optionalText(item.market_value) ??
-        multiplyDecimal(quantity, text(price, "last_done"));
+        (price ? multiplyDecimal(quantity, price) : null);
       const sourceAmount =
-        currency === accountCurrency
+        marketValue === null
+          ? null
+          : currency === accountCurrency
           ? marketValue
-          : divideDecimal(
+          : exchangeRates[currency]
+            ? divideDecimal(
               marketValue,
-              text(exchangeRates[currency], `exchange_rate(${currency}/${accountCurrency})`),
-            );
+              exchangeRates[currency],
+            )
+            : null;
+      const pricedAt = nativePrice
+        ? optionalText(item.net_asset_value_day) ?? input.syncedAt
+        : input.quoteTimes?.[symbol] ?? input.syncedAt;
+      const priceSource = nativePrice
+        ? "Longbridge 基金净值"
+        : price
+          ? "Longbridge QuoteContext"
+          : optionalText(item.market_value)
+            ? "Longbridge 账户估值"
+            : null;
       return {
         symbol,
         name: text(item.symbol_name ?? item.name ?? item.fund_name, "symbol_name"),
         quantity,
         currency,
+        assetClass: "securities" as const,
+        currentPrice: price ? { amount: price, currency } : null,
         marketValue,
-        sourceMarketValue: { amount: sourceAmount, currency: accountCurrency },
+        sourceMarketValue:
+          sourceAmount === null
+            ? null
+            : { amount: sourceAmount, currency: accountCurrency },
+        valuation:
+          sourceAmount !== null && priceSource
+            ? { status: "valued" as const, priceSource, pricedAt }
+            : {
+                status: "unvalued" as const,
+                reason: marketValue === null
+                  ? "Longbridge 未返回可靠价格"
+                  : `缺少 ${currency}/${accountCurrency} 来源汇率`,
+              },
         costPrice: optionalText(item.cost_price ?? item.cost_net_asset_value),
         platformProfit: optionalText(
           item.unrealized_pl ?? item.platform_profit,
@@ -170,17 +220,26 @@ export function mapLongbridgeSnapshot(input: {
       };
     })
     .sort((left, right) => {
-      return compareDecimal(
-        right.sourceMarketValue.amount,
-        left.sourceMarketValue.amount,
-      );
+      if (left.sourceMarketValue === null) return right.sourceMarketValue === null ? 0 : 1;
+      if (right.sourceMarketValue === null) return -1;
+      return compareDecimal(right.sourceMarketValue.amount, left.sourceMarketValue.amount);
     });
+  const totalAmount = holdings.every((holding) => holding.sourceMarketValue !== null)
+    ? text(account.net_assets, "net_assets")
+    : holdings.reduce(
+        (sum, holding) =>
+          holding.sourceMarketValue
+            ? decimalAdd(sum, holding.sourceMarketValue.amount)
+            : sum,
+        optionalText(account.total_cash) ?? "0",
+      );
   return {
     total: {
-      amount: text(account.net_assets, "net_assets"),
+      amount: totalAmount,
       currency: accountCurrency,
     },
     holdings,
+    exchangeRates: exchangeRateObservations,
     syncedAt: input.syncedAt,
   };
 }
@@ -550,7 +609,11 @@ export interface LongbridgeMarketData {
   quote(
     accessToken: string,
     symbols: string[],
-  ): Promise<{ prices: Record<string, string>; previous: Record<string, string> }>;
+  ): Promise<{
+    prices: Record<string, string>;
+    previous: Record<string, string>;
+    times: Record<string, string>;
+  }>;
 }
 
 /**
@@ -561,7 +624,7 @@ export class LongbridgeMcpMarketData implements LongbridgeMarketData {
   constructor(private readonly request: LongbridgeFetch = globalThis.fetch) {}
 
   async quote(accessToken: string, symbols: string[]) {
-    if (symbols.length === 0) return { prices: {}, previous: {} };
+    if (symbols.length === 0) return { prices: {}, previous: {}, times: {} };
     const transport = new StreamableHTTPClientTransport(
       new URL("https://mcp.longbridge.com/v2"),
       {
@@ -591,13 +654,15 @@ export class LongbridgeMcpMarketData implements LongbridgeMarketData {
       if (!Array.isArray(quotes)) throw new Error("长桥行情响应格式无效");
       const prices: Record<string, string> = {};
       const previous: Record<string, string> = {};
+      const times: Record<string, string> = {};
       for (const raw of quotes) {
         const quote = record(raw);
         const symbol = text(quote.symbol, "symbol");
         prices[symbol] = text(quote.last_done, "last_done");
         previous[symbol] = text(quote.prev_close, "prev_close");
+        times[symbol] = optionalText(quote.timestamp) ?? new Date().toISOString();
       }
-      return { prices, previous };
+      return { prices, previous, times };
     } finally {
       await client.close().catch(() => undefined);
     }
@@ -737,6 +802,7 @@ export class ProductionLongbridgeOAuth implements LongbridgeOAuth {
         syncedAt: new Date().toISOString(),
         quotePrices: quotes.prices,
         quotePrevious: quotes.previous,
+        quoteTimes: quotes.times,
         exchangeRatePages: [exchangeRatePage],
         profitPages,
       }),

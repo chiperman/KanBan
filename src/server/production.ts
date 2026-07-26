@@ -7,12 +7,14 @@ import {
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { decimalAdd, decimalCompare, decimalDivide } from "@/domain/decimal";
 import type {
   AppServices,
   Card,
 } from "@/server/composition";
 import type {
   AssetSourceSummary,
+  AssetSnapshot,
   AssetSourceConnections,
   AssetSources,
   CardStore,
@@ -41,8 +43,116 @@ class SystemClock implements Clock {
 }
 
 interface DashboardState {
+  schemaVersion: 2;
   cards: Card[];
   assetSources: AssetSourceSummary[];
+}
+
+const DASHBOARD_SCHEMA_VERSION = 2 as const;
+
+function migrateAssetSource(raw: unknown): AssetSourceSummary {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new Error("资产来源数据格式无效");
+  }
+  const source = raw as AssetSourceSummary;
+  if (
+    typeof source.snapshot !== "object" ||
+    source.snapshot === null ||
+    !Array.isArray(source.snapshot.holdings)
+  ) {
+    throw new Error("资产来源快照格式无效");
+  }
+  const snapshot = source.snapshot as AssetSnapshot;
+  const legacySnapshot =
+    !Array.isArray(snapshot.exchangeRates) ||
+    snapshot.holdings.some(
+      (holding) =>
+        !Object.hasOwn(holding, "assetClass") ||
+        !Object.hasOwn(holding, "currentPrice") ||
+        !Object.hasOwn(holding, "sourceMarketValue") ||
+        !Object.hasOwn(holding, "valuation"),
+    );
+  const exchangeRates = Array.isArray(snapshot.exchangeRates)
+    ? snapshot.exchangeRates
+    : [];
+  const holdings = snapshot.holdings.map((holding) => {
+    const legacy = holding as typeof holding & {
+      assetClass?: typeof holding.assetClass;
+      currentPrice?: typeof holding.currentPrice;
+      sourceMarketValue?: typeof holding.sourceMarketValue;
+      valuation?: typeof holding.valuation;
+    };
+    const hasCurrentPrice = Object.hasOwn(legacy, "currentPrice");
+    const hasSourceMarketValue = Object.hasOwn(legacy, "sourceMarketValue");
+    const hasValuation = Object.hasOwn(legacy, "valuation");
+    const canDerivePrice =
+      typeof legacy.marketValue === "string" &&
+      typeof legacy.quantity === "string" &&
+      decimalCompare(legacy.quantity, "0") !== 0;
+    const currentPrice = hasCurrentPrice
+      ? legacy.currentPrice ?? null
+      : canDerivePrice
+        ? {
+            amount: decimalDivide(legacy.marketValue!, legacy.quantity),
+            currency: legacy.currency,
+          }
+        : null;
+    const sourceMarketValue = hasSourceMarketValue
+      ? legacy.sourceMarketValue ?? null
+      : typeof legacy.marketValue === "string" &&
+          legacy.currency === snapshot.total.currency
+        ? { amount: legacy.marketValue, currency: snapshot.total.currency }
+        : null;
+    const valuation = hasValuation
+      ? legacy.valuation
+      : currentPrice !== null && sourceMarketValue !== null
+        ? {
+            status: "valued" as const,
+            priceSource: `${source.label} 旧快照`,
+            pricedAt: snapshot.syncedAt,
+          }
+        : {
+            status: "unvalued" as const,
+            reason: currentPrice === null
+              ? "旧快照没有可靠价格"
+              : `缺少 ${legacy.currency}/${snapshot.total.currency} 显式汇率`,
+          };
+    return {
+      ...legacy,
+      assetClass: legacy.assetClass ?? "securities",
+      currentPrice,
+      sourceMarketValue,
+      valuation,
+    };
+  });
+  const hasUnvaluedLegacyHolding =
+    legacySnapshot &&
+    holdings.some(
+      (holding) =>
+        holding.valuation.status === "unvalued" ||
+        holding.sourceMarketValue === null,
+    );
+  const total = hasUnvaluedLegacyHolding
+    ? {
+        amount: decimalAdd(
+          ...holdings.flatMap((holding) =>
+            holding.sourceMarketValue?.currency === snapshot.total.currency
+              ? [holding.sourceMarketValue.amount]
+              : [],
+          ),
+        ),
+        currency: snapshot.total.currency,
+      }
+    : snapshot.total;
+  return {
+    ...source,
+    snapshot: {
+      ...snapshot,
+      total,
+      holdings,
+      exchangeRates,
+    },
+  };
 }
 
 function isMissingFile(error: unknown): boolean {
@@ -79,7 +189,11 @@ export class FileDashboardDatabase {
       } catch (legacyError) {
         if (!isMissingFile(legacyError)) throw legacyError;
       }
-      return { cards, assetSources: [] };
+      return {
+        schemaVersion: DASHBOARD_SCHEMA_VERSION,
+        cards,
+        assetSources: [],
+      };
     }
     const value = JSON.parse(raw) as Partial<DashboardState>;
     const cards = parseCards(value.cards);
@@ -90,8 +204,9 @@ export class FileDashboardDatabase {
       throw new Error(`Dashboard 数据文件格式无效: ${this.filePath}`);
     }
     return {
+      schemaVersion: DASHBOARD_SCHEMA_VERSION,
       cards,
-      assetSources: value.assetSources,
+      assetSources: value.assetSources.map(migrateAssetSource),
     };
   }
 

@@ -6,9 +6,10 @@ import type { Card, CardSpan, LinkItem } from "@/server/ports";
 import { CardContent } from "@/ui/card-content";
 import { AssetSourceFlow } from "@/ui/asset-source-flow";
 import {
-  LongbridgeAssetCard,
+  AssetSourceCard,
   type AssetSourceView,
 } from "@/ui/longbridge-asset-card";
+import { TotalAssetOverview } from "@/ui/total-asset-overview";
 
 type OrdinaryKind = "identity" | "now" | "links" | "markdown";
 type EditorTarget =
@@ -327,7 +328,12 @@ export function OwnerDashboard({
         className={`card-grid${layoutEditing ? " layout-editing" : ""}`}
         data-testid="card-grid"
       >
-        {visibleCards.length === 0 ? (
+        {assetSources.length > 0 ? (
+          <article className="card span-3 total-overview-card" data-testid="total-overview-card">
+            <TotalAssetOverview sources={assetSources} />
+          </article>
+        ) : null}
+        {visibleCards.length === 0 && assetSources.length === 0 ? (
           <div className="empty-state" data-testid="empty-state">
             <p className="empty-title">暂无卡片</p>
             <p className="empty-hint">使用上方内容管理入口创建公开主页内容。</p>
@@ -347,8 +353,8 @@ export function OwnerDashboard({
               {card.kind === "asset" && card.sourceId ? (
                 (() => {
                   const source = assetSources.find((item) => item.id === card.sourceId);
-                  return source?.kind === "longbridge" ? (
-                    <LongbridgeAssetCard source={source} />
+                  return source ? (
+                    <AssetSourceCard source={source} />
                   ) : (
                     <CardContent card={card} />
                   );

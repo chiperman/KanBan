@@ -76,6 +76,9 @@ test("生产运行不暴露测试替身", async ({ playwright }) => {
   expect(
     (await prodRequest.post("/test-doubles/longbridge/persistence")).status(),
   ).toBe(404);
+  expect(
+    (await prodRequest.post("/test-doubles/valuation")).status(),
+  ).toBe(404);
 
   await prodRequest.dispose();
 });

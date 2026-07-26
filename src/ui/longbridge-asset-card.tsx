@@ -6,7 +6,7 @@ import type { AssetHolding, AssetSnapshot } from "@/server/ports";
 
 export interface AssetSourceView {
   id: string;
-  kind: "longbridge";
+  kind: string;
   label: string;
   accountId: string;
   snapshot: AssetSnapshot;
@@ -44,11 +44,27 @@ function compareDecimal(left: string | null, right: string | null): number {
 }
 
 function HoldingRow({ holding }: { holding: AssetHolding }) {
+  const valuationDetail = holding.valuation.status === "valued"
+    ? `${holding.valuation.priceSource} · ${holding.valuation.pricedAt.slice(0, 16).replace("T", " ")} UTC`
+    : holding.valuation.reason;
   return (
     <tr>
-      <td><strong>{holding.name}</strong><span className="holding-symbol">{holding.symbol}</span></td>
+      <td>
+        <strong>{holding.name}</strong>
+        <span className="holding-symbol">{holding.symbol}</span>
+        <span className="holding-price-source">
+          {valuationDetail}
+        </span>
+      </td>
       <td>{amount(holding.quantity)}</td>
-      <td>{amount(holding.marketValue)} {holding.currency}</td>
+      <td>
+        {holding.currentPrice
+          ? `${amount(holding.currentPrice.amount)} ${holding.currentPrice.currency}`
+          : holding.valuation.status === "unvalued"
+            ? "未估值"
+            : "—"}
+      </td>
+      <td>{holding.marketValue === null ? "未估值" : `${amount(holding.marketValue)} ${holding.currency}`}</td>
       <td>{holding.costPrice === null ? "—" : amount(holding.costPrice)}</td>
       <td>{holding.platformProfit === null ? "—" : amount(holding.platformProfit)}</td>
       <td>{holding.changePercent === null ? "—" : `${holding.changePercent}%`}</td>
@@ -56,7 +72,7 @@ function HoldingRow({ holding }: { holding: AssetHolding }) {
   );
 }
 
-export function LongbridgeAssetCard({ source }: { source: AssetSourceView }) {
+export function AssetSourceCard({ source }: { source: AssetSourceView }) {
   const [open, setOpen] = useState(false);
   const [sort, setSort] = useState("market-value");
   const scrollPosition = useRef(0);
@@ -65,8 +81,8 @@ export function LongbridgeAssetCard({ source }: { source: AssetSourceView }) {
       if (sort === "name") return left.name.localeCompare(right.name, "en");
       if (sort === "change") return compareDecimal(right.changePercent, left.changePercent);
       return compareDecimal(
-        right.sourceMarketValue.amount,
-        left.sourceMarketValue.amount,
+        right.sourceMarketValue?.amount ?? null,
+        left.sourceMarketValue?.amount ?? null,
       );
     });
   }, [sort, source.snapshot.holdings]);
@@ -83,14 +99,21 @@ export function LongbridgeAssetCard({ source }: { source: AssetSourceView }) {
 
   return (
     <>
-      <div data-testid="longbridge-card">
-        <p className="card-label">长桥资产</p>
+      <div
+        data-testid={source.kind === "longbridge" ? "longbridge-card" : `asset-source-card-${source.id}`}
+      >
+        <p className="card-label">{source.kind === "longbridge" ? "长桥资产" : "资产来源"}</p>
+        {source.kind === "longbridge" ? null : <h2 className="asset-source-title">{source.label}</h2>}
         <p className="asset-total">{amount(source.snapshot.total.amount)} <span>{source.snapshot.total.currency}</span></p>
         <ol className="holding-top-list">
           {source.snapshot.holdings.slice(0, 5).map((holding) => (
             <li key={holding.symbol}>
               <span>{holding.name}</span>
-              <strong>{amount(holding.marketValue)} {holding.currency}</strong>
+              <strong>
+                {holding.marketValue === null
+                  ? "未估值"
+                  : `${amount(holding.marketValue)} ${holding.currency}`}
+              </strong>
             </li>
           ))}
         </ol>
@@ -98,10 +121,15 @@ export function LongbridgeAssetCard({ source }: { source: AssetSourceView }) {
         <button type="button" className="secondary-button" onClick={showDetails}>查看全部持仓</button>
       </div>
       {open ? (
-        <div className="asset-detail-overlay" role="dialog" aria-modal="true" aria-label="长桥全部持仓">
+        <div
+          className="asset-detail-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label={source.kind === "longbridge" ? "长桥全部持仓" : `${source.label} 全部持仓`}
+        >
           <div className="asset-detail-dialog">
             <div className="asset-detail-header">
-              <div><p className="card-label">长桥全部持仓</p><h2>{source.label}</h2></div>
+              <div><p className="card-label">全部持仓</p><h2>{source.label}</h2></div>
               <button type="button" className="login-cancel" onClick={closeDetails}>关闭详情</button>
             </div>
             <label className="asset-sort">持仓排序
@@ -113,7 +141,7 @@ export function LongbridgeAssetCard({ source }: { source: AssetSourceView }) {
             </label>
             <div className="asset-table-wrap">
               <table className="asset-table">
-                <thead><tr><th>名称</th><th>数量</th><th>市值</th><th>成本</th><th>平台盈亏</th><th>涨跌</th></tr></thead>
+                <thead><tr><th>名称</th><th>数量</th><th>当前价格</th><th>原始市值</th><th>成本</th><th>平台盈亏</th><th>涨跌</th></tr></thead>
                 <tbody>{holdings.map((holding) => <HoldingRow key={holding.symbol} holding={holding} />)}</tbody>
               </table>
             </div>

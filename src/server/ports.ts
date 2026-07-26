@@ -66,7 +66,7 @@ export interface CardStore {
 
 export interface AssetSourceSummary {
   id: string;
-  kind: "longbridge";
+  kind: string;
   label: string;
   accountId: string;
   permissions: AssetPermission[];
@@ -87,14 +87,38 @@ export interface AssetMoney {
   currency: string;
 }
 
+export type AssetClass = "securities" | "crypto";
+
+export interface AssetExchangeRate {
+  baseCurrency: string;
+  quoteCurrency: string;
+  rate: string;
+  source: string;
+  observedAt: string;
+}
+
+export type AssetValuation =
+  | {
+      status: "valued";
+      priceSource: string;
+      pricedAt: string;
+    }
+  | {
+      status: "unvalued";
+      reason: string;
+    };
+
 export interface AssetHolding {
   symbol: string;
   name: string;
   quantity: string;
   currency: string;
-  marketValue: string;
+  assetClass: AssetClass;
+  currentPrice: AssetMoney | null;
+  marketValue: string | null;
   /** 来源按账户计价货币给出的可比较市值，仅用于来源内排序与汇总。 */
-  sourceMarketValue: AssetMoney;
+  sourceMarketValue: AssetMoney | null;
+  valuation: AssetValuation;
   costPrice: string | null;
   platformProfit: string | null;
   changePercent: string | null;
@@ -103,6 +127,7 @@ export interface AssetHolding {
 export interface AssetSnapshot {
   total: AssetMoney;
   holdings: AssetHolding[];
+  exchangeRates: AssetExchangeRate[];
   syncedAt: string;
 }
 

@@ -1,8 +1,8 @@
-import { mkdtemp, mkdir, readFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { isTestEnv } from "@/server/composition";
+import { getTestServices, isTestEnv } from "@/server/composition";
 import {
   DatabaseAssetSourceConnections,
   FileDashboardDatabase,
@@ -21,13 +21,71 @@ const RESULT: LongbridgeAuthorizationResult = {
   snapshot: {
     total: { amount: "1", currency: "USD" },
     holdings: [],
+    exchangeRates: [],
     syncedAt: "2026-01-01T00:00:00.000Z",
   },
 };
 
-export async function POST() {
+export async function POST(request: Request) {
   if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
   const root = await mkdtemp(path.join(tmpdir(), "pad-ticket06-"));
+  if (new URL(request.url).searchParams.get("legacy") === "1") {
+    try {
+      const dashboardPath = path.join(root, "dashboard.json");
+      await writeFile(dashboardPath, JSON.stringify({
+        cards: [{
+          id: "legacy-card",
+          kind: "asset",
+          access: "private",
+          title: "长桥资产",
+          body: "只读证券账户",
+          sourceId: "legacy-source",
+          span: 2,
+        }],
+        assetSources: [{
+          id: "legacy-source",
+          kind: "longbridge",
+          label: "长桥 Ticket 06 账户",
+          accountId: "legacy-account",
+          permissions: ["market-data", "account", "positions"],
+          credentialReference: "legacy-reference",
+          snapshot: {
+            total: { amount: "300", currency: "USD" },
+            holdings: [{
+              symbol: "AAPL.US",
+              name: "Apple",
+              quantity: "2",
+              currency: "USD",
+              marketValue: "200",
+              costPrice: "90",
+              platformProfit: "20",
+              changePercent: "1",
+            }, {
+              symbol: "0700.HK",
+              name: "Tencent",
+              quantity: "10",
+              currency: "HKD",
+              marketValue: "500",
+              costPrice: "48",
+              platformProfit: "20",
+              changePercent: "0.5",
+            }],
+            syncedAt: "2026-03-31T08:00:00.000Z",
+          },
+        }],
+      }));
+      const database = new FileDashboardDatabase(
+        dashboardPath,
+        path.join(root, "legacy-cards.json"),
+      );
+      const services = getTestServices();
+      await services.cards.replaceAll(await database.listCards());
+      await services.assetSources.replaceAll(await database.listSources());
+      return Response.json({ ok: true });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
   const previousKey = process.env.PAD_SECRET_ENCRYPTION_KEY;
   process.env.PAD_SECRET_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64");
   try {

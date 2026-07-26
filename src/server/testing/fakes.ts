@@ -130,6 +130,17 @@ export class FakeLongbridgeOAuth implements LongbridgeOAuth {
         );
       }),
     );
+    const quoteTimes = Object.fromEntries(
+      (config.quotePages ?? []).flatMap((page) => {
+        if (typeof page !== "object" || page === null) return [];
+        const root = page as { data?: { list?: Array<{ symbol?: unknown; timestamp?: unknown }> } };
+        return (root.data?.list ?? []).flatMap((quote) =>
+          typeof quote.symbol === "string" && typeof quote.timestamp === "string"
+            ? [[quote.symbol, quote.timestamp] as const]
+            : [],
+        );
+      }),
+    );
     return {
       credentials: JSON.stringify(config.credentials),
       permissions: config.permissions,
@@ -140,6 +151,7 @@ export class FakeLongbridgeOAuth implements LongbridgeOAuth {
         syncedAt: "2026-01-01T00:00:00.000Z",
         quotePrices,
         quotePrevious,
+        quoteTimes,
         exchangeRatePages: config.exchangeRatePages,
         profitPages,
       }),

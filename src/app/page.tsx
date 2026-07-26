@@ -6,6 +6,7 @@ import { RestrictedCard } from "@/ui/restricted-card";
 import { RecoverySetup } from "@/ui/recovery-setup";
 import { SessionGuard } from "@/ui/session-guard";
 import { ThemeSwitcher } from "@/ui/theme-switcher";
+import { TotalOverviewPlaceholder } from "@/ui/total-asset-overview";
 
 export const dynamic = "force-dynamic";
 
@@ -55,21 +56,26 @@ export default async function PublicHomePage() {
                 </p>
               </div>
             ) : (
-              cards.map((card) =>
+              <>
+              {cards.some((card) => card.kind === "asset") ? (
+                <TotalOverviewPlaceholder />
+              ) : null}
+              {cards.map((card) =>
                 // 服务端数据边界：访客永远不会收到私密卡片的真实内容，
                 // 占位模型只包含宽度。
                 card.access === "private" ? (
                   <RestrictedCard key={card.id} span={card.span} />
                 ) : (
-                <article
-                  key={card.id}
-                  className={`card span-${card.span}`}
-                  data-testid="card"
-                >
-                  <CardContent card={card} />
-                </article>
-              ),
-            )
+                  <article
+                    key={card.id}
+                    className={`card span-${card.span}`}
+                    data-testid="card"
+                  >
+                    <CardContent card={card} />
+                  </article>
+                ),
+              )}
+              </>
             )}
           </section>
         )}

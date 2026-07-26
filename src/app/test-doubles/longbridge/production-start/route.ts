@@ -81,6 +81,7 @@ export async function POST(request: Request) {
                 symbol,
                 last_done: "2000",
                 prev_close: "1950",
+                timestamp: "2026-05-29T00:00:00Z",
               }))),
             }],
           },
