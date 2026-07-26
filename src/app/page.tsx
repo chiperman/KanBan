@@ -17,6 +17,11 @@ export default async function PublicHomePage() {
   const services = getServices();
   const cards = await services.cards.list();
   const session = await services.auth.currentSession();
+  const assetSources = session
+    ? (await services.assetSources.list()).map(
+        ({ credentialReference: _credentialReference, permissions: _permissions, ...source }) => source,
+      )
+    : [];
   const now = services.clock.now();
 
   const content = (
@@ -39,7 +44,7 @@ export default async function PublicHomePage() {
       </header>
       <main>
         {session ? (
-          <OwnerDashboard cards={cards} />
+          <OwnerDashboard cards={cards} assetSources={assetSources} />
         ) : (
           <section className="card-grid" data-testid="card-grid">
             {cards.length === 0 ? (

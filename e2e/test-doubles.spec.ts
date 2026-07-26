@@ -59,6 +59,23 @@ test("生产运行不暴露测试替身", async ({ playwright }) => {
       })
     ).status(),
   ).toBe(404);
+  expect(
+    (
+      await prodRequest.post("/test-doubles/longbridge", {
+        data: {},
+      })
+    ).status(),
+  ).toBe(404);
+  expect((await prodRequest.get("/test-doubles/longbridge")).status()).toBe(404);
+  expect(
+    (await prodRequest.get("/test-doubles/longbridge/authorize")).status(),
+  ).toBe(404);
+  expect(
+    (await prodRequest.post("/test-doubles/longbridge/production-start")).status(),
+  ).toBe(404);
+  expect(
+    (await prodRequest.post("/test-doubles/longbridge/persistence")).status(),
+  ).toBe(404);
 
   await prodRequest.dispose();
 });

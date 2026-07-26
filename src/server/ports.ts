@@ -49,6 +49,7 @@ export interface AssetCard extends Omit<BaseCard, "access"> {
   access: "private";
   title: string;
   body: string;
+  sourceId?: string;
 }
 
 export type Card =
@@ -65,13 +66,74 @@ export interface CardStore {
 
 export interface AssetSourceSummary {
   id: string;
-  kind: string;
+  kind: "longbridge";
   label: string;
+  accountId: string;
+  permissions: AssetPermission[];
+  credentialReference: string;
+  snapshot: AssetSnapshot;
 }
 
-/** 外部资产来源的只读契约；后续 Ticket 在此扩展同步能力。 */
+export type AssetPermission =
+  | "market-data"
+  | "account"
+  | "positions"
+  | "trade"
+  | "transfer"
+  | "withdraw";
+
+export interface AssetMoney {
+  amount: string;
+  currency: string;
+}
+
+export interface AssetHolding {
+  symbol: string;
+  name: string;
+  quantity: string;
+  currency: string;
+  marketValue: string;
+  /** 来源按账户计价货币给出的可比较市值，仅用于来源内排序与汇总。 */
+  sourceMarketValue: AssetMoney;
+  costPrice: string | null;
+  platformProfit: string | null;
+  changePercent: string | null;
+}
+
+export interface AssetSnapshot {
+  total: AssetMoney;
+  holdings: AssetHolding[];
+  syncedAt: string;
+}
+
+export interface LongbridgeAuthorizationResult {
+  credentials: string;
+  permissions: AssetPermission[];
+  account: { id: string; label: string };
+  snapshot: AssetSnapshot;
+}
+
+export interface LongbridgeOAuth {
+  start(redirectUri: string): Promise<{
+    authorizationUrl: string;
+    state: string;
+    codeVerifier: string;
+  }>;
+  finish(input: {
+    code: string;
+    codeVerifier: string;
+    redirectUri: string;
+  }): Promise<LongbridgeAuthorizationResult>;
+}
+
+export interface AssetSourceConnections {
+  connectLongbridge(result: LongbridgeAuthorizationResult): Promise<void>;
+}
+
+/** 外部资产来源仅保存服务端凭证引用；凭证正文只能进入 SecretStore。 */
 export interface AssetSources {
   list(): Promise<AssetSourceSummary[]>;
+  replaceAll(sources: AssetSourceSummary[]): Promise<void>;
 }
 
 export interface PriceQuote {

@@ -1,7 +1,9 @@
 import type {
   AssetSources,
+  AssetSourceConnections,
   CardStore,
   Clock,
+  LongbridgeOAuth,
   OwnerAuth,
   OwnerCredentialStore,
   OwnerRecoveryCredentialStore,
@@ -10,6 +12,7 @@ import type {
 } from "@/server/ports";
 import { createProductionServices } from "@/server/production";
 import { clearAllSessions } from "@/server/auth/session";
+import { LongbridgeConnectionState } from "@/server/asset-sources/longbridge";
 import {
   createTestServices,
   type TestServices,
@@ -27,6 +30,9 @@ export interface AppServices {
   ownerCredentials: OwnerCredentialStore;
   ownerRecoveryCredentials: OwnerRecoveryCredentialStore;
   secrets: SecretStore;
+  longbridge: LongbridgeOAuth;
+  longbridgeConnections: LongbridgeConnectionState;
+  assetSourceConnections: AssetSourceConnections;
 }
 
 const GLOBAL_KEY = "__personal_asset_dashboard_services__";

@@ -10,6 +10,7 @@
     "test": "next build && playwright test"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
     "@simplewebauthn/browser": "^13.3.0",
     "@simplewebauthn/server": "^13.3.2",
     "next": "^16.2.11",

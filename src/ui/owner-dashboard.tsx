@@ -4,6 +4,11 @@ import { useState, type DragEvent, type FormEvent } from "react";
 
 import type { Card, CardSpan, LinkItem } from "@/server/ports";
 import { CardContent } from "@/ui/card-content";
+import { AssetSourceFlow } from "@/ui/asset-source-flow";
+import {
+  LongbridgeAssetCard,
+  type AssetSourceView,
+} from "@/ui/longbridge-asset-card";
 
 type OrdinaryKind = "identity" | "now" | "links" | "markdown";
 type EditorTarget =
@@ -200,7 +205,13 @@ function CardEditor({
   );
 }
 
-export function OwnerDashboard({ cards }: { cards: Card[] }) {
+export function OwnerDashboard({
+  cards,
+  assetSources,
+}: {
+  cards: Card[];
+  assetSources: AssetSourceView[];
+}) {
   const [editor, setEditor] = useState<EditorTarget | null>(null);
   const [error, setError] = useState("");
   const [layoutEditing, setLayoutEditing] = useState(false);
@@ -301,6 +312,7 @@ export function OwnerDashboard({ cards }: { cards: Card[] }) {
             {!existingKinds.has("now") ? <button type="button" onClick={() => setEditor({ mode: "create", kind: "now" })}>新建 Now 卡片</button> : null}
             {!existingKinds.has("links") ? <button type="button" onClick={() => setEditor({ mode: "create", kind: "links" })}>新建链接卡片</button> : null}
             <button type="button" onClick={() => setEditor({ mode: "create", kind: "markdown" })}>新建 Markdown 卡片</button>
+            <AssetSourceFlow />
             <button type="button" onClick={enterLayoutEditing}>编辑布局</button>
           </>
         )}
@@ -332,7 +344,18 @@ export function OwnerDashboard({ cards }: { cards: Card[] }) {
               onDragOver={layoutEditing ? (event) => event.preventDefault() : undefined}
               onDrop={layoutEditing ? (event) => dropBefore(event, card.id) : undefined}
             >
-              <CardContent card={card} />
+              {card.kind === "asset" && card.sourceId ? (
+                (() => {
+                  const source = assetSources.find((item) => item.id === card.sourceId);
+                  return source?.kind === "longbridge" ? (
+                    <LongbridgeAssetCard source={source} />
+                  ) : (
+                    <CardContent card={card} />
+                  );
+                })()
+              ) : (
+                <CardContent card={card} />
+              )}
               {layoutEditing ? (
                 <label className="layout-span-control">
                   {cardName(card)}宽度
