@@ -25,6 +25,8 @@ export async function GET() {
       okxConnections: "in-memory-okx-preview-state",
       bitget: "fake-bitget-read-only",
       bitgetConnections: "in-memory-bitget-preview-state",
+      evm: "fake-chain-configured-evm-watch-wallet",
+      evmConnections: "in-memory-evm-preview-state",
       prices: "fake-prices",
       auth: "in-memory-session-auth",
       ownerCredentials: "in-memory-owner-credential-store",

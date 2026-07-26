@@ -12,6 +12,9 @@ import type {
   BitgetAuthorizationResult,
   BitgetAccountMode,
   BitgetReadOnly,
+  EvmChain,
+  EvmWatchAuthorizationResult,
+  EvmWatchWalletReadOnly,
   OkxAuthorizationResult,
   OkxReadOnly,
   OkxRegion,
@@ -57,6 +60,7 @@ import {
   validateBitgetReadOnlyPermission,
 } from "@/server/asset-sources/bitget";
 import { bitgetFixtureSnapshot } from "@/server/testing/bitget-fixtures";
+import { EvmConnectionState } from "@/server/asset-sources/ethereum";
 
 export class FakeClock implements Clock {
   private current = new Date("2026-01-01T00:00:00.000Z");
@@ -371,6 +375,108 @@ export class FakeBitgetReadOnly implements BitgetReadOnly {
   }
 }
 
+export class FakeEvmWatchWallet implements EvmWatchWalletReadOnly {
+  private scenario = "valid";
+
+  configure(scenario: string): void {
+    this.scenario = scenario;
+  }
+
+  async preview(input: { chain: EvmChain; addresses: string[]; observedAt: string }): Promise<EvmWatchAuthorizationResult> {
+    if (this.scenario === "failure") throw new Error("Ethereum RPC 暂时不可用");
+    const addresses = input.addresses.map((address) => address.trim().toLowerCase()).filter(Boolean);
+    if (addresses.length === 0 || addresses.some((address) => !/^0x[0-9a-f]{40}$/.test(address))) {
+      throw new Error("Ethereum 地址格式无效");
+    }
+    if (new Set(addresses).size !== addresses.length) throw new Error("Ethereum 公开地址不能重复");
+    const config = input.chain === "ethereum"
+      ? { chainId: "1", label: "Ethereum", symbol: "ETH", standard: "ERC-20", nativePrice: "2000", nativeValue: "5000", total: "5519" }
+      : { chainId: "56", label: "BNB Smart Chain", symbol: "BNB", standard: "BEP-20", nativePrice: "600", nativeValue: "1500", total: "2019" };
+    const holdings = this.scenario === "empty" ? [] : [
+      {
+        symbol: config.symbol,
+        name: config.label,
+        sourceAsset: `evm:${config.chainId}:native`,
+        quantity: "2.5",
+        currency: "USD",
+        assetClass: "crypto" as const,
+        currentPrice: { amount: config.nativePrice, currency: "USD" },
+        marketValue: config.nativeValue,
+        sourceMarketValue: { amount: config.nativeValue, currency: "USD" },
+        valuation: { status: "valued" as const, priceSource: `CoinGecko ${config.label}/USD 参考价格`, pricedAt: input.observedAt },
+        costPrice: null,
+        platformProfit: null,
+        changePercent: null,
+      },
+      {
+        symbol: "SAME",
+        name: `SAME · ${config.label} ${config.standard}`,
+        sourceAsset: `evm:${config.chainId}:0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`,
+        quantity: "500",
+        currency: "USD",
+        assetClass: "crypto" as const,
+        currentPrice: { amount: "1", currency: "USD" },
+        marketValue: "500",
+        sourceMarketValue: { amount: "500", currency: "USD" },
+        valuation: { status: "valued" as const, priceSource: "CoinGecko Ethereum token/USD 参考价格", pricedAt: input.observedAt },
+        costPrice: null,
+        platformProfit: null,
+        changePercent: null,
+      },
+      {
+        symbol: "SAME",
+        name: `SAME · ${config.label} ${config.standard}`,
+        sourceAsset: `evm:${config.chainId}:0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb`,
+        quantity: "10",
+        currency: "USD",
+        assetClass: "crypto" as const,
+        currentPrice: { amount: "1.9", currency: "USD" },
+        marketValue: "19",
+        sourceMarketValue: { amount: "19", currency: "USD" },
+        valuation: { status: "valued" as const, priceSource: "CoinGecko Ethereum token/USD 参考价格", pricedAt: input.observedAt },
+        costPrice: null,
+        platformProfit: null,
+        changePercent: null,
+      },
+      {
+        symbol: "UNKNOWN",
+        name: `UNKNOWN · ${config.label} ${config.standard}`,
+        sourceAsset: `evm:${config.chainId}:0xcccccccccccccccccccccccccccccccccccccccc`,
+        quantity: "7",
+        currency: "USD",
+        assetClass: "crypto" as const,
+        currentPrice: null,
+        marketValue: null,
+        sourceMarketValue: null,
+        valuation: { status: "unvalued" as const, reason: "CoinGecko 未返回可靠 USD 参考价格" },
+        costPrice: null,
+        platformProfit: null,
+        changePercent: null,
+      },
+    ];
+    return {
+      credentials: JSON.stringify({ chain: input.chain, addresses }),
+      chain: input.chain,
+      permissions: ["public-address", "market-data", "positions"],
+      account: {
+        id: `evm:${config.chainId}:test-${addresses.length}`,
+        label: `${config.label} 观察钱包 · ${addresses.length} 个地址`,
+      },
+      snapshot: {
+        total: { amount: this.scenario === "empty" ? "0" : config.total, currency: "USD" },
+        holdings,
+        exchangeRates: [],
+        syncedAt: input.observedAt,
+      },
+    };
+  }
+
+  revalidate(input: { credentials: string; observedAt: string }): Promise<EvmWatchAuthorizationResult> {
+    const value = JSON.parse(input.credentials) as { chain: EvmChain; addresses: string[] };
+    return this.preview({ chain: value.chain, addresses: value.addresses, observedAt: input.observedAt });
+  }
+}
+
 export type FakeRefreshScenario =
   | "passthrough"
   | "schedule"
@@ -380,7 +486,9 @@ export type FakeRefreshScenario =
   | "longbridge-refresh-failure"
   | "binance-refresh-failure"
   | "okx-refresh-failure"
-  | "bitget-refresh-failure";
+  | "bitget-refresh-failure"
+  | "evm-ethereum-refresh-failure"
+  | "evm-ethereum-price-refresh-failure";
 
 export class FakeAssetSourceRefresher implements AssetSourceRefresher {
   private scenario: FakeRefreshScenario = "passthrough";
@@ -399,6 +507,7 @@ export class FakeAssetSourceRefresher implements AssetSourceRefresher {
 
   async refresh({
     source,
+    mode,
     attemptedAt,
     signal,
   }: Parameters<AssetSourceRefresher["refresh"]>[0]) {
@@ -433,6 +542,20 @@ export class FakeAssetSourceRefresher implements AssetSourceRefresher {
       source.kind === "bitget"
     ) {
       throw new Error("Bitget 同步失败");
+    }
+    if (
+      this.scenario === "evm-ethereum-refresh-failure" &&
+      source.kind === "evm-watch-ethereum" &&
+      mode !== "prices"
+    ) {
+      throw new Error("Ethereum 同步失败");
+    }
+    if (
+      this.scenario === "evm-ethereum-price-refresh-failure" &&
+      source.kind === "evm-watch-ethereum" &&
+      mode === "prices"
+    ) {
+      throw new Error("Ethereum 定价失败");
     }
     if (source.id === "source-unvalued") {
       return {
@@ -690,6 +813,16 @@ export class InMemoryAssetSourceConnections implements AssetSourceConnections {
       body: "现货、资金与 Earn 只读账户",
     });
   }
+
+  connectEvm(result: EvmWatchAuthorizationResult): Promise<void> {
+    return this.connect(result, {
+      kind: result.chain === "ethereum" ? "evm-watch-ethereum" : "evm-watch-bsc",
+      title: result.chain === "ethereum" ? "Ethereum 观察钱包" : "BNB Smart Chain 观察钱包",
+      body: result.chain === "ethereum"
+        ? "公开地址 ETH 与 ERC-20 只读来源"
+        : "公开地址 BNB 与 BEP-20 只读来源",
+    });
+  }
 }
 
 export interface TestServices extends AppServices {
@@ -711,6 +844,8 @@ export interface TestServices extends AppServices {
   okxConnections: OkxConnectionState;
   bitget: FakeBitgetReadOnly;
   bitgetConnections: BitgetConnectionState;
+  evm: FakeEvmWatchWallet;
+  evmConnections: EvmConnectionState;
   assetSourceConnections: InMemoryAssetSourceConnections;
 }
 
@@ -752,6 +887,8 @@ export function createTestServices(): TestServices {
     okxConnections: new OkxConnectionState(),
     bitget: new FakeBitgetReadOnly(),
     bitgetConnections: new BitgetConnectionState(),
+    evm: new FakeEvmWatchWallet(),
+    evmConnections: new EvmConnectionState(),
     assetSourceConnections: new InMemoryAssetSourceConnections(
       assetSources,
       cards,

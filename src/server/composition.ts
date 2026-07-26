@@ -4,6 +4,7 @@ import type {
   AssetSourceConnections,
   BinanceReadOnly,
   BitgetReadOnly,
+  EvmWatchWalletReadOnly,
   OkxReadOnly,
   CardStore,
   Clock,
@@ -21,6 +22,7 @@ import { LongbridgeConnectionState } from "@/server/asset-sources/longbridge";
 import { BinanceConnectionState } from "@/server/asset-sources/binance";
 import { OkxConnectionState } from "@/server/asset-sources/okx";
 import { BitgetConnectionState } from "@/server/asset-sources/bitget";
+import { EvmConnectionState } from "@/server/asset-sources/ethereum";
 import {
   createTestServices,
   type TestServices,
@@ -48,6 +50,8 @@ export interface AppServices {
   okxConnections: OkxConnectionState;
   bitget: BitgetReadOnly;
   bitgetConnections: BitgetConnectionState;
+  evm: EvmWatchWalletReadOnly;
+  evmConnections: EvmConnectionState;
   assetSourceConnections: AssetSourceConnections;
 }
 

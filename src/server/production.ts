@@ -20,6 +20,7 @@ import type {
   AssetSources,
   BinanceAuthorizationResult,
   BitgetAuthorizationResult,
+  EvmWatchAuthorizationResult,
   OkxAuthorizationResult,
   DailyAssetSnapshot,
   DailyAssetSnapshots,
@@ -58,6 +59,11 @@ import {
   ProductionBitgetReadOnly,
   ProductionBitgetSourceRefresher,
 } from "@/server/asset-sources/bitget";
+import {
+  EvmConnectionState,
+  ProductionEvmWatchSourceRefresher,
+  ProductionEvmWatchWallet,
+} from "@/server/asset-sources/ethereum";
 
 class SystemClock implements Clock {
   now(): Date {
@@ -376,12 +382,27 @@ export class FileDashboardDatabase {
     });
   }
 
+  async connectEvm(
+    result: EvmWatchAuthorizationResult,
+    credentialReference: string,
+    capturedAt: string,
+  ): Promise<void> {
+    return this.connectAssetSource(result, credentialReference, capturedAt, {
+      kind: result.chain === "ethereum" ? "evm-watch-ethereum" : "evm-watch-bsc",
+      title: result.chain === "ethereum" ? "Ethereum 观察钱包" : "BNB Smart Chain 观察钱包",
+      body: result.chain === "ethereum"
+        ? "公开地址 ETH 与 ERC-20 只读来源"
+        : "公开地址 BNB 与 BEP-20 只读来源",
+    });
+  }
+
   private async connectAssetSource(
     result:
       | LongbridgeAuthorizationResult
       | BinanceAuthorizationResult
       | OkxAuthorizationResult
-      | BitgetAuthorizationResult,
+      | BitgetAuthorizationResult
+      | EvmWatchAuthorizationResult,
     credentialReference: string,
     capturedAt: string,
     card: { kind: string; title: string; body: string },
@@ -607,7 +628,8 @@ export class DatabaseAssetSourceConnections implements AssetSourceConnections {
       | LongbridgeAuthorizationResult
       | BinanceAuthorizationResult
       | OkxAuthorizationResult
-      | BitgetAuthorizationResult,
+      | BitgetAuthorizationResult
+      | EvmWatchAuthorizationResult,
     save: (credentialReference: string, capturedAt: string) => Promise<void>,
   ) {
     await this.ready;
@@ -647,6 +669,11 @@ export class DatabaseAssetSourceConnections implements AssetSourceConnections {
   connectBitget(result: BitgetAuthorizationResult) {
     return this.connect(result, (reference, capturedAt) =>
       this.database.connectBitget(result, reference, capturedAt));
+  }
+
+  connectEvm(result: EvmWatchAuthorizationResult) {
+    return this.connect(result, (reference, capturedAt) =>
+      this.database.connectEvm(result, reference, capturedAt));
   }
 }
 
@@ -764,6 +791,7 @@ export function createProductionServices(): AppServices {
   const dailyAssetSnapshots = new DatabaseDailyAssetSnapshots(database);
   const prices = new CoinGeckoUsdtUsdPrices();
   const readySecrets = new ReadySecretStore(secrets, secretRecovery);
+  const evmRefresher = new ProductionEvmWatchSourceRefresher();
   return {
     clock,
     cards: new DatabaseCardStore(database),
@@ -778,6 +806,8 @@ export function createProductionServices(): AppServices {
         binance: new ProductionBinanceSourceRefresher(prices),
         okx: new ProductionOkxSourceRefresher(prices),
         bitget: new ProductionBitgetSourceRefresher(prices),
+        "evm-watch-ethereum": evmRefresher,
+        "evm-watch-bsc": evmRefresher,
       }),
       60_000,
       dailyAssetSnapshots,
@@ -799,6 +829,8 @@ export function createProductionServices(): AppServices {
     okxConnections: new OkxConnectionState(),
     bitget: new ProductionBitgetReadOnly(prices),
     bitgetConnections: new BitgetConnectionState(),
+    evm: new ProductionEvmWatchWallet(),
+    evmConnections: new EvmConnectionState(),
     assetSourceConnections: new DatabaseAssetSourceConnections(
       database,
       secrets,

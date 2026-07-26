@@ -23,6 +23,8 @@ function providerCardLabel(source: AssetSourceView): string {
   if (source.kind === "binance") return "Binance 资产";
   if (source.kind === "okx") return "OKX 资产";
   if (source.kind === "bitget") return "Bitget 资产";
+  if (source.kind === "evm-watch-ethereum") return "Ethereum 观察钱包";
+  if (source.kind === "evm-watch-bsc") return "BNB Smart Chain 观察钱包";
   return "资产来源";
 }
 
@@ -31,6 +33,8 @@ function providerHoldingsLabel(source: AssetSourceView): string {
   if (source.kind === "binance") return "Binance 全部持仓";
   if (source.kind === "okx") return "OKX 全部持仓";
   if (source.kind === "bitget") return "Bitget 全部持仓";
+  if (source.kind === "evm-watch-ethereum") return "Ethereum 观察钱包全部持仓";
+  if (source.kind === "evm-watch-bsc") return "BNB Smart Chain 观察钱包全部持仓";
   return `${source.label} 全部持仓`;
 }
 
@@ -123,6 +127,9 @@ export function AssetSourceCard({
     const item = snapshot.sources.find(({ sourceId }) => sourceId === source.id);
     return item ? [{ day: snapshot.day, ...item }] : [];
   });
+  const unvaluedCount = source.snapshot.holdings.filter(
+    ({ valuation }) => valuation.status === "unvalued",
+  ).length;
   const holdings = useMemo(() => {
     return [...source.snapshot.holdings].sort((left, right) => {
       if (sort === "name") return left.name.localeCompare(right.name, "en");
@@ -156,6 +163,10 @@ export function AssetSourceCard({
                 ? "okx-card"
                 : source.kind === "bitget"
                   ? "bitget-card"
+                  : source.kind === "evm-watch-ethereum"
+                    ? "ethereum-watch-card"
+                    : source.kind === "evm-watch-bsc"
+                      ? "bsc-watch-card"
               : `asset-source-card-${source.id}`
         }
       >
@@ -164,7 +175,7 @@ export function AssetSourceCard({
         <p className="asset-total" data-testid="asset-source-total">{amount(source.snapshot.total.amount)} <span>{source.snapshot.total.currency}</span></p>
         <ol className="holding-top-list" data-testid="holding-top-list">
           {source.snapshot.holdings.slice(0, 5).map((holding) => (
-            <li key={`${holding.sourceAccount ?? "default"}:${holding.symbol}`}>
+            <li key={`${holding.sourceAccount ?? "default"}:${holding.sourceAsset ?? holding.symbol}`}>
               <span>{holding.name}</span>
               <strong>
                 {holding.marketValue === null
@@ -174,6 +185,9 @@ export function AssetSourceCard({
             </li>
           ))}
         </ol>
+        {unvaluedCount > 0 ? (
+          <p className="asset-sync-status">含 {unvaluedCount} 项未估值资产</p>
+        ) : null}
         <section
           className="asset-trend source-trend"
           data-testid={`asset-source-trend-${source.id}`}
@@ -232,7 +246,7 @@ export function AssetSourceCard({
             <div className="asset-table-wrap">
               <table className="asset-table">
                 <thead><tr><th>名称</th><th>数量</th><th>当前价格</th><th>原始市值</th><th>成本</th>{showPlatformProfit ? <th>平台盈亏（来源提供）</th> : null}<th>涨跌</th></tr></thead>
-                <tbody>{holdings.map((holding) => <HoldingRow key={`${holding.sourceAccount ?? "default"}:${holding.symbol}`} holding={holding} showPlatformProfit={showPlatformProfit} />)}</tbody>
+                <tbody>{holdings.map((holding) => <HoldingRow key={`${holding.sourceAccount ?? "default"}:${holding.sourceAsset ?? holding.symbol}`} holding={holding} showPlatformProfit={showPlatformProfit} />)}</tbody>
               </table>
             </div>
           </div>

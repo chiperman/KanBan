@@ -61,28 +61,48 @@ export class SourceIsolatedAssetSynchronization
               }, this.sourceTimeoutMs);
             }),
           ]);
+          const preservesBalanceFailure =
+            mode === "prices" &&
+            source.sync.status === "expired" &&
+            source.sync.failedMode !== "prices";
           const updated = {
             ...source,
             snapshot: result.snapshot,
-            sync: {
-              status: "current" as const,
-              lastSuccessfulAt: result.snapshot.syncedAt,
-              lastAttemptAt: attemptedAt,
-              error: null,
-            },
+            sync: preservesBalanceFailure
+              ? {
+                  ...source.sync,
+                  lastAttemptAt: attemptedAt,
+                }
+              : {
+                  status: "current" as const,
+                  lastSuccessfulAt: result.snapshot.syncedAt,
+                  lastAttemptAt: attemptedAt,
+                  error: null,
+                  failedMode: null,
+                },
           };
           await this.sources.update(updated);
           return true;
         } catch (error) {
+          const preservesBalanceFailure =
+            mode === "prices" &&
+            source.sync.status === "expired" &&
+            source.sync.failedMode !== "prices";
           const updated = {
             ...source,
-            sync: {
-              ...source.sync,
-              status: "expired" as const,
-              lastAttemptAt: attemptedAt,
-              error:
-                error instanceof Error ? error.message : "资产来源同步失败",
-            },
+            sync: preservesBalanceFailure
+              ? {
+                  ...source.sync,
+                  lastAttemptAt: attemptedAt,
+                }
+              : {
+                  ...source.sync,
+                  status: "expired" as const,
+                  lastAttemptAt: attemptedAt,
+                  error:
+                    error instanceof Error ? error.message : "资产来源同步失败",
+                  failedMode: mode,
+                },
           };
           await this.sources.update(updated);
           return false;

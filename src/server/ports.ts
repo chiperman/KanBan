@@ -80,6 +80,8 @@ export interface AssetSourceSyncState {
   lastSuccessfulAt: string;
   lastAttemptAt: string;
   error: string | null;
+  /** 可选以兼容旧快照；用于防止价格成功掩盖余额同步失败。 */
+  failedMode?: AssetRefreshMode | null;
 }
 
 export type AssetRefreshMode = "all" | "prices" | "holdings";
@@ -133,6 +135,7 @@ export interface AssetSourceRefresher {
 
 export type AssetPermission =
   | "market-data"
+  | "public-address"
   | "account"
   | "positions"
   | "trade"
@@ -222,6 +225,16 @@ export interface BitgetAuthorizationResult {
   snapshot: AssetSnapshot;
 }
 
+export type EvmChain = "ethereum" | "bsc";
+
+export interface EvmWatchAuthorizationResult {
+  credentials: string;
+  chain: EvmChain;
+  permissions: AssetPermission[];
+  account: { id: string; label: string };
+  snapshot: AssetSnapshot;
+}
+
 export type BitgetAccountMode = "classic" | "uta";
 
 export type OkxRegion = "global" | "us" | "eea";
@@ -266,6 +279,18 @@ export interface BitgetReadOnly {
   }): Promise<BitgetAuthorizationResult>;
 }
 
+export interface EvmWatchWalletReadOnly {
+  preview(input: {
+    chain: EvmChain;
+    addresses: string[];
+    observedAt: string;
+  }): Promise<EvmWatchAuthorizationResult>;
+  revalidate(input: {
+    credentials: string;
+    observedAt: string;
+  }): Promise<EvmWatchAuthorizationResult>;
+}
+
 export interface LongbridgeOAuth {
   start(redirectUri: string): Promise<{
     authorizationUrl: string;
@@ -284,6 +309,7 @@ export interface AssetSourceConnections {
   connectBinance(result: BinanceAuthorizationResult): Promise<void>;
   connectOkx(result: OkxAuthorizationResult): Promise<void>;
   connectBitget(result: BitgetAuthorizationResult): Promise<void>;
+  connectEvm(result: EvmWatchAuthorizationResult): Promise<void>;
 }
 
 /** 外部资产来源仅保存服务端凭证引用；凭证正文只能进入 SecretStore。 */
