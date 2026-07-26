@@ -21,6 +21,8 @@ export async function GET() {
       dailyAssetSnapshots: "in-memory-daily-asset-snapshots",
       binance: "fake-binance-read-only",
       binanceConnections: "in-memory-binance-preview-state",
+      okx: "fake-okx-read-only",
+      okxConnections: "in-memory-okx-preview-state",
       prices: "fake-prices",
       auth: "in-memory-session-auth",
       ownerCredentials: "in-memory-owner-credential-store",

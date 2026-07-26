@@ -19,6 +19,7 @@ import type {
   AssetSourceConnections,
   AssetSources,
   BinanceAuthorizationResult,
+  OkxAuthorizationResult,
   DailyAssetSnapshot,
   DailyAssetSnapshots,
   CardStore,
@@ -46,6 +47,11 @@ import {
   ProductionBinanceSourceRefresher,
 } from "@/server/asset-sources/binance";
 import { RoutedAssetSourceRefresher } from "@/server/asset-sources/router";
+import {
+  OkxConnectionState,
+  ProductionOkxReadOnly,
+  ProductionOkxSourceRefresher,
+} from "@/server/asset-sources/okx";
 
 class SystemClock implements Clock {
   now(): Date {
@@ -340,8 +346,23 @@ export class FileDashboardDatabase {
     });
   }
 
+  async connectOkx(
+    result: OkxAuthorizationResult,
+    credentialReference: string,
+    capturedAt: string,
+  ): Promise<void> {
+    return this.connectAssetSource(result, credentialReference, capturedAt, {
+      kind: "okx",
+      title: "OKX 资产",
+      body: "现货、资金与 Earn 只读账户",
+    });
+  }
+
   private async connectAssetSource(
-    result: LongbridgeAuthorizationResult | BinanceAuthorizationResult,
+    result:
+      | LongbridgeAuthorizationResult
+      | BinanceAuthorizationResult
+      | OkxAuthorizationResult,
     credentialReference: string,
     capturedAt: string,
     card: { kind: string; title: string; body: string },
@@ -563,7 +584,10 @@ export class DatabaseAssetSourceConnections implements AssetSourceConnections {
     private readonly clock: Clock = new SystemClock(),
   ) {}
   private async connect(
-    result: LongbridgeAuthorizationResult | BinanceAuthorizationResult,
+    result:
+      | LongbridgeAuthorizationResult
+      | BinanceAuthorizationResult
+      | OkxAuthorizationResult,
     save: (credentialReference: string, capturedAt: string) => Promise<void>,
   ) {
     await this.ready;
@@ -593,6 +617,11 @@ export class DatabaseAssetSourceConnections implements AssetSourceConnections {
   connectBinance(result: BinanceAuthorizationResult) {
     return this.connect(result, (reference, capturedAt) =>
       this.database.connectBinance(result, reference, capturedAt));
+  }
+
+  connectOkx(result: OkxAuthorizationResult) {
+    return this.connect(result, (reference, capturedAt) =>
+      this.database.connectOkx(result, reference, capturedAt));
   }
 }
 
@@ -722,6 +751,7 @@ export function createProductionServices(): AppServices {
       new RoutedAssetSourceRefresher({
         longbridge: new ProductionLongbridgeSourceRefresher(),
         binance: new ProductionBinanceSourceRefresher(prices),
+        okx: new ProductionOkxSourceRefresher(prices),
       }),
       15_000,
       dailyAssetSnapshots,
@@ -739,6 +769,8 @@ export function createProductionServices(): AppServices {
     longbridgeConnections: new LongbridgeConnectionState(),
     binance: new ProductionBinanceReadOnly(prices),
     binanceConnections: new BinanceConnectionState(),
+    okx: new ProductionOkxReadOnly(prices),
+    okxConnections: new OkxConnectionState(),
     assetSourceConnections: new DatabaseAssetSourceConnections(
       database,
       secrets,

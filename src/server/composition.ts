@@ -3,6 +3,7 @@ import type {
   AssetSynchronization,
   AssetSourceConnections,
   BinanceReadOnly,
+  OkxReadOnly,
   CardStore,
   Clock,
   DailyAssetSnapshots,
@@ -17,6 +18,7 @@ import { createProductionServices } from "@/server/production";
 import { clearAllSessions } from "@/server/auth/session";
 import { LongbridgeConnectionState } from "@/server/asset-sources/longbridge";
 import { BinanceConnectionState } from "@/server/asset-sources/binance";
+import { OkxConnectionState } from "@/server/asset-sources/okx";
 import {
   createTestServices,
   type TestServices,
@@ -40,6 +42,8 @@ export interface AppServices {
   longbridgeConnections: LongbridgeConnectionState;
   binance: BinanceReadOnly;
   binanceConnections: BinanceConnectionState;
+  okx: OkxReadOnly;
+  okxConnections: OkxConnectionState;
   assetSourceConnections: AssetSourceConnections;
 }
 

@@ -9,6 +9,9 @@ import type {
   AssetSynchronization,
   BinanceAuthorizationResult,
   BinanceReadOnly,
+  OkxAuthorizationResult,
+  OkxReadOnly,
+  OkxRegion,
   DailyAssetSnapshot,
   DailyAssetSnapshots,
   LongbridgeAuthorizationResult,
@@ -42,6 +45,11 @@ import {
   binanceFixture,
   binancePermissions,
 } from "@/server/testing/binance-fixtures";
+import {
+  OkxConnectionState,
+  validateOkxReadOnlyPermission,
+} from "@/server/asset-sources/okx";
+import { okxFixtureSnapshot } from "@/server/testing/okx-fixtures";
 
 export class FakeClock implements Clock {
   private current = new Date("2026-01-01T00:00:00.000Z");
@@ -286,13 +294,71 @@ export class FakeBinanceReadOnly implements BinanceReadOnly {
   }
 }
 
+export class FakeOkxReadOnly implements OkxReadOnly {
+  private scenario = "valid";
+
+  configure(scenario: string): void {
+    this.scenario = scenario;
+  }
+
+  private permission(): string {
+    const permissions: Record<string, string> = {
+      valid: "read_only",
+      trade: "trade",
+      withdraw: "withdraw",
+      "read-and-trade": "read_only,trade",
+      "unknown-permission": "read_only,new_permission",
+      "missing-read": "",
+      "commit-failure": "read_only",
+    };
+    return permissions[this.scenario] ?? "read_only";
+  }
+
+  preview(input: {
+    apiKey: string;
+    apiSecret: string;
+    passphrase: string;
+    region?: OkxRegion;
+    observedAt: string;
+  }): Promise<OkxAuthorizationResult> {
+    const permissions = validateOkxReadOnlyPermission(this.permission());
+    const uid = this.scenario === "identity-changed" ? "880002" : "880001";
+    return Promise.resolve({
+      credentials: JSON.stringify({
+        apiKey: input.apiKey,
+        apiSecret: input.apiSecret,
+        passphrase: input.passphrase,
+        region: input.region ?? "global",
+      }),
+      permissions,
+      account: { id: `okx:${uid}`, label: `OKX 账户 · UID ${uid}` },
+      scopeFingerprint: `${uid}:${uid}:0`,
+      snapshot: okxFixtureSnapshot(input.observedAt),
+    });
+  }
+
+  revalidate(input: {
+    credentials: string;
+    observedAt: string;
+  }): Promise<OkxAuthorizationResult> {
+    const credentials = JSON.parse(input.credentials) as {
+      apiKey: string;
+      apiSecret: string;
+      passphrase: string;
+      region?: OkxRegion;
+    };
+    return this.preview({ ...credentials, observedAt: input.observedAt });
+  }
+}
+
 export type FakeRefreshScenario =
   | "passthrough"
   | "schedule"
   | "partial-failure"
   | "timeout-isolation"
   | "all-failure"
-  | "binance-refresh-failure";
+  | "binance-refresh-failure"
+  | "okx-refresh-failure";
 
 export class FakeAssetSourceRefresher implements AssetSourceRefresher {
   private scenario: FakeRefreshScenario = "passthrough";
@@ -327,6 +393,12 @@ export class FakeAssetSourceRefresher implements AssetSourceRefresher {
       source.kind === "binance"
     ) {
       throw new Error("Binance 同步失败");
+    }
+    if (
+      this.scenario === "okx-refresh-failure" &&
+      source.kind === "okx"
+    ) {
+      throw new Error("OKX 同步失败");
     }
     if (source.id === "source-unvalued") {
       return {
@@ -502,7 +574,10 @@ export class InMemoryAssetSourceConnections implements AssetSourceConnections {
   }
 
   private async connect(
-    result: LongbridgeAuthorizationResult | BinanceAuthorizationResult,
+    result:
+      | LongbridgeAuthorizationResult
+      | BinanceAuthorizationResult
+      | OkxAuthorizationResult,
     config: { kind: string; title: string; body: string },
   ): Promise<void> {
     const credentialReference = await this.secrets.put(result.credentials);
@@ -564,6 +639,14 @@ export class InMemoryAssetSourceConnections implements AssetSourceConnections {
       body: "现货、资金与 Simple Earn 只读账户",
     });
   }
+
+  connectOkx(result: OkxAuthorizationResult): Promise<void> {
+    return this.connect(result, {
+      kind: "okx",
+      title: "OKX 资产",
+      body: "现货、资金与 Earn 只读账户",
+    });
+  }
 }
 
 export interface TestServices extends AppServices {
@@ -581,6 +664,8 @@ export interface TestServices extends AppServices {
   longbridgeConnections: LongbridgeConnectionState;
   binance: FakeBinanceReadOnly;
   binanceConnections: BinanceConnectionState;
+  okx: FakeOkxReadOnly;
+  okxConnections: OkxConnectionState;
   assetSourceConnections: InMemoryAssetSourceConnections;
 }
 
@@ -618,6 +703,8 @@ export function createTestServices(): TestServices {
     longbridgeConnections: new LongbridgeConnectionState(),
     binance: new FakeBinanceReadOnly(prices),
     binanceConnections: new BinanceConnectionState(),
+    okx: new FakeOkxReadOnly(),
+    okxConnections: new OkxConnectionState(),
     assetSourceConnections: new InMemoryAssetSourceConnections(
       assetSources,
       cards,

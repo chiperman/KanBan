@@ -2,14 +2,32 @@
 
 import { useEffect, useState } from "react";
 
-import type { AssetMoney, AssetPermission } from "@/server/ports";
+import type {
+  AssetMoney,
+  AssetPermission,
+  OkxRegion,
+} from "@/server/ports";
 
 interface Preview {
   id: string;
-  provider: "longbridge" | "binance";
+  provider: "longbridge" | "binance" | "okx";
   account: { id: string; label: string };
   permissions: AssetPermission[];
   total: AssetMoney;
+}
+
+type Provider = Preview["provider"] | "";
+
+function providerLabel(provider: Preview["provider"]): string {
+  if (provider === "binance") return "Binance";
+  if (provider === "okx") return "OKX";
+  return "长桥";
+}
+
+function previewScope(provider: Preview["provider"]): string {
+  if (provider === "binance") return "现货、资金、Simple Earn（只读）";
+  if (provider === "okx") return "现货、资金、Simple Earn Flexible（只读）";
+  return "行情、账户、持仓（只读）";
 }
 
 function formatAmount(amount: string): string {
@@ -20,12 +38,14 @@ function formatAmount(amount: string): string {
 
 export function AssetSourceFlow() {
   const [choosing, setChoosing] = useState(false);
-  const [provider, setProvider] = useState("");
+  const [provider, setProvider] = useState<Provider>("");
   const [preview, setPreview] = useState<Preview | null>(null);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
-  const [binanceApiKey, setBinanceApiKey] = useState("");
-  const [binanceApiSecret, setBinanceApiSecret] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [apiSecret, setApiSecret] = useState("");
+  const [passphrase, setPassphrase] = useState("");
+  const [okxRegion, setOkxRegion] = useState<OkxRegion>("global");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -56,15 +76,16 @@ export function AssetSourceFlow() {
   }
 
   async function start() {
-    if (provider === "binance") {
+    if (provider === "binance" || provider === "okx") {
       setPending(true);
       setError("");
-      const response = await fetch("/api/asset-sources/binance/preview", {
+      const response = await fetch(`/api/asset-sources/${provider}/preview`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          apiKey: binanceApiKey,
-          apiSecret: binanceApiSecret,
+          apiKey,
+          apiSecret,
+          ...(provider === "okx" ? { passphrase, region: okxRegion } : {}),
         }),
       });
       const body = (await response.json().catch(() => null)) as
@@ -72,13 +93,14 @@ export function AssetSourceFlow() {
         | null;
       setPending(false);
       if (!response.ok || !body) {
-        setError(body?.error ?? "Binance 凭证验证失败");
+        setError(body?.error ?? `${providerLabel(provider)} 凭证验证失败`);
         return;
       }
-      setBinanceApiKey("");
-      setBinanceApiSecret("");
+      setApiKey("");
+      setApiSecret("");
+      setPassphrase("");
       setChoosing(false);
-      setPreview({ ...body, provider: "binance" });
+      setPreview({ ...body, provider });
       return;
     }
     if (provider !== "longbridge") return;
@@ -114,7 +136,7 @@ export function AssetSourceFlow() {
     const body = (await response.json()) as { error?: string };
     if (!response.ok) {
       setPending(false);
-      setError(body.error ?? `保存 ${preview.provider === "binance" ? "Binance" : "长桥"} 来源失败`);
+      setError(body.error ?? `保存 ${providerLabel(preview.provider)} 来源失败`);
       return;
     }
     clearCallbackQuery();
@@ -151,7 +173,7 @@ export function AssetSourceFlow() {
                 name="asset-provider"
                 value="longbridge"
                 checked={provider === "longbridge"}
-                onChange={(event) => setProvider(event.target.value)}
+                onChange={(event) => setProvider(event.target.value as Provider)}
               />
               长桥 Longbridge
             </label>
@@ -161,29 +183,64 @@ export function AssetSourceFlow() {
                 name="asset-provider"
                 value="binance"
                 checked={provider === "binance"}
-                onChange={(event) => setProvider(event.target.value)}
+                onChange={(event) => setProvider(event.target.value as Provider)}
               />
               Binance
             </label>
-            {provider === "binance" ? (
+            <label className="source-option">
+              <input
+                type="radio"
+                name="asset-provider"
+                value="okx"
+                checked={provider === "okx"}
+                onChange={(event) => setProvider(event.target.value as Provider)}
+              />
+              OKX
+            </label>
+            {provider === "binance" || provider === "okx" ? (
               <div className="source-credential-fields">
+                {provider === "okx" ? (
+                  <label className="field-label">
+                    OKX 注册区域
+                    <select
+                      value={okxRegion}
+                      onChange={(event) =>
+                        setOkxRegion(event.target.value as OkxRegion)}
+                    >
+                      <option value="global">Global</option>
+                      <option value="us">US / AU</option>
+                      <option value="eea">EEA</option>
+                    </select>
+                  </label>
+                ) : null}
                 <label className="field-label">
-                  Binance API Key
+                  {providerLabel(provider)} API Key
                   <input
-                    value={binanceApiKey}
+                    value={apiKey}
                     autoComplete="off"
-                    onChange={(event) => setBinanceApiKey(event.target.value)}
+                    onChange={(event) => setApiKey(event.target.value)}
                   />
                 </label>
                 <label className="field-label">
-                  Binance API Secret
+                  {providerLabel(provider)} API Secret
                   <input
                     type="password"
-                    value={binanceApiSecret}
+                    value={apiSecret}
                     autoComplete="new-password"
-                    onChange={(event) => setBinanceApiSecret(event.target.value)}
+                    onChange={(event) => setApiSecret(event.target.value)}
                   />
                 </label>
+                {provider === "okx" ? (
+                  <label className="field-label">
+                    OKX Passphrase
+                    <input
+                      type="password"
+                      value={passphrase}
+                      autoComplete="new-password"
+                      onChange={(event) => setPassphrase(event.target.value)}
+                    />
+                  </label>
+                ) : null}
               </div>
             ) : null}
             <div className="editor-actions">
@@ -193,12 +250,16 @@ export function AssetSourceFlow() {
                 disabled={
                   pending ||
                   provider === "" ||
-                  (provider === "binance" &&
-                    (!binanceApiKey.trim() || !binanceApiSecret.trim()))
+                  ((provider === "binance" || provider === "okx") &&
+                    (!apiKey.trim() ||
+                      !apiSecret.trim() ||
+                      (provider === "okx" && !passphrase.trim())))
                 }
                 onClick={() => void start()}
               >
-                {provider === "binance" ? "验证只读凭证" : "开始 OAuth 授权"}
+                {provider === "binance" || provider === "okx"
+                  ? "验证只读凭证"
+                  : "开始 OAuth 授权"}
               </button>
               <button type="button" className="login-cancel" disabled={pending} onClick={() => { setChoosing(false); clearCallbackQuery(); }}>
                 取消
@@ -213,22 +274,30 @@ export function AssetSourceFlow() {
           role="dialog"
           aria-modal="true"
           aria-label={
-            preview.provider === "binance"
-              ? "确认 Binance 资产来源"
-              : "确认长桥资产来源"
+            preview.provider === "longbridge"
+              ? "确认长桥资产来源"
+              : `确认 ${providerLabel(preview.provider)} 资产来源`
           }
         >
           <div className="editor-dialog">
-            <p className="card-label">{preview.provider === "binance" ? "Binance 凭证预览" : "长桥授权预览"}</p>
+            <p className="card-label">
+              {preview.provider === "longbridge"
+                ? "长桥授权预览"
+                : `${providerLabel(preview.provider)} 凭证预览`}
+            </p>
             <h2 className="source-preview-title">{preview.account.label}</h2>
             <dl className="source-preview-list">
               <div>
                 <dt>可读取范围</dt>
-                <dd>{preview.provider === "binance" ? "现货、资金、Simple Earn（只读）" : "行情、账户、持仓（只读）"}</dd>
+                <dd>{previewScope(preview.provider)}</dd>
               </div>
               <div><dt>账户总额</dt><dd>{formatAmount(preview.total.amount)} {preview.total.currency}</dd></div>
             </dl>
-            <p className="login-copy">确认后才会把{preview.provider === "binance" ? "只读 API 凭证" : " OAuth 凭证"}写入服务端安全存储。</p>
+            <p className="login-copy">
+              确认后才会把
+              {preview.provider === "longbridge" ? " OAuth 凭证" : "只读 API 凭证"}
+              写入服务端安全存储。
+            </p>
             {error ? <p className="login-error" role="alert">{error}</p> : null}
             <div className="editor-actions">
               <button type="button" className="login-primary" disabled={pending} onClick={() => void confirm()}>确认并保存</button>

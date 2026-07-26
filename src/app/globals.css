@@ -392,6 +392,7 @@ body {
 }
 
 .field-label input,
+.field-label select,
 .field-label textarea {
   width: 100%;
   border: 1px solid var(--border-strong);
