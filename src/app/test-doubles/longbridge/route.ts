@@ -5,8 +5,14 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
-  const config = (await request.json()) as FakeLongbridgeConfig;
+  const config = (await request.json()) as FakeLongbridgeConfig & {
+    scenario?: string;
+  };
   const services = getTestServices();
+  if (config.scenario === "refresh-failure") {
+    services.assetSynchronization.reset("longbridge-refresh-failure");
+    return Response.json({ ok: true });
+  }
   services.longbridge.configure(config);
   services.assetSourceConnections.failNext(config.commitError);
   return Response.json({ ok: true });

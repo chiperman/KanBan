@@ -15,6 +15,14 @@ const PRIVATE_CARD = {
 } as const;
 
 const SECRET_TOKEN = "oauth-access-token-must-never-reach-browser";
+const PRODUCTION_ACCESS_TOKEN = [
+  Buffer.from(JSON.stringify({ alg: "none" })).toString("base64url"),
+  Buffer.from(JSON.stringify({
+    sub: JSON.stringify({ account_channel: "lb" }),
+  })).toString("base64url"),
+  "test-signature",
+].join(".");
+const PRODUCTION_REFRESH_TOKEN = "refresh-token-must-never-reach-browser";
 
 async function attachPasskey(page: Page): Promise<VirtualPasskey> {
   const client = await page.context().newCDPSession(page);
@@ -261,6 +269,40 @@ test("长桥 OAuth 先预览后原子保存，并展示总额、前五持仓与�
   expect(await page.content()).not.toContain(SECRET_TOKEN);
 });
 
+test("长桥行情与持仓刷新失败时保留最后成功数据并明确标记过期", async ({
+  page,
+}) => {
+  await configureLongbridge(page);
+  await loginAsOwner(page);
+  await startLongbridgeFlow(page);
+  await page
+    .getByRole("dialog", { name: "确认长桥资产来源" })
+    .getByRole("button", { name: "确认并保存" })
+    .click();
+
+  const card = page.getByTestId("longbridge-card");
+  await expect(card.getByTestId("asset-source-total")).toHaveText(
+    "123,456.7891 USD",
+  );
+  const configured = await page.request.post("/test-doubles/longbridge", {
+    data: { scenario: "refresh-failure" },
+  });
+  expect(configured.ok()).toBeTruthy();
+
+  await page.getByRole("button", { name: "立即刷新资产" }).click();
+  await expect(page.getByTestId("asset-refresh-status")).toContainText(
+    "1 个来源失败",
+  );
+  await expect(card.getByTestId("asset-source-total")).toHaveText(
+    "123,456.7891 USD",
+  );
+  await expect(card).toContainText("过期数据");
+  await expect(card).toContainText("长桥同步失败");
+  await expect(page.getByTestId("total-asset-overview")).toContainText(
+    "包含 1 个过期来源",
+  );
+});
+
 test("交易权限与授权或预览失败都被拒绝且不留下来源或凭证", async ({
   page,
 }) => {
@@ -404,8 +446,69 @@ test("生产 OAuth 只申请并接受 account.read，交易、缺失或未知 sc
       "GET /v1/portfolio/profit-analysis/by-market?page=2&size=100",
     ],
     quotedSymbols: ["AAPL.US"],
+    quoteEngine: "longbridge@4.4.1 QuoteContext",
+    quoteContextCalls: 1,
   });
+  expect(finishBody.assetRequests).toEqual(
+    expect.arrayContaining([
+      "GET /v1/asset/account",
+      "GET /v1/asset/stock",
+      "GET /v1/asset/fund",
+    ]),
+  );
+  expect(
+    finishBody.assetRequests.every((entry: string) => entry.startsWith("GET ")),
+  ).toBeTruthy();
+  expect(JSON.stringify(finishBody)).not.toContain("mcp.longbridge.com");
+  expect(JSON.stringify(finishBody)).not.toContain("/v1/trade/order");
   expect(JSON.stringify(finishBody)).not.toContain(SECRET_TOKEN);
+  expect(JSON.stringify(finishBody)).not.toContain(PRODUCTION_ACCESS_TOKEN);
+  expect(JSON.stringify(finishBody)).not.toContain(PRODUCTION_REFRESH_TOKEN);
+
+  const workerProbe = await request.post(
+    "/test-doubles/longbridge/production-start",
+    { data: { action: "sdk-worker-probe" } },
+  );
+  expect(workerProbe.ok()).toBeTruthy();
+  const workerProbeText = await workerProbe.text();
+  expect(workerProbeText).not.toContain("sdk-worker-probe-token-must-not-leak");
+  expect(JSON.parse(workerProbeText)).toEqual({
+    quotes: [{
+      symbol: "AAPL.US",
+      lastDone: "2000",
+      prevClose: "1950",
+      timestamp: "2026-05-29T00:00:00.000Z",
+    }],
+    aborted: "长桥 SDK 行情请求已取消",
+    timedOut: "长桥 Node SDK 行情读取超时",
+    malformed: "长桥 SDK 行情响应格式无效",
+    missingWorker: "长桥 Node SDK 行情读取失败",
+    temporaryHomesLeft: [],
+  });
+
+  const sourceAudit = await request.post(
+    "/test-doubles/longbridge/production-start",
+    { data: { action: "sdk-source-audit" } },
+  );
+  expect(sourceAudit.ok()).toBeTruthy();
+  await expect(sourceAudit.json()).resolves.toEqual({
+    forbidden: [],
+    hasMcpDependency: false,
+    hasMcpEndpoint: false,
+    usesQuoteContext: true,
+  });
+
+  const buildAudit = await request.post(
+    "/test-doubles/longbridge/production-start",
+    { data: { action: "sdk-build-audit" } },
+  );
+  expect(buildAudit.ok()).toBeTruthy();
+  await expect(buildAudit.json()).resolves.toEqual({
+    routes: [
+      { worker: true, sdk: true, native: true },
+      { worker: true, sdk: true, native: true },
+    ],
+  });
 
   const persistence = await request.post(
     "/test-doubles/longbridge/persistence",

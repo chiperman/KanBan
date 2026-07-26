@@ -5,9 +5,8 @@ import {
   randomBytes,
   randomUUID,
 } from "node:crypto";
-
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { spawn } from "node:child_process";
+import path from "node:path";
 
 import { decimalAdd, decimalSubtract } from "@/domain/decimal";
 import type {
@@ -687,57 +686,191 @@ export interface LongbridgeMarketData {
   }>;
 }
 
+interface LongbridgeSdkQuote {
+  symbol: string;
+  lastDone: string;
+  prevClose: string;
+  timestamp: string;
+}
+
+export type LongbridgeSdkQuoteRunner = (input: {
+  accessToken: string;
+  clientId: string;
+  symbols: string[];
+  signal?: AbortSignal;
+}) => Promise<LongbridgeSdkQuote[]>;
+
+interface LongbridgeSdkWorkerOptions {
+  workerPath?: string;
+  testSdkModule?: string;
+  timeoutMs?: number;
+}
+
+export function runLongbridgeSdkQuoteWorker({
+  accessToken,
+  clientId,
+  symbols,
+  signal,
+}: Parameters<LongbridgeSdkQuoteRunner>[0], options: LongbridgeSdkWorkerOptions = {}): Promise<LongbridgeSdkQuote[]> {
+  if (process.platform === "win32") {
+    throw new Error("长桥 SDK 内存 Token 通道暂不支持 Windows");
+  }
+  if (options.workerPath !== undefined && process.env.APP_ENV !== "test") {
+    throw new Error("长桥 SDK worker 覆盖仅允许在测试环境使用");
+  }
+  if (signal?.aborted) {
+    throw new Error("长桥 SDK 行情请求已取消");
+  }
+  return new Promise((resolve, reject) => {
+    const workerEnv: NodeJS.ProcessEnv = {
+      NODE_ENV: process.env.NODE_ENV,
+      PATH: process.env.PATH,
+      TMPDIR: process.env.TMPDIR,
+      LONGBRIDGE_REGION: process.env.LONGBRIDGE_REGION,
+      LONGBRIDGE_ENABLE_OVERNIGHT:
+        process.env.LONGBRIDGE_ENABLE_OVERNIGHT,
+      LONGBRIDGE_PRINT_QUOTE_PACKAGES: "false",
+    };
+    if (options.testSdkModule !== undefined) {
+      if (process.env.APP_ENV !== "test") {
+        throw new Error("长桥 SDK 测试模块仅允许在测试环境使用");
+      }
+      workerEnv.APP_ENV = "test";
+      workerEnv.LONGBRIDGE_SDK_TEST_MODULE = options.testSdkModule;
+    }
+    const worker = spawn(
+      process.execPath,
+      [options.workerPath ?? path.join(process.cwd(), "scripts", "longbridge-quote-worker.mjs")],
+      {
+        cwd: process.cwd(),
+        env: workerEnv,
+        stdio: ["pipe", "pipe", "pipe", "pipe"],
+        windowsHide: true,
+      },
+    );
+    const output: Buffer[] = [];
+    let outputBytes = 0;
+    let settled = false;
+    let stopError: Error | null = null;
+    let forceKill: ReturnType<typeof setTimeout> | undefined;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      if (timeout) clearTimeout(timeout);
+      if (forceKill) clearTimeout(forceKill);
+      signal?.removeEventListener("abort", abort);
+      if (error) reject(error);
+    };
+    const stop = (error: Error) => {
+      if (settled || stopError) return;
+      stopError = error;
+      worker.kill("SIGTERM");
+      forceKill = setTimeout(() => worker.kill("SIGKILL"), 1_000);
+      forceKill.unref();
+    };
+    const abort = () => {
+      stop(new Error("长桥 SDK 行情请求已取消"));
+    };
+    worker.once("error", () => finish(new Error("无法启动长桥 Node SDK 行情进程")));
+    worker.stdin.on("error", () => {
+      stop(new Error("长桥 SDK 行情输入通道中断"));
+    });
+    worker.stdout.on("error", () => {
+      stop(new Error("长桥 SDK 行情输出通道中断"));
+    });
+    worker.stderr.on("error", () => undefined);
+    worker.stderr.resume();
+    worker.stdout.on("data", (chunk: Buffer) => {
+      outputBytes += chunk.length;
+      if (outputBytes > 1_000_000) {
+        stop(new Error("长桥 SDK 行情响应超过安全上限"));
+        return;
+      }
+      output.push(chunk);
+    });
+    worker.once("close", (code) => {
+      if (settled) return;
+      signal?.removeEventListener("abort", abort);
+      if (stopError) {
+        finish(stopError);
+        return;
+      }
+      if (code !== 0) {
+        finish(new Error("长桥 Node SDK 行情读取失败"));
+        return;
+      }
+      try {
+        const value: unknown = JSON.parse(Buffer.concat(output).toString("utf8"));
+        if (!Array.isArray(value)) throw new Error("invalid response");
+        const quotes = value.map((raw) => {
+          const quote = record(raw);
+          return {
+            symbol: text(quote.symbol, "symbol"),
+            lastDone: text(quote.lastDone, "lastDone"),
+            prevClose: text(quote.prevClose, "prevClose"),
+            timestamp: text(quote.timestamp, "timestamp"),
+          };
+        });
+        settled = true;
+        if (timeout) clearTimeout(timeout);
+        if (forceKill) clearTimeout(forceKill);
+        resolve(quotes);
+      } catch {
+        finish(new Error("长桥 SDK 行情响应格式无效"));
+      }
+    });
+    timeout = setTimeout(() => {
+      stop(new Error("长桥 Node SDK 行情读取超时"));
+    }, options.timeoutMs ?? 30_000);
+    timeout.unref();
+    signal?.addEventListener("abort", abort, { once: true });
+    if (signal?.aborted) {
+      abort();
+      return;
+    }
+    worker.stdin.end(JSON.stringify({ clientId, symbols }));
+    const tokenPipe = worker.stdio[3];
+    if (!tokenPipe || !("end" in tokenPipe)) {
+      stop(new Error("无法建立长桥 SDK 内存 Token 通道"));
+      return;
+    }
+    tokenPipe.on("error", () => {
+      stop(new Error("长桥 SDK 内存 Token 通道中断"));
+    });
+    tokenPipe.end(JSON.stringify({
+      client_id: clientId,
+      access_token: accessToken,
+      refresh_token: null,
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+    }));
+  });
+}
+
 /**
- * 官方 Node SDK 4.4.1 尚未暴露内存 token 注入；因此行情通过长桥官方只读
- * MCP `/v2` 调用其 SDK QuoteContext，避免 SDK 默认明文 token 缓存。
+ * 行情只使用官方 Node SDK QuoteContext。SDK 的默认明文 token 文件改为
+ * `/dev/fd/3` 匿名管道；受控 OAuth 与加密 SecretStore 仍是唯一持久化边界。
  */
-export class LongbridgeMcpMarketData implements LongbridgeMarketData {
-  constructor(private readonly request: LongbridgeFetch = globalThis.fetch) {}
+export class LongbridgeSdkMarketData implements LongbridgeMarketData {
+  constructor(private readonly run: LongbridgeSdkQuoteRunner = runLongbridgeSdkQuoteWorker) {}
 
   async quote(accessToken: string, symbols: string[], signal?: AbortSignal) {
     if (symbols.length === 0) return { prices: {}, previous: {}, times: {} };
-    const transport = new StreamableHTTPClientTransport(
-      new URL("https://mcp.longbridge.com/v2"),
-      {
-        requestInit: {
-          headers: { authorization: `Bearer ${accessToken}` },
-          signal,
-        },
-        fetch: this.request,
-      },
-    );
-    const client = new Client({
-      name: "personal-asset-dashboard",
-      version: "0.1.0",
+    const quotes = await this.run({
+      accessToken,
+      clientId: oauthClientId(),
+      symbols,
+      signal,
     });
-    try {
-      await client.connect(transport);
-      const result = await client.callTool({
-        name: "quote",
-        arguments: { symbols },
-      });
-      if (result.isError) throw new Error("长桥行情读取失败");
-      const content = Array.isArray(result.content) ? result.content : [];
-      const block = content.find(
-        (item) => record(item).type === "text" && typeof record(item).text === "string",
-      );
-      if (!block) throw new Error("长桥行情响应缺少数据");
-      const quotes = JSON.parse(text(record(block).text, "quote content")) as unknown;
-      if (!Array.isArray(quotes)) throw new Error("长桥行情响应格式无效");
-      const prices: Record<string, string> = {};
-      const previous: Record<string, string> = {};
-      const times: Record<string, string> = {};
-      for (const raw of quotes) {
-        const quote = record(raw);
-        const symbol = text(quote.symbol, "symbol");
-        prices[symbol] = text(quote.last_done, "last_done");
-        previous[symbol] = text(quote.prev_close, "prev_close");
-        times[symbol] = optionalText(quote.timestamp) ?? new Date().toISOString();
-      }
-      return { prices, previous, times };
-    } finally {
-      await client.close().catch(() => undefined);
+    const prices: Record<string, string> = {};
+    const previous: Record<string, string> = {};
+    const times: Record<string, string> = {};
+    for (const quote of quotes) {
+      prices[quote.symbol] = quote.lastDone;
+      previous[quote.symbol] = quote.prevClose;
+      times[quote.symbol] = quote.timestamp;
     }
+    return { prices, previous, times };
   }
 }
 
@@ -748,7 +881,7 @@ export class LongbridgeMcpMarketData implements LongbridgeMarketData {
 export class ProductionLongbridgeOAuth implements LongbridgeOAuth {
   constructor(
     private readonly request: LongbridgeFetch = globalThis.fetch,
-    private readonly marketData: LongbridgeMarketData = new LongbridgeMcpMarketData(request),
+    private readonly marketData: LongbridgeMarketData = new LongbridgeSdkMarketData(),
   ) {}
 
   async start(redirectUri: string): Promise<{
@@ -977,7 +1110,7 @@ function needsCredentialRefresh(
   const obtainedAt = Date.parse(credentials.obtainedAt);
   const attempted = Date.parse(attemptedAt);
   if (!Number.isFinite(obtainedAt) || !Number.isFinite(attempted)) return true;
-  return attempted >= obtainedAt + credentials.expiresIn * 1000 - 60_000;
+  return attempted >= obtainedAt + credentials.expiresIn * 1000 - 5 * 60_000;
 }
 
 function assertCompleteQuotes(
@@ -997,7 +1130,7 @@ export class ProductionLongbridgeSourceRefresher
   constructor(
     private readonly request: LongbridgeFetch = globalThis.fetch,
     private readonly marketData: LongbridgeMarketData =
-      new LongbridgeMcpMarketData(request),
+      new LongbridgeSdkMarketData(),
   ) {}
 
   private async rotateCredentials(

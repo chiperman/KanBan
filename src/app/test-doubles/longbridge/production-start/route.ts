@@ -1,6 +1,12 @@
+import { readFile, readdir } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
 import {
+  LongbridgeSdkMarketData,
   ProductionLongbridgeOAuth,
   ProductionLongbridgeSourceRefresher,
+  runLongbridgeSdkQuoteWorker,
 } from "@/server/asset-sources/longbridge";
 import { isTestEnv } from "@/server/composition";
 import type { AssetSourceSummary } from "@/server/ports";
@@ -22,7 +28,10 @@ export async function POST(request: Request) {
       | "refresh-expired"
       | "refresh-expired-trade"
       | "refresh-expired-downstream-fail"
-      | "refresh-expired-malformed-scope";
+      | "refresh-expired-malformed-scope"
+      | "sdk-worker-probe"
+      | "sdk-source-audit"
+      | "sdk-build-audit";
     scenario?: "readonly" | "trade" | "missing" | "unknown" | "extra";
   };
   const previousClientId = process.env.LONGBRIDGE_OAUTH_CLIENT_ID;
@@ -31,6 +40,7 @@ export async function POST(request: Request) {
   const quotedSymbols: string[] = [];
   let tokenRequests = 0;
   let credentialsRotated = false;
+  let quoteContextCalls = 0;
   const scope = {
     readonly: "6",
     trade: "6 11",
@@ -55,63 +65,6 @@ export async function POST(request: Request) {
     const method = (
       init?.method ?? (input instanceof Request ? input.method : "GET")
     ).toUpperCase();
-    if (url.hostname === "mcp.longbridge.com") {
-      if (method === "DELETE") return new Response(null, { status: 200 });
-      const rawBody = input instanceof Request
-        ? await input.clone().text()
-        : typeof init?.body === "string"
-          ? init.body
-          : "{}";
-      const message = JSON.parse(rawBody) as {
-        id?: string | number;
-        method?: string;
-        params?: { protocolVersion?: string; arguments?: { symbols?: string[] } };
-      };
-      if (message.method === "notifications/initialized") {
-        return new Response(null, { status: 202 });
-      }
-      if (message.method === "initialize") {
-        return Response.json(
-          {
-            jsonrpc: "2.0",
-            id: message.id,
-            result: {
-              protocolVersion: message.params?.protocolVersion,
-              capabilities: { tools: {} },
-              serverInfo: { name: "longbridge-test", version: "1" },
-            },
-          },
-          { headers: { "mcp-session-id": "browser-test-session" } },
-        );
-      }
-      if (message.method === "tools/call") {
-        const symbols = message.params?.arguments?.symbols ?? [];
-        quotedSymbols.push(...symbols);
-        const returnedSymbols =
-          body.action === "refresh-missing-quote" ||
-          body.action === "refresh-expired-downstream-fail"
-          ? []
-          : symbols;
-        return Response.json({
-          jsonrpc: "2.0",
-          id: message.id,
-          result: {
-            content: [{
-              type: "text",
-              text: JSON.stringify(returnedSymbols.map((symbol) => ({
-                symbol,
-                last_done:
-                  body.action === "refresh-negative-residual" ? "100" : "2000",
-                prev_close:
-                  body.action === "refresh-negative-residual" ? "100" : "1950",
-                timestamp: "2026-05-29T00:00:00Z",
-              }))),
-            }],
-          },
-        });
-      }
-      return Response.json({ error: "unexpected MCP request" }, { status: 500 });
-    }
     if (url.pathname === "/oauth2/token") {
       const rawBody = input instanceof Request
         ? await input.clone().text()
@@ -192,7 +145,148 @@ export async function POST(request: Request) {
     }
     return Response.json({ error: "unexpected request" }, { status: 500 });
   };
+  const marketData = new LongbridgeSdkMarketData(async ({
+    accessToken: receivedToken,
+    symbols,
+  }) => {
+    if (!receivedToken) throw new Error("长桥 SDK 未收到 Token");
+    quoteContextCalls += 1;
+    quotedSymbols.push(...symbols);
+    const returnedSymbols =
+      body.action === "refresh-missing-quote" ||
+      body.action === "refresh-expired-downstream-fail"
+        ? []
+        : symbols;
+    return returnedSymbols.map((symbol) => ({
+      symbol,
+      lastDone: body.action === "refresh-negative-residual" ? "100" : "2000",
+      prevClose: body.action === "refresh-negative-residual" ? "100" : "1950",
+      timestamp: "2026-05-29T00:00:00Z",
+    }));
+  });
   try {
+    if (body.action === "sdk-worker-probe") {
+      const before = new Set(
+        (await readdir(os.tmpdir())).filter((name) =>
+          name.startsWith("longbridge-sdk-"),
+        ),
+      );
+      const testSdkModule = path.join(
+        /* turbopackIgnore: true */ process.cwd(),
+        "scripts",
+        "testing",
+        "fake-longbridge-sdk.mjs",
+      );
+      const workerInput = {
+        accessToken: "sdk-worker-probe-token-must-not-leak",
+        clientId: "browser-test-client",
+        symbols: ["AAPL.US"],
+      };
+      const quotes = await runLongbridgeSdkQuoteWorker(workerInput, {
+        testSdkModule,
+      });
+      const controller = new AbortController();
+      const aborted = runLongbridgeSdkQuoteWorker(
+        { ...workerInput, symbols: ["SLOW.US"], signal: controller.signal },
+        { testSdkModule },
+      ).catch((error: unknown) =>
+        error instanceof Error ? error.message : "unknown",
+      );
+      setTimeout(() => controller.abort(), 10);
+      const timedOut = await runLongbridgeSdkQuoteWorker(
+        { ...workerInput, symbols: ["SLOW.US"] },
+        { testSdkModule, timeoutMs: 20 },
+      ).catch((error: unknown) =>
+        error instanceof Error ? error.message : "unknown",
+      );
+      const malformed = await runLongbridgeSdkQuoteWorker(workerInput, {
+        workerPath: path.join(
+          /* turbopackIgnore: true */ process.cwd(),
+          "scripts",
+          "testing",
+          "invalid-longbridge-worker.mjs",
+        ),
+      }).catch((error: unknown) =>
+        error instanceof Error ? error.message : "unknown",
+      );
+      const missingWorker = await runLongbridgeSdkQuoteWorker(workerInput, {
+        workerPath: path.join(
+          /* turbopackIgnore: true */ process.cwd(),
+          "scripts",
+          "testing",
+          "missing-longbridge-worker.mjs",
+        ),
+      }).catch((error: unknown) =>
+        error instanceof Error ? error.message : "unknown",
+      );
+      const temporaryHomesLeft = (await readdir(os.tmpdir())).filter(
+        (name) => name.startsWith("longbridge-sdk-") && !before.has(name),
+      );
+      return Response.json({
+        quotes,
+        aborted: await aborted,
+        timedOut,
+        malformed,
+        missingWorker,
+        temporaryHomesLeft,
+      });
+    }
+    if (body.action === "sdk-source-audit") {
+      const [adapter, worker, packageJson, lockfile] = await Promise.all([
+        readFile(path.join(/* turbopackIgnore: true */ process.cwd(), "src/server/asset-sources/longbridge.ts"), "utf8"),
+        readFile(path.join(/* turbopackIgnore: true */ process.cwd(), "scripts/longbridge-quote-worker.mjs"), "utf8"),
+        readFile(path.join(/* turbopackIgnore: true */ process.cwd(), "package.json"), "utf8"),
+        readFile(path.join(/* turbopackIgnore: true */ process.cwd(), "pnpm-lock.yaml"), "utf8"),
+      ]);
+      const productSource = `${adapter}\n${worker}`;
+      const forbidden = [
+        "TradeContext",
+        "submitOrder",
+        "replaceOrder",
+        "cancelOrder",
+        "/v1/trade/order",
+      ].filter((identifier) => productSource.includes(identifier));
+      return Response.json({
+        forbidden,
+        hasMcpDependency:
+          packageJson.includes("@modelcontextprotocol/sdk") ||
+          lockfile.includes("@modelcontextprotocol/sdk"),
+        hasMcpEndpoint: productSource.includes("mcp.longbridge.com"),
+        usesQuoteContext:
+          worker.includes("QuoteContext.new") && worker.includes("context.quote"),
+      });
+    }
+    if (body.action === "sdk-build-audit") {
+      const traceFiles = [
+        ".next/server/app/api/asset-sources/longbridge/preview/route.js.nft.json",
+        ".next/server/app/api/asset-sources/refresh/route.js.nft.json",
+      ];
+      const traces = await Promise.all(
+        traceFiles.map(async (file) => {
+          const trace = JSON.parse(
+            await readFile(
+              path.join(/* turbopackIgnore: true */ process.cwd(), file),
+              "utf8",
+            ),
+          ) as { files?: unknown };
+          if (!Array.isArray(trace.files)) return [];
+          return trace.files.filter((entry): entry is string =>
+            typeof entry === "string",
+          );
+        }),
+      );
+      return Response.json({
+        routes: traces.map((files) => ({
+          worker: files.some((file) =>
+            file.endsWith("scripts/longbridge-quote-worker.mjs"),
+          ),
+          sdk: files.some((file) =>
+            file.endsWith("node_modules/longbridge/index.js"),
+          ),
+          native: files.some((file) => file.endsWith(".node")),
+        })),
+      });
+    }
     if (body.action?.startsWith("refresh-")) {
       const source: AssetSourceSummary = {
         id: "production-refresh-source",
@@ -237,7 +331,10 @@ export async function POST(request: Request) {
           error: null,
         },
       };
-      const refresher = new ProductionLongbridgeSourceRefresher(mockFetch);
+      const refresher = new ProductionLongbridgeSourceRefresher(
+        mockFetch,
+        marketData,
+      );
       const expired =
         body.action === "refresh-expired" ||
         body.action === "refresh-expired-trade" ||
@@ -274,16 +371,24 @@ export async function POST(request: Request) {
         assetRequests,
         quotedSymbols,
         tokenRequests,
+        quoteEngine: "longbridge@4.4.1 QuoteContext",
+        quoteContextCalls,
       });
     }
-    const oauth = new ProductionLongbridgeOAuth(mockFetch);
+    const oauth = new ProductionLongbridgeOAuth(mockFetch, marketData);
     if (body.action === "finish") {
       const { credentials: _credentials, ...safe } = await oauth.finish({
         code: "browser-test-code",
         codeVerifier: "browser-test-code-verifier",
         redirectUri: new URL("/callback", request.url).toString(),
       });
-      return Response.json({ ...safe, assetRequests, quotedSymbols });
+      return Response.json({
+        ...safe,
+        assetRequests,
+        quotedSymbols,
+        quoteEngine: "longbridge@4.4.1 QuoteContext",
+        quoteContextCalls,
+      });
     }
     const started = await oauth.start(new URL("/callback", request.url).toString());
     return Response.json({
@@ -298,6 +403,8 @@ export async function POST(request: Request) {
         quotedSymbols,
         tokenRequests,
         credentialsRotated,
+        quoteEngine: "longbridge@4.4.1 QuoteContext",
+        quoteContextCalls,
       },
       { status: 400 },
     );

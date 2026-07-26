@@ -241,6 +241,8 @@ test("生产长桥刷新保持只读边界，并在读取前拒绝非纯 scope 6
     },
     assetRequests: [],
     quotedSymbols: ["AAPL.US"],
+    quoteEngine: "longbridge@4.4.1 QuoteContext",
+    quoteContextCalls: 1,
   });
 
   const holdings = await request.post(
@@ -260,6 +262,10 @@ test("生产长桥刷新保持只读边界，并在读取前拒绝非纯 scope 6
   expect(holdingsBody.snapshot.total).toEqual({
     amount: "123456.7891",
     currency: "USD",
+  });
+  expect(holdingsBody).toMatchObject({
+    quoteEngine: "longbridge@4.4.1 QuoteContext",
+    quoteContextCalls: 1,
   });
 
   const rejected = await request.post(

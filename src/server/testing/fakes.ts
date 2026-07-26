@@ -427,6 +427,7 @@ export type FakeRefreshScenario =
   | "partial-failure"
   | "timeout-isolation"
   | "all-failure"
+  | "longbridge-refresh-failure"
   | "binance-refresh-failure"
   | "okx-refresh-failure"
   | "bitget-refresh-failure";
@@ -458,6 +459,12 @@ export class FakeAssetSourceRefresher implements AssetSourceRefresher {
     this.sourceCalls.set(source.id, count);
     if (this.scenario === "all-failure") {
       throw new Error("全部来源暂时不可用");
+    }
+    if (
+      this.scenario === "longbridge-refresh-failure" &&
+      source.kind === "longbridge"
+    ) {
+      throw new Error("长桥同步失败");
     }
     if (
       this.scenario === "binance-refresh-failure" &&
