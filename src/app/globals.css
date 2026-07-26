@@ -996,3 +996,13 @@ body {
   margin: 16px 0 0;
   font-size: 13px;
 }
+
+.setup-done p {
+  margin: 0;
+}
+
+.setup-home-link {
+  display: inline-block;
+  margin-top: 12px;
+  text-decoration: none;
+}

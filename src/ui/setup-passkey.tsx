@@ -34,9 +34,12 @@ export function SetupPasskey() {
 
   if (state === "done") {
     return (
-      <p className="setup-done" role="status">
-        已完成预置。返回公开主页，点击受限卡片即可使用 Passkey 解锁。
-      </p>
+      <div className="setup-done" role="status">
+        <p>已完成预置。预置不会自动登录，请返回公开主页解锁受限卡片。</p>
+        <a className="login-primary setup-home-link" href="/">
+          返回公开主页
+        </a>
+      </div>
     );
   }
 
