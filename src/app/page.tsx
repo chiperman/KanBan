@@ -37,7 +37,12 @@ export default async function PublicHomePage() {
     <>
       <header className="page-header">
         <div className="header-title">
-          <p className="header-label">PERSONAL ASSET DASHBOARD · 公开主页</p>
+          <p className="header-label">
+            <span className="header-wordmark" lang="en">
+              PERSONAL ASSET DASHBOARD
+            </span>
+            <span className="header-context">· 公开主页</span>
+          </p>
           <p className="header-sub" data-testid="view-mode">
             {session ? "所有者视图 · 已验证身份" : "访客视图 · 无需登录"}
           </p>
@@ -58,7 +63,7 @@ export default async function PublicHomePage() {
           <ThemeSwitcher />
         </div>
       </header>
-      <main>
+      <main id="main-content">
         {session ? (
           <OwnerDashboard
             cards={cards}
@@ -105,6 +110,9 @@ export default async function PublicHomePage() {
 
   return (
     <div className="page">
+      <a className="skip-link" href="#main-content">
+        跳到主要内容
+      </a>
       {session ? <SessionGuard>{content}</SessionGuard> : content}
     </div>
   );

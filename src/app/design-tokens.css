@@ -1,0 +1,112 @@
+@font-face {
+  font-family: "Doto";
+  src: url("/fonts/nothing-open/Doto-ROND-wght.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: "Geist";
+  src: url("/fonts/nothing-open/Geist-Regular.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: "Geist";
+  src: url("/fonts/nothing-open/Geist-SemiBold.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 600;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("/fonts/nothing-open/GeistMono-Regular.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("/fonts/nothing-open/GeistMono-Medium.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 500;
+}
+
+:root,
+[data-theme="light"] {
+  --canvas: #f2f2f2;
+  --surface: #ffffff;
+  --raised: #ededed;
+  --line: #e2e2e2;
+  --line-strong: #cfcfcf;
+  --ink-muted: #9a9a9a;
+  --ink-secondary: #585a5a;
+  --ink-primary: #1c1c1c;
+  --ink-display: #000000;
+  --signal: #d71921;
+  --signal-text: #c2141c;
+  --success: #3d8b4a;
+  --warning: #9c6b00;
+  --error: #d23b30;
+  --restricted-dot: rgba(0, 0, 0, 0.14);
+  --overlay: rgba(242, 242, 242, 0.88);
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --canvas: #000000;
+  --surface: #0c0c0c;
+  --raised: #171717;
+  --line: #262626;
+  --line-strong: #3a3a3a;
+  --ink-muted: #5a5a5a;
+  --ink-secondary: #8c8c8c;
+  --ink-primary: #ededed;
+  --ink-display: #ffffff;
+  --signal: #d71921;
+  --signal-text: #ff4438;
+  --success: #7be38a;
+  --warning: #f2c94c;
+  --error: #ff5247;
+  --restricted-dot: rgba(255, 255, 255, 0.12);
+  --overlay: rgba(0, 0, 0, 0.88);
+  color-scheme: dark;
+}
+
+:root {
+  --font-display: "Doto", ui-monospace, monospace;
+  --font-ui: "Geist", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-16: 64px;
+  --radius-xs: 4px;
+  --radius-control: 6px;
+  --radius-module: 8px;
+  --radius-round: 999px;
+  --duration-fast: 180ms;
+  --duration-theme: 350ms;
+  --ease-standard: ease-in-out;
+
+  /* Progressive aliases for the existing component stylesheet. */
+  --bg: var(--canvas);
+  --bg-subtle: var(--raised);
+  --card-bg: var(--surface);
+  --border: var(--line);
+  --border-strong: var(--line-strong);
+  --text: var(--ink-primary);
+  --text-dim: var(--ink-secondary);
+  --accent: var(--ink-display);
+}
