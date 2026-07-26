@@ -36,8 +36,34 @@ export async function POST(request: Request) {
 export async function GET() {
   if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
   const services = getTestServices();
+  const sources = (await services.assetSources.list()).filter(({ kind }) =>
+    kind.startsWith("evm-watch-"),
+  );
+  const cards = (await services.cards.list()).filter(
+    (card) => card.kind === "asset" && card.sourceId !== undefined &&
+      sources.some((source) => source.id === card.sourceId),
+  );
+  const snapshots = await services.dailyAssetSnapshots.list();
   return Response.json({
-    savedSources: (await services.assetSources.list()).filter(({ kind }) => kind.startsWith("evm-watch-")).length,
+    savedSources: sources.length,
     savedSecrets: services.secrets.size(),
+    sources: sources.map(({ id, kind, lifecycle = "connected" }) => ({
+      id,
+      kind,
+      lifecycle,
+    })),
+    cards: cards.map((card) => card.kind === "asset"
+      ? { sourceId: card.sourceId, hidden: card.hidden }
+      : {}),
+    refreshCalls: services.assetSynchronization.refresher.calls(),
+    snapshotSourceIds: [
+      ...new Set(snapshots.flatMap((snapshot) =>
+        snapshot.sources.map(({ sourceId }) => sourceId),
+      )),
+    ],
+    snapshots: snapshots.map(({ day, sources: snapshotSources }) => ({
+      day,
+      sourceIds: snapshotSources.map(({ sourceId }) => sourceId),
+    })),
   });
 }

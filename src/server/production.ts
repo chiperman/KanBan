@@ -15,6 +15,7 @@ import type {
 } from "@/server/composition";
 import type {
   AssetSourceSummary,
+  AssetSourceLifecycle,
   AssetSnapshot,
   AssetSourceConnections,
   AssetSources,
@@ -79,6 +80,29 @@ interface DashboardState {
 }
 
 const DASHBOARD_SCHEMA_VERSION = 4 as const;
+
+function withoutSnapshotSource(
+  snapshot: DailyAssetSnapshot,
+  sourceId: string,
+): DailyAssetSnapshot | null {
+  const sources = snapshot.sources.filter((source) => source.sourceId !== sourceId);
+  if (sources.length === 0) return null;
+  const total = {
+    USD: sources.some((source) => source.total.USD !== null)
+      ? decimalAdd(...sources.flatMap((source) => source.total.USD ?? []))
+      : null,
+    CNY: sources.some((source) => source.total.CNY !== null)
+      ? decimalAdd(...sources.flatMap((source) => source.total.CNY ?? []))
+      : null,
+  };
+  return {
+    ...snapshot,
+    sources,
+    total,
+    complete:
+      sources.every((source) => source.complete) && total.USD !== null,
+  };
+}
 
 function migrateAssetSource(raw: unknown): AssetSourceSummary {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
@@ -331,6 +355,44 @@ export class FileDashboardDatabase {
         left.day.localeCompare(right.day),
       );
       return true;
+    });
+  }
+
+  async setAssetCardHidden(sourceId: string, hidden: boolean): Promise<void> {
+    await this.mutate((state) => {
+      if (!state.assetSources.some((source) => source.id === sourceId)) {
+        throw new Error("资产来源不存在");
+      }
+      const card = state.cards.find(
+        (item) => item.kind === "asset" && item.sourceId === sourceId,
+      );
+      if (!card || card.kind !== "asset") throw new Error("资产卡片不存在");
+      card.hidden = hidden;
+    });
+  }
+
+  async disconnectAssetSource(sourceId: string): Promise<string> {
+    return this.mutate((state) => {
+      const source = state.assetSources.find((item) => item.id === sourceId);
+      if (!source) throw new Error("资产来源不存在");
+      source.lifecycle = "disconnected";
+      return source.credentialReference;
+    });
+  }
+
+  async deleteAssetSourceData(sourceId: string): Promise<string> {
+    return this.mutate((state) => {
+      const source = state.assetSources.find((item) => item.id === sourceId);
+      if (!source) throw new Error("资产来源不存在");
+      state.assetSources = state.assetSources.filter((item) => item.id !== sourceId);
+      state.cards = state.cards.filter(
+        (card) => card.kind !== "asset" || card.sourceId !== sourceId,
+      );
+      state.dailyAssetSnapshots = state.dailyAssetSnapshots.flatMap((snapshot) => {
+        const updated = withoutSnapshotSource(snapshot, sourceId);
+        return updated ? [updated] : [];
+      });
+      return source.credentialReference;
     });
   }
 
@@ -616,6 +678,27 @@ class DatabaseDailyAssetSnapshots implements DailyAssetSnapshots {
   }
 }
 
+class DatabaseAssetSourceLifecycle implements AssetSourceLifecycle {
+  constructor(
+    private readonly database: FileDashboardDatabase,
+    private readonly secrets: SecretStore,
+  ) {}
+
+  setHidden(sourceId: string, hidden: boolean): Promise<void> {
+    return this.database.setAssetCardHidden(sourceId, hidden);
+  }
+
+  async disconnect(sourceId: string): Promise<void> {
+    const reference = await this.database.disconnectAssetSource(sourceId);
+    await this.secrets.remove(reference);
+  }
+
+  async deleteData(sourceId: string): Promise<void> {
+    const reference = await this.database.deleteAssetSourceData(sourceId);
+    await this.secrets.remove(reference);
+  }
+}
+
 export class DatabaseAssetSourceConnections implements AssetSourceConnections {
   constructor(
     private readonly database: FileDashboardDatabase,
@@ -783,9 +866,16 @@ export function createProductionServices(): AppServices {
   const secrets = new FileEncryptedSecretStore(
     path.join(dataDir, "secrets.json"),
   );
-  const secretRecovery = database.listSources().then((sources) =>
-    secrets.recover(new Set(sources.map((source) => source.credentialReference))),
-  );
+  const secretRecovery = database.listSources().then(async (sources) => {
+    await secrets.recover(
+      new Set(sources.map((source) => source.credentialReference)),
+    );
+    await Promise.all(
+      sources
+        .filter((source) => source.lifecycle === "disconnected")
+        .map((source) => secrets.remove(source.credentialReference)),
+    );
+  });
   void secretRecovery.catch(() => undefined);
   const assetSources = new DatabaseAssetSources(database);
   const dailyAssetSnapshots = new DatabaseDailyAssetSnapshots(database);
@@ -796,6 +886,10 @@ export function createProductionServices(): AppServices {
     clock,
     cards: new DatabaseCardStore(database),
     assetSources,
+    assetSourceLifecycle: new DatabaseAssetSourceLifecycle(
+      database,
+      readySecrets,
+    ),
     dailyAssetSnapshots,
     assetSynchronization: new SourceIsolatedAssetSynchronization(
       assetSources,

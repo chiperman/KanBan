@@ -78,7 +78,8 @@ function isCard(value: unknown): value is Card {
         value.access === "private" &&
         typeof value.title === "string" &&
         typeof value.body === "string" &&
-        (value.sourceId === undefined || typeof value.sourceId === "string")
+        (value.sourceId === undefined || typeof value.sourceId === "string") &&
+        (value.hidden === undefined || typeof value.hidden === "boolean")
       );
     default:
       return false;

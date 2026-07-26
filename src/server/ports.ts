@@ -50,6 +50,7 @@ export interface AssetCard extends Omit<BaseCard, "access"> {
   title: string;
   body: string;
   sourceId?: string;
+  hidden?: boolean;
 }
 
 export type Card =
@@ -73,6 +74,8 @@ export interface AssetSourceSummary {
   credentialReference: string;
   snapshot: AssetSnapshot;
   sync: AssetSourceSyncState;
+  /** 旧数据缺省为 connected；断开后仅保留历史身份与快照。 */
+  lifecycle?: "connected" | "disconnected";
 }
 
 export interface AssetSourceSyncState {
@@ -317,6 +320,12 @@ export interface AssetSources {
   list(): Promise<AssetSourceSummary[]>;
   replaceAll(sources: AssetSourceSummary[]): Promise<void>;
   update(source: AssetSourceSummary): Promise<void>;
+}
+
+export interface AssetSourceLifecycle {
+  setHidden(sourceId: string, hidden: boolean): Promise<void>;
+  disconnect(sourceId: string): Promise<void>;
+  deleteData(sourceId: string): Promise<void>;
 }
 
 export interface PriceQuote {

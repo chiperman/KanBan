@@ -1,5 +1,6 @@
 import type {
   AssetSourceSummary,
+  AssetSourceLifecycle,
   AssetSources,
   AssetPermission,
   AssetSourceConnections,
@@ -41,6 +42,7 @@ import {
 } from "@/server/asset-sources/longbridge";
 import { SourceIsolatedAssetSynchronization } from "@/server/asset-synchronization";
 import { buildDailyAssetSnapshot } from "@/domain/daily-asset-snapshots";
+import { decimalAdd } from "@/domain/decimal";
 import {
   BinanceConnectionState,
   mapBinanceSnapshot,
@@ -130,6 +132,28 @@ export class InMemoryDailyAssetSnapshots implements DailyAssetSnapshots {
       left.day.localeCompare(right.day),
     );
     return true;
+  }
+
+  removeSource(sourceId: string): void {
+    this.snapshots = this.snapshots.flatMap((snapshot) => {
+      const sources = snapshot.sources.filter((source) => source.sourceId !== sourceId);
+      if (sources.length === 0) return [];
+      const total = {
+        USD: sources.some((source) => source.total.USD !== null)
+          ? decimalAdd(...sources.flatMap((source) => source.total.USD ?? []))
+          : null,
+        CNY: sources.some((source) => source.total.CNY !== null)
+          ? decimalAdd(...sources.flatMap((source) => source.total.CNY ?? []))
+          : null,
+      };
+      return [{
+        ...snapshot,
+        sources,
+        total,
+        complete:
+          sources.every((source) => source.complete) && total.USD !== null,
+      }];
+    });
   }
 }
 
@@ -511,11 +535,11 @@ export class FakeAssetSourceRefresher implements AssetSourceRefresher {
     attemptedAt,
     signal,
   }: Parameters<AssetSourceRefresher["refresh"]>[0]) {
+    const count = (this.sourceCalls.get(source.id) ?? 0) + 1;
+    this.sourceCalls.set(source.id, count);
     if (this.scenario === "passthrough") {
       return { snapshot: source.snapshot };
     }
-    const count = (this.sourceCalls.get(source.id) ?? 0) + 1;
-    this.sourceCalls.set(source.id, count);
     if (this.scenario === "all-failure") {
       throw new Error("全部来源暂时不可用");
     }
@@ -611,6 +635,10 @@ export class FakeAssetSourceRefresher implements AssetSourceRefresher {
         syncedAt: attemptedAt,
       },
     };
+  }
+
+  calls(): number {
+    return [...this.sourceCalls.values()].reduce((total, count) => total + count, 0);
   }
 }
 
@@ -825,6 +853,51 @@ export class InMemoryAssetSourceConnections implements AssetSourceConnections {
   }
 }
 
+export class InMemoryAssetSourceLifecycle implements AssetSourceLifecycle {
+  constructor(
+    private readonly sources: FakeAssetSources,
+    private readonly cards: InMemoryCardStore,
+    private readonly secrets: InMemorySecretStore,
+    private readonly dailySnapshots: InMemoryDailyAssetSnapshots,
+  ) {}
+
+  async setHidden(sourceId: string, hidden: boolean): Promise<void> {
+    if (!(await this.sources.list()).some((source) => source.id === sourceId)) {
+      throw new Error("资产来源不存在");
+    }
+    const cards = await this.cards.list();
+    const card = cards.find(
+      (item) => item.kind === "asset" && item.sourceId === sourceId,
+    );
+    if (!card || card.kind !== "asset") throw new Error("资产卡片不存在");
+    await this.cards.replaceAll(
+      cards.map((item) => item.id === card.id ? { ...item, hidden } : item),
+    );
+  }
+
+  async disconnect(sourceId: string): Promise<void> {
+    const sources = await this.sources.list();
+    const source = sources.find((item) => item.id === sourceId);
+    if (!source) throw new Error("资产来源不存在");
+    await this.sources.update({ ...source, lifecycle: "disconnected" });
+    await this.secrets.remove(source.credentialReference);
+  }
+
+  async deleteData(sourceId: string): Promise<void> {
+    const sources = await this.sources.list();
+    const source = sources.find((item) => item.id === sourceId);
+    if (!source) throw new Error("资产来源不存在");
+    await this.sources.replaceAll(sources.filter((item) => item.id !== sourceId));
+    await this.cards.replaceAll(
+      (await this.cards.list()).filter(
+        (card) => card.kind !== "asset" || card.sourceId !== sourceId,
+      ),
+    );
+    this.dailySnapshots.removeSource(sourceId);
+    await this.secrets.remove(source.credentialReference);
+  }
+}
+
 export interface TestServices extends AppServices {
   clock: FakeClock;
   cards: InMemoryCardStore;
@@ -847,6 +920,7 @@ export interface TestServices extends AppServices {
   evm: FakeEvmWatchWallet;
   evmConnections: EvmConnectionState;
   assetSourceConnections: InMemoryAssetSourceConnections;
+  assetSourceLifecycle: InMemoryAssetSourceLifecycle;
 }
 
 export function createTestServices(): TestServices {
@@ -868,10 +942,17 @@ export function createTestServices(): TestServices {
     ),
     refreshAdapter,
   );
+  const assetSourceLifecycle = new InMemoryAssetSourceLifecycle(
+    assetSources,
+    cards,
+    secrets,
+    dailyAssetSnapshots,
+  );
   return {
     clock,
     cards,
     assetSources,
+    assetSourceLifecycle,
     dailyAssetSnapshots,
     assetSynchronization,
     prices,

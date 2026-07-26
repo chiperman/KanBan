@@ -1,5 +1,6 @@
 import type {
   AssetSources,
+  AssetSourceLifecycle,
   AssetSynchronization,
   AssetSourceConnections,
   BinanceReadOnly,
@@ -35,6 +36,7 @@ export interface AppServices {
   clock: Clock;
   cards: CardStore;
   assetSources: AssetSources;
+  assetSourceLifecycle: AssetSourceLifecycle;
   assetSynchronization: AssetSynchronization;
   dailyAssetSnapshots: DailyAssetSnapshots;
   prices: Prices;

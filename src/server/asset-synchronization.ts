@@ -35,7 +35,9 @@ export class SourceIsolatedAssetSynchronization
   }
 
   private async execute(mode: AssetRefreshMode): Promise<AssetRefreshReport> {
-    const sources = await this.sources.list();
+    const sources = (await this.sources.list()).filter(
+      (source) => source.lifecycle !== "disconnected",
+    );
     const attemptedAt = this.clock.now().toISOString();
     const outcomes = await Promise.all(
       sources.map(async (source) => {
@@ -114,8 +116,11 @@ export class SourceIsolatedAssetSynchronization
     );
     const successCount = outcomes.filter(Boolean).length;
     if (successCount > 0) {
+      const connectedSources = (await this.sources.list()).filter(
+        (source) => source.lifecycle !== "disconnected",
+      );
       await this.dailySnapshots.createIfAbsent(
-        buildDailyAssetSnapshot(await this.sources.list(), attemptedAt),
+        buildDailyAssetSnapshot(connectedSources, attemptedAt),
       );
     }
     return {

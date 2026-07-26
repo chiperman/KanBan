@@ -18,6 +18,9 @@ function formatUtc(date: Date): string {
 export default async function PublicHomePage() {
   const services = getServices();
   const cards = await services.cards.list();
+  const visitorCards = cards.filter(
+    (card) => card.kind !== "asset" || !card.hidden,
+  );
   const session = await services.auth.currentSession();
   const assetSources = session
     ? (await services.assetSources.list()).map(
@@ -57,7 +60,7 @@ export default async function PublicHomePage() {
           />
         ) : (
           <section className="card-grid" data-testid="card-grid">
-            {cards.length === 0 ? (
+            {visitorCards.length === 0 ? (
               <div className="empty-state" data-testid="empty-state">
                 <p className="empty-title">暂无公开内容</p>
                 <p className="empty-hint">
@@ -66,10 +69,10 @@ export default async function PublicHomePage() {
               </div>
             ) : (
               <>
-              {cards.some((card) => card.kind === "asset") ? (
+              {visitorCards.some((card) => card.kind === "asset") ? (
                 <TotalOverviewPlaceholder />
               ) : null}
-              {cards.map((card) =>
+              {visitorCards.map((card) =>
                 // 服务端数据边界：访客永远不会收到私密卡片的真实内容，
                 // 占位模型只包含宽度。
                 card.access === "private" ? (

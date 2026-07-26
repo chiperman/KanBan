@@ -16,6 +16,7 @@ export interface AssetSourceView {
   accountId: string;
   snapshot: AssetSnapshot;
   sync: AssetSourceSyncState;
+  lifecycle?: "connected" | "disconnected";
 }
 
 function providerCardLabel(source: AssetSourceView): string {
@@ -212,11 +213,15 @@ export function AssetSourceCard({
           )}
         </section>
         <p className="asset-updated">最后更新：{source.snapshot.syncedAt.slice(0, 16).replace("T", " ")} UTC</p>
-        <p className={`asset-sync-status ${source.sync.status}`}>
-          {source.sync.status === "expired" ? "过期数据" : "数据当前"}
-          {" · 最后成功："}
-          {source.sync.lastSuccessfulAt.slice(0, 16).replace("T", " ")} UTC
-        </p>
+        {source.lifecycle === "disconnected" ? (
+          <p className="asset-sync-status expired">已断开 · 历史数据保留</p>
+        ) : (
+          <p className={`asset-sync-status ${source.sync.status}`}>
+            {source.sync.status === "expired" ? "过期数据" : "数据当前"}
+            {" · 最后成功："}
+            {source.sync.lastSuccessfulAt.slice(0, 16).replace("T", " ")} UTC
+          </p>
+        )}
         {source.sync.error ? (
           <p className="asset-sync-error" role="alert">
             {source.label} 同步失败：{source.sync.error}
