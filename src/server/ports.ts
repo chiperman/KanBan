@@ -168,6 +168,9 @@ export type AssetValuation =
 export interface AssetHolding {
   symbol: string;
   name: string;
+  /** 来源内资产标识与账户分区；用于同一资产跨分区保持独立。 */
+  sourceAsset?: string;
+  sourceAccount?: "spot" | "funding" | "earn-flexible" | "earn-locked";
   quantity: string;
   currency: string;
   assetClass: AssetClass;
@@ -195,6 +198,25 @@ export interface LongbridgeAuthorizationResult {
   snapshot: AssetSnapshot;
 }
 
+export interface BinanceAuthorizationResult {
+  credentials: string;
+  permissions: AssetPermission[];
+  account: { id: string; label: string };
+  snapshot: AssetSnapshot;
+}
+
+export interface BinanceReadOnly {
+  preview(input: {
+    apiKey: string;
+    apiSecret: string;
+    observedAt: string;
+  }): Promise<BinanceAuthorizationResult>;
+  revalidate(input: {
+    credentials: string;
+    observedAt: string;
+  }): Promise<BinanceAuthorizationResult>;
+}
+
 export interface LongbridgeOAuth {
   start(redirectUri: string): Promise<{
     authorizationUrl: string;
@@ -210,6 +232,7 @@ export interface LongbridgeOAuth {
 
 export interface AssetSourceConnections {
   connectLongbridge(result: LongbridgeAuthorizationResult): Promise<void>;
+  connectBinance(result: BinanceAuthorizationResult): Promise<void>;
 }
 
 /** 外部资产来源仅保存服务端凭证引用；凭证正文只能进入 SecretStore。 */

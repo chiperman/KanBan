@@ -2,6 +2,7 @@ import type {
   AssetSources,
   AssetSynchronization,
   AssetSourceConnections,
+  BinanceReadOnly,
   CardStore,
   Clock,
   DailyAssetSnapshots,
@@ -15,6 +16,7 @@ import type {
 import { createProductionServices } from "@/server/production";
 import { clearAllSessions } from "@/server/auth/session";
 import { LongbridgeConnectionState } from "@/server/asset-sources/longbridge";
+import { BinanceConnectionState } from "@/server/asset-sources/binance";
 import {
   createTestServices,
   type TestServices,
@@ -36,6 +38,8 @@ export interface AppServices {
   secrets: SecretStore;
   longbridge: LongbridgeOAuth;
   longbridgeConnections: LongbridgeConnectionState;
+  binance: BinanceReadOnly;
+  binanceConnections: BinanceConnectionState;
   assetSourceConnections: AssetSourceConnections;
 }
 

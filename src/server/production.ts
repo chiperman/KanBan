@@ -18,6 +18,7 @@ import type {
   AssetSnapshot,
   AssetSourceConnections,
   AssetSources,
+  BinanceAuthorizationResult,
   DailyAssetSnapshot,
   DailyAssetSnapshots,
   CardStore,
@@ -27,8 +28,6 @@ import type {
   OwnerCredentialStore,
   OwnerRecoveryCredential,
   OwnerRecoveryCredentialStore,
-  Prices,
-  PriceQuote,
   SecretStore,
   LongbridgeAuthorizationResult,
 } from "@/server/ports";
@@ -40,6 +39,13 @@ import {
   ProductionLongbridgeSourceRefresher,
 } from "@/server/asset-sources/longbridge";
 import { SourceIsolatedAssetSynchronization } from "@/server/asset-synchronization";
+import {
+  BinanceConnectionState,
+  CoinGeckoUsdtUsdPrices,
+  ProductionBinanceReadOnly,
+  ProductionBinanceSourceRefresher,
+} from "@/server/asset-sources/binance";
+import { RoutedAssetSourceRefresher } from "@/server/asset-sources/router";
 
 class SystemClock implements Clock {
   now(): Date {
@@ -315,11 +321,36 @@ export class FileDashboardDatabase {
     credentialReference: string,
     capturedAt: string,
   ): Promise<void> {
+    return this.connectAssetSource(result, credentialReference, capturedAt, {
+      kind: "longbridge",
+      title: "长桥资产",
+      body: "只读证券账户",
+    });
+  }
+
+  async connectBinance(
+    result: BinanceAuthorizationResult,
+    credentialReference: string,
+    capturedAt: string,
+  ): Promise<void> {
+    return this.connectAssetSource(result, credentialReference, capturedAt, {
+      kind: "binance",
+      title: "Binance 资产",
+      body: "现货、资金与 Simple Earn 只读账户",
+    });
+  }
+
+  private async connectAssetSource(
+    result: LongbridgeAuthorizationResult | BinanceAuthorizationResult,
+    credentialReference: string,
+    capturedAt: string,
+    card: { kind: string; title: string; body: string },
+  ): Promise<void> {
     await this.mutate((state) => {
       const sourceId = randomUUID();
       state.assetSources.push({
         id: sourceId,
-        kind: "longbridge",
+        kind: card.kind,
         label: result.account.label,
         accountId: result.account.id,
         permissions: result.permissions,
@@ -336,8 +367,8 @@ export class FileDashboardDatabase {
         id: randomUUID(),
         kind: "asset",
         access: "private",
-        title: "长桥资产",
-        body: "只读证券账户",
+        title: card.title,
+        body: card.body,
         sourceId,
         span: 2,
       });
@@ -531,15 +562,14 @@ export class DatabaseAssetSourceConnections implements AssetSourceConnections {
     private readonly ready: Promise<void> = Promise.resolve(),
     private readonly clock: Clock = new SystemClock(),
   ) {}
-  async connectLongbridge(result: LongbridgeAuthorizationResult) {
+  private async connect(
+    result: LongbridgeAuthorizationResult | BinanceAuthorizationResult,
+    save: (credentialReference: string, capturedAt: string) => Promise<void>,
+  ) {
     await this.ready;
     const credentialReference = await this.secrets.stage(result.credentials);
     try {
-      await this.database.connectLongbridge(
-        result,
-        credentialReference,
-        this.clock.now().toISOString(),
-      );
+      await save(credentialReference, this.clock.now().toISOString());
     } catch (error) {
       try {
         await this.secrets.remove(credentialReference);
@@ -553,6 +583,16 @@ export class DatabaseAssetSourceConnections implements AssetSourceConnections {
     }
     // Dashboard 中的引用是提交点；若标记写入中断，启动恢复会按该引用提升 pending。
     await this.secrets.commit(credentialReference).catch(() => undefined);
+  }
+
+  connectLongbridge(result: LongbridgeAuthorizationResult) {
+    return this.connect(result, (reference, capturedAt) =>
+      this.database.connectLongbridge(result, reference, capturedAt));
+  }
+
+  connectBinance(result: BinanceAuthorizationResult) {
+    return this.connect(result, (reference, capturedAt) =>
+      this.database.connectBinance(result, reference, capturedAt));
   }
 }
 
@@ -576,13 +616,6 @@ class ReadySecretStore implements SecretStore {
   async remove(reference: string) {
     await this.ready;
     return this.secrets.remove(reference);
-  }
-}
-
-/** 首版尚未接入参考价格来源；无可靠价格时一律返回 null。 */
-class NoPrices implements Prices {
-  async quote(): Promise<PriceQuote | null> {
-    return null;
   }
 }
 
@@ -675,6 +708,7 @@ export function createProductionServices(): AppServices {
   void secretRecovery.catch(() => undefined);
   const assetSources = new DatabaseAssetSources(database);
   const dailyAssetSnapshots = new DatabaseDailyAssetSnapshots(database);
+  const prices = new CoinGeckoUsdtUsdPrices();
   const readySecrets = new ReadySecretStore(secrets, secretRecovery);
   return {
     clock,
@@ -685,11 +719,14 @@ export function createProductionServices(): AppServices {
       assetSources,
       readySecrets,
       clock,
-      new ProductionLongbridgeSourceRefresher(),
+      new RoutedAssetSourceRefresher({
+        longbridge: new ProductionLongbridgeSourceRefresher(),
+        binance: new ProductionBinanceSourceRefresher(prices),
+      }),
       15_000,
       dailyAssetSnapshots,
     ),
-    prices: new NoPrices(),
+    prices,
     auth: new SessionOwnerAuth(clock),
     ownerCredentials: new FileOwnerCredentialStore(
       path.join(dataDir, "owner-credential.json"),
@@ -700,6 +737,8 @@ export function createProductionServices(): AppServices {
     secrets: readySecrets,
     longbridge: new ProductionLongbridgeOAuth(),
     longbridgeConnections: new LongbridgeConnectionState(),
+    binance: new ProductionBinanceReadOnly(prices),
+    binanceConnections: new BinanceConnectionState(),
     assetSourceConnections: new DatabaseAssetSourceConnections(
       database,
       secrets,

@@ -19,6 +19,8 @@ export async function GET() {
       assetSources: "fake-asset-sources",
       assetSynchronization: "fake-asset-synchronization",
       dailyAssetSnapshots: "in-memory-daily-asset-snapshots",
+      binance: "fake-binance-read-only",
+      binanceConnections: "in-memory-binance-preview-state",
       prices: "fake-prices",
       auth: "in-memory-session-auth",
       ownerCredentials: "in-memory-owner-credential-store",

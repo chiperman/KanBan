@@ -7,6 +7,8 @@ import type {
   AssetRefreshReport,
   AssetSourceRefresher,
   AssetSynchronization,
+  BinanceAuthorizationResult,
+  BinanceReadOnly,
   DailyAssetSnapshot,
   DailyAssetSnapshots,
   LongbridgeAuthorizationResult,
@@ -31,6 +33,15 @@ import {
 } from "@/server/asset-sources/longbridge";
 import { SourceIsolatedAssetSynchronization } from "@/server/asset-synchronization";
 import { buildDailyAssetSnapshot } from "@/domain/daily-asset-snapshots";
+import {
+  BinanceConnectionState,
+  mapBinanceSnapshot,
+  validateBinanceReadOnlyPermissions,
+} from "@/server/asset-sources/binance";
+import {
+  binanceFixture,
+  binancePermissions,
+} from "@/server/testing/binance-fixtures";
 
 export class FakeClock implements Clock {
   private current = new Date("2026-01-01T00:00:00.000Z");
@@ -203,8 +214,75 @@ export class FakeLongbridgeOAuth implements LongbridgeOAuth {
 }
 
 export class FakePrices implements Prices {
-  async quote(): Promise<PriceQuote | null> {
-    return null;
+  private readonly quotes = new Map<string, PriceQuote>();
+
+  setQuote(quote: PriceQuote | null): void {
+    this.quotes.clear();
+    if (quote) this.quotes.set(quote.symbol, quote);
+  }
+
+  async quote(symbol: string): Promise<PriceQuote | null> {
+    return this.quotes.get(symbol) ?? null;
+  }
+}
+
+export class FakeBinanceReadOnly implements BinanceReadOnly {
+  private scenario = "valid";
+
+  constructor(private readonly prices: Prices) {}
+
+  configure(scenario: string): void {
+    this.scenario = scenario;
+  }
+
+  async preview(input: {
+    apiKey: string;
+    apiSecret: string;
+    observedAt: string;
+  }): Promise<BinanceAuthorizationResult> {
+    const permissions = validateBinanceReadOnlyPermissions(
+      binancePermissions(this.scenario),
+    );
+    const fixture = binanceFixture(this.scenario === "missing-price");
+    return {
+      credentials: JSON.stringify({
+        apiKey: input.apiKey,
+        apiSecret: input.apiSecret,
+      }),
+      permissions,
+      account: {
+        id: "binance:900001",
+        label: "Binance 账户 · UID 900001",
+      },
+      snapshot: mapBinanceSnapshot({
+        ...fixture,
+        observedAt: input.observedAt,
+        usdtUsdQuote: await this.prices.quote("USDT"),
+      }),
+    };
+  }
+
+  revalidate(input: {
+    credentials: string;
+    observedAt: string;
+  }): Promise<BinanceAuthorizationResult> {
+    let credentials: { apiKey?: unknown; apiSecret?: unknown };
+    try {
+      credentials = JSON.parse(input.credentials) as typeof credentials;
+    } catch {
+      return Promise.reject(new Error("Binance 只读凭证格式无效"));
+    }
+    if (
+      typeof credentials.apiKey !== "string" ||
+      typeof credentials.apiSecret !== "string"
+    ) {
+      return Promise.reject(new Error("Binance 只读凭证格式无效"));
+    }
+    return this.preview({
+      apiKey: credentials.apiKey,
+      apiSecret: credentials.apiSecret,
+      observedAt: input.observedAt,
+    });
   }
 }
 
@@ -213,7 +291,8 @@ export type FakeRefreshScenario =
   | "schedule"
   | "partial-failure"
   | "timeout-isolation"
-  | "all-failure";
+  | "all-failure"
+  | "binance-refresh-failure";
 
 export class FakeAssetSourceRefresher implements AssetSourceRefresher {
   private scenario: FakeRefreshScenario = "passthrough";
@@ -242,6 +321,12 @@ export class FakeAssetSourceRefresher implements AssetSourceRefresher {
     this.sourceCalls.set(source.id, count);
     if (this.scenario === "all-failure") {
       throw new Error("全部来源暂时不可用");
+    }
+    if (
+      this.scenario === "binance-refresh-failure" &&
+      source.kind === "binance"
+    ) {
+      throw new Error("Binance 同步失败");
     }
     if (source.id === "source-unvalued") {
       return {
@@ -416,7 +501,10 @@ export class InMemoryAssetSourceConnections implements AssetSourceConnections {
     this.failMessage = message ?? null;
   }
 
-  async connectLongbridge(result: LongbridgeAuthorizationResult): Promise<void> {
+  private async connect(
+    result: LongbridgeAuthorizationResult | BinanceAuthorizationResult,
+    config: { kind: string; title: string; body: string },
+  ): Promise<void> {
     const credentialReference = await this.secrets.put(result.credentials);
     if (this.failMessage) {
       const message = this.failMessage;
@@ -424,12 +512,12 @@ export class InMemoryAssetSourceConnections implements AssetSourceConnections {
       await this.secrets.remove(credentialReference);
       throw new Error(message);
     }
-    const sourceId = `test-longbridge-source-${(await this.sources.list()).length + 1}`;
+    const sourceId = `test-${config.kind}-source-${(await this.sources.list()).length + 1}`;
     const updatedSources: AssetSourceSummary[] = [
       ...(await this.sources.list()),
       {
         id: sourceId,
-        kind: "longbridge",
+        kind: config.kind,
         label: result.account.label,
         accountId: result.account.id,
         permissions: result.permissions,
@@ -447,11 +535,11 @@ export class InMemoryAssetSourceConnections implements AssetSourceConnections {
     await this.cards.replaceAll([
       ...(await this.cards.list()),
       {
-        id: `test-longbridge-card-${sourceId}`,
+        id: `test-${config.kind}-card-${sourceId}`,
         kind: "asset",
         access: "private",
-        title: "长桥资产",
-        body: "只读证券账户",
+        title: config.title,
+        body: config.body,
         sourceId,
         span: 2,
       },
@@ -459,6 +547,22 @@ export class InMemoryAssetSourceConnections implements AssetSourceConnections {
     await this.dailySnapshots.createIfAbsent(
       buildDailyAssetSnapshot(updatedSources, this.clock.now().toISOString()),
     );
+  }
+
+  connectLongbridge(result: LongbridgeAuthorizationResult): Promise<void> {
+    return this.connect(result, {
+      kind: "longbridge",
+      title: "长桥资产",
+      body: "只读证券账户",
+    });
+  }
+
+  connectBinance(result: BinanceAuthorizationResult): Promise<void> {
+    return this.connect(result, {
+      kind: "binance",
+      title: "Binance 资产",
+      body: "现货、资金与 Simple Earn 只读账户",
+    });
   }
 }
 
@@ -475,6 +579,8 @@ export interface TestServices extends AppServices {
   secrets: InMemorySecretStore;
   longbridge: FakeLongbridgeOAuth;
   longbridgeConnections: LongbridgeConnectionState;
+  binance: FakeBinanceReadOnly;
+  binanceConnections: BinanceConnectionState;
   assetSourceConnections: InMemoryAssetSourceConnections;
 }
 
@@ -484,6 +590,7 @@ export function createTestServices(): TestServices {
   const assetSources = new FakeAssetSources();
   const dailyAssetSnapshots = new InMemoryDailyAssetSnapshots();
   const secrets = new InMemorySecretStore();
+  const prices = new FakePrices();
   const refreshAdapter = new FakeAssetSourceRefresher();
   const assetSynchronization = new FakeAssetSynchronization(
     new SourceIsolatedAssetSynchronization(
@@ -502,13 +609,15 @@ export function createTestServices(): TestServices {
     assetSources,
     dailyAssetSnapshots,
     assetSynchronization,
-    prices: new FakePrices(),
+    prices,
     auth: new SessionOwnerAuth(clock),
     ownerCredentials: new InMemoryOwnerCredentialStore(),
     ownerRecoveryCredentials: new InMemoryOwnerRecoveryCredentialStore(),
     secrets,
     longbridge: new FakeLongbridgeOAuth(),
     longbridgeConnections: new LongbridgeConnectionState(),
+    binance: new FakeBinanceReadOnly(prices),
+    binanceConnections: new BinanceConnectionState(),
     assetSourceConnections: new InMemoryAssetSourceConnections(
       assetSources,
       cards,

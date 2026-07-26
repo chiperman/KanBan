@@ -18,6 +18,18 @@ export interface AssetSourceView {
   sync: AssetSourceSyncState;
 }
 
+function providerCardLabel(source: AssetSourceView): string {
+  if (source.kind === "longbridge") return "长桥资产";
+  if (source.kind === "binance") return "Binance 资产";
+  return "资产来源";
+}
+
+function providerHoldingsLabel(source: AssetSourceView): string {
+  if (source.kind === "longbridge") return "长桥全部持仓";
+  if (source.kind === "binance") return "Binance 全部持仓";
+  return `${source.label} 全部持仓`;
+}
+
 function amount(value: string): string {
   const [integer, fraction] = value.split(".");
   const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -131,14 +143,20 @@ export function AssetSourceCard({
   return (
     <>
       <div
-        data-testid={source.kind === "longbridge" ? "longbridge-card" : `asset-source-card-${source.id}`}
+        data-testid={
+          source.kind === "longbridge"
+            ? "longbridge-card"
+            : source.kind === "binance"
+              ? "binance-card"
+              : `asset-source-card-${source.id}`
+        }
       >
-        <p className="card-label">{source.kind === "longbridge" ? "长桥资产" : "资产来源"}</p>
+        <p className="card-label">{providerCardLabel(source)}</p>
         {source.kind === "longbridge" ? null : <h2 className="asset-source-title">{source.label}</h2>}
         <p className="asset-total" data-testid="asset-source-total">{amount(source.snapshot.total.amount)} <span>{source.snapshot.total.currency}</span></p>
-        <ol className="holding-top-list">
+        <ol className="holding-top-list" data-testid="holding-top-list">
           {source.snapshot.holdings.slice(0, 5).map((holding) => (
-            <li key={holding.symbol}>
+            <li key={`${holding.sourceAccount ?? "default"}:${holding.symbol}`}>
               <span>{holding.name}</span>
               <strong>
                 {holding.marketValue === null
@@ -189,7 +207,7 @@ export function AssetSourceCard({
           className="asset-detail-overlay"
           role="dialog"
           aria-modal="true"
-          aria-label={source.kind === "longbridge" ? "长桥全部持仓" : `${source.label} 全部持仓`}
+          aria-label={providerHoldingsLabel(source)}
         >
           <div className="asset-detail-dialog">
             <div className="asset-detail-header">
@@ -206,7 +224,7 @@ export function AssetSourceCard({
             <div className="asset-table-wrap">
               <table className="asset-table">
                 <thead><tr><th>名称</th><th>数量</th><th>当前价格</th><th>原始市值</th><th>成本</th>{showPlatformProfit ? <th>平台盈亏（来源提供）</th> : null}<th>涨跌</th></tr></thead>
-                <tbody>{holdings.map((holding) => <HoldingRow key={holding.symbol} holding={holding} showPlatformProfit={showPlatformProfit} />)}</tbody>
+                <tbody>{holdings.map((holding) => <HoldingRow key={`${holding.sourceAccount ?? "default"}:${holding.symbol}`} holding={holding} showPlatformProfit={showPlatformProfit} />)}</tbody>
               </table>
             </div>
           </div>

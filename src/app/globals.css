@@ -435,6 +435,12 @@ body {
   background: var(--bg-subtle);
 }
 
+.source-credential-fields {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
 .source-preview-title {
   margin: 12px 0 0;
   font-size: 20px;
