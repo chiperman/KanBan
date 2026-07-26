@@ -226,8 +226,9 @@ test("长桥 OAuth 先预览后原子保存，并展示总额、前五持仓与�
   const card = page.getByTestId("longbridge-card");
   await expect(card).toContainText("123,456.7891 USD");
   await expect(card).toContainText("最后更新：2026-01-01 00:00 UTC");
-  await expect(card.getByRole("listitem")).toHaveCount(5);
-  await expect(card.getByRole("listitem").first()).toContainText("NVIDIA");
+  const topHoldings = card.locator(".holding-top-list").getByRole("listitem");
+  await expect(topHoldings).toHaveCount(5);
+  await expect(topHoldings.first()).toContainText("NVIDIA");
   await expect(card).not.toContainText("Tesla");
 
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));

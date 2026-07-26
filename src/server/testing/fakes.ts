@@ -7,6 +7,8 @@ import type {
   AssetRefreshReport,
   AssetSourceRefresher,
   AssetSynchronization,
+  DailyAssetSnapshot,
+  DailyAssetSnapshots,
   LongbridgeAuthorizationResult,
   Card,
   CardStore,
@@ -28,6 +30,7 @@ import {
   mapLongbridgeSnapshot,
 } from "@/server/asset-sources/longbridge";
 import { SourceIsolatedAssetSynchronization } from "@/server/asset-synchronization";
+import { buildDailyAssetSnapshot } from "@/domain/daily-asset-snapshots";
 
 export class FakeClock implements Clock {
   private current = new Date("2026-01-01T00:00:00.000Z");
@@ -70,6 +73,33 @@ export class FakeAssetSources implements AssetSources {
     this.sources = this.sources.map((item) =>
       item.id === source.id ? source : item,
     );
+  }
+}
+
+export class InMemoryDailyAssetSnapshots implements DailyAssetSnapshots {
+  private snapshots: DailyAssetSnapshot[] = [];
+
+  async list(): Promise<DailyAssetSnapshot[]> {
+    return this.snapshots;
+  }
+
+  async createIfAbsent(snapshot: DailyAssetSnapshot): Promise<boolean> {
+    const existing = this.snapshots.find(({ day }) => day === snapshot.day);
+    if (existing) {
+      const existingSourceIds = new Set(
+        existing.sources.map(({ sourceId }) => sourceId),
+      );
+      existing.sources.push(
+        ...snapshot.sources.filter(
+          ({ sourceId }) => !existingSourceIds.has(sourceId),
+        ),
+      );
+      return false;
+    }
+    this.snapshots = [...this.snapshots, snapshot].sort((left, right) =>
+      left.day.localeCompare(right.day),
+    );
+    return true;
   }
 }
 
@@ -182,7 +212,8 @@ export type FakeRefreshScenario =
   | "passthrough"
   | "schedule"
   | "partial-failure"
-  | "timeout-isolation";
+  | "timeout-isolation"
+  | "all-failure";
 
 export class FakeAssetSourceRefresher implements AssetSourceRefresher {
   private scenario: FakeRefreshScenario = "passthrough";
@@ -209,6 +240,14 @@ export class FakeAssetSourceRefresher implements AssetSourceRefresher {
     }
     const count = (this.sourceCalls.get(source.id) ?? 0) + 1;
     this.sourceCalls.set(source.id, count);
+    if (this.scenario === "all-failure") {
+      throw new Error("全部来源暂时不可用");
+    }
+    if (source.id === "source-unvalued") {
+      return {
+        snapshot: { ...source.snapshot, syncedAt: attemptedAt },
+      };
+    }
     if (
       this.scenario === "timeout-isolation" &&
       source.id === "source-beta"
@@ -369,6 +408,8 @@ export class InMemoryAssetSourceConnections implements AssetSourceConnections {
     private readonly sources: FakeAssetSources,
     private readonly cards: InMemoryCardStore,
     private readonly secrets: InMemorySecretStore,
+    private readonly dailySnapshots: InMemoryDailyAssetSnapshots,
+    private readonly clock: Clock,
   ) {}
 
   failNext(message: string | undefined): void {
@@ -384,7 +425,7 @@ export class InMemoryAssetSourceConnections implements AssetSourceConnections {
       throw new Error(message);
     }
     const sourceId = `test-longbridge-source-${(await this.sources.list()).length + 1}`;
-    await this.sources.replaceAll([
+    const updatedSources: AssetSourceSummary[] = [
       ...(await this.sources.list()),
       {
         id: sourceId,
@@ -401,7 +442,8 @@ export class InMemoryAssetSourceConnections implements AssetSourceConnections {
           error: null,
         },
       },
-    ]);
+    ];
+    await this.sources.replaceAll(updatedSources);
     await this.cards.replaceAll([
       ...(await this.cards.list()),
       {
@@ -414,6 +456,9 @@ export class InMemoryAssetSourceConnections implements AssetSourceConnections {
         span: 2,
       },
     ]);
+    await this.dailySnapshots.createIfAbsent(
+      buildDailyAssetSnapshot(updatedSources, this.clock.now().toISOString()),
+    );
   }
 }
 
@@ -421,6 +466,7 @@ export interface TestServices extends AppServices {
   clock: FakeClock;
   cards: InMemoryCardStore;
   assetSources: FakeAssetSources;
+  dailyAssetSnapshots: InMemoryDailyAssetSnapshots;
   assetSynchronization: FakeAssetSynchronization;
   prices: FakePrices;
   auth: SessionOwnerAuth;
@@ -436,6 +482,7 @@ export function createTestServices(): TestServices {
   const clock = new FakeClock();
   const cards = new InMemoryCardStore();
   const assetSources = new FakeAssetSources();
+  const dailyAssetSnapshots = new InMemoryDailyAssetSnapshots();
   const secrets = new InMemorySecretStore();
   const refreshAdapter = new FakeAssetSourceRefresher();
   const assetSynchronization = new FakeAssetSynchronization(
@@ -445,6 +492,7 @@ export function createTestServices(): TestServices {
       clock,
       refreshAdapter,
       100,
+      dailyAssetSnapshots,
     ),
     refreshAdapter,
   );
@@ -452,6 +500,7 @@ export function createTestServices(): TestServices {
     clock,
     cards,
     assetSources,
+    dailyAssetSnapshots,
     assetSynchronization,
     prices: new FakePrices(),
     auth: new SessionOwnerAuth(clock),
@@ -464,6 +513,8 @@ export function createTestServices(): TestServices {
       assetSources,
       cards,
       secrets,
+      dailyAssetSnapshots,
+      clock,
     ),
   };
 }

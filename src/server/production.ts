@@ -8,6 +8,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { decimalAdd, decimalCompare, decimalDivide } from "@/domain/decimal";
+import { buildDailyAssetSnapshot } from "@/domain/daily-asset-snapshots";
 import type {
   AppServices,
   Card,
@@ -17,6 +18,8 @@ import type {
   AssetSnapshot,
   AssetSourceConnections,
   AssetSources,
+  DailyAssetSnapshot,
+  DailyAssetSnapshots,
   CardStore,
   Clock,
   OwnerAuth,
@@ -45,12 +48,13 @@ class SystemClock implements Clock {
 }
 
 interface DashboardState {
-  schemaVersion: 3;
+  schemaVersion: 4;
   cards: Card[];
   assetSources: AssetSourceSummary[];
+  dailyAssetSnapshots: DailyAssetSnapshot[];
 }
 
-const DASHBOARD_SCHEMA_VERSION = 3 as const;
+const DASHBOARD_SCHEMA_VERSION = 4 as const;
 
 function migrateAssetSource(raw: unknown): AssetSourceSummary {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
@@ -201,6 +205,7 @@ export class FileDashboardDatabase {
         schemaVersion: DASHBOARD_SCHEMA_VERSION,
         cards,
         assetSources: [],
+        dailyAssetSnapshots: [],
       };
     }
     const value = JSON.parse(raw) as Partial<DashboardState>;
@@ -215,6 +220,9 @@ export class FileDashboardDatabase {
       schemaVersion: DASHBOARD_SCHEMA_VERSION,
       cards,
       assetSources: value.assetSources.map(migrateAssetSource),
+      dailyAssetSnapshots: Array.isArray(value.dailyAssetSnapshots)
+        ? value.dailyAssetSnapshots
+        : [],
     };
   }
 
@@ -271,9 +279,41 @@ export class FileDashboardDatabase {
     });
   }
 
+  async listDailyAssetSnapshots(): Promise<DailyAssetSnapshot[]> {
+    await this.queue;
+    return (await this.load()).dailyAssetSnapshots;
+  }
+
+  async createDailyAssetSnapshotIfAbsent(
+    snapshot: DailyAssetSnapshot,
+  ): Promise<boolean> {
+    return this.mutate((state) => {
+      const existing = state.dailyAssetSnapshots.find(
+        ({ day }) => day === snapshot.day,
+      );
+      if (existing) {
+        const existingSourceIds = new Set(
+          existing.sources.map(({ sourceId }) => sourceId),
+        );
+        existing.sources.push(
+          ...snapshot.sources.filter(
+            ({ sourceId }) => !existingSourceIds.has(sourceId),
+          ),
+        );
+        return false;
+      }
+      state.dailyAssetSnapshots.push(snapshot);
+      state.dailyAssetSnapshots.sort((left, right) =>
+        left.day.localeCompare(right.day),
+      );
+      return true;
+    });
+  }
+
   async connectLongbridge(
     result: LongbridgeAuthorizationResult,
     credentialReference: string,
+    capturedAt: string,
   ): Promise<void> {
     await this.mutate((state) => {
       const sourceId = randomUUID();
@@ -301,6 +341,28 @@ export class FileDashboardDatabase {
         sourceId,
         span: 2,
       });
+      const dailySnapshot = buildDailyAssetSnapshot(
+        state.assetSources,
+        capturedAt,
+      );
+      const existingDailySnapshot = state.dailyAssetSnapshots.find(
+        ({ day }) => day === dailySnapshot.day,
+      );
+      if (existingDailySnapshot) {
+        const existingSourceIds = new Set(
+          existingDailySnapshot.sources.map(({ sourceId }) => sourceId),
+        );
+        existingDailySnapshot.sources.push(
+          ...dailySnapshot.sources.filter(
+            ({ sourceId }) => !existingSourceIds.has(sourceId),
+          ),
+        );
+      } else {
+        state.dailyAssetSnapshots.push(dailySnapshot);
+        state.dailyAssetSnapshots.sort((left, right) =>
+          left.day.localeCompare(right.day),
+        );
+      }
     });
   }
 }
@@ -454,17 +516,30 @@ class DatabaseAssetSources implements AssetSources {
   update(source: AssetSourceSummary) { return this.database.updateSource(source); }
 }
 
+class DatabaseDailyAssetSnapshots implements DailyAssetSnapshots {
+  constructor(private readonly database: FileDashboardDatabase) {}
+  list() { return this.database.listDailyAssetSnapshots(); }
+  createIfAbsent(snapshot: DailyAssetSnapshot) {
+    return this.database.createDailyAssetSnapshotIfAbsent(snapshot);
+  }
+}
+
 export class DatabaseAssetSourceConnections implements AssetSourceConnections {
   constructor(
     private readonly database: FileDashboardDatabase,
     private readonly secrets: FileEncryptedSecretStore,
     private readonly ready: Promise<void> = Promise.resolve(),
+    private readonly clock: Clock = new SystemClock(),
   ) {}
   async connectLongbridge(result: LongbridgeAuthorizationResult) {
     await this.ready;
     const credentialReference = await this.secrets.stage(result.credentials);
     try {
-      await this.database.connectLongbridge(result, credentialReference);
+      await this.database.connectLongbridge(
+        result,
+        credentialReference,
+        this.clock.now().toISOString(),
+      );
     } catch (error) {
       try {
         await this.secrets.remove(credentialReference);
@@ -599,16 +674,20 @@ export function createProductionServices(): AppServices {
   );
   void secretRecovery.catch(() => undefined);
   const assetSources = new DatabaseAssetSources(database);
+  const dailyAssetSnapshots = new DatabaseDailyAssetSnapshots(database);
   const readySecrets = new ReadySecretStore(secrets, secretRecovery);
   return {
     clock,
     cards: new DatabaseCardStore(database),
     assetSources,
+    dailyAssetSnapshots,
     assetSynchronization: new SourceIsolatedAssetSynchronization(
       assetSources,
       readySecrets,
       clock,
       new ProductionLongbridgeSourceRefresher(),
+      15_000,
+      dailyAssetSnapshots,
     ),
     prices: new NoPrices(),
     auth: new SessionOwnerAuth(clock),
@@ -625,6 +704,7 @@ export function createProductionServices(): AppServices {
       database,
       secrets,
       secretRecovery,
+      clock,
     ),
   };
 }

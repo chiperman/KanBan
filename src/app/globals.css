@@ -602,6 +602,62 @@ body {
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
+.today-asset-change,
+.asset-trend {
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.today-change-amount {
+  margin: 7px 0 0;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 20px;
+  font-weight: 650;
+}
+
+.today-change-amount span,
+.trend-empty {
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.trend-empty {
+  margin: 7px 0 0;
+}
+
+.trend-list {
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  margin: 8px 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.trend-list li {
+  display: grid;
+  grid-template-columns: minmax(68px, auto) 1fr auto;
+  gap: 10px;
+  align-items: baseline;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+
+.trend-list strong {
+  text-align: right;
+}
+
+.trend-list span,
+.trend-list time {
+  color: var(--text-dim);
+}
+
+.source-trend {
+  margin-top: 14px;
+}
+
 .holding-price-source {
   display: block;
   max-width: 260px;

@@ -1,4 +1,5 @@
 import { getServices } from "@/server/composition";
+import { shanghaiDay } from "@/domain/daily-asset-snapshots";
 import { CardContent } from "@/ui/card-content";
 import { LogoutButton } from "@/ui/logout-button";
 import { OwnerDashboard } from "@/ui/owner-dashboard";
@@ -23,6 +24,9 @@ export default async function PublicHomePage() {
         ({ credentialReference: _credentialReference, permissions: _permissions, ...source }) => source,
       )
     : [];
+  const dailyAssetSnapshots = session
+    ? await services.dailyAssetSnapshots.list()
+    : [];
   const now = services.clock.now();
 
   const content = (
@@ -45,7 +49,12 @@ export default async function PublicHomePage() {
       </header>
       <main>
         {session ? (
-          <OwnerDashboard cards={cards} assetSources={assetSources} />
+          <OwnerDashboard
+            cards={cards}
+            assetSources={assetSources}
+            dailyAssetSnapshots={dailyAssetSnapshots}
+            currentDay={shanghaiDay(now)}
+          />
         ) : (
           <section className="card-grid" data-testid="card-grid">
             {cards.length === 0 ? (

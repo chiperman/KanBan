@@ -5,6 +5,7 @@ const REPLACEABLE_DOUBLES = [
   "clock",
   "assetSources",
   "assetSynchronization",
+  "dailyAssetSnapshots",
   "prices",
   "auth",
   "secrets",
@@ -84,6 +85,12 @@ test("生产运行不暴露测试替身", async ({ playwright }) => {
     (await prodRequest.post("/test-doubles/refresh")).status(),
   ).toBe(404);
   expect((await prodRequest.get("/test-doubles/refresh")).status()).toBe(404);
+  expect(
+    (await prodRequest.post("/test-doubles/daily-snapshots")).status(),
+  ).toBe(404);
+  expect(
+    (await prodRequest.get("/test-doubles/daily-snapshots")).status(),
+  ).toBe(404);
 
   await prodRequest.dispose();
 });

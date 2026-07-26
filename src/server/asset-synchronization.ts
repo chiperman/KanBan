@@ -1,12 +1,14 @@
 import type {
   AssetRefreshMode,
   AssetRefreshReport,
+  DailyAssetSnapshots,
   AssetSourceRefresher,
   AssetSources,
   AssetSynchronization,
   Clock,
   SecretStore,
 } from "@/server/ports";
+import { buildDailyAssetSnapshot } from "@/domain/daily-asset-snapshots";
 
 /** 每个来源独立读取；失败只更新该来源的过期状态，不覆盖最后成功快照。 */
 export class SourceIsolatedAssetSynchronization
@@ -20,6 +22,7 @@ export class SourceIsolatedAssetSynchronization
     private readonly clock: Clock,
     private readonly refresher: AssetSourceRefresher,
     private readonly sourceTimeoutMs = 15_000,
+    private readonly dailySnapshots: DailyAssetSnapshots,
   ) {}
 
   refresh(mode: AssetRefreshMode): Promise<AssetRefreshReport> {
@@ -90,6 +93,11 @@ export class SourceIsolatedAssetSynchronization
       }),
     );
     const successCount = outcomes.filter(Boolean).length;
+    if (successCount > 0) {
+      await this.dailySnapshots.createIfAbsent(
+        buildDailyAssetSnapshot(await this.sources.list(), attemptedAt),
+      );
+    }
     return {
       successCount,
       failureCount: outcomes.length - successCount,

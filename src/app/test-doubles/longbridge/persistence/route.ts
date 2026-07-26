@@ -173,6 +173,11 @@ export async function POST(request: Request) {
       { now: () => new Date("2026-05-29T00:00:00.000Z") },
       failingAfterRotation,
       100,
+      {
+        list: () => rotationDashboard.listDailyAssetSnapshots(),
+        createIfAbsent: (snapshot) =>
+          rotationDashboard.createDailyAssetSnapshotIfAbsent(snapshot),
+      },
     ).refresh("all");
     const rotationRaw = await readFile(
       path.join(rotationDir, "secrets.json"),

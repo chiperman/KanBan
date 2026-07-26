@@ -18,6 +18,7 @@ export async function GET() {
       clock: "fake-clock",
       assetSources: "fake-asset-sources",
       assetSynchronization: "fake-asset-synchronization",
+      dailyAssetSnapshots: "in-memory-daily-asset-snapshots",
       prices: "fake-prices",
       auth: "in-memory-session-auth",
       ownerCredentials: "in-memory-owner-credential-store",

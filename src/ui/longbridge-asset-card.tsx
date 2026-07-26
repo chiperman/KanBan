@@ -6,6 +6,7 @@ import type {
   AssetHolding,
   AssetSnapshot,
   AssetSourceSyncState,
+  DailyAssetSnapshot,
 } from "@/server/ports";
 
 export interface AssetSourceView {
@@ -48,7 +49,17 @@ function compareDecimal(left: string | null, right: string | null): number {
   );
 }
 
-function HoldingRow({ holding }: { holding: AssetHolding }) {
+function dayLabel(day: string): string {
+  return `${day.slice(5, 7)}月${day.slice(8, 10)}日`;
+}
+
+function HoldingRow({
+  holding,
+  showPlatformProfit,
+}: {
+  holding: AssetHolding;
+  showPlatformProfit: boolean;
+}) {
   const valuationDetail = holding.valuation.status === "valued"
     ? `${holding.valuation.priceSource} · ${holding.valuation.pricedAt.slice(0, 16).replace("T", " ")} UTC`
     : holding.valuation.reason;
@@ -71,16 +82,31 @@ function HoldingRow({ holding }: { holding: AssetHolding }) {
       </td>
       <td>{holding.marketValue === null ? "未估值" : `${amount(holding.marketValue)} ${holding.currency}`}</td>
       <td>{holding.costPrice === null ? "—" : amount(holding.costPrice)}</td>
-      <td>{holding.platformProfit === null ? "—" : amount(holding.platformProfit)}</td>
+      {showPlatformProfit ? (
+        <td>{holding.platformProfit === null ? "—" : amount(holding.platformProfit)}</td>
+      ) : null}
       <td>{holding.changePercent === null ? "—" : `${holding.changePercent}%`}</td>
     </tr>
   );
 }
 
-export function AssetSourceCard({ source }: { source: AssetSourceView }) {
+export function AssetSourceCard({
+  source,
+  history,
+}: {
+  source: AssetSourceView;
+  history: DailyAssetSnapshot[];
+}) {
   const [open, setOpen] = useState(false);
   const [sort, setSort] = useState("market-value");
   const scrollPosition = useRef(0);
+  const showPlatformProfit = source.snapshot.holdings.some(
+    (holding) => holding.platformProfit !== null,
+  );
+  const sourceHistory = history.flatMap((snapshot) => {
+    const item = snapshot.sources.find(({ sourceId }) => sourceId === source.id);
+    return item ? [{ day: snapshot.day, ...item }] : [];
+  });
   const holdings = useMemo(() => {
     return [...source.snapshot.holdings].sort((left, right) => {
       if (sort === "name") return left.name.localeCompare(right.name, "en");
@@ -122,6 +148,29 @@ export function AssetSourceCard({ source }: { source: AssetSourceView }) {
             </li>
           ))}
         </ol>
+        <section
+          className="asset-trend source-trend"
+          data-testid={`asset-source-trend-${source.id}`}
+        >
+          <p className="card-label">来源趋势（USD）</p>
+          {sourceHistory.length === 0 ? (
+            <p className="trend-empty">首次成功同步后开始记录</p>
+          ) : (
+            <ol className="trend-list">
+              {sourceHistory.map((snapshot) => (
+                <li key={snapshot.day}>
+                  <time dateTime={snapshot.day}>{dayLabel(snapshot.day)}</time>
+                  <strong>
+                    {snapshot.total.USD === null
+                      ? "未估值"
+                      : `${amount(snapshot.total.USD)} USD`}
+                  </strong>
+                  <span>{snapshot.complete ? "完整" : "不完整"}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
         <p className="asset-updated">最后更新：{source.snapshot.syncedAt.slice(0, 16).replace("T", " ")} UTC</p>
         <p className={`asset-sync-status ${source.sync.status}`}>
           {source.sync.status === "expired" ? "过期数据" : "数据当前"}
@@ -156,8 +205,8 @@ export function AssetSourceCard({ source }: { source: AssetSourceView }) {
             </label>
             <div className="asset-table-wrap">
               <table className="asset-table">
-                <thead><tr><th>名称</th><th>数量</th><th>当前价格</th><th>原始市值</th><th>成本</th><th>平台盈亏</th><th>涨跌</th></tr></thead>
-                <tbody>{holdings.map((holding) => <HoldingRow key={holding.symbol} holding={holding} />)}</tbody>
+                <thead><tr><th>名称</th><th>数量</th><th>当前价格</th><th>原始市值</th><th>成本</th>{showPlatformProfit ? <th>平台盈亏（来源提供）</th> : null}<th>涨跌</th></tr></thead>
+                <tbody>{holdings.map((holding) => <HoldingRow key={holding.symbol} holding={holding} showPlatformProfit={showPlatformProfit} />)}</tbody>
               </table>
             </div>
           </div>

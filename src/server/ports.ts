@@ -93,6 +93,29 @@ export interface AssetSynchronization {
   refresh(mode: AssetRefreshMode): Promise<AssetRefreshReport>;
 }
 
+export interface DailyAssetSourceSnapshot {
+  sourceId: string;
+  label: string;
+  kind: string;
+  capturedAt: string;
+  complete: boolean;
+  total: Record<"USD" | "CNY", string | null>;
+}
+
+/** Asia/Shanghai 自然日内首次成功同步形成的不可改写基准。 */
+export interface DailyAssetSnapshot {
+  day: string;
+  capturedAt: string;
+  complete: boolean;
+  total: Record<"USD" | "CNY", string | null>;
+  sources: DailyAssetSourceSnapshot[];
+}
+
+export interface DailyAssetSnapshots {
+  list(): Promise<DailyAssetSnapshot[]>;
+  createIfAbsent(snapshot: DailyAssetSnapshot): Promise<boolean>;
+}
+
 export interface AssetSourceRefreshResult {
   snapshot: AssetSnapshot;
 }

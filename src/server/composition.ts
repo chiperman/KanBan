@@ -4,6 +4,7 @@ import type {
   AssetSourceConnections,
   CardStore,
   Clock,
+  DailyAssetSnapshots,
   LongbridgeOAuth,
   OwnerAuth,
   OwnerCredentialStore,
@@ -27,6 +28,7 @@ export interface AppServices {
   cards: CardStore;
   assetSources: AssetSources;
   assetSynchronization: AssetSynchronization;
+  dailyAssetSnapshots: DailyAssetSnapshots;
   prices: Prices;
   auth: OwnerAuth;
   ownerCredentials: OwnerCredentialStore;

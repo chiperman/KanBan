@@ -2,7 +2,12 @@
 
 import { useState, type DragEvent, type FormEvent } from "react";
 
-import type { Card, CardSpan, LinkItem } from "@/server/ports";
+import type {
+  Card,
+  CardSpan,
+  DailyAssetSnapshot,
+  LinkItem,
+} from "@/server/ports";
 import { CardContent } from "@/ui/card-content";
 import { AssetSourceFlow } from "@/ui/asset-source-flow";
 import { AssetRefreshControls } from "@/ui/asset-refresh-controls";
@@ -210,9 +215,13 @@ function CardEditor({
 export function OwnerDashboard({
   cards,
   assetSources,
+  dailyAssetSnapshots,
+  currentDay,
 }: {
   cards: Card[];
   assetSources: AssetSourceView[];
+  dailyAssetSnapshots: DailyAssetSnapshot[];
+  currentDay: string;
 }) {
   const [editor, setEditor] = useState<EditorTarget | null>(null);
   const [error, setError] = useState("");
@@ -332,7 +341,11 @@ export function OwnerDashboard({
       >
         {assetSources.length > 0 ? (
           <article className="card span-3 total-overview-card" data-testid="total-overview-card">
-            <TotalAssetOverview sources={assetSources} />
+            <TotalAssetOverview
+              sources={assetSources}
+              history={dailyAssetSnapshots}
+              currentDay={currentDay}
+            />
           </article>
         ) : null}
         {visibleCards.length === 0 && assetSources.length === 0 ? (
@@ -356,7 +369,10 @@ export function OwnerDashboard({
                 (() => {
                   const source = assetSources.find((item) => item.id === card.sourceId);
                   return source ? (
-                    <AssetSourceCard source={source} />
+                    <AssetSourceCard
+                      source={source}
+                      history={dailyAssetSnapshots}
+                    />
                   ) : (
                     <CardContent card={card} />
                   );
