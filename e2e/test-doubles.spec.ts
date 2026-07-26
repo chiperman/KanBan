@@ -91,6 +91,13 @@ test("生产运行不暴露测试替身", async ({ playwright }) => {
   expect(
     (await prodRequest.get("/test-doubles/daily-snapshots")).status(),
   ).toBe(404);
+  expect(
+    (
+      await prodRequest.post("/test-doubles/release-acceptance", {
+        data: { action: "seed" },
+      })
+    ).status(),
+  ).toBe(404);
 
   await prodRequest.dispose();
 });

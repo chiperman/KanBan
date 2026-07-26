@@ -512,7 +512,8 @@ export type FakeRefreshScenario =
   | "okx-refresh-failure"
   | "bitget-refresh-failure"
   | "evm-ethereum-refresh-failure"
-  | "evm-ethereum-price-refresh-failure";
+  | "evm-ethereum-price-refresh-failure"
+  | "release-partial-failure";
 
 export class FakeAssetSourceRefresher implements AssetSourceRefresher {
   private scenario: FakeRefreshScenario = "passthrough";
@@ -542,6 +543,14 @@ export class FakeAssetSourceRefresher implements AssetSourceRefresher {
     }
     if (this.scenario === "all-failure") {
       throw new Error("全部来源暂时不可用");
+    }
+    if (this.scenario === "release-partial-failure") {
+      if (source.kind === "longbridge" || source.kind === "evm-watch-ethereum") {
+        throw new Error(`${source.label} 发布验收模拟失败`);
+      }
+      return {
+        snapshot: { ...source.snapshot, syncedAt: attemptedAt },
+      };
     }
     if (
       this.scenario === "longbridge-refresh-failure" &&
@@ -802,7 +811,7 @@ export class InMemoryAssetSourceConnections implements AssetSourceConnections {
         title: config.title,
         body: config.body,
         sourceId,
-        span: 2,
+        span: 1,
       },
     ]);
     await this.dailySnapshots.createIfAbsent(

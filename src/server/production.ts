@@ -493,7 +493,7 @@ export class FileDashboardDatabase {
         title: card.title,
         body: card.body,
         sourceId,
-        span: 2,
+        span: 1,
       });
       const dailySnapshot = buildDailyAssetSnapshot(
         state.assetSources,
