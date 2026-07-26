@@ -137,38 +137,11 @@ async function configureLongbridge(
               currency: "USD",
               current_net_asset_value: "15.22",
               cost_net_asset_value: "14.50",
-              net_asset_value_day: "2026-05-29T00:00:00Z",
+              net_asset_value_day: "1649865600",
             }],
           }] },
         },
       ],
-      exchangeRatePages: [{
-        code: 0,
-        data: {
-          exchanges: [{
-            base_currency: "USD",
-            other_currency: "HKD",
-            average_rate: 7.8125,
-            bid_rate: 7.8,
-            offer_rate: 7.825,
-          }],
-        },
-      }],
-      profitPages: [{
-        code: 0,
-        data: {
-          profit: "100.25",
-          has_more: true,
-          stock_items: [{ code: "AAPL", name: "Apple", market: "US", profit: "100.25" }],
-        },
-      }, {
-        code: 0,
-        data: {
-          profit: "-50.5",
-          has_more: false,
-          stock_items: [{ code: "0700", name: "Tencent", market: "HK", profit: "-50.5" }],
-        },
-      }],
       ...overrides,
     },
   });
@@ -213,7 +186,7 @@ test("长桥 OAuth 先预览后原子保存，并展示总额、前五持仓与�
   const preview = page.getByRole("dialog", { name: "确认长桥资产来源" });
   await expect(preview).toContainText("长桥证券账户 U12345");
   await expect(preview).toContainText("账户、持仓（只读）");
-  await expect(preview).toContainText("152.2 USD");
+  await expect(preview).toContainText("123,456.7891 USD");
   await expect(page.getByText("oauth-access-token")).toHaveCount(0);
 
   const beforeConfirm = await page.request.get("/test-doubles/longbridge");
@@ -225,7 +198,7 @@ test("长桥 OAuth 先预览后原子保存，并展示总额、前五持仓与�
   await preview.getByRole("button", { name: "确认并保存" }).click();
 
   const card = page.getByTestId("longbridge-card");
-  await expect(card).toContainText("152.2 USD");
+  await expect(card).toContainText("123,456.7891 USD");
   await expect(card).toContainText("最后更新：2026-01-01 00:00 UTC");
   const topHoldings = card.getByTestId("holding-top-list").getByRole("listitem");
   await expect(topHoldings).toHaveCount(5);
@@ -238,6 +211,9 @@ test("长桥 OAuth 先预览后原子保存，并展示总额、前五持仓与�
   const detail = page.getByRole("dialog", { name: "长桥全部持仓" });
   await expect(detail.getByRole("row")).toHaveCount(8);
   await expect(detail.getByRole("row").nth(1)).toContainText("高腾微金");
+  await expect(detail.getByRole("row").nth(1)).toContainText(
+    "Longbridge 基金净值 · 2022-04-13 16:00 UTC",
+  );
   await detail.getByLabel("持仓排序").selectOption("change");
   await expect(detail.getByRole("row").nth(1)).toContainText("高腾微金");
   await expect(detail.getByRole("row").nth(6)).toContainText("Alibaba");
@@ -245,7 +221,7 @@ test("长桥 OAuth 先预览后原子保存，并展示总额、前五持仓与�
   await detail.getByLabel("持仓排序").selectOption("name");
   await expect(detail.getByRole("row").nth(1)).toContainText("Alibaba");
   await expect(detail.getByRole("row").filter({ hasText: "Apple" })).toContainText("190.1234");
-  await expect(detail.getByRole("row").filter({ hasText: "Apple" })).toContainText("100.25");
+  await expect(detail.getByRole("columnheader", { name: "平台盈亏（来源提供）" })).toHaveCount(0);
   await expect(detail.getByRole("row").filter({ hasText: "Tencent" })).toContainText("HKD");
   await detail.getByRole("button", { name: "关闭详情" }).click();
   expect(await page.evaluate(() => window.scrollY)).toBe(scrollBefore);
@@ -255,7 +231,6 @@ test("长桥 OAuth 先预览后原子保存，并展示总额、前五持仓与�
     savedSources: 1,
     savedSecrets: 1,
     fetchedPositionPages: 2,
-    fetchedProfitPages: 2,
   });
 
   expect(responseBodies.join("\n")).not.toContain(SECRET_TOKEN);
@@ -277,7 +252,7 @@ test("长桥持仓刷新失败时保留最后成功数据并明确标记过期",
 
   const card = page.getByTestId("longbridge-card");
   await expect(card.getByTestId("asset-source-total")).toHaveText(
-    "152.2 USD",
+    "123,456.7891 USD",
   );
   const configured = await page.request.post("/test-doubles/longbridge", {
     data: { scenario: "refresh-failure" },
@@ -289,7 +264,7 @@ test("长桥持仓刷新失败时保留最后成功数据并明确标记过期",
     "1 个来源失败",
   );
   await expect(card.getByTestId("asset-source-total")).toHaveText(
-    "152.2 USD",
+    "123,456.7891 USD",
   );
   await expect(card).toContainText("过期数据");
   await expect(card).toContainText("长桥同步失败");
@@ -421,14 +396,14 @@ test("生产 OAuth 只申请并接受 account.read，交易、缺失或未知 sc
       label: expect.stringMatching(/^长桥账户（类型 lb · USD · [a-f0-9]{12}）$/),
     },
     snapshot: {
-      total: { amount: "0", currency: "USD" },
+      total: { amount: "123456.7891", currency: "USD" },
       holdings: [
         {
           symbol: "AAPL.US",
           marketValue: null,
           currency: "USD",
           costPrice: "190.1234",
-          platformProfit: "100.25",
+          platformProfit: null,
         },
       ],
     },
@@ -436,9 +411,6 @@ test("生产 OAuth 只申请并接受 account.read，交易、缺失或未知 sc
       "GET /v1/asset/account",
       "GET /v1/asset/stock",
       "GET /v1/asset/fund",
-      "GET /v1/asset/exchange_rates",
-      "GET /v1/portfolio/profit-analysis/by-market?page=1&size=100",
-      "GET /v1/portfolio/profit-analysis/by-market?page=2&size=100",
     ],
   });
   expect(finishBody.assetRequests).toEqual(

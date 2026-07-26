@@ -117,22 +117,6 @@ export async function POST(request: Request) {
     if (url.pathname === "/v1/asset/fund") {
       return Response.json({ code: 0, data: { list: [] } });
     }
-    if (url.pathname === "/v1/asset/exchange_rates") {
-      return Response.json({ code: 0, data: { exchanges: [] } });
-    }
-    if (url.pathname === "/v1/portfolio/profit-analysis/by-market") {
-      const page = url.searchParams.get("page");
-      return Response.json({
-        code: 0,
-        data: {
-          profit: "100.25",
-          has_more: page === "1",
-          stock_items: page === "1"
-            ? [{ code: "AAPL", name: "Apple", market: "US", profit: "100.25" }]
-            : [],
-        },
-      });
-    }
     return Response.json({ error: "unexpected request" }, { status: 500 });
   };
   try {

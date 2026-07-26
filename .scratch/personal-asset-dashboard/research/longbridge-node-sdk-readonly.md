@@ -52,15 +52,14 @@ OAuth.build(clientId, onOpenUrl, callbackPort?)
 | 账户总额 | `/v1/asset/account` |
 | 股票持仓 | `/v1/asset/stock` |
 | 基金持仓 | `/v1/asset/fund` |
-| 汇率 | `/v1/asset/exchange_rates` |
-| 平台盈亏明细 | `/v1/portfolio/profit-analysis/by-market` |
-
-前三项为 Ticket 06 的官方账户读取基础端点。[Account Assets](https://open.longbridge.com/docs/trade/asset/account) · [Stock Positions](https://open.longbridge.com/docs/trade/asset/stock) · [Fund Positions](https://open.longbridge.com/docs/trade/asset/fund)
+Ticket 06 的 allowlist **只有以上三项**，不调用汇率、Portfolio P&L、行情或其他端点。[Account Assets](https://open.longbridge.com/docs/trade/asset/account) · [Stock Positions](https://open.longbridge.com/docs/trade/asset/stock) · [Fund Positions](https://open.longbridge.com/docs/trade/asset/fund)
 
 生产代码不调用 `/v1/trade/*`，不导入下单、改单或撤单能力。Access Token 与 Refresh Token 仅保存在服务端加密安全存储中；浏览器、普通资产数据、HTML、日志和测试响应只获得脱敏的预览或连接状态。
 
 ## 验收边界
 
 - 不使用真实长桥凭证的自动测试只用官方响应样本及受控传输替身。
+- 持仓同步必须精确发出上述三个 GET；任何额外端点都视为越界。
 - 账户/持仓 GET 失败时，系统的同步层保留最后一次成功快照并标记过期，不归零。
-- 无实时行情调用时，30 秒价格周期不向长桥发起网络请求，也不会把持仓端点当作行情接口。
+- 账户总额直接采用 `/v1/asset/account` 的 `net_assets`；股票若没有可靠价格，只保留数量并标记未估值。
+- 30 秒价格周期不向长桥发起任何网络请求，也不刷新 Token；5 分钟持仓周期才调用三个资产端点。

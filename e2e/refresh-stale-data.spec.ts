@@ -263,12 +263,9 @@ test("生产长桥刷新保持只读边界，并在读取前拒绝非纯 scope 6
     "GET /v1/asset/account",
     "GET /v1/asset/stock",
     "GET /v1/asset/fund",
-    "GET /v1/asset/exchange_rates",
-    "GET /v1/portfolio/profit-analysis/by-market?page=1&size=100",
-    "GET /v1/portfolio/profit-analysis/by-market?page=2&size=100",
   ]);
   expect(holdingsBody.snapshot.total).toEqual({
-    amount: "0",
+    amount: "123456.7891",
     currency: "USD",
   });
   expect(holdingsBody.quotedSymbols).toEqual([]);

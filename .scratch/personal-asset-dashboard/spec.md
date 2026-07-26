@@ -32,7 +32,7 @@ Status: ready-for-agent
 12. As an 所有者, I want to sort holdings by market value, change, or name, so that I can find relevant positions quickly.
 13. As an 所有者, I want each holding to show name or symbol, quantity, current price, market value, and available profit information, so that the position is understandable.
 14. As an 所有者, I want closing a detail panel to restore my former page position, so that drilling into holdings does not disrupt dashboard navigation.
-15. As an 所有者, I want Longbridge securities and fund positions to be read through approved account and market-data scopes, so that brokerage assets are included without granting trading authority.
+15. As an 所有者, I want Longbridge securities and fund positions to be read through exact account scope 6 and three allowlisted asset REST GET endpoints, so that brokerage assets are included without market-data or trading authority.
 16. As an 所有者, I want Binance spot assets to be included, so that my exchange balances appear in the personal terminal.
 17. As an 所有者, I want Binance funding and Earn assets to be included, so that non-spot investment balances are not omitted.
 18. As an 所有者, I want OKX spot, funding, and Earn assets to be included, so that the source total matches the agreed account scope.
@@ -132,7 +132,8 @@ Status: ready-for-agent
 - Keep the product single-owner permanently. Disable public registration and model visitors as unauthenticated read-only viewers, not additional users.
 - Separate the application into high-level capabilities: authentication and authorization, public/private card content, layout composition, asset-source onboarding, asset-source adapters, synchronization, valuation, snapshots, secure credential storage, and settings.
 - Put all external asset sources behind a common read-only adapter contract that can return source identity, balances, holdings, source valuation, platform profit when available, data timestamps, and permission status.
-- Implement Longbridge through OAuth scopes limited to market data, account, and holdings. Do not accept legacy or OAuth credentials that permit trading.
+- Implement Longbridge with OAuth 2.0 Authorization Code + PKCE. Request and accept only exact `scope=6`; reject missing, unknown, additional scopes and `scope=11` before any asset read or credential persistence.
+- Limit Longbridge production data access to official REST `GET /v1/asset/account`, `GET /v1/asset/stock`, and `GET /v1/asset/fund`. Do not use Longbridge quotes, MCP, the `longbridge` SDK, WebSocket, or any trade endpoint.
 - Implement Binance, OKX, and Bitget with read-only keys. Reject credentials that expose trade, transfer, or withdrawal permissions.
 - Treat platform credentials as server-only secrets. Persist only an opaque secret reference alongside ordinary source configuration; never return secret material through browser APIs, logs, snapshots, or Supabase-synchronized records.
 - In the local-first version, use operating-system-backed or equivalently secure server-side secret storage. A future hosted deployment must configure credentials independently in its server-side secret store.
@@ -140,13 +141,13 @@ Status: ready-for-agent
 - Support Ethereum, BNB Smart Chain, Base, Arbitrum, and Solana in the first version. Resolve native balances and fungible tokens only.
 - Exclude Bitcoin, NFTs, staking, liquidity-pool positions, lending, and other DeFi protocol positions from the first version.
 - Include spot, funding, and Earn balances for supported centralized crypto platforms. Exclude futures, margin, leveraged, borrowing, and lending accounts.
-- Use source-native valuation for assets held by Longbridge, Binance, OKX, and Bitget. The total is the sum of source valuations rather than a theoretical global revaluation.
+- Use source-native valuation for assets held by Longbridge, Binance, OKX, and Bitget. For Longbridge, trust `/v1/asset/account` `net_assets` as the source total; funds may use native NAV fields, while stocks without a price in the three allowed responses remain unvalued. Do not fabricate a holding price, market value, exchange rate, or platform profit.
 - Use CoinGecko as the initial independent reference-price provider for observation-wallet assets and source assets lacking a reliable native price. Identify tokens by chain and contract or mint address rather than symbol alone.
 - Use actual market prices for stablecoins. Never hardcode a one-dollar peg.
 - Store price source and update time with each valuation. If no reliable price exists, retain the quantity as an unvalued asset and exclude it from the numeric total.
 - Convert the unified total to USD by default and allow CNY display through one explicit exchange-rate observation. Preserve native holding currency and native values.
 - Define total status as complete, contains expired data, contains unvalued assets, or both. Do not silently hide incomplete aggregation.
-- Fetch immediately on page entry. While visible, poll market prices every 30 seconds and private balances and holdings every five minutes. Pause scheduled polling when the page is hidden and provide manual refresh.
+- Fetch immediately on page entry. While visible, poll market prices every 30 seconds and private balances and holdings every five minutes. The 30-second cycle is a strict no-op for Longbridge: it performs no network request and no Token refresh; Longbridge account and positions are read only in the five-minute holdings cycle. Pause scheduled polling when the page is hidden and provide manual refresh.
 - Treat synchronization as source-isolated. One failing source must not prevent successful sources from updating.
 - Preserve the last successful reading when a source fails. Mark it as expired, show its last successful timestamp, retain it in totals, and propagate the expired state to the total asset overview.
 - Persist one daily asset snapshot using Asia/Shanghai as the canonical time zone and 00:00 as the daily boundary. Begin on the first successful synchronization and do not backfill history automatically.
@@ -183,7 +184,7 @@ Status: ready-for-agent
 - Verify authentication outcomes for Passkey success and failure, recovery authentication, TOTP challenge, manual lock, 30-minute inactivity lock using a fake clock, browser-session termination, and disabled registration.
 - Verify source onboarding as an atomic flow: valid read-only credentials succeed; credentials with trade, transfer, or withdrawal permission are rejected; failed checks leave no source or secret reference behind.
 - Verify that browser-accessible responses and logs never contain platform credentials, secret references that can be dereferenced by the client, seed phrases, private keys, or wallet-signing material.
-- Use provider response fixtures for Longbridge, Binance, OKX, Bitget, EVM chains, Solana, and CoinGecko. Adapter tests should confirm mapping, precision, pagination, account-scope inclusion, and error normalization without calling real accounts.
+- Use provider response fixtures for Longbridge, Binance, OKX, Bitget, EVM chains, Solana, and CoinGecko. Longbridge browser tests must assert exact scope 6, exactly the three allowlisted GET asset endpoints during holdings sync, zero Longbridge network/Token activity during the 30-second price cycle, no order interface or request, no Token disclosure, source-native mapping, and stale-data retention on failure. Other adapters should confirm mapping, precision, pagination, account-scope inclusion, and error normalization without calling real accounts.
 - Verify that spot, funding, and Earn assets are included and that futures, margin, leverage, borrowing, lending, NFTs, staking, LP, and DeFi positions are excluded.
 - Verify source-native pricing with controlled cross-platform price differences. Confirm that the same asset may have different values per source and that the total sums those source values correctly.
 - Verify stablecoins use the supplied actual price rather than a hardcoded peg.
@@ -203,6 +204,7 @@ Status: ready-for-agent
 ## Out of Scope
 
 - Any order placement, cancellation, transfer, withdrawal, portfolio rebalancing, wallet signature, or other write action.
+- Longbridge quote or market-data integration, MCP, `longbridge` SDK, WebSocket, Portfolio P&L endpoints, exchange-rate endpoints, and any endpoint other than the three allowlisted asset REST GETs.
 - Public registration, additional owners, teams, roles, collaboration, or a multi-user product model.
 - Futures, options, perpetual contracts, margin, leverage, borrowing, lending, liabilities, credit cards, loans, income, expenses, or complete personal finance.
 - Bitcoin observation wallets in the first version.

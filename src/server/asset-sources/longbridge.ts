@@ -6,8 +6,6 @@ import {
   randomUUID,
 } from "node:crypto";
 
-import { decimalAdd } from "@/domain/decimal";
-
 import type {
   AssetSourceRefreshResult,
   AssetSourceRefresher,
@@ -37,17 +35,22 @@ function optionalText(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
-function decimalText(value: unknown, field: string): string {
-  const output =
-    typeof value === "number" && Number.isFinite(value)
-      ? String(value)
-      : typeof value === "string"
-        ? value
-        : "";
-  if (!/^[+-]?\d+(?:\.\d+)?$/.test(output)) {
-    throw new Error(`长桥响应缺少 ${field}`);
+function optionalUnixSecondsIso(value: unknown, field: string): string | null {
+  if (value === undefined || value === null || value === "") return null;
+  const seconds =
+    typeof value === "number" && Number.isSafeInteger(value)
+      ? value
+      : typeof value === "string" && /^\d+$/.test(value)
+        ? Number(value)
+        : Number.NaN;
+  if (!Number.isSafeInteger(seconds) || seconds < 0) {
+    throw new Error(`长桥响应 ${field} 格式无效`);
   }
-  return output;
+  const timestamp = new Date(seconds * 1000);
+  if (Number.isNaN(timestamp.getTime())) {
+    throw new Error(`长桥响应 ${field} 格式无效`);
+  }
+  return timestamp.toISOString();
 }
 
 function listFromPage(page: unknown): JsonRecord[] {
@@ -105,52 +108,10 @@ export function mapLongbridgeSnapshot(input: {
   accountPages: unknown[];
   positionPages: unknown[];
   syncedAt: string;
-  exchangeRatePages?: unknown[];
-  profitPages?: unknown[];
 }): AssetSnapshot {
   const account = listFromPage(input.accountPages[0] ?? {}).at(0);
   if (!account) throw new Error("长桥账户预览为空");
   const accountCurrency = text(account.currency, "currency");
-  const exchangeRateObservations = (input.exchangeRatePages ?? []).flatMap((page) => {
-    const root = record(page);
-    const data =
-      typeof root.data === "object" && root.data !== null
-        ? record(root.data)
-        : root;
-    return (Array.isArray(data.exchanges) ? data.exchanges : []).map((raw) => {
-      const rate = record(raw);
-      return {
-        baseCurrency: text(rate.base_currency, "base_currency"),
-        quoteCurrency: text(rate.other_currency, "other_currency"),
-        rate: decimalText(rate.average_rate, "average_rate"),
-        source: "Longbridge 账户汇率",
-        observedAt: input.syncedAt,
-      };
-    });
-  });
-  const exchangeRates = Object.fromEntries(
-    exchangeRateObservations.flatMap((rate) =>
-      rate.baseCurrency === accountCurrency
-        ? [[rate.quoteCurrency, rate.rate] as const]
-        : [],
-    ),
-  );
-  const platformProfits = Object.fromEntries(
-    (input.profitPages ?? []).flatMap((page) => {
-      const root = record(page);
-      const data =
-        typeof root.data === "object" && root.data !== null
-          ? record(root.data)
-          : root;
-      return (Array.isArray(data.stock_items) ? data.stock_items : []).flatMap((raw) => {
-        const item = record(raw);
-        const code = text(item.code, "code");
-        const market = text(item.market, "market");
-        const profit = optionalText(item.profit);
-        return profit ? [[code.includes(".") ? code : `${code}.${market}`, profit] as const] : [];
-      });
-    }),
-  );
   const holdings: AssetHolding[] = input.positionPages
     .flatMap(listFromPage)
     .map((item) => {
@@ -163,18 +124,14 @@ export function mapLongbridgeSnapshot(input: {
         optionalText(item.market_value) ??
         (price ? multiplyDecimal(quantity, price) : null);
       const sourceAmount =
-        marketValue === null
-          ? null
-          : currency === accountCurrency
+        marketValue !== null && currency === accountCurrency
           ? marketValue
-          : exchangeRates[currency]
-            ? divideDecimal(
-              marketValue,
-              exchangeRates[currency],
-            )
-            : null;
+          : null;
       const pricedAt = nativePrice
-        ? optionalText(item.net_asset_value_day) ?? input.syncedAt
+        ? optionalUnixSecondsIso(
+            item.net_asset_value_day,
+            "net_asset_value_day",
+          ) ?? input.syncedAt
         : input.syncedAt;
       const priceSource = nativePrice
         ? "Longbridge 基金净值"
@@ -205,7 +162,7 @@ export function mapLongbridgeSnapshot(input: {
         costPrice: optionalText(item.cost_price ?? item.cost_net_asset_value),
         platformProfit: optionalText(
           item.unrealized_pl ?? item.platform_profit,
-        ) ?? platformProfits[symbol] ?? null,
+        ),
         changePercent:
           optionalText(item.change_rate ?? item.change_percent),
       };
@@ -215,22 +172,13 @@ export function mapLongbridgeSnapshot(input: {
       if (right.sourceMarketValue === null) return -1;
       return compareDecimal(right.sourceMarketValue.amount, left.sourceMarketValue.amount);
     });
-  const totalAmount = holdings.every((holding) => holding.sourceMarketValue !== null)
-    ? text(account.net_assets, "net_assets")
-    : holdings.reduce(
-        (sum, holding) =>
-          holding.sourceMarketValue
-            ? decimalAdd(sum, holding.sourceMarketValue.amount)
-            : sum,
-        optionalText(account.total_cash) ?? "0",
-      );
   return {
     total: {
-      amount: totalAmount,
+      amount: text(account.net_assets, "net_assets"),
       currency: accountCurrency,
     },
     holdings,
-    exchangeRates: exchangeRateObservations,
+    exchangeRates: [],
     syncedAt: input.syncedAt,
   };
 }
@@ -255,31 +203,6 @@ function multiplyDecimal(left: string, right: string): string {
   const integer = digits.slice(0, -scale);
   const fraction = digits.slice(-scale).replace(/0+$/, "");
   return fraction ? `${sign}${integer}.${fraction}` : `${sign}${integer}`;
-}
-
-function divideDecimal(left: string, right: string): string {
-  const parts = (value: string) => {
-    const negative = value.startsWith("-");
-    const unsigned = value.replace(/^[+-]/, "");
-    const [integer = "0", fraction = ""] = unsigned.split(".");
-    return {
-      negative,
-      digits: BigInt(`${integer}${fraction}` || "0"),
-      scale: fraction.length,
-    };
-  };
-  const dividend = parts(left);
-  const divisor = parts(right);
-  if (divisor.digits === 0n) throw new Error("长桥汇率不能为零");
-  const scale = 12;
-  const numerator =
-    dividend.digits * 10n ** BigInt(divisor.scale + scale);
-  const denominator = divisor.digits * 10n ** BigInt(dividend.scale);
-  const quotient = numerator / denominator;
-  const sign = dividend.negative !== divisor.negative ? "-" : "";
-  const digits = quotient.toString().padStart(scale + 1, "0");
-  const fraction = digits.slice(-scale).replace(/0+$/, "");
-  return `${sign}${digits.slice(0, -scale)}${fraction ? `.${fraction}` : ""}`;
 }
 
 export interface LongbridgePendingPreview extends LongbridgeAuthorizationResult {
@@ -445,29 +368,6 @@ export class LongbridgeConnectionState {
   completePreview(id: string): void {
     this.clearPreview(id);
   }
-}
-
-function hasMore(page: JsonRecord): boolean {
-  const data =
-    typeof page.data === "object" && page.data !== null && !Array.isArray(page.data)
-      ? record(page.data)
-      : page;
-  return page.has_more === true || data.has_more === true;
-}
-
-export async function collectLongbridgePages(
-  fetchPage: (page: number) => Promise<unknown>,
-): Promise<unknown[]> {
-  const pages: unknown[] = [];
-  let pageNumber = 1;
-  do {
-    const page = record(await fetchPage(pageNumber));
-    pages.push(page);
-    if (!hasMore(page)) break;
-    pageNumber += 1;
-  } while (pageNumber <= 100);
-  if (pageNumber > 100) throw new Error("长桥分页超过安全上限");
-  return pages;
 }
 
 const LONGBRIDGE_AUTHORIZATION_ENDPOINT =
@@ -703,41 +603,6 @@ export class ProductionLongbridgeOAuth implements LongbridgeOAuth {
     }
     const [accountPage, stockPage, fundPage] = pages;
     const positionPages = [stockPage, fundPage];
-    const exchangeRateResponse = await this.request(
-      `${LONGBRIDGE_API_ORIGIN}/v1/asset/exchange_rates`,
-      {
-        method: "GET",
-        headers: {
-          authorization: `Bearer ${token.accessToken}`,
-          accept: "application/json",
-        },
-        cache: "no-store",
-      },
-    );
-    if (!exchangeRateResponse.ok) {
-      throw new Error(`长桥汇率读取失败（HTTP ${exchangeRateResponse.status}）`);
-    }
-    const exchangeRatePage = responseData(await exchangeRateResponse.json());
-    const profitPages = await collectLongbridgePages(async (page) => {
-      const url = new URL(
-        "/v1/portfolio/profit-analysis/by-market",
-        LONGBRIDGE_API_ORIGIN,
-      );
-      url.searchParams.set("page", String(page));
-      url.searchParams.set("size", "100");
-      const response = await this.request(url, {
-        method: "GET",
-        headers: {
-          authorization: `Bearer ${token.accessToken}`,
-          accept: "application/json",
-        },
-        cache: "no-store",
-      });
-      if (!response.ok) {
-        throw new Error(`长桥平台盈亏读取失败（HTTP ${response.status}）`);
-      }
-      return responseData(await response.json());
-    });
     const identity = jwtAccountIdentity(token.accessToken);
     if (!identity) throw new Error("长桥未返回可确认的 OAuth 账户主体");
     const account = listFromPage(accountPage).at(0);
@@ -761,8 +626,6 @@ export class ProductionLongbridgeOAuth implements LongbridgeOAuth {
         accountPages: [accountPage],
         positionPages,
         syncedAt,
-        exchangeRatePages: [exchangeRatePage],
-        profitPages,
       }),
     };
   }
@@ -855,50 +718,11 @@ export class ProductionLongbridgeSourceRefresher
     }
     const [accountPage, stockPage, fundPage] = pages;
     const positionPages = [stockPage, fundPage];
-    const exchangeRateResponse = await this.request(
-      `${LONGBRIDGE_API_ORIGIN}/v1/asset/exchange_rates`,
-      {
-        method: "GET",
-        headers: {
-          authorization: `Bearer ${accessToken}`,
-          accept: "application/json",
-        },
-        cache: "no-store",
-        signal,
-      },
-    );
-    if (!exchangeRateResponse.ok) {
-      throw new Error(`长桥汇率读取失败（HTTP ${exchangeRateResponse.status}）`);
-    }
-    const exchangeRatePage = responseData(await exchangeRateResponse.json());
-    const profitPages = await collectLongbridgePages(async (page) => {
-      const url = new URL(
-        "/v1/portfolio/profit-analysis/by-market",
-        LONGBRIDGE_API_ORIGIN,
-      );
-      url.searchParams.set("page", String(page));
-      url.searchParams.set("size", "100");
-      const response = await this.request(url, {
-        method: "GET",
-        headers: {
-          authorization: `Bearer ${accessToken}`,
-          accept: "application/json",
-        },
-        cache: "no-store",
-        signal,
-      });
-      if (!response.ok) {
-        throw new Error(`长桥平台盈亏读取失败（HTTP ${response.status}）`);
-      }
-      return responseData(await response.json());
-    });
     return {
       snapshot: mapLongbridgeSnapshot({
         accountPages: [accountPage],
         positionPages,
         syncedAt: attemptedAt,
-        exchangeRatePages: [exchangeRatePage],
-        profitPages,
       }),
     };
   }

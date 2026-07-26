@@ -25,6 +25,5 @@ export async function GET() {
     savedSources: (await services.assetSources.list()).length,
     savedSecrets: services.secrets.size(),
     fetchedPositionPages: services.longbridge.fetchedPositionPages,
-    fetchedProfitPages: services.longbridge.fetchedProfitPages,
   });
 }

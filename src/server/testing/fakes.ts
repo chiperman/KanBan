@@ -34,7 +34,6 @@ import type { AppServices } from "@/server/composition";
 import { SessionOwnerAuth } from "@/server/auth/session-auth";
 import {
   LongbridgeConnectionState,
-  collectLongbridgePages,
   mapLongbridgeSnapshot,
 } from "@/server/asset-sources/longbridge";
 import { SourceIsolatedAssetSynchronization } from "@/server/asset-synchronization";
@@ -136,8 +135,6 @@ export interface FakeLongbridgeConfig {
   account: { id: string; label: string };
   accountPages: unknown[];
   positionPages: unknown[];
-  exchangeRatePages?: unknown[];
-  profitPages?: unknown[];
   previewError?: string;
   commitError?: string;
 }
@@ -145,12 +142,10 @@ export interface FakeLongbridgeConfig {
 export class FakeLongbridgeOAuth implements LongbridgeOAuth {
   private config: FakeLongbridgeConfig | null = null;
   fetchedPositionPages = 0;
-  fetchedProfitPages = 0;
 
   configure(config: FakeLongbridgeConfig): void {
     this.config = config;
     this.fetchedPositionPages = 0;
-    this.fetchedProfitPages = 0;
   }
 
   async start(redirectUri: string) {
@@ -171,12 +166,6 @@ export class FakeLongbridgeOAuth implements LongbridgeOAuth {
     if (config.previewError) throw new Error(config.previewError);
     const positionPages = config.positionPages;
     this.fetchedPositionPages = positionPages.length;
-    const profitPages = await collectLongbridgePages(async (page) => {
-      const value = config.profitPages?.[page - 1];
-      if (value === undefined) throw new Error("长桥平台盈亏分页测试样本不足");
-      this.fetchedProfitPages += 1;
-      return value;
-    });
     return {
       credentials: JSON.stringify(config.credentials),
       permissions: config.permissions,
@@ -185,8 +174,6 @@ export class FakeLongbridgeOAuth implements LongbridgeOAuth {
         accountPages: config.accountPages,
         positionPages,
         syncedAt: "2026-01-01T00:00:00.000Z",
-        exchangeRatePages: config.exchangeRatePages,
-        profitPages,
       }),
     };
   }
