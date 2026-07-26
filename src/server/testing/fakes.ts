@@ -3,6 +3,10 @@ import type {
   AssetSources,
   AssetPermission,
   AssetSourceConnections,
+  AssetRefreshMode,
+  AssetRefreshReport,
+  AssetSourceRefresher,
+  AssetSynchronization,
   LongbridgeAuthorizationResult,
   Card,
   CardStore,
@@ -23,6 +27,7 @@ import {
   collectLongbridgePages,
   mapLongbridgeSnapshot,
 } from "@/server/asset-sources/longbridge";
+import { SourceIsolatedAssetSynchronization } from "@/server/asset-synchronization";
 
 export class FakeClock implements Clock {
   private current = new Date("2026-01-01T00:00:00.000Z");
@@ -57,6 +62,14 @@ export class FakeAssetSources implements AssetSources {
 
   async replaceAll(sources: AssetSourceSummary[]): Promise<void> {
     this.sources = sources;
+  }
+
+  async update(source: AssetSourceSummary): Promise<void> {
+    const index = this.sources.findIndex((item) => item.id === source.id);
+    if (index === -1) return;
+    this.sources = this.sources.map((item) =>
+      item.id === source.id ? source : item,
+    );
   }
 }
 
@@ -165,6 +178,135 @@ export class FakePrices implements Prices {
   }
 }
 
+export type FakeRefreshScenario =
+  | "passthrough"
+  | "schedule"
+  | "partial-failure"
+  | "timeout-isolation";
+
+export class FakeAssetSourceRefresher implements AssetSourceRefresher {
+  private scenario: FakeRefreshScenario = "passthrough";
+  private recovered = false;
+  private readonly sourceCalls = new Map<string, number>();
+
+  configure(scenario: FakeRefreshScenario): void {
+    this.scenario = scenario;
+    this.recovered = false;
+    this.sourceCalls.clear();
+  }
+
+  recover(): void {
+    this.recovered = true;
+  }
+
+  async refresh({
+    source,
+    attemptedAt,
+    signal,
+  }: Parameters<AssetSourceRefresher["refresh"]>[0]) {
+    if (this.scenario === "passthrough") {
+      return { snapshot: source.snapshot };
+    }
+    const count = (this.sourceCalls.get(source.id) ?? 0) + 1;
+    this.sourceCalls.set(source.id, count);
+    if (
+      this.scenario === "timeout-isolation" &&
+      source.id === "source-beta"
+    ) {
+      await new Promise<never>((_, reject) => {
+        signal.addEventListener(
+          "abort",
+          () => reject(new Error("来源请求已取消")),
+          { once: true },
+        );
+      });
+    }
+    if (
+      this.scenario === "partial-failure" &&
+      source.id === "source-beta" &&
+      !this.recovered
+    ) {
+      throw new Error("来源暂时不可用");
+    }
+    const amount = this.scenario === "schedule"
+      ? String((source.id === "source-alpha" ? 100 : 200) + count)
+      : this.scenario === "timeout-isolation"
+        ? "110"
+      : source.id === "source-alpha"
+        ? this.recovered ? "120" : "110"
+        : "210";
+    const holdings = source.snapshot.holdings.map((holding, index) =>
+      index === 0
+        ? {
+            ...holding,
+            currentPrice: { amount, currency: "USD" },
+            marketValue: amount,
+            sourceMarketValue: { amount, currency: "USD" },
+            valuation: {
+              status: "valued" as const,
+              priceSource: `${source.label} 确定性行情`,
+              pricedAt: attemptedAt,
+            },
+          }
+        : holding,
+    );
+    return {
+      snapshot: {
+        ...source.snapshot,
+        total: { amount, currency: "USD" },
+        holdings,
+        syncedAt: attemptedAt,
+      },
+    };
+  }
+}
+
+export class FakeAssetSynchronization implements AssetSynchronization {
+  readonly modes: AssetRefreshMode[] = [];
+  active = 0;
+  private holdNext = false;
+  private releasePending: (() => void) | null = null;
+
+  constructor(
+    private readonly delegate: SourceIsolatedAssetSynchronization,
+    readonly refresher: FakeAssetSourceRefresher,
+  ) {}
+
+  reset(scenario: FakeRefreshScenario): void {
+    this.modes.length = 0;
+    this.active = 0;
+    this.holdNext = false;
+    this.releasePending = null;
+    this.refresher.configure(scenario);
+  }
+
+  prepareRecovery(hold: boolean): void {
+    this.refresher.recover();
+    this.holdNext = hold;
+  }
+
+  release(): void {
+    this.releasePending?.();
+    this.releasePending = null;
+  }
+
+  async refresh(mode: AssetRefreshMode): Promise<AssetRefreshReport> {
+    this.modes.push(mode);
+    this.active += 1;
+    try {
+      if (this.holdNext) {
+        this.holdNext = false;
+        await new Promise<void>((resolve) => {
+          this.releasePending = resolve;
+        });
+      }
+      return await this.delegate.refresh(mode);
+    } finally {
+      this.active -= 1;
+    }
+  }
+}
+
 export class InMemoryOwnerCredentialStore implements OwnerCredentialStore {
   private credential: OwnerCredential | null = null;
 
@@ -204,6 +346,11 @@ export class InMemorySecretStore implements SecretStore {
 
   async get(reference: string): Promise<string | null> {
     return this.values.get(reference) ?? null;
+  }
+
+  async replace(reference: string, value: string): Promise<void> {
+    if (!this.values.has(reference)) throw new Error("凭证引用不存在");
+    this.values.set(reference, value);
   }
 
   async remove(reference: string): Promise<void> {
@@ -247,6 +394,12 @@ export class InMemoryAssetSourceConnections implements AssetSourceConnections {
         permissions: result.permissions,
         credentialReference,
         snapshot: result.snapshot,
+        sync: {
+          status: "current",
+          lastSuccessfulAt: result.snapshot.syncedAt,
+          lastAttemptAt: result.snapshot.syncedAt,
+          error: null,
+        },
       },
     ]);
     await this.cards.replaceAll([
@@ -268,6 +421,7 @@ export interface TestServices extends AppServices {
   clock: FakeClock;
   cards: InMemoryCardStore;
   assetSources: FakeAssetSources;
+  assetSynchronization: FakeAssetSynchronization;
   prices: FakePrices;
   auth: SessionOwnerAuth;
   ownerCredentials: InMemoryOwnerCredentialStore;
@@ -283,10 +437,22 @@ export function createTestServices(): TestServices {
   const cards = new InMemoryCardStore();
   const assetSources = new FakeAssetSources();
   const secrets = new InMemorySecretStore();
+  const refreshAdapter = new FakeAssetSourceRefresher();
+  const assetSynchronization = new FakeAssetSynchronization(
+    new SourceIsolatedAssetSynchronization(
+      assetSources,
+      secrets,
+      clock,
+      refreshAdapter,
+      100,
+    ),
+    refreshAdapter,
+  );
   return {
     clock,
     cards,
     assetSources,
+    assetSynchronization,
     prices: new FakePrices(),
     auth: new SessionOwnerAuth(clock),
     ownerCredentials: new InMemoryOwnerCredentialStore(),

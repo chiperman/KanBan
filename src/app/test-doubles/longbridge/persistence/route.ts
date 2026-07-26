@@ -8,11 +8,16 @@ import {
   FileDashboardDatabase,
   FileEncryptedSecretStore,
 } from "@/server/production";
-import type { LongbridgeAuthorizationResult } from "@/server/ports";
+import { SourceIsolatedAssetSynchronization } from "@/server/asset-synchronization";
+import type {
+  AssetSourceRefresher,
+  LongbridgeAuthorizationResult,
+} from "@/server/ports";
 
 export const dynamic = "force-dynamic";
 
 const PROBE_SECRET = "production-persistence-probe-secret";
+const ROTATED_SECRET = "production-rotated-refresh-secret";
 
 const RESULT: LongbridgeAuthorizationResult = {
   credentials: PROBE_SECRET,
@@ -102,6 +107,10 @@ export async function POST(request: Request) {
     const reference = sources[0]?.credentialReference ?? "";
     const dashboardRaw = await readFile(dashboardPath, "utf8");
     const secretRaw = await readFile(secretPath, "utf8");
+    const committedSecretReadable =
+      (await secrets.get(reference)) === PROBE_SECRET;
+    await secrets.replace(reference, ROTATED_SECRET);
+    const rotatedSecretRaw = await readFile(secretPath, "utf8");
 
     const failureDir = path.join(root, "failure");
     const blockedDashboardPath = path.join(failureDir, "dashboard.json");
@@ -134,6 +143,43 @@ export async function POST(request: Request) {
     const referenced = await recoveryStore.stage("referenced");
     await recoveryStore.recover(new Set([referenced]));
 
+    const rotationDir = path.join(root, "rotation");
+    const rotationDashboard = new FileDashboardDatabase(
+      path.join(rotationDir, "dashboard.json"),
+      path.join(rotationDir, "legacy-cards.json"),
+    );
+    const rotationSecrets = new FileEncryptedSecretStore(
+      path.join(rotationDir, "secrets.json"),
+    );
+    await new DatabaseAssetSourceConnections(
+      rotationDashboard,
+      rotationSecrets,
+    ).connectLongbridge(RESULT);
+    const rotationReference =
+      (await rotationDashboard.listSources())[0].credentialReference;
+    const failingAfterRotation: AssetSourceRefresher = {
+      async refresh({ persistCredentials }) {
+        await persistCredentials(ROTATED_SECRET);
+        throw new Error("轮换后下游行情失败");
+      },
+    };
+    const rotationReport = await new SourceIsolatedAssetSynchronization(
+      {
+        list: () => rotationDashboard.listSources(),
+        replaceAll: (sources) => rotationDashboard.replaceSources(sources),
+        update: (source) => rotationDashboard.updateSource(source),
+      },
+      rotationSecrets,
+      { now: () => new Date("2026-05-29T00:00:00.000Z") },
+      failingAfterRotation,
+      100,
+    ).refresh("all");
+    const rotationRaw = await readFile(
+      path.join(rotationDir, "secrets.json"),
+      "utf8",
+    );
+    const rotatedSource = (await rotationDashboard.listSources())[0];
+
     return Response.json({
       dashboardHasOnlyReference:
         dashboardRaw.includes(reference) &&
@@ -142,11 +188,21 @@ export async function POST(request: Request) {
       encryptedStoreHasNoPlaintext:
         !secretRaw.includes(PROBE_SECRET) &&
         secretRaw.includes('"state":"committed"'),
-      committedSecretReadable: (await secrets.get(reference)) === PROBE_SECRET,
+      committedSecretReadable,
+      rotatedSecretReadableAndEncrypted:
+        (await secrets.get(reference)) === ROTATED_SECRET &&
+        !rotatedSecretRaw.includes(ROTATED_SECRET) &&
+        !rotatedSecretRaw.includes(PROBE_SECRET),
       failedWriteRolledBack: failed && failureSecretRaw === "{}",
       orphanRecovered: orphanRaw === "{}",
       referencedPendingRecovered:
         (await recoveryStore.get(referenced)) === "referenced",
+      rotatedBeforeDownstreamFailure:
+        rotationReport.failureCount === 1 &&
+        rotatedSource.credentialReference === rotationReference &&
+        rotatedSource.sync.status === "expired" &&
+        (await rotationSecrets.get(rotationReference)) === ROTATED_SECRET &&
+        !rotationRaw.includes(ROTATED_SECRET),
     });
   } finally {
     if (previousKey === undefined) delete process.env.PAD_SECRET_ENCRYPTION_KEY;

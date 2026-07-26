@@ -9,8 +9,10 @@ import {
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
-import { decimalAdd } from "@/domain/decimal";
+import { decimalAdd, decimalSubtract } from "@/domain/decimal";
 import type {
+  AssetSourceRefreshResult,
+  AssetSourceRefresher,
   AssetHolding,
   AssetSnapshot,
   LongbridgeAuthorizationResult,
@@ -532,6 +534,14 @@ interface TokenResponse {
   scopes: string[];
 }
 
+interface StoredLongbridgeCredentials {
+  accessToken: string;
+  refreshToken: string | null;
+  expiresIn: number | null;
+  obtainedAt: string | null;
+  validatedScopes: string[];
+}
+
 function base64Url(value: Buffer): string {
   return value.toString("base64url");
 }
@@ -542,19 +552,25 @@ function oauthClientId(): string {
   return value;
 }
 
-function parseTokenResponse(value: unknown): TokenResponse {
-  const token = record(value);
-  const scope = token.scope;
-  if (typeof scope !== "string" || scope.trim().length === 0) {
-    throw new Error("长桥未返回授权范围，无法证明凭证为只读");
-  }
-  const scopes = [...new Set(scope.trim().split(/\s+/))];
+function validateReadOnlyScopes(scopes: string[]): string[] {
   if (scopes.includes("11")) {
     throw new Error("检测到长桥交易写权限，已拒绝连接");
   }
   if (scopes.length !== 1 || scopes[0] !== READ_ONLY_SCOPE) {
     throw new Error(`长桥授权范围不是仅账户读取（实际：${scopes.join(" ")}）`);
   }
+  return scopes;
+}
+
+function parseTokenResponse(value: unknown): TokenResponse {
+  const token = record(value);
+  const scope = token.scope;
+  if (typeof scope !== "string" || scope.trim().length === 0) {
+    throw new Error("长桥未返回授权范围，无法证明凭证为只读");
+  }
+  const scopes = validateReadOnlyScopes([
+    ...new Set(scope.trim().split(/\s+/)),
+  ]);
   if (token.token_type !== "Bearer") {
     throw new Error("长桥 token 类型不是 Bearer，已拒绝连接");
   }
@@ -566,6 +582,60 @@ function parseTokenResponse(value: unknown): TokenResponse {
         ? token.expires_in
         : null,
     scopes,
+  };
+}
+
+function parseStoredCredentials(credentials: string): StoredLongbridgeCredentials {
+  let value: JsonRecord;
+  try {
+    value = record(JSON.parse(credentials));
+  } catch {
+    throw new Error("长桥只读凭证格式无效");
+  }
+  const rawScopes = value.validatedScopes;
+  if (!Array.isArray(rawScopes) || !rawScopes.every((scope) => typeof scope === "string")) {
+    throw new Error("长桥凭证无法证明授权范围，已停止同步");
+  }
+  return {
+    accessToken: text(value.accessToken, "accessToken"),
+    refreshToken: optionalText(value.refreshToken),
+    expiresIn:
+      typeof value.expiresIn === "number" && Number.isFinite(value.expiresIn)
+        ? value.expiresIn
+        : null,
+    obtainedAt: optionalText(value.obtainedAt),
+    validatedScopes: validateReadOnlyScopes([...new Set(rawScopes)]),
+  };
+}
+
+function parseRefreshTokenResponse(
+  value: unknown,
+  previous: StoredLongbridgeCredentials,
+  obtainedAt: string,
+): StoredLongbridgeCredentials {
+  const token = record(value);
+  if (token.token_type !== "Bearer") {
+    throw new Error("长桥刷新 token 类型不是 Bearer，已拒绝使用");
+  }
+  let scopes: string[];
+  if (!Object.hasOwn(token, "scope")) {
+    scopes = validateReadOnlyScopes(previous.validatedScopes);
+  } else if (typeof token.scope === "string" && token.scope.trim().length > 0) {
+    scopes = validateReadOnlyScopes([
+      ...new Set(token.scope.trim().split(/\s+/)),
+    ]);
+  } else {
+    throw new Error("长桥刷新响应 scope 格式无效，已拒绝使用");
+  }
+  return {
+    accessToken: text(token.access_token, "access_token"),
+    refreshToken: optionalText(token.refresh_token) ?? previous.refreshToken,
+    expiresIn:
+      typeof token.expires_in === "number" && Number.isFinite(token.expires_in)
+        ? token.expires_in
+        : previous.expiresIn,
+    obtainedAt,
+    validatedScopes: scopes,
   };
 }
 
@@ -609,6 +679,7 @@ export interface LongbridgeMarketData {
   quote(
     accessToken: string,
     symbols: string[],
+    signal?: AbortSignal,
   ): Promise<{
     prices: Record<string, string>;
     previous: Record<string, string>;
@@ -623,13 +694,14 @@ export interface LongbridgeMarketData {
 export class LongbridgeMcpMarketData implements LongbridgeMarketData {
   constructor(private readonly request: LongbridgeFetch = globalThis.fetch) {}
 
-  async quote(accessToken: string, symbols: string[]) {
+  async quote(accessToken: string, symbols: string[], signal?: AbortSignal) {
     if (symbols.length === 0) return { prices: {}, previous: {}, times: {} };
     const transport = new StreamableHTTPClientTransport(
       new URL("https://mcp.longbridge.com/v2"),
       {
         requestInit: {
           headers: { authorization: `Bearer ${accessToken}` },
+          signal,
         },
         fetch: this.request,
       },
@@ -784,11 +856,13 @@ export class ProductionLongbridgeOAuth implements LongbridgeOAuth {
     const account = listFromPage(accountPage).at(0);
     if (!account) throw new Error("长桥账户预览为空");
     const accountCurrency = text(account.currency, "currency");
+    const syncedAt = new Date().toISOString();
     return {
       credentials: JSON.stringify({
         accessToken: token.accessToken,
         refreshToken: token.refreshToken,
         expiresIn: token.expiresIn,
+        obtainedAt: syncedAt,
         validatedScopes: token.scopes,
       }),
       permissions: ["market-data", "account", "positions"],
@@ -799,7 +873,264 @@ export class ProductionLongbridgeOAuth implements LongbridgeOAuth {
       snapshot: mapLongbridgeSnapshot({
         accountPages: [accountPage],
         positionPages,
-        syncedAt: new Date().toISOString(),
+        syncedAt,
+        quotePrices: quotes.prices,
+        quotePrevious: quotes.previous,
+        quoteTimes: quotes.times,
+        exchangeRatePages: [exchangeRatePage],
+        profitPages,
+      }),
+    };
+  }
+}
+
+function longbridgeSourceValue(
+  marketValue: string,
+  currency: string,
+  snapshot: AssetSnapshot,
+): string | null {
+  const accountCurrency = snapshot.total.currency;
+  if (currency === accountCurrency) return marketValue;
+  const direct = snapshot.exchangeRates.find(
+    (rate) =>
+      rate.baseCurrency === accountCurrency &&
+      rate.quoteCurrency === currency,
+  );
+  if (direct) return divideDecimal(marketValue, direct.rate);
+  const inverse = snapshot.exchangeRates.find(
+    (rate) =>
+      rate.baseCurrency === currency &&
+      rate.quoteCurrency === accountCurrency,
+  );
+  return inverse ? multiplyDecimal(marketValue, inverse.rate) : null;
+}
+
+function applyLongbridgePrices(
+  snapshot: AssetSnapshot,
+  quotes: Awaited<ReturnType<LongbridgeMarketData["quote"]>>,
+  syncedAt: string,
+): AssetSnapshot {
+  const previousHoldingTotal = snapshot.holdings.reduce(
+    (sum, holding) =>
+      holding.sourceMarketValue
+        ? decimalAdd(sum, holding.sourceMarketValue.amount)
+        : sum,
+    "0",
+  );
+  const residual = decimalSubtract(
+    snapshot.total.amount,
+    previousHoldingTotal,
+  );
+  const holdings = snapshot.holdings.map((holding) => {
+    const price = quotes.prices[holding.symbol];
+    if (!price) return holding;
+    const marketValue = multiplyDecimal(holding.quantity, price);
+    const sourceAmount = longbridgeSourceValue(
+      marketValue,
+      holding.currency,
+      snapshot,
+    );
+    return {
+      ...holding,
+      currentPrice: { amount: price, currency: holding.currency },
+      marketValue,
+      sourceMarketValue: sourceAmount === null
+        ? null
+        : { amount: sourceAmount, currency: snapshot.total.currency },
+      valuation: sourceAmount === null
+        ? {
+            status: "unvalued" as const,
+            reason: `缺少 ${holding.currency}/${snapshot.total.currency} 来源汇率`,
+          }
+        : {
+            status: "valued" as const,
+            priceSource: "Longbridge QuoteContext",
+            pricedAt: quotes.times[holding.symbol] ?? syncedAt,
+          },
+      changePercent:
+        percentageChange(price, quotes.previous[holding.symbol]) ??
+        holding.changePercent,
+    };
+  });
+  const total = holdings.reduce(
+    (sum, holding) =>
+      holding.sourceMarketValue
+        ? decimalAdd(sum, holding.sourceMarketValue.amount)
+        : sum,
+    residual,
+  );
+  return {
+    ...snapshot,
+    total: { amount: total, currency: snapshot.total.currency },
+    holdings,
+    syncedAt,
+  };
+}
+
+function needsCredentialRefresh(
+  credentials: StoredLongbridgeCredentials,
+  attemptedAt: string,
+): boolean {
+  if (credentials.refreshToken === null) return false;
+  if (credentials.obtainedAt === null) return true;
+  if (credentials.expiresIn === null) return false;
+  const obtainedAt = Date.parse(credentials.obtainedAt);
+  const attempted = Date.parse(attemptedAt);
+  if (!Number.isFinite(obtainedAt) || !Number.isFinite(attempted)) return true;
+  return attempted >= obtainedAt + credentials.expiresIn * 1000 - 60_000;
+}
+
+function assertCompleteQuotes(
+  symbols: string[],
+  quotes: Awaited<ReturnType<LongbridgeMarketData["quote"]>>,
+): void {
+  const missing = symbols.filter((symbol) => quotes.prices[symbol] === undefined);
+  if (missing.length > 0) {
+    throw new Error(`长桥行情缺少请求代码：${missing.join(", ")}`);
+  }
+}
+
+/** 已保存来源的只读刷新器；行情刷新不读取私有持仓端点。 */
+export class ProductionLongbridgeSourceRefresher
+  implements AssetSourceRefresher
+{
+  constructor(
+    private readonly request: LongbridgeFetch = globalThis.fetch,
+    private readonly marketData: LongbridgeMarketData =
+      new LongbridgeMcpMarketData(request),
+  ) {}
+
+  private async rotateCredentials(
+    previous: StoredLongbridgeCredentials,
+    attemptedAt: string,
+    signal: AbortSignal,
+  ): Promise<StoredLongbridgeCredentials> {
+    if (previous.refreshToken === null) {
+      throw new Error("长桥 refresh token 不可用，需要重新授权");
+    }
+    const form = new URLSearchParams({
+      grant_type: "refresh_token",
+      client_id: oauthClientId(),
+      refresh_token: previous.refreshToken,
+    });
+    const response = await this.request(LONGBRIDGE_TOKEN_ENDPOINT, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: form,
+      cache: "no-store",
+      signal,
+    });
+    if (!response.ok) {
+      throw new Error(`长桥 token 刷新失败（HTTP ${response.status}）`);
+    }
+    return parseRefreshTokenResponse(
+      await response.json(),
+      previous,
+      attemptedAt,
+    );
+  }
+
+  async refresh({
+    source,
+    credentials,
+    mode,
+    attemptedAt,
+    signal,
+    persistCredentials,
+  }: Parameters<AssetSourceRefresher["refresh"]>[0]): Promise<AssetSourceRefreshResult> {
+    if (source.kind !== "longbridge") {
+      throw new Error(`暂不支持刷新来源类型：${source.kind}`);
+    }
+    let stored = parseStoredCredentials(credentials);
+    if (needsCredentialRefresh(stored, attemptedAt)) {
+      stored = await this.rotateCredentials(stored, attemptedAt, signal);
+      await persistCredentials(JSON.stringify(stored));
+    }
+    const accessToken = stored.accessToken;
+    if (mode === "prices") {
+      const symbols = [...new Set(source.snapshot.holdings
+        .filter(
+          (holding) =>
+            holding.valuation.status === "unvalued" ||
+            holding.valuation.priceSource !== "Longbridge 基金净值",
+        )
+        .map((holding) => holding.symbol))];
+      const quotes = await this.marketData.quote(accessToken, symbols, signal);
+      assertCompleteQuotes(symbols, quotes);
+      return {
+        snapshot: applyLongbridgePrices(source.snapshot, quotes, attemptedAt),
+      };
+    }
+
+    const pages: unknown[] = [];
+    for (const path of ASSET_PATHS) {
+      const response = await this.request(`${LONGBRIDGE_API_ORIGIN}${path}`, {
+        method: "GET",
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+          accept: "application/json",
+        },
+        cache: "no-store",
+        signal,
+      });
+      if (!response.ok) {
+        throw new Error(`长桥资产读取失败（HTTP ${response.status}）`);
+      }
+      pages.push(responseData(await response.json()));
+    }
+    const [accountPage, stockPage, fundPage] = pages;
+    const positionPages = [stockPage, fundPage];
+    const symbols = positionPages
+      .flatMap(listFromPage)
+      .flatMap((item) =>
+        optionalText(item.current_net_asset_value)
+          ? []
+          : [text(item.symbol, "symbol")],
+      );
+    const quotes = await this.marketData.quote(accessToken, symbols, signal);
+    assertCompleteQuotes(symbols, quotes);
+    const exchangeRateResponse = await this.request(
+      `${LONGBRIDGE_API_ORIGIN}/v1/asset/exchange_rates`,
+      {
+        method: "GET",
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+          accept: "application/json",
+        },
+        cache: "no-store",
+        signal,
+      },
+    );
+    if (!exchangeRateResponse.ok) {
+      throw new Error(`长桥汇率读取失败（HTTP ${exchangeRateResponse.status}）`);
+    }
+    const exchangeRatePage = responseData(await exchangeRateResponse.json());
+    const profitPages = await collectLongbridgePages(async (page) => {
+      const url = new URL(
+        "/v1/portfolio/profit-analysis/by-market",
+        LONGBRIDGE_API_ORIGIN,
+      );
+      url.searchParams.set("page", String(page));
+      url.searchParams.set("size", "100");
+      const response = await this.request(url, {
+        method: "GET",
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+          accept: "application/json",
+        },
+        cache: "no-store",
+        signal,
+      });
+      if (!response.ok) {
+        throw new Error(`长桥平台盈亏读取失败（HTTP ${response.status}）`);
+      }
+      return responseData(await response.json());
+    });
+    return {
+      snapshot: mapLongbridgeSnapshot({
+        accountPages: [accountPage],
+        positionPages,
+        syncedAt: attemptedAt,
         quotePrices: quotes.prices,
         quotePrevious: quotes.previous,
         quoteTimes: quotes.times,

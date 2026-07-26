@@ -17,7 +17,7 @@ import type {
 
 export type ValuationSource = Pick<
   AssetSourceSummary,
-  "id" | "kind" | "label" | "snapshot"
+  "id" | "kind" | "label" | "snapshot" | "sync"
 >;
 
 export type ReportingCurrency = "USD" | "CNY";
@@ -34,6 +34,7 @@ export interface TotalValuation {
   currency: ReportingCurrency;
   incomplete: boolean;
   unvaluedCount: number;
+  expiredCount: number;
   conversion: AssetExchangeRate | null;
   groups: ValuationGroup[];
 }
@@ -178,9 +179,11 @@ export function buildTotalValuation(
   let totalUsd = "0";
   let incomplete = false;
   let unvaluedCount = 0;
+  let expiredCount = 0;
   const sourceTotals = new Map<string, string>();
 
   for (const source of sources) {
+    if (source.sync.status === "expired") expiredCount += 1;
     const total = convert(
       source.snapshot.total.amount,
       source.snapshot.total.currency,
@@ -320,6 +323,7 @@ export function buildTotalValuation(
     currency,
     incomplete,
     unvaluedCount,
+    expiredCount,
     conversion,
     groups,
   };

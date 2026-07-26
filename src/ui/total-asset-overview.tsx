@@ -55,14 +55,19 @@ export function TotalAssetOverview({ sources }: { sources: ValuationSource[] }) 
       <div className="total-overview-head">
         <div>
           <p className="card-label">总资产概览</p>
-          <p className="total-overview-amount">
+          <p className="total-overview-amount" data-testid="total-asset-amount">
             {valuation.amount === null ? "无法折算" : amount(valuation.amount)}{" "}
             <span>{valuation.currency}</span>
           </p>
-          <p className={`total-status${valuation.incomplete ? " incomplete" : ""}`}>
-            {valuation.incomplete
-              ? `汇总不完整 · ${valuation.unvaluedCount} 项未估值`
-              : "汇总完整"}
+          <p className={`total-status${valuation.incomplete ? " incomplete" : ""}${valuation.expiredCount > 0 ? " expired" : ""}`}>
+            {[
+              valuation.incomplete
+                ? `汇总不完整 · ${valuation.unvaluedCount} 项未估值`
+                : "汇总完整",
+              valuation.expiredCount > 0
+                ? `包含 ${valuation.expiredCount} 个过期来源`
+                : null,
+            ].filter(Boolean).join(" · ")}
           </p>
         </div>
         <div className="valuation-controls">

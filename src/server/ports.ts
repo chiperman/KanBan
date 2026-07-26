@@ -72,6 +72,40 @@ export interface AssetSourceSummary {
   permissions: AssetPermission[];
   credentialReference: string;
   snapshot: AssetSnapshot;
+  sync: AssetSourceSyncState;
+}
+
+export interface AssetSourceSyncState {
+  status: "current" | "expired";
+  lastSuccessfulAt: string;
+  lastAttemptAt: string;
+  error: string | null;
+}
+
+export type AssetRefreshMode = "all" | "prices" | "holdings";
+
+export interface AssetRefreshReport {
+  successCount: number;
+  failureCount: number;
+}
+
+export interface AssetSynchronization {
+  refresh(mode: AssetRefreshMode): Promise<AssetRefreshReport>;
+}
+
+export interface AssetSourceRefreshResult {
+  snapshot: AssetSnapshot;
+}
+
+export interface AssetSourceRefresher {
+  refresh(input: {
+    source: AssetSourceSummary;
+    credentials: string;
+    mode: AssetRefreshMode;
+    attemptedAt: string;
+    signal: AbortSignal;
+    persistCredentials(credentials: string): Promise<void>;
+  }): Promise<AssetSourceRefreshResult>;
 }
 
 export type AssetPermission =
@@ -159,6 +193,7 @@ export interface AssetSourceConnections {
 export interface AssetSources {
   list(): Promise<AssetSourceSummary[]>;
   replaceAll(sources: AssetSourceSummary[]): Promise<void>;
+  update(source: AssetSourceSummary): Promise<void>;
 }
 
 export interface PriceQuote {
@@ -217,5 +252,6 @@ export interface OwnerRecoveryCredentialStore {
 export interface SecretStore {
   put(value: string): Promise<string>;
   get(reference: string): Promise<string | null>;
+  replace(reference: string, value: string): Promise<void>;
   remove(reference: string): Promise<void>;
 }

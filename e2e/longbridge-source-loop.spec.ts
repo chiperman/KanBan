@@ -414,9 +414,11 @@ test("生产 OAuth 只申请并接受 account.read，交易、缺失或未知 sc
     dashboardHasOnlyReference: true,
     encryptedStoreHasNoPlaintext: true,
     committedSecretReadable: true,
+    rotatedSecretReadableAndEncrypted: true,
     failedWriteRolledBack: true,
     orphanRecovered: true,
     referencedPendingRecovered: true,
+    rotatedBeforeDownstreamFailure: true,
   });
 });
 

@@ -34,7 +34,9 @@ import { parseCards } from "@/server/cards";
 import {
   LongbridgeConnectionState,
   ProductionLongbridgeOAuth,
+  ProductionLongbridgeSourceRefresher,
 } from "@/server/asset-sources/longbridge";
+import { SourceIsolatedAssetSynchronization } from "@/server/asset-synchronization";
 
 class SystemClock implements Clock {
   now(): Date {
@@ -43,12 +45,12 @@ class SystemClock implements Clock {
 }
 
 interface DashboardState {
-  schemaVersion: 2;
+  schemaVersion: 3;
   cards: Card[];
   assetSources: AssetSourceSummary[];
 }
 
-const DASHBOARD_SCHEMA_VERSION = 2 as const;
+const DASHBOARD_SCHEMA_VERSION = 3 as const;
 
 function migrateAssetSource(raw: unknown): AssetSourceSummary {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
@@ -151,6 +153,12 @@ function migrateAssetSource(raw: unknown): AssetSourceSummary {
       total,
       holdings,
       exchangeRates,
+    },
+    sync: source.sync ?? {
+      status: "current",
+      lastSuccessfulAt: snapshot.syncedAt,
+      lastAttemptAt: snapshot.syncedAt,
+      error: null,
     },
   };
 }
@@ -256,6 +264,13 @@ export class FileDashboardDatabase {
     });
   }
 
+  async updateSource(source: AssetSourceSummary): Promise<void> {
+    await this.mutate((state) => {
+      const index = state.assetSources.findIndex((item) => item.id === source.id);
+      if (index !== -1) state.assetSources[index] = source;
+    });
+  }
+
   async connectLongbridge(
     result: LongbridgeAuthorizationResult,
     credentialReference: string,
@@ -270,6 +285,12 @@ export class FileDashboardDatabase {
         permissions: result.permissions,
         credentialReference,
         snapshot: result.snapshot,
+        sync: {
+          status: "current",
+          lastSuccessfulAt: result.snapshot.syncedAt,
+          lastAttemptAt: result.snapshot.syncedAt,
+          error: null,
+        },
       });
       state.cards.push({
         id: randomUUID(),
@@ -393,6 +414,16 @@ export class FileEncryptedSecretStore implements SecretStore {
     return value?.state === "committed" ? this.unseal(value.sealed) : null;
   }
 
+  replace(reference: string, value: string): Promise<void> {
+    return this.mutate((values) => {
+      const current = values[reference];
+      if (!current || current.state !== "committed") {
+        throw new Error("凭证引用不存在或尚未提交");
+      }
+      current.sealed = this.seal(value);
+    });
+  }
+
   remove(reference: string): Promise<void> {
     return this.mutate((values) => {
       delete values[reference];
@@ -420,6 +451,7 @@ class DatabaseAssetSources implements AssetSources {
   constructor(private readonly database: FileDashboardDatabase) {}
   list() { return this.database.listSources(); }
   replaceAll(sources: AssetSourceSummary[]) { return this.database.replaceSources(sources); }
+  update(source: AssetSourceSummary) { return this.database.updateSource(source); }
 }
 
 export class DatabaseAssetSourceConnections implements AssetSourceConnections {
@@ -461,6 +493,10 @@ class ReadySecretStore implements SecretStore {
   async get(reference: string) {
     await this.ready;
     return this.secrets.get(reference);
+  }
+  async replace(reference: string, value: string) {
+    await this.ready;
+    return this.secrets.replace(reference, value);
   }
   async remove(reference: string) {
     await this.ready;
@@ -562,10 +598,18 @@ export function createProductionServices(): AppServices {
     secrets.recover(new Set(sources.map((source) => source.credentialReference))),
   );
   void secretRecovery.catch(() => undefined);
+  const assetSources = new DatabaseAssetSources(database);
+  const readySecrets = new ReadySecretStore(secrets, secretRecovery);
   return {
     clock,
     cards: new DatabaseCardStore(database),
-    assetSources: new DatabaseAssetSources(database),
+    assetSources,
+    assetSynchronization: new SourceIsolatedAssetSynchronization(
+      assetSources,
+      readySecrets,
+      clock,
+      new ProductionLongbridgeSourceRefresher(),
+    ),
     prices: new NoPrices(),
     auth: new SessionOwnerAuth(clock),
     ownerCredentials: new FileOwnerCredentialStore(
@@ -574,7 +618,7 @@ export function createProductionServices(): AppServices {
     ownerRecoveryCredentials: new FileOwnerRecoveryCredentialStore(
       path.join(dataDir, "owner-recovery.json"),
     ),
-    secrets: new ReadySecretStore(secrets, secretRecovery),
+    secrets: readySecrets,
     longbridge: new ProductionLongbridgeOAuth(),
     longbridgeConnections: new LongbridgeConnectionState(),
     assetSourceConnections: new DatabaseAssetSourceConnections(

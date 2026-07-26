@@ -17,6 +17,7 @@ export async function GET() {
     doubles: {
       clock: "fake-clock",
       assetSources: "fake-asset-sources",
+      assetSynchronization: "fake-asset-synchronization",
       prices: "fake-prices",
       auth: "in-memory-session-auth",
       ownerCredentials: "in-memory-owner-credential-store",

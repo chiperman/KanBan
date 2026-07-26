@@ -5,6 +5,7 @@ import { useState, type DragEvent, type FormEvent } from "react";
 import type { Card, CardSpan, LinkItem } from "@/server/ports";
 import { CardContent } from "@/ui/card-content";
 import { AssetSourceFlow } from "@/ui/asset-source-flow";
+import { AssetRefreshControls } from "@/ui/asset-refresh-controls";
 import {
   AssetSourceCard,
   type AssetSourceView,
@@ -318,6 +319,7 @@ export function OwnerDashboard({
           </>
         )}
       </div>
+      <AssetRefreshControls enabled={assetSources.length > 0} />
       {layoutEditing ? (
         <p className="layout-mode-status" role="status">
           布局编辑模式：拖拽卡片排序，并选择卡片宽度。

@@ -2,7 +2,11 @@
 
 import { useMemo, useRef, useState } from "react";
 
-import type { AssetHolding, AssetSnapshot } from "@/server/ports";
+import type {
+  AssetHolding,
+  AssetSnapshot,
+  AssetSourceSyncState,
+} from "@/server/ports";
 
 export interface AssetSourceView {
   id: string;
@@ -10,6 +14,7 @@ export interface AssetSourceView {
   label: string;
   accountId: string;
   snapshot: AssetSnapshot;
+  sync: AssetSourceSyncState;
 }
 
 function amount(value: string): string {
@@ -104,7 +109,7 @@ export function AssetSourceCard({ source }: { source: AssetSourceView }) {
       >
         <p className="card-label">{source.kind === "longbridge" ? "长桥资产" : "资产来源"}</p>
         {source.kind === "longbridge" ? null : <h2 className="asset-source-title">{source.label}</h2>}
-        <p className="asset-total">{amount(source.snapshot.total.amount)} <span>{source.snapshot.total.currency}</span></p>
+        <p className="asset-total" data-testid="asset-source-total">{amount(source.snapshot.total.amount)} <span>{source.snapshot.total.currency}</span></p>
         <ol className="holding-top-list">
           {source.snapshot.holdings.slice(0, 5).map((holding) => (
             <li key={holding.symbol}>
@@ -118,6 +123,16 @@ export function AssetSourceCard({ source }: { source: AssetSourceView }) {
           ))}
         </ol>
         <p className="asset-updated">最后更新：{source.snapshot.syncedAt.slice(0, 16).replace("T", " ")} UTC</p>
+        <p className={`asset-sync-status ${source.sync.status}`}>
+          {source.sync.status === "expired" ? "过期数据" : "数据当前"}
+          {" · 最后成功："}
+          {source.sync.lastSuccessfulAt.slice(0, 16).replace("T", " ")} UTC
+        </p>
+        {source.sync.error ? (
+          <p className="asset-sync-error" role="alert">
+            {source.label} 同步失败：{source.sync.error}
+          </p>
+        ) : null}
         <button type="button" className="secondary-button" onClick={showDetails}>查看全部持仓</button>
       </div>
       {open ? (

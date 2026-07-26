@@ -6,6 +6,13 @@ export const dynamic = "force-dynamic";
 
 const SYNCED_AT = "2026-04-01T08:00:00.000Z";
 
+const CURRENT_SYNC = {
+  status: "current" as const,
+  lastSuccessfulAt: SYNCED_AT,
+  lastAttemptAt: SYNCED_AT,
+  error: null,
+};
+
 function exchangeRates(inverse: boolean): AssetExchangeRate[] {
   return [{
     baseCurrency: inverse ? "CNY" : "USD",
@@ -120,6 +127,7 @@ function standardSources(input: {
       syncedAt: SYNCED_AT,
       adjustment: input.alphaAdjustment,
     }),
+    sync: CURRENT_SYNC,
   }, {
     id: "source-beta",
     kind: "valuation-fixture",
@@ -133,6 +141,7 @@ function standardSources(input: {
       exchangeRates: rates,
       syncedAt: SYNCED_AT,
     }),
+    sync: CURRENT_SYNC,
   }];
 }
 
@@ -172,6 +181,7 @@ function roundingSources(): AssetSourceSummary[] {
       exchangeRates: exchangeRates(false),
       syncedAt: SYNCED_AT,
     }),
+    sync: CURRENT_SYNC,
   }];
 }
 
@@ -200,6 +210,7 @@ function manyRoundingSources(): AssetSourceSummary[] {
       exchangeRates: exchangeRates(false),
       syncedAt: SYNCED_AT,
     }),
+    sync: CURRENT_SYNC,
   } satisfies AssetSourceSummary));
 }
 

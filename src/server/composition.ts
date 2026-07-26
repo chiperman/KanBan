@@ -1,5 +1,6 @@
 import type {
   AssetSources,
+  AssetSynchronization,
   AssetSourceConnections,
   CardStore,
   Clock,
@@ -25,6 +26,7 @@ export interface AppServices {
   clock: Clock;
   cards: CardStore;
   assetSources: AssetSources;
+  assetSynchronization: AssetSynchronization;
   prices: Prices;
   auth: OwnerAuth;
   ownerCredentials: OwnerCredentialStore;

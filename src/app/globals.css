@@ -270,6 +270,7 @@ body {
 }
 
 .owner-toolbar button,
+.asset-refresh-controls button,
 .secondary-button,
 .text-button {
   appearance: none;
@@ -510,8 +511,55 @@ body {
   font-size: 11px;
 }
 
-.total-status.incomplete {
+.total-status.incomplete,
+.total-status.expired {
   color: #a64722;
+}
+
+.asset-refresh-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: -4px 0 16px;
+}
+
+.asset-refresh-controls button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.asset-refresh-controls p,
+.asset-sync-status,
+.asset-sync-error {
+  margin: 0;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+
+.asset-refresh-controls p,
+.asset-sync-status {
+  color: var(--text-dim);
+}
+
+.asset-sync-status {
+  margin-top: 8px;
+}
+
+.asset-sync-status.expired,
+.asset-sync-error {
+  color: #a64722;
+}
+
+.asset-sync-error {
+  margin-top: 5px;
+}
+
+[data-theme="dark"] .asset-sync-status.expired,
+[data-theme="dark"] .asset-sync-error,
+[data-theme="dark"] .total-status.incomplete,
+[data-theme="dark"] .total-status.expired {
+  color: #e08a7a;
 }
 
 .valuation-controls {
