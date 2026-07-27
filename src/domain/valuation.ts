@@ -180,6 +180,7 @@ export function buildTotalValuation(
   let incomplete = false;
   let unvaluedCount = 0;
   let expiredCount = 0;
+  let convertedSourceCount = 0;
   const sourceTotals = new Map<string, string>();
 
   for (const source of sources) {
@@ -193,6 +194,7 @@ export function buildTotalValuation(
     if (total === null) {
       incomplete = true;
     } else {
+      convertedSourceCount += 1;
       totalUsd = decimalAdd(totalUsd, total);
       sourceTotals.set(source.id, total);
     }
@@ -260,7 +262,9 @@ export function buildTotalValuation(
     }
   }
 
-  const displayAmount = convert(totalUsd, "USD", currency, allRates);
+  const displayAmount = sources.length > 0 && convertedSourceCount === 0
+    ? null
+    : convert(totalUsd, "USD", currency, allRates);
   if (currency === "CNY" && !conversion) incomplete = true;
   let groups = [...groupsUsd.values()].map((group) => ({
     ...group,

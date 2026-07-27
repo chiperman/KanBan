@@ -27,16 +27,12 @@ async function loginAsOwner(page: Page): Promise<void> {
   await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
   await expect(page.getByRole("status")).toContainText("已完成预置");
   await page.goto("/");
-  await page
-    .getByTestId("restricted-card")
-    .first()
-    .getByRole("button", { name: "验证身份后查看" })
-    .click();
+
   const [verification] = await Promise.all([
     page.waitForResponse((response) =>
       response.url().endsWith("/api/auth/login/verify"),
     ),
-    page.getByRole("button", { name: "使用 Passkey 解锁" }).click(),
+    page.getByRole("button", { name: "使用 Passkey 登录" }).click(),
   ]);
   expect(verification.ok()).toBeTruthy();
   await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
@@ -205,7 +201,7 @@ test("挂起来源超时不阻塞成功提交，刷新期间新增来源也不�
   );
 });
 
-test("访客不能触发同步，也不会收到来源刷新状态", async ({ page, request }) => {
+test("未认证状态不能触发同步，也不会收到来源刷新状态", async ({ page, request }) => {
   await request.post("/test-doubles/refresh", {
     data: { action: "configure", scenario: "partial-failure" },
   });

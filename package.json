@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "native:longbridge:build": "node scripts/build-longbridge-keychain-sdk.mjs",
+    "predev": "pnpm native:longbridge:build",
+    "prebuild": "pnpm native:longbridge:build",
+    "prestart": "pnpm native:longbridge:build",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

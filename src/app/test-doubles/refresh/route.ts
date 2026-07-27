@@ -83,12 +83,11 @@ export async function POST(request: Request) {
       ...(await services.assetSources.list()),
       source,
     ]);
-    await services.cards.replaceAll([
-      ...(await services.cards.list()),
+    await services.assetCards.replaceAll([
+      ...(await services.assetCards.list()),
       {
         id: "refresh-card-3",
         kind: "asset",
-        access: "private",
         title: source.label,
         body: "并发新增刷新测试来源",
         sourceId: source.id,
@@ -125,14 +124,13 @@ export async function POST(request: Request) {
   const cards: Card[] = sources.map((source, index) => ({
     id: `refresh-card-${index + 1}`,
     kind: "asset",
-    access: "private",
     title: source.label,
     body: "刷新浏览器测试来源",
     sourceId: source.id,
     span: 1,
   }));
   await services.assetSources.replaceAll(sources);
-  await services.cards.replaceAll(cards);
+  await services.assetCards.replaceAll(cards);
   return Response.json({ ok: true });
 }
 

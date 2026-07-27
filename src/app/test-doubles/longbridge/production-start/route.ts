@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
+  KeychainLongbridgeOAuth,
   ProductionLongbridgeOAuth,
   ProductionLongbridgeSourceRefresher,
 } from "@/server/asset-sources/longbridge";
@@ -23,6 +24,7 @@ export async function POST(request: Request) {
       | "refresh-expired"
       | "refresh-expired-trade"
       | "refresh-expired-malformed-scope"
+      | "keychain-snapshot"
       | "rest-source-audit";
     scenario?: "readonly" | "trade" | "missing" | "unknown" | "extra";
   };
@@ -32,11 +34,11 @@ export async function POST(request: Request) {
   let tokenRequests = 0;
   let credentialsRotated = false;
   const scope = {
-    readonly: "6",
-    trade: "6 11",
+    readonly: "account.read",
+    trade: "account.read 11",
     missing: undefined,
-    unknown: "6 99",
-    extra: "6 10",
+    unknown: "account.read 99",
+    extra: "account.read 10",
   }[body.scenario ?? "readonly"];
   const accessToken = [
     Buffer.from(JSON.stringify({ alg: "none" })).toString("base64url"),
@@ -71,10 +73,10 @@ export async function POST(request: Request) {
           token_type: "Bearer",
           scope:
             body.action === "refresh-expired-trade"
-              ? "6 11"
+              ? "account.read 11"
               : body.action === "refresh-expired-malformed-scope"
                 ? null
-                : "6",
+                : "account.read",
         });
       }
       return Response.json({
@@ -120,6 +122,65 @@ export async function POST(request: Request) {
     return Response.json({ error: "unexpected request" }, { status: 500 });
   };
   try {
+    if (body.action === "keychain-snapshot") {
+      const oauth = new KeychainLongbridgeOAuth({
+        beginAuthorization: () => ({
+          status: "authorized" as const,
+          authorizationUrl: null,
+        }),
+        beginBrowserAuthorization: () => ({
+          authorizationUrl: "https://openapi.longbridge.com/oauth2/authorize",
+          state: "test-state",
+        }),
+        completeBrowserAuthorization: async () => undefined,
+        authorizationStatus: () => ({
+          status: "authorized" as const,
+          authorizationUrl: null,
+        }),
+        credentialReference: () => "macos-keychain:browser-test-client",
+        readAssets: async () => {
+          const assets = {
+            accountPage: {
+              data: { list: [{ currency: "USD", net_assets: "74442.43" }] },
+            },
+            stockPage: {
+              data: {
+                list: [{
+                  account_channel: "lb",
+                  stock_info: [{
+                    symbol: "700.HK",
+                    symbol_name: "Tencent",
+                    quantity: "10",
+                    currency: "HKD",
+                    cost_price: "500",
+                  }],
+                }],
+              },
+            },
+            fundPage: { data: { list: [] } },
+            exchangeRates: [{
+              base_currency: "USD",
+              other_currency: "HKD",
+              average_rate: 0.12751,
+              bid_rate: 0.12751,
+              offer_rate: 0.12751,
+            }],
+          };
+          return assets;
+        },
+        readQuotes: async () => [{
+          symbol: "700.HK",
+          lastDone: "600",
+          timestamp: 1785150000,
+        }],
+      });
+      const { credentials: _credentials, ...safe } = await oauth.finish({
+        code: "browser-test-code",
+        codeVerifier: "test-state",
+        redirectUri: new URL("/callback", request.url).toString(),
+      });
+      return Response.json(safe);
+    }
     if (body.action === "rest-source-audit") {
       const [adapter, packageJson, lockfile] = await Promise.all([
         readFile(path.join(/* turbopackIgnore: true */ process.cwd(), "src/server/asset-sources/longbridge.ts"), "utf8"),

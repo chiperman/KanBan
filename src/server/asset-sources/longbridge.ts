@@ -7,6 +7,7 @@ import {
 } from "node:crypto";
 
 import type {
+  AssetExchangeRate,
   AssetSourceRefreshResult,
   AssetSourceRefresher,
   AssetHolding,
@@ -14,6 +15,8 @@ import type {
   LongbridgeAuthorizationResult,
   LongbridgeOAuth,
 } from "@/server/ports";
+import { LongbridgeKeychainSdk } from "@/server/asset-sources/longbridge-keychain-sdk";
+import { decimalDivide, decimalMultiply } from "@/domain/decimal";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -104,37 +107,105 @@ function compareDecimal(left: string, right: string): number {
   return a.fraction.padEnd(width, "0").localeCompare(b.fraction.padEnd(width, "0"));
 }
 
+function decimalText(value: unknown, field: string): string {
+  if (
+    typeof value === "string" &&
+    /^\d+(?:\.\d+)?$/.test(value) &&
+    Number(value) > 0
+  ) {
+    return value;
+  }
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return String(value);
+  }
+  throw new Error(`长桥响应 ${field} 格式无效`);
+}
+
+function mapLongbridgeExchangeRates(
+  values: unknown[],
+  observedAt: string,
+): AssetExchangeRate[] {
+  return values.map((value) => {
+    const rate = record(value);
+    return {
+      // Longbridge 的 average_rate 单位是 base_currency / other_currency，
+      // 即一单位 other_currency 可换得多少 base_currency。
+      baseCurrency: text(rate.other_currency, "other_currency"),
+      quoteCurrency: text(rate.base_currency, "base_currency"),
+      rate: decimalText(rate.average_rate, "average_rate"),
+      source: "Longbridge 官方账户汇率",
+      observedAt,
+    };
+  });
+}
+
+function convertLongbridgeAmount(
+  amount: string,
+  from: string,
+  to: string,
+  rates: AssetExchangeRate[],
+): string | null {
+  if (from === to) return amount;
+  const direct = rates.find(
+    (rate) => rate.baseCurrency === from && rate.quoteCurrency === to,
+  );
+  if (direct) return decimalMultiply(amount, direct.rate);
+  const inverse = rates.find(
+    (rate) => rate.baseCurrency === to && rate.quoteCurrency === from,
+  );
+  return inverse ? decimalDivide(amount, inverse.rate) : null;
+}
+
 export function mapLongbridgeSnapshot(input: {
   accountPages: unknown[];
   positionPages: unknown[];
   syncedAt: string;
+  quotes?: Array<{ symbol: string; lastDone: string; timestamp: number }>;
+  exchangeRates?: unknown[];
 }): AssetSnapshot {
   const account = listFromPage(input.accountPages[0] ?? {}).at(0);
   if (!account) throw new Error("长桥账户预览为空");
   const accountCurrency = text(account.currency, "currency");
+  const quotes = new Map(
+    (input.quotes ?? []).map((quote) => [quote.symbol, quote]),
+  );
+  const exchangeRates = mapLongbridgeExchangeRates(
+    input.exchangeRates ?? [],
+    input.syncedAt,
+  );
   const holdings: AssetHolding[] = input.positionPages
     .flatMap(listFromPage)
     .map((item) => {
       const symbol = text(item.symbol, "symbol");
       const quantity = text(item.quantity ?? item.holding_units, "quantity");
       const nativePrice = optionalText(item.current_net_asset_value);
-      const price = nativePrice;
+      const quote = quotes.get(symbol);
+      const price = nativePrice ?? quote?.lastDone ?? null;
       const currency = text(item.currency, "currency");
       const marketValue =
         optionalText(item.market_value) ??
         (price ? multiplyDecimal(quantity, price) : null);
       const sourceAmount =
-        marketValue !== null && currency === accountCurrency
-          ? marketValue
-          : null;
+        marketValue === null
+          ? null
+          : convertLongbridgeAmount(
+              marketValue,
+              currency,
+              accountCurrency,
+              exchangeRates,
+            );
       const pricedAt = nativePrice
         ? optionalUnixSecondsIso(
             item.net_asset_value_day,
             "net_asset_value_day",
           ) ?? input.syncedAt
+        : quote
+          ? optionalUnixSecondsIso(quote.timestamp, "quote.timestamp") ?? input.syncedAt
         : input.syncedAt;
       const priceSource = nativePrice
         ? "Longbridge 基金净值"
+        : quote
+          ? "Longbridge 实时行情"
         : optionalText(item.market_value)
           ? "Longbridge 账户估值"
           : null;
@@ -178,7 +249,7 @@ export function mapLongbridgeSnapshot(input: {
       currency: accountCurrency,
     },
     holdings,
-    exchangeRates: [],
+    exchangeRates,
     syncedAt: input.syncedAt,
   };
 }
@@ -303,6 +374,15 @@ export class LongbridgeConnectionState {
     return value && value.expiresAt >= Date.now() ? value : null;
   }
 
+  hasStart(state: string): boolean {
+    const value = this.starts.get(state) ?? null;
+    if (value && value.expiresAt < Date.now()) {
+      this.clearStart(state);
+      return false;
+    }
+    return value !== null;
+  }
+
   rememberPreview(result: LongbridgeAuthorizationResult): string {
     const id = randomUUID();
     const expiresAt = Date.now() + 10 * 60_000;
@@ -376,6 +456,7 @@ const LONGBRIDGE_TOKEN_ENDPOINT =
   "https://openapi.longbridge.com/oauth2/token";
 const LONGBRIDGE_API_ORIGIN = "https://openapi.longbridge.com";
 const READ_ONLY_SCOPE = "6";
+const ACCOUNT_READ_SCOPE = "account.read";
 const ASSET_PATHS = [
   "/v1/asset/account",
   "/v1/asset/stock",
@@ -416,7 +497,10 @@ function validateReadOnlyScopes(scopes: string[]): string[] {
   if (scopes.includes("11")) {
     throw new Error("检测到长桥交易写权限，已拒绝连接");
   }
-  if (scopes.length !== 1 || scopes[0] !== READ_ONLY_SCOPE) {
+  if (
+    scopes.length !== 1 ||
+    ![READ_ONLY_SCOPE, ACCOUNT_READ_SCOPE].includes(scopes[0] ?? "")
+  ) {
     throw new Error(`长桥授权范围不是仅账户读取（实际：${scopes.join(" ")}）`);
   }
   return scopes;
@@ -725,5 +809,167 @@ export class ProductionLongbridgeSourceRefresher
         syncedAt: attemptedAt,
       }),
     };
+  }
+}
+
+type LongbridgeKeychainReadSdk = Pick<
+  LongbridgeKeychainSdk,
+  | "beginAuthorization"
+  | "beginBrowserAuthorization"
+  | "completeBrowserAuthorization"
+  | "authorizationStatus"
+  | "credentialReference"
+  | "readAssets"
+  | "readQuotes"
+>;
+
+function stockSymbols(page: unknown): string[] {
+  return [...new Set(listFromPage(page).map((item) => text(item.symbol, "symbol")))];
+}
+
+async function keychainSnapshot(
+  sdk: LongbridgeKeychainReadSdk,
+  syncedAt: string,
+): Promise<AssetSnapshot> {
+  const assets = await sdk.readAssets("USD");
+  const quotes = await sdk.readQuotes(stockSymbols(assets.stockPage));
+  return mapLongbridgeSnapshot({
+    accountPages: [assets.accountPage],
+    positionPages: [assets.stockPage, assets.fundPage],
+    quotes,
+    exchangeRates: assets.exchangeRates,
+    syncedAt,
+  });
+}
+
+function snapshotWithQuotes(
+  snapshot: AssetSnapshot,
+  quotes: Array<{ symbol: string; lastDone: string; timestamp: number }>,
+  syncedAt: string,
+): AssetSnapshot {
+  const bySymbol = new Map(quotes.map((quote) => [quote.symbol, quote]));
+  return {
+    ...snapshot,
+    syncedAt,
+    holdings: snapshot.holdings.map((holding) => {
+      const quote = bySymbol.get(holding.symbol);
+      if (!quote) return holding;
+      const marketValue = multiplyDecimal(holding.quantity, quote.lastDone);
+      const pricedAt = optionalUnixSecondsIso(quote.timestamp, "quote.timestamp") ?? syncedAt;
+      return {
+        ...holding,
+        currentPrice: { amount: quote.lastDone, currency: holding.currency },
+        marketValue,
+        sourceMarketValue:
+          holding.currency === snapshot.total.currency
+            ? { amount: marketValue, currency: snapshot.total.currency }
+            : null,
+        valuation:
+          holding.currency === snapshot.total.currency
+            ? {
+                status: "valued" as const,
+                priceSource: "Longbridge 实时行情",
+                pricedAt,
+              }
+            : {
+                status: "unvalued" as const,
+                reason: `缺少 ${holding.currency}/${snapshot.total.currency} 来源汇率`,
+              },
+      };
+    }),
+  };
+}
+
+/**
+ * 生产路径：官方 Rust SDK OAuth + macOS Keychain。
+ *
+ * Source credentials 仅保存一个不含 Token 的 Keychain 引用；Token 刷新由 SDK
+ * 直接写回 Keychain，TypeScript、数据库和浏览器均无法读取 Token 正文。
+ */
+export class KeychainLongbridgeOAuth implements LongbridgeOAuth {
+  constructor(private readonly sdk: LongbridgeKeychainReadSdk = new LongbridgeKeychainSdk()) {}
+
+  async start(redirectUri: string): Promise<{
+    authorizationUrl: string;
+    state: string;
+    codeVerifier: string;
+  }> {
+    const started = this.sdk.beginBrowserAuthorization(redirectUri);
+    return {
+      authorizationUrl: started.authorizationUrl,
+      state: started.state,
+      // 原生 SDK 保管真正的 PKCE verifier；这里仅把 CSRF state 留在服务端临时态。
+      codeVerifier: started.state,
+    };
+  }
+
+  async finish(input: {
+    code: string;
+    codeVerifier: string;
+    redirectUri: string;
+  }): Promise<LongbridgeAuthorizationResult> {
+    try {
+      await this.sdk.completeBrowserAuthorization({
+        state: input.codeVerifier,
+        code: input.code,
+        redirectUri: input.redirectUri,
+      });
+    } catch (error) {
+      throw new Error(
+        `长桥 OAuth 令牌保存失败：${error instanceof Error ? error.message : "未知错误"}`,
+      );
+    }
+    const status = this.sdk.authorizationStatus();
+    if (status.status !== "authorized") {
+      throw new Error("长桥 OAuth 令牌未写入 macOS Keychain");
+    }
+    const syncedAt = new Date().toISOString();
+    let snapshot: AssetSnapshot;
+    try {
+      snapshot = await keychainSnapshot(this.sdk, syncedAt);
+    } catch (error) {
+      throw new Error(
+        `长桥授权后读取账户失败：${error instanceof Error ? error.message : "未知错误"}`,
+      );
+    }
+    const fingerprint = createHash("sha256")
+      .update(this.sdk.credentialReference())
+      .digest("hex")
+      .slice(0, 12);
+    return {
+      credentials: this.sdk.credentialReference(),
+      permissions: ["account", "positions", "market-data"],
+      account: {
+        id: `longbridge:${fingerprint}`,
+        label: `长桥账户（macOS Keychain · ${snapshot.total.currency} · ${fingerprint}）`,
+      },
+      snapshot,
+    };
+  }
+}
+
+/** Keychain SDK 来源刷新器；不接受旧的明文 OAuth 凭证。 */
+export class KeychainLongbridgeSourceRefresher implements AssetSourceRefresher {
+  constructor(private readonly sdk: LongbridgeKeychainReadSdk = new LongbridgeKeychainSdk()) {}
+
+  async refresh({
+    source,
+    credentials,
+    mode,
+    attemptedAt,
+  }: Parameters<AssetSourceRefresher["refresh"]>[0]): Promise<AssetSourceRefreshResult> {
+    if (source.kind !== "longbridge") {
+      throw new Error(`暂不支持刷新来源类型：${source.kind}`);
+    }
+    if (credentials !== this.sdk.credentialReference()) {
+      throw new Error("长桥来源不是 macOS Keychain 凭证，请重新连接");
+    }
+    if (mode === "prices") {
+      const quotes = await this.sdk.readQuotes(
+        source.snapshot.holdings.map((holding) => holding.symbol),
+      );
+      return { snapshot: snapshotWithQuotes(source.snapshot, quotes, attemptedAt) };
+    }
+    return { snapshot: await keychainSnapshot(this.sdk, attemptedAt) };
   }
 }

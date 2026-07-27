@@ -7,11 +7,10 @@ interface VirtualPasskey {
 
 const PRIVATE_CARD = {
   id: "private-entry",
-  kind: "markdown",
+  kind: "asset",
   title: "私密入口",
-  markdown: "仅用于解锁所有者视图",
+  body: "仅用于解锁所有者视图",
   span: 1,
-  access: "private",
 } as const;
 
 const SECRET_TOKEN = "oauth-access-token-must-never-reach-browser";
@@ -48,11 +47,8 @@ async function loginAsOwner(page: Page): Promise<void> {
   await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
   await expect(page.getByRole("status")).toContainText("已完成预置");
   await page.goto("/");
-  await page
-    .getByTestId("restricted-card")
-    .getByRole("button", { name: "验证身份后查看" })
-    .click();
-  await page.getByRole("button", { name: "使用 Passkey 解锁" }).click();
+
+  await page.getByRole("button", { name: "使用 Passkey 登录" }).click();
   await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
 }
 
@@ -159,10 +155,19 @@ async function startLongbridgeFlow(page: Page): Promise<void> {
 
 test.beforeEach(async ({ request }) => {
   await request.post("/test-doubles/reset");
-  await request.post("/test-doubles/cards", { data: { cards: [PRIVATE_CARD] } });
+  await request.post("/test-doubles/asset-cards", { data: { assetCards: [PRIVATE_CARD] } });
 });
 
-test("长桥 OAuth 先预览后原子保存，并展示总额、前五持仓与完整可排序详情", async ({
+test("长桥 OAuth 回调的所有者会话允许跨站顶层导航", async ({ page }) => {
+  await loginAsOwner(page);
+
+  const session = (await page.context().cookies()).find(
+    (cookie) => cookie.name === "pad_session",
+  );
+  expect(session).toMatchObject({ httpOnly: true, sameSite: "Lax" });
+});
+
+test("长桥 OAuth 先预览后原子保存，并展示总额与紧凑持仓", async ({
   page,
 }) => {
   await configureLongbridge(page);
@@ -201,30 +206,30 @@ test("长桥 OAuth 先预览后原子保存，并展示总额、前五持仓与�
   await expect(card).toContainText("123,456.7891 USD");
   await expect(card).toContainText("最后更新：2026-01-01 00:00 UTC");
   const topHoldings = card.getByTestId("holding-top-list").getByRole("listitem");
-  await expect(topHoldings).toHaveCount(5);
+  const holdingDetails = card.getByTestId("asset-holdings-detail");
+  await expect(topHoldings).toHaveCount(3);
+  await expect(holdingDetails).toBeHidden();
   await expect(topHoldings.first()).toContainText("高腾微金");
-  await expect(card).not.toContainText("Tesla");
+  await expect(card.getByRole("button", { name: "查看全部持仓" })).toHaveCount(0);
 
-  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-  const scrollBefore = await page.evaluate(() => window.scrollY);
-  await card.getByRole("button", { name: "查看全部持仓" }).click();
-  const detail = page.getByRole("dialog", { name: "长桥全部持仓" });
-  await expect(detail.getByRole("row")).toHaveCount(8);
-  await expect(detail.getByRole("row").nth(1)).toContainText("高腾微金");
-  await expect(detail.getByRole("row").nth(1)).toContainText(
-    "Longbridge 基金净值 · 2022-04-13 16:00 UTC",
+  const resizeHandle = page.getByRole("button", { name: /调整长桥资产宽度/ });
+  const saveAsTwo = page.waitForResponse(
+    (response) => response.url().endsWith("/api/asset-cards/layout") && response.request().method() === "PUT",
   );
-  await detail.getByLabel("持仓排序").selectOption("change");
-  await expect(detail.getByRole("row").nth(1)).toContainText("高腾微金");
-  await expect(detail.getByRole("row").nth(6)).toContainText("Alibaba");
-  await expect(detail.getByRole("row").last()).toContainText("Tesla");
-  await detail.getByLabel("持仓排序").selectOption("name");
-  await expect(detail.getByRole("row").nth(1)).toContainText("Alibaba");
-  await expect(detail.getByRole("row").filter({ hasText: "Apple" })).toContainText("190.1234");
-  await expect(detail.getByRole("columnheader", { name: "平台盈亏（来源提供）" })).toHaveCount(0);
-  await expect(detail.getByRole("row").filter({ hasText: "Tencent" })).toContainText("HKD");
-  await detail.getByRole("button", { name: "关闭详情" }).click();
-  expect(await page.evaluate(() => window.scrollY)).toBe(scrollBefore);
+  await resizeHandle.press("ArrowRight");
+  await saveAsTwo;
+  await expect(topHoldings).toHaveCount(5);
+  await expect(holdingDetails).toBeHidden();
+
+  const saveAsThree = page.waitForResponse(
+    (response) => response.url().endsWith("/api/asset-cards/layout") && response.request().method() === "PUT",
+  );
+  await resizeHandle.press("ArrowRight");
+  await saveAsThree;
+  await expect(topHoldings).toHaveCount(0);
+  await expect(holdingDetails).toBeVisible();
+  await expect(holdingDetails.getByRole("row")).toHaveCount(8);
+  await expect(holdingDetails).toContainText("Longbridge 基金净值 · 2022-04-13 16:00 UTC");
 
   const state = await page.request.get("/test-doubles/longbridge");
   await expect(state.json()).resolves.toMatchObject({
@@ -337,6 +342,32 @@ test("交易权限与授权或预览失败都被拒绝且不留下来源或凭�
   state = await page.request.get("/test-doubles/longbridge");
   await expect(state.json()).resolves.toMatchObject({ savedSources: 2, savedSecrets: 2 });
   await expect(concurrentPreview).toBeVisible();
+});
+
+test("Keychain 长桥快照使用 USD 总额并按官方汇率估值跨币种持仓", async ({
+  request,
+}) => {
+  const response = await request.post(
+    "/test-doubles/longbridge/production-start",
+    { data: { action: "keychain-snapshot" } },
+  );
+  expect(response.ok()).toBeTruthy();
+  const body = await response.json();
+
+  expect(body.snapshot.total).toEqual({ amount: "74442.43", currency: "USD" });
+  expect(body.snapshot.exchangeRates).toContainEqual({
+    baseCurrency: "HKD",
+    quoteCurrency: "USD",
+    rate: "0.12751",
+    source: "Longbridge 官方账户汇率",
+    observedAt: expect.any(String),
+  });
+  expect(body.snapshot.holdings[0]).toMatchObject({
+    symbol: "700.HK",
+    marketValue: "6000",
+    sourceMarketValue: { amount: "765.06", currency: "USD" },
+    valuation: { status: "valued" },
+  });
 });
 
 test("生产 OAuth 只申请并接受 account.read，交易、缺失或未知 scope 均在读取前拒绝", async ({
@@ -458,7 +489,7 @@ test("生产 OAuth 只申请并接受 account.read，交易、缺失或未知 sc
   });
 });
 
-test("访客只收到安全占位，不含长桥账户、证券、金额或更新时间", async ({
+test("锁定首页只显示登录入口，不含长桥账户、证券、金额或更新时间", async ({
   page,
 }) => {
   await configureLongbridge(page);
@@ -470,7 +501,7 @@ test("访客只收到安全占位，不含长桥账户、证券、金额或更�
     .click();
 
   await page.getByRole("button", { name: "退出登录" }).click();
-  await expect(page.getByTestId("view-mode")).toContainText("访客视图");
+  await expect(page.getByTestId("view-mode")).toContainText("已锁定");
   const visitorResponses: string[] = [];
   page.on("response", async (response) => {
     if (response.url().startsWith("http://localhost:3101")) {
@@ -478,7 +509,8 @@ test("访客只收到安全占位，不含长桥账户、证券、金额或更�
     }
   });
   await page.reload();
-  await expect(page.getByTestId("restricted-card")).toHaveCount(2);
+  await expect(page.getByTestId("login-gate")).toBeVisible();
+  await expect(page.getByTestId("card")).toHaveCount(0);
 
   const html = await page.content();
   const serverHtml = await (await page.request.get("/")).text();

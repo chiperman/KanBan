@@ -39,8 +39,8 @@ import { SessionOwnerAuth } from "@/server/auth/session-auth";
 import { parseAssetCards } from "@/server/asset-cards";
 import {
   LongbridgeConnectionState,
-  ProductionLongbridgeOAuth,
-  ProductionLongbridgeSourceRefresher,
+  KeychainLongbridgeOAuth,
+  KeychainLongbridgeSourceRefresher,
 } from "@/server/asset-sources/longbridge";
 import { SourceIsolatedAssetSynchronization } from "@/server/asset-synchronization";
 import {
@@ -897,7 +897,7 @@ export function createProductionServices(): AppServices {
       readySecrets,
       clock,
       new RoutedAssetSourceRefresher({
-        longbridge: new ProductionLongbridgeSourceRefresher(),
+        longbridge: new KeychainLongbridgeSourceRefresher(),
         binance: new ProductionBinanceSourceRefresher(prices),
         okx: new ProductionOkxSourceRefresher(prices),
         bitget: new ProductionBitgetSourceRefresher(prices),
@@ -916,7 +916,7 @@ export function createProductionServices(): AppServices {
       path.join(dataDir, "owner-recovery.json"),
     ),
     secrets: readySecrets,
-    longbridge: new ProductionLongbridgeOAuth(),
+    longbridge: new KeychainLongbridgeOAuth(),
     longbridgeConnections: new LongbridgeConnectionState(),
     binance: new ProductionBinanceReadOnly(prices),
     binanceConnections: new BinanceConnectionState(),

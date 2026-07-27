@@ -17,7 +17,10 @@ export async function POST(request: Request) {
       codeVerifier: started.codeVerifier,
       redirectUri: callback,
     });
-    return Response.json({ authorizationUrl: started.authorizationUrl });
+    return Response.json({
+      authorizationUrl: started.authorizationUrl,
+      state: started.state,
+    });
   } catch (error) {
     return Response.json(
       { error: error instanceof Error ? error.message : "无法开始长桥授权" },
