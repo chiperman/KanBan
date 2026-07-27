@@ -4,7 +4,7 @@ Status: active baseline
 
 Reference: [Vibe-Nothing-UI-Design](https://github.com/wangbh030722/vibe-nothing-ui-design)
 
-This project uses the reference as an independent, Nothing-inspired visual source. It does not ship Nothing proprietary fonts or brand assets. The bundled Doto, Geist, and Geist Mono files remain under SIL OFL 1.1.
+This project uses the reference as an independent, Nothing-inspired visual source. It does not ship Nothing proprietary fonts or brand assets. Doto, Space Grotesk, and Space Mono are loaded through `next/font/google`, localized into the Next.js build, and exposed as CSS font variables.
 
 ## 1. Visual theme and atmosphere
 
@@ -12,7 +12,7 @@ The dashboard is a precise personal instrument: monochrome, quiet, compact, and 
 
 - Visual thesis: black, grey, and white carry hierarchy; round dots carry identity; signal red communicates an exceptional state only.
 - Content plan: orient with identity and freshness, show the total, compare sources, then expose holding detail.
-- Interaction thesis: selection inverts black and white, cards move at most 2px on hover, refresh state advances through stepped dots.
+- Interaction thesis: selection inverts black and white, card borders brighten without floating, refresh and valuation state use stepped segments. Card resize and reorder previews use a signal-red solid outline covering the complete target footprint.
 
 ## 2. Color palette and roles
 
@@ -20,19 +20,19 @@ The exact neutral and signal values follow the supplied reference repository so 
 
 | Token | Light | Dark | Role |
 | --- | --- | --- | --- |
-| Canvas | `#F2F2F2` | `#000000` | Page background |
-| Surface | `#FFFFFF` | `#0C0C0C` | Menus and dialogs |
-| Raised | `#EDEDED` | `#171717` | Active rows and secondary panels |
-| Line | `#E2E2E2` | `#262626` | Quiet separators |
-| Line strong | `#CFCFCF` | `#3A3A3A` | Control outlines |
-| Primary ink | `#1C1C1C` | `#EDEDED` | Body and control text |
+| Canvas | `#F5F5F5` | `#000000` | Page background |
+| Surface | `#FFFFFF` | `#111111` | Menus and dialogs |
+| Raised | `#F0F0F0` | `#1A1A1A` | Active rows and secondary panels |
+| Line | `#E8E8E8` | `#222222` | Quiet separators |
+| Line strong | `#CCCCCC` | `#333333` | Control outlines |
+| Primary ink | `#1A1A1A` | `#E8E8E8` | Body and control text |
 | Display ink | `#000000` | `#FFFFFF` | Headlines and large numbers |
-| Secondary ink | `#585A5A` | `#8C8C8C` | Labels and supporting data |
-| Muted ink | `#9A9A9A` | `#5A5A5A` | Disabled and placeholder text |
-| Signal red | `#D71921` | `#D71921` | Needs attention, stale, failed, live |
-| Success | `#3D8B4A` | `#7BE38A` | Fresh or completed value |
-| Warning | `#9C6B00` | `#F2C94C` | Incomplete valuation |
-| Error | `#D23B30` | `#FF5247` | Failed synchronization |
+| Secondary ink | `#666666` | `#999999` | Labels and supporting data |
+| Muted ink | `#999999` | `#666666` | Disabled and placeholder text |
+| Signal red | `#D71921` | `#D71921` | Needs attention, stale or failed |
+| Success | `#4A9E5C` | `#62B873` | Fresh or completed value |
+| Warning | `#9A6D00` | `#D4A843` | Incomplete valuation |
+| Error | `#D71921` | `#FF5A52` | Failed synchronization |
 
 Rules:
 
@@ -46,35 +46,36 @@ Rules:
 | Role | Family | Size | Weight | Tracking | Usage |
 | --- | --- | --- | --- | --- | --- |
 | Display XL | Doto | 48px | 500 | `-0.02em` | Total asset amount |
-| Display L | Doto | 32px | 500 | `-0.01em` | Source totals and major change |
-| Display S | Doto | 14px | 500 | `0.04em` | Module numbers and compact counters |
-| Headline | Geist, PingFang SC | 18px | 600 | normal | Card and dialog titles |
-| UI body | Geist, PingFang SC | 13px | 400 | normal | Chinese descriptions and controls |
-| Data | Geist Mono | 11px | 400 or 500 | normal | Prices, quantities, timestamps, tables |
-| Label | Geist Mono | 9px | 500 | `0.12em` | Uppercase labels and statuses |
+| Display L | Doto | 36–48px | 500 | `-0.01em` | Locked state and rare secondary hero |
+| Headline | Space Grotesk, PingFang SC | 18–24px | 500 | normal | Card and dialog titles |
+| UI body | Space Grotesk, PingFang SC | 14–16px | 400 | normal | Chinese descriptions and controls |
+| Data | Space Mono | 11–48px | 400 or 700 | normal | Source totals, prices, quantities, timestamps, tables |
+| Label | Space Mono | 10–11px | 400 or 700 | `0.08em` | Uppercase labels and statuses |
 
-- Use Doto for hero totals, primary changes, and module counters. Dates, timestamps, table cells, and compact list data remain Geist Mono for scanning accuracy.
-- Data columns use Geist Mono with tabular numerals and right alignment.
+- Use Doto only for the total-asset hero and locked-state instrument. Source totals, changes, dates, timestamps, table cells, and compact list data remain Space Mono for scanning accuracy.
+- Data columns use Space Mono with tabular numerals and right alignment.
 - Chinese body copy stays in a readable sans-serif fallback and uses line-height 1.7.
 - Negative tracking is never applied to Chinese text.
-- Units such as USD, CNY, ETH, and `%` remain compact Geist Mono beside the Doto number.
+- Units such as USD, CNY, ETH, and `%` remain compact Space Mono beside the number.
+- Font variables are attached to the root `html` element so derived aliases resolve correctly; visual acceptance must verify computed font families, not only CSS declarations.
 
 ## 4. Component styling
 
 ### Buttons
 
-- Standard radius: 6px. Circular icon buttons are the only pill-shaped buttons.
+- Standard compact radius: 8px. Primary, secondary, and segmented buttons use an explicit pill shape.
 - Primary: display ink fill with canvas text.
 - Secondary: transparent with one strong hairline.
 - Hover: opacity `0.8`. Press: opacity `0.64` and translate `1px`.
-- Minimum target: 40px by 40px. Focus uses a 2px display-ink outline.
+- Minimum target: 44px by 44px. Focus uses a 2px display-ink outline.
 
 ### Cards and modules
 
-- Radius: 8px. Padding: 20px to 24px. Gap: 12px.
+- Radius: 12px. Padding: 20px to 24px. Gap: 12px.
 - Use stepped solid surfaces, not generic drop shadows.
-- Ordinary cards have no decorative corner brackets.
-- Restricted cards may use a safe 9×9 dot field, but dots stay behind content.
+- Asset cards have no decorative corner brackets.
+- Each source card exposes provider code, live/stale signal, segmented valuation completeness, indexed holdings and a separate control deck.
+- The locked homepage uses an open, asymmetric two-column composition: owner access on the left and a non-sensitive mechanical lock instrument on the right. It does not imitate the asset grid.
 - Total overview is the dominant full-width module. Source cards remain compact and equal in density, not forced to equal height.
 
 ### Inputs and selectors
@@ -98,10 +99,12 @@ Rules:
 
 ## 5. Layout principles
 
-- Desktop: three logical columns, 12px gaps, maximum content width 1180px.
+- Desktop: three logical columns, 12px gaps, maximum content width 1280px.
 - Medium: two logical columns.
 - Phone: one column, 16px page inset.
-- Spacing scale: `4, 8, 12, 16, 20, 24, 32, 40, 64`.
+- Width resizing snaps to the one, two, or three-column grid and shows an independent red outline before committing; card height always follows content and is never stored as layout data. Reordering uses the same outline at the destination with the source card's complete span and current content height.
+- Starting a card on a new row changes only its grid start line; it must never reset or override the card's one, two, or three-column span.
+- Spacing scale: `4, 8, 16, 24, 32, 48, 64, 96`.
 - The first viewport prioritizes identity/freshness, total assets, then source state.
 - Dashboard surfaces stay utility-first. There is no marketing hero.
 
@@ -118,10 +121,10 @@ Rules:
 Do:
 
 - Use Doto where a number is the visual subject.
-- Keep Chinese reading text in Geist plus CJK fallback.
+- Keep Chinese reading text in Space Grotesk plus CJK fallback.
 - Reserve red for stale, failed, live, or needs-attention states.
 - Use full-circle dots for all dot-matrix glyphs.
-- Keep visitor placeholders structurally similar but semantically empty.
+- Keep the locked login page visually distinct from the authenticated asset dashboard.
 
 Do not:
 
@@ -142,10 +145,10 @@ Do not:
 
 ## 9. Agent prompt guide
 
-Quick tokens: canvas `#F2F2F2/#000000`, surface `#FFFFFF/#0C0C0C`, display `#000000/#FFFFFF`, primary `#1C1C1C/#EDEDED`, signal `#D71921`, radius `6px/8px`, gap `12px`.
+Quick tokens: canvas `#F5F5F5/#000000`, surface `#FFFFFF/#111111`, display `#000000/#FFFFFF`, primary `#1A1A1A/#E8E8E8`, signal `#D71921`, radius `8px/12px`, gap `12px`.
 
-- Create a total-asset module on the surface token, radius 8px, padding 24px. Use a 9px Geist Mono uppercase label at `0.12em`, a 48px Doto amount at weight 500, and an 11px Geist Mono currency unit. Do not add a shadow.
-- Create a source card with a 9px Geist Mono provider label, an 18px Geist headline, a 32px Doto total, 1px quiet row separators, and a 40px secondary action with a 6px radius.
-- Create a holdings table with left-aligned identity, right-aligned tabular numeric columns, 11px Geist Mono data, 9px uppercase headers, and 1px quiet row separators. Do not use zebra rows.
-- Create a stale state using one 7px full-circle signal-red dot, an 11px Geist Mono label, the last-success timestamp, and visible text stating `过期数据`. Do not color the entire card.
-- Create a restricted placeholder using neutral dots behind safe copy, no real symbol, amount, source identity, or timestamp, with a 40px inversion button for authentication.
+- Create a total-asset hero without a surrounding card. Use a Space Mono uppercase label, a 54–84px Doto amount, a compact Space Mono currency unit, and one bottom rule before source cards.
+- Create a source card with a Space Mono provider label, an 18px Space Grotesk headline, a 34–48px Space Mono total, a 12-step valuation meter, indexed rows, quiet separators, and 44px controls.
+- Create a holdings table with left-aligned identity, right-aligned tabular numeric columns, 12px Space Mono data, uppercase headers, and quiet row separators. Do not use zebra rows.
+- Create a stale state using one 7px full-circle signal-red dot, a Space Mono label, the last-success timestamp, and visible text stating `过期数据`. Do not color the entire card.
+- Create a locked owner-login composition with no asset symbol, amount, source identity, timestamp, placeholder card, or simulated portfolio layout. The only expressive element is the Doto `LOCKED` instrument.
