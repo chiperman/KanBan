@@ -192,7 +192,7 @@ export function destroyPendingRecovery(token: string): void {
   slot().pendingRecoveries.delete(token);
 }
 
-/** 测试重置时清空全部会话，保证每条浏览器测试从访客状态开始。 */
+/** 测试重置时清空全部会话，保证每条浏览器测试从锁定状态开始。 */
 export function clearAllSessions(): void {
   slot().sessions.clear();
   slot().pendingRecoveries.clear();

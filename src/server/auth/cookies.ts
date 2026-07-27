@@ -5,6 +5,7 @@ import {
 } from "@/server/auth/session";
 
 const COOKIE_BASE = "Path=/; HttpOnly; SameSite=Strict";
+const SESSION_COOKIE_BASE = "Path=/; HttpOnly; SameSite=Lax";
 
 /** WebAuthn 质询 Cookie：短生命周期，仅服务端可读。 */
 export function challengeCookieHeader(challenge: string): string {
@@ -17,11 +18,11 @@ export function clearChallengeCookieHeader(): string {
 
 /** 会话 Cookie：不设置 Max-Age，浏览器关闭即结束敏感会话。 */
 export function sessionCookieHeader(token: string): string {
-  return `${SESSION_COOKIE}=${token}; ${COOKIE_BASE}`;
+  return `${SESSION_COOKIE}=${token}; ${SESSION_COOKIE_BASE}`;
 }
 
 export function clearSessionCookieHeader(): string {
-  return `${SESSION_COOKIE}=; ${COOKIE_BASE}; Max-Age=0`;
+  return `${SESSION_COOKIE}=; ${SESSION_COOKIE_BASE}; Max-Age=0`;
 }
 
 export function recoveryPendingCookieHeader(token: string): string {

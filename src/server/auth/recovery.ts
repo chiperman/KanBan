@@ -12,10 +12,10 @@ import type { OwnerRecoveryCredential } from "@/server/ports";
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
 export function normalizeRecoveryEmail(value: unknown): string {
-  if (typeof value !== "string") throw new Error("恢复邮箱格式无效");
+  if (typeof value !== "string") throw new Error("备用登录邮箱格式无效");
   const email = value.trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email)) {
-    throw new Error("恢复邮箱格式无效");
+    throw new Error("备用登录邮箱格式无效");
   }
   return email;
 }
