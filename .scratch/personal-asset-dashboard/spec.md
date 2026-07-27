@@ -85,7 +85,7 @@ Status: ready-for-human
 
 44. As an 所有者, I want asset cards reordered and resized to one, two, or three columns.
 45. As an 所有者, I want one desktop order to reflow into two columns and one column on narrower screens.
-46. As an 所有者, I want asset-card height to follow content with an optional owner-adjusted minimum height.
+46. As an 所有者, I want asset-card height to always follow its content.
 47. As an 所有者, I want a hidden source to keep synchronizing and contributing to totals.
 48. As an 所有者, I want disconnecting a source to delete its credential and stop future synchronization while retaining snapshots.
 49. As an 所有者, I want permanent source-data deletion separate from disconnect and protected by a second confirmation.
@@ -97,7 +97,7 @@ Status: ready-for-human
 - The unauthenticated application surface is an owner login page, not a public homepage or visitor content layer.
 - Remove identity, Now, links, Markdown, ordinary content cards, access levels, publish/unpublish actions, restricted placeholders, and content-card CRUD routes.
 - The runtime card model contains asset cards only. Persist the field as `assetCards`; when reading legacy data, retain valid asset cards, migrate old restricted asset records, and discard legacy ordinary/public content.
-- Keep asset-card ordering, width, row breaks, minimum height, hidden state, and source identity.
+- Keep asset-card ordering, width, row breaks, hidden state, and source identity; card height always follows content.
 - Use Passkey as primary authentication and email + strong password + TOTP for recovery. Sessions are server-validated, `HttpOnly`, browser-session scoped, and automatically locked after 30 minutes of inactivity.
 - Put all external sources behind a common read-only adapter interface that returns source identity, holdings, valuation, timestamps, permission status, and platform profit when available.
 - Implement Longbridge with the registered web OAuth callback, a private official Rust SDK extension, and macOS Keychain token storage. PKCE verifier and Token remain inside the native module/Keychain. Request and accept only exact `account.read`; reject missing, unknown, additional, or transaction scopes before any asset read or credential persistence.
@@ -121,7 +121,7 @@ Status: ready-for-human
 - Inspect unauthenticated HTML, serialized page state, APIs, and network responses for asset and credential leakage.
 - Verify Passkey success/failure, forged sessions, recovery authentication, TOTP limits, manual lock, inactivity lock, and browser-session termination.
 - Verify removed content routes return 404 and no identity, Now, links, Markdown, publish, or access-level controls exist after login.
-- Verify asset-card ordering, width, height, responsive reflow, hidden state, disconnect, and permanent deletion through browser-visible behavior.
+- Verify asset-card ordering, width, responsive reflow, hidden state, disconnect, and permanent deletion through browser-visible behavior.
 - Verify onboarding rejects write-capable or ambiguous permissions and leaves no partial source or secret.
 - Verify source-native prices, CNY conversion, stablecoin market prices, unvalued holdings, expired data, and distribution conservation.
 - Verify source-isolated refresh, refresh cadence, hidden-page pause, manual refresh, and concurrent source connection.
