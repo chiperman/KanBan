@@ -21,13 +21,12 @@ export async function POST(request: Request) {
   services.assetSourceConnections.failNext(
     body.scenario === "commit-failure" ? "原子事务写入失败" : undefined,
   );
-  if ((await services.cards.list()).length === 0) {
-    await services.cards.replaceAll([{
+  if ((await services.assetCards.list()).length === 0) {
+    await services.assetCards.replaceAll([{
       id: "okx-login-card",
-      kind: "markdown",
-      access: "private",
+      kind: "asset",
       title: "OKX 测试登录入口",
-      markdown: "仅用于浏览器验收",
+      body: "仅用于浏览器验收",
       span: 1,
     }]);
   }

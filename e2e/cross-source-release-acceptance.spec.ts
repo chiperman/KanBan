@@ -30,12 +30,8 @@ async function loginAsOwner(page: Page): Promise<void> {
   await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
   await expect(page.getByRole("status")).toContainText("已完成预置");
   await page.goto("/");
-  await page
-    .getByTestId("restricted-card")
-    .first()
-    .getByRole("button", { name: "验证身份后查看" })
-    .click();
-  await page.getByRole("button", { name: "使用 Passkey 解锁" }).click();
+
+  await page.getByRole("button", { name: "使用 Passkey 登录" }).click();
   await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
 }
 
@@ -50,8 +46,8 @@ test.beforeEach(async ({ request }) => {
 
 test("六类来源形成正确总额、分布、真实稳定币价格与失败隔离", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("restricted-card")).toHaveCount(6);
-  await expect(page.getByTestId("total-overview-placeholder")).toBeVisible();
+  await expect(page.getByTestId("login-gate")).toBeVisible();
+  await expect(page.getByTestId("card")).toHaveCount(0);
   await loginAsOwner(page);
 
   for (const testId of [
@@ -78,15 +74,6 @@ test("六类来源形成正确总额、分布、真实稳定币价格与失败�
   await expect(overview.getByLabel("资产分布")).toContainText("100,000.00 USD");
   await expect(overview.getByLabel("资产分布")).toContainText("加密资产");
   await expect(overview.getByLabel("资产分布")).toContainText("42,548.00 USD");
-
-  await page.getByTestId("binance-card").getByRole("button", { name: "查看全部持仓" }).click();
-  const binance = page.getByRole("dialog", { name: "Binance 全部持仓" });
-  await expect(binance).toContainText("0.998 USD");
-  await binance.getByRole("button", { name: "关闭详情" }).click();
-  await page.getByTestId("okx-card").getByRole("button", { name: "查看全部持仓" }).click();
-  const okx = page.getByRole("dialog", { name: "OKX 全部持仓" });
-  await expect(okx).toContainText("1.005 USD");
-  await okx.getByRole("button", { name: "关闭详情" }).click();
 
   await overview.getByLabel("分布维度").selectOption("source");
   for (const source of [
@@ -131,19 +118,22 @@ test("六类来源形成正确总额、分布、真实稳定币价格与失败�
   );
 });
 
-test("完整访客到所有者再锁定旅程不泄露敏感数据且不存在越界入口", async ({
+test("完整锁定到所有者再锁定旅程不泄露敏感数据且不存在越界入口", async ({
   page,
 }) => {
   await loginAsOwner(page);
-  await expect(page.getByRole("button", { name: "配置恢复认证" })).toBeVisible();
-  await page.getByRole("button", { name: "编辑布局" }).click();
-  await expect(page.getByText(/布局编辑模式：/)).toBeVisible();
-  await page.getByRole("button", { name: "取消布局编辑" }).click();
+  await expect(page.getByRole("button", { name: "配置备用登录" })).toBeVisible();
+  await expect(
+    page.getByRole("button", {
+      name: /新建身份卡片|新建 Now 卡片|新建链接卡片|新建 Markdown 卡片/,
+    }),
+  ).toHaveCount(0);
   await page.getByRole("button", { name: "打开快捷命令" }).click();
   await page.getByRole("searchbox", { name: "搜索命令" }).fill("锁定");
   await page.getByRole("button", { name: "立即锁定敏感内容" }).click();
-  await expect(page.getByTestId("view-mode")).toContainText("访客视图");
-  await expect(page.getByTestId("restricted-card")).toHaveCount(6);
+  await expect(page.getByTestId("view-mode")).toContainText("已锁定");
+  await expect(page.getByTestId("login-gate")).toBeVisible();
+  await expect(page.getByTestId("card")).toHaveCount(0);
 
   const networkBodies: string[] = [];
   page.on("response", async (response) => {

@@ -159,14 +159,43 @@ export function AssetSourceFlow() {
     );
     const body = (await response.json()) as {
       authorizationUrl?: string;
+      state?: string;
+      authorizationMode?: "browser-redirect" | "local-loopback";
       error?: string;
     };
-    if (!response.ok || !body.authorizationUrl) {
+    if (!response.ok || !body.state || (!body.authorizationUrl && body.authorizationMode !== "local-loopback")) {
       setPending(false);
       setError(body.error ?? "无法开始长桥授权");
       return;
     }
-    window.location.assign(body.authorizationUrl);
+    if (body.authorizationMode === "local-loopback") {
+      if (body.authorizationUrl) {
+        window.open(body.authorizationUrl, "longbridge-oauth", "popup,width=560,height=720");
+      }
+      const deadline = Date.now() + 10 * 60_000;
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => window.setTimeout(resolve, 1_000));
+        const status = await fetch(
+          `/api/asset-sources/longbridge/oauth/status?state=${encodeURIComponent(body.state)}`,
+        );
+        const result = (await status.json().catch(() => null)) as
+          | { status?: string; previewId?: string; error?: string }
+          | null;
+        if (status.ok && result?.status === "authorized" && result.previewId) {
+          window.location.assign(`/?longbridge_preview=${encodeURIComponent(result.previewId)}`);
+          return;
+        }
+        if (!status.ok || result?.error) {
+          setPending(false);
+          setError(result?.error ?? "长桥授权状态读取失败");
+          return;
+        }
+      }
+      setPending(false);
+      setError("等待长桥授权超时，请重新开始");
+      return;
+    }
+    window.location.assign(body.authorizationUrl!);
   }
 
   async function confirm() {

@@ -23,7 +23,7 @@ import type {
   DailyAssetSnapshots,
   LongbridgeAuthorizationResult,
   Card,
-  CardStore,
+  AssetCardStore,
   Clock,
   OwnerCredential,
   OwnerCredentialStore,
@@ -76,7 +76,7 @@ export class FakeClock implements Clock {
   }
 }
 
-export class InMemoryCardStore implements CardStore {
+export class InMemoryAssetCardStore implements AssetCardStore {
   private cards: Card[] = [];
 
   async list(): Promise<Card[]> {
@@ -757,7 +757,7 @@ export class InMemoryAssetSourceConnections implements AssetSourceConnections {
 
   constructor(
     private readonly sources: FakeAssetSources,
-    private readonly cards: InMemoryCardStore,
+    private readonly cards: InMemoryAssetCardStore,
     private readonly secrets: InMemorySecretStore,
     private readonly dailySnapshots: InMemoryDailyAssetSnapshots,
     private readonly clock: Clock,
@@ -807,7 +807,6 @@ export class InMemoryAssetSourceConnections implements AssetSourceConnections {
       {
         id: `test-${config.kind}-card-${sourceId}`,
         kind: "asset",
-        access: "private",
         title: config.title,
         body: config.body,
         sourceId,
@@ -865,7 +864,7 @@ export class InMemoryAssetSourceConnections implements AssetSourceConnections {
 export class InMemoryAssetSourceLifecycle implements AssetSourceLifecycle {
   constructor(
     private readonly sources: FakeAssetSources,
-    private readonly cards: InMemoryCardStore,
+    private readonly cards: InMemoryAssetCardStore,
     private readonly secrets: InMemorySecretStore,
     private readonly dailySnapshots: InMemoryDailyAssetSnapshots,
   ) {}
@@ -909,7 +908,7 @@ export class InMemoryAssetSourceLifecycle implements AssetSourceLifecycle {
 
 export interface TestServices extends AppServices {
   clock: FakeClock;
-  cards: InMemoryCardStore;
+  assetCards: InMemoryAssetCardStore;
   assetSources: FakeAssetSources;
   dailyAssetSnapshots: InMemoryDailyAssetSnapshots;
   assetSynchronization: FakeAssetSynchronization;
@@ -934,7 +933,7 @@ export interface TestServices extends AppServices {
 
 export function createTestServices(): TestServices {
   const clock = new FakeClock();
-  const cards = new InMemoryCardStore();
+  const assetCards = new InMemoryAssetCardStore();
   const assetSources = new FakeAssetSources();
   const dailyAssetSnapshots = new InMemoryDailyAssetSnapshots();
   const secrets = new InMemorySecretStore();
@@ -953,13 +952,13 @@ export function createTestServices(): TestServices {
   );
   const assetSourceLifecycle = new InMemoryAssetSourceLifecycle(
     assetSources,
-    cards,
+    assetCards,
     secrets,
     dailyAssetSnapshots,
   );
   return {
     clock,
-    cards,
+    assetCards,
     assetSources,
     assetSourceLifecycle,
     dailyAssetSnapshots,
@@ -981,7 +980,7 @@ export function createTestServices(): TestServices {
     evmConnections: new EvmConnectionState(),
     assetSourceConnections: new InMemoryAssetSourceConnections(
       assetSources,
-      cards,
+      assetCards,
       secrets,
       dailyAssetSnapshots,
       clock,

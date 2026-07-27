@@ -7,7 +7,7 @@ import type {
   BitgetReadOnly,
   EvmWatchWalletReadOnly,
   OkxReadOnly,
-  CardStore,
+  AssetCardStore,
   Clock,
   DailyAssetSnapshots,
   LongbridgeOAuth,
@@ -34,7 +34,7 @@ export type { Card } from "@/server/ports";
 /** 应用服务组合根：所有系统边界端口在此装配。 */
 export interface AppServices {
   clock: Clock;
-  cards: CardStore;
+  assetCards: AssetCardStore;
   assetSources: AssetSources;
   assetSourceLifecycle: AssetSourceLifecycle;
   assetSynchronization: AssetSynchronization;

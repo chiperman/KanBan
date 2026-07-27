@@ -64,7 +64,6 @@ function sourceCard(source: AssetSourceSummary, index: number): Card {
   return {
     id: `daily-card-${index}`,
     kind: "asset",
-    access: "private",
     title: source.label,
     body: "每日快照浏览器测试来源",
     sourceId: source.id,
@@ -175,8 +174,8 @@ export async function POST(request: Request) {
     };
     const sources = [...(await services.assetSources.list()), source];
     await services.assetSources.replaceAll(sources);
-    await services.cards.replaceAll([
-      ...(await services.cards.list()),
+    await services.assetCards.replaceAll([
+      ...(await services.assetCards.list()),
       sourceCard(source, sources.length),
     ]);
     return Response.json({ ok: true });
@@ -206,7 +205,7 @@ export async function POST(request: Request) {
     }),
   ];
   await services.assetSources.replaceAll(sources);
-  await services.cards.replaceAll(sources.map(sourceCard));
+  await services.assetCards.replaceAll(sources.map(sourceCard));
   return Response.json({ ok: true });
 }
 

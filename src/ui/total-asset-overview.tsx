@@ -72,6 +72,9 @@ export function TotalAssetOverview({
     valuation.incomplete ||
     valuation.expiredCount > 0 ||
     todayBaseline?.complete === false;
+  const allocationGroups = valuation.groups.filter(
+    (group) => group.amount !== null && decimalCompare(group.amount, "0") > 0,
+  );
 
   function changeCurrency(value: ReportingCurrency) {
     setCurrency(value);
@@ -106,6 +109,21 @@ export function TotalAssetOverview({
                 : null,
             ].filter(Boolean).join(" · ")}
           </p>
+          <div className="allocation-instrument" aria-label="分配比例仪表">
+            <div className="allocation-instrument-head">
+              <span>ALLOCATION / {dimension.toUpperCase()}</span>
+              <span>{String(allocationGroups.length).padStart(2, "0")} GROUPS</span>
+            </div>
+            <div className="allocation-meter" aria-hidden="true">
+              {allocationGroups.map((group, index) => (
+                <span
+                  key={group.key}
+                  className={`allocation-segment allocation-segment-${(index % 3) + 1}`}
+                  style={{ flexGrow: Number(group.amount) }}
+                />
+              ))}
+            </div>
+          </div>
         </div>
         <div className="valuation-controls">
           <label>
@@ -155,9 +173,14 @@ export function TotalAssetOverview({
         )}
       </section>
       <div className="distribution-list" aria-label="资产分布">
-        {valuation.groups.map((group) => (
+        {valuation.groups.map((group, index) => (
           <div key={group.key} className="distribution-item">
-            <span>{group.label}</span>
+            <span className="distribution-name">
+              <span className="distribution-index">
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              {group.label}
+            </span>
             <strong>
               {group.amount === null
                 ? "未折算"
@@ -194,19 +217,5 @@ export function TotalAssetOverview({
         )}
       </section>
     </section>
-  );
-}
-
-export function TotalOverviewPlaceholder() {
-  return (
-    <article
-      className="card span-3 restricted-card total-placeholder"
-      data-testid="total-overview-placeholder"
-      aria-label="受限总资产概览"
-    >
-      <p className="restricted-label">PRIVATE OVERVIEW</p>
-      <p className="restricted-title">总资产概览已锁定</p>
-      <div className="restricted-lines" aria-hidden="true"><span /><span /><span /></div>
-    </article>
   );
 }

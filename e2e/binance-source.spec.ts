@@ -30,16 +30,12 @@ async function loginAsOwner(page: Page): Promise<void> {
   await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
   await expect(page.getByRole("status")).toContainText("已完成预置");
   await page.goto("/");
-  await page
-    .getByTestId("restricted-card")
-    .first()
-    .getByRole("button", { name: "验证身份后查看" })
-    .click();
+
   const [response] = await Promise.all([
     page.waitForResponse((candidate) =>
       candidate.url().endsWith("/api/auth/login/verify"),
     ),
-    page.getByRole("button", { name: "使用 Passkey 解锁" }).click(),
+    page.getByRole("button", { name: "使用 Passkey 登录" }).click(),
   ]);
   expect(response.ok()).toBeTruthy();
   await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
@@ -100,7 +96,7 @@ test("Binance 只读凭证先预览后原子保存，并展示现货、资金与
   await expect(card.getByTestId("asset-source-total")).toHaveText(
     "12,849.5 USDT",
   );
-  await expect(card.getByTestId("holding-top-list").getByRole("listitem")).toHaveCount(5);
+  await expect(card.getByTestId("holding-top-list").getByRole("listitem")).toHaveCount(3);
   await expect(card).toContainText("现货");
   await expect(page.getByTestId("total-asset-amount")).toHaveText(
     "12,823.80 USD",
@@ -109,20 +105,6 @@ test("Binance 只读凭证先预览后原子保存，并展示现货、资金与
     "01月01日",
   );
 
-  await card.getByRole("button", { name: "查看全部持仓" }).click();
-  const detail = page.getByRole("dialog", { name: "Binance 全部持仓" });
-  await expect(detail.getByRole("row")).toHaveCount(10);
-  for (const scope of ["现货", "资金", "活期 Earn", "定期 Earn"]) {
-    await expect(detail).toContainText(scope);
-  }
-  await expect(detail.getByRole("row").filter({ hasText: "USDC" })).toContainText(
-    "0.999",
-  );
-  await expect(detail.getByRole("row").filter({ hasText: "USDT · 现货" })).toContainText(
-    "1,000 USDT",
-  );
-  await detail.getByLabel("持仓排序").selectOption("name");
-  await expect(detail.getByRole("row").nth(1)).toContainText("BNB");
   expect(await state(page)).toEqual({ savedSources: 1, savedSecrets: 1 });
   expect(responseBodies.join("\n")).not.toContain(API_SECRET);
 });
@@ -314,7 +296,7 @@ test("Binance 同步失败保留最后成功数据并接入过期状态和日快
   );
 });
 
-test("访客与生产测试替身都不能读取 Binance 私密来源或凭证", async ({
+test("未认证状态与生产测试替身都不能读取 Binance 私密来源或凭证", async ({
   page,
   playwright,
 }) => {

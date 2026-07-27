@@ -3,21 +3,18 @@ import { expect, test, type CDPSession, type Page } from "@playwright/test";
 const ADDRESS = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
 const CARDS = [
   {
-    id: "identity",
-    kind: "identity",
-    avatarUrl: "",
-    nickname: "XiaoX",
-    introduction: "个人资产终端",
+    id: "overview-entry",
+    kind: "asset",
+    title: "XiaoX 资产概览",
+    body: "个人资产终端",
     span: 2,
-    access: "private",
   },
   {
     id: "research",
-    kind: "markdown",
+    kind: "asset",
     title: "研究日志",
-    markdown: "记录长期观察与决策。",
+    body: "记录长期观察与决策。",
     span: 1,
-    access: "private",
   },
 ] as const;
 
@@ -42,12 +39,8 @@ async function loginAsOwner(page: Page): Promise<void> {
   await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
   await expect(page.getByRole("status")).toContainText("已完成预置");
   await page.goto("/");
-  await page
-    .getByTestId("restricted-card")
-    .first()
-    .getByRole("button", { name: "验证身份后查看" })
-    .click();
-  await page.getByRole("button", { name: "使用 Passkey 解锁" }).click();
+
+  await page.getByRole("button", { name: "使用 Passkey 登录" }).click();
   await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
 }
 
@@ -74,13 +67,13 @@ async function refreshCalls(page: Page): Promise<number> {
 
 test.beforeEach(async ({ request }) => {
   await request.post("/test-doubles/reset");
-  const response = await request.post("/test-doubles/cards", {
-    data: { cards: CARDS },
+  const response = await request.post("/test-doubles/asset-cards", {
+    data: { assetCards: CARDS },
   });
   expect(response.ok()).toBeTruthy();
 });
 
-test("访客无命令菜单，所有者可用 Command-K 与 Ctrl-K 搜索并跳转可见卡片", async ({
+test("未认证状态无命令菜单，所有者可用 Command-K 与 Ctrl-K 搜索并跳转资产卡片", async ({
   page,
 }) => {
   await page.goto("/");
@@ -103,8 +96,8 @@ test("访客无命令菜单，所有者可用 Command-K 与 Ctrl-K 搜索并跳�
 
   await page.getByRole("button", { name: "打开快捷命令" }).click();
   await page.getByRole("searchbox", { name: "搜索命令" }).fill("XiaoX");
-  await page.getByRole("button", { name: "跳转到 XiaoX" }).click();
-  await expect(page.locator('[data-command-label="XiaoX"]')).toBeFocused();
+  await page.getByRole("button", { name: "跳转到 XiaoX 资产概览" }).click();
+  await expect(page.locator('[data-command-label="XiaoX 资产概览"]')).toBeFocused();
 });
 
 test("鼠标可打开菜单、刷新资产并锁定，隐藏卡片不会进入导航结果", async ({ page }) => {
@@ -130,6 +123,6 @@ test("鼠标可打开菜单、刷新资产并锁定，隐藏卡片不会进入�
   await page.getByRole("button", { name: "打开快捷命令" }).click();
   await page.getByRole("searchbox", { name: "搜索命令" }).fill("锁定");
   await page.getByRole("button", { name: "立即锁定敏感内容" }).click();
-  await expect(page.getByTestId("view-mode")).toContainText("访客视图");
+  await expect(page.getByTestId("view-mode")).toContainText("已锁定");
   await expect(page.getByRole("dialog", { name: "快捷命令" })).toHaveCount(0);
 });

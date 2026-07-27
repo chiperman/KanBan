@@ -1,14 +1,12 @@
-import { getServices } from "@/server/composition";
 import { shanghaiDay } from "@/domain/daily-asset-snapshots";
-import { CardContent } from "@/ui/card-content";
+import { getServices } from "@/server/composition";
+import { CommandMenu } from "@/ui/command-menu";
 import { LogoutButton } from "@/ui/logout-button";
 import { OwnerDashboard } from "@/ui/owner-dashboard";
-import { RestrictedCard } from "@/ui/restricted-card";
+import { OwnerLogin } from "@/ui/owner-login";
 import { RecoverySetup } from "@/ui/recovery-setup";
 import { SessionGuard } from "@/ui/session-guard";
-import { ThemeSwitcher } from "@/ui/theme-switcher";
-import { TotalOverviewPlaceholder } from "@/ui/total-asset-overview";
-import { CommandMenu } from "@/ui/command-menu";
+import { ShanghaiClock } from "@/ui/shanghai-clock";
 
 export const dynamic = "force-dynamic";
 
@@ -16,104 +14,95 @@ function formatUtc(date: Date): string {
   return `${date.toISOString().slice(0, 16).replace("T", " ")} UTC`;
 }
 
-export default async function PublicHomePage() {
+export default async function AssetDashboardPage() {
   const services = getServices();
-  const cards = await services.cards.list();
-  const visitorCards = cards.filter(
-    (card) => card.kind !== "asset" || !card.hidden,
-  );
   const session = await services.auth.currentSession();
-  const assetSources = session
-    ? (await services.assetSources.list()).map(
-        ({ credentialReference: _credentialReference, permissions: _permissions, ...source }) => source,
-      )
-    : [];
-  const dailyAssetSnapshots = session
-    ? await services.dailyAssetSnapshots.list()
-    : [];
+  const recoveryConfigured =
+    (await services.ownerRecoveryCredentials.get()) !== null;
   const now = services.clock.now();
 
-  const content = (
-    <>
-      <header className="page-header">
-        <div className="header-title">
-          <p className="header-label">
+  if (session === null) {
+    return (
+      <div className="page page-locked">
+        <a className="skip-link" href="#main-content">
+          跳到主要内容
+        </a>
+        <header className="page-header locked-header">
+          <div className="locked-brand">
             <span className="header-wordmark" lang="en">
               PERSONAL ASSET DASHBOARD
             </span>
-            <span className="header-context">· 公开主页</span>
-          </p>
-          <p className="header-sub" data-testid="view-mode">
-            {session ? "所有者视图 · 已验证身份" : "访客视图 · 无需登录"}
-          </p>
-        </div>
-        <div className="header-side">
-          <span className="header-time" data-testid="server-time">
-            {formatUtc(now)}
-          </span>
-          {session ? <RecoverySetup /> : null}
-          {session ? (
+            <strong>OWNER ACCESS</strong>
+            <span className="locked-view-mode" data-testid="view-mode">
+              已锁定 · 仅限所有者
+            </span>
+          </div>
+          <div className="header-side">
+            <span className="header-system">LOCAL / READ ONLY</span>
+            <ShanghaiClock initialTime={now.toISOString()} />
+          </div>
+        </header>
+        <main id="main-content" className="login-main">
+          <OwnerLogin recoveryConfigured={recoveryConfigured} />
+        </main>
+        <footer className="locked-footer">
+          <span>LOCAL-FIRST · OWNER ONLY</span>
+          <span>NO TRADING · NO CLOUD SYNC</span>
+        </footer>
+      </div>
+    );
+  }
+
+  const assetCards = await services.assetCards.list();
+  const assetSources = (await services.assetSources.list()).map(
+    ({ credentialReference: _credentialReference, permissions: _permissions, ...source }) =>
+      source,
+  );
+  const dailyAssetSnapshots = await services.dailyAssetSnapshots.list();
+
+  return (
+    <div className="page page-dashboard">
+      <a className="skip-link" href="#main-content">
+        跳到主要内容
+      </a>
+      <SessionGuard>
+        <header className="page-header">
+          <div className="header-title">
+            <p className="header-label">
+              <span className="header-index" aria-hidden="true">
+                01
+              </span>
+              <span className="header-wordmark" lang="en">
+                PERSONAL ASSET DASHBOARD
+              </span>
+            </p>
+            <p className="header-sub" data-testid="view-mode">
+              所有者视图 · 资产看板 · 已验证身份
+            </p>
+          </div>
+          <div className="header-side">
+            <span className="header-system">LOCAL / READ ONLY</span>
+            <time className="header-time" data-testid="server-time">
+              {formatUtc(now)}
+            </time>
+            <RecoverySetup configured={recoveryConfigured} />
             <CommandMenu
               refreshEnabled={assetSources.some(
                 (source) => source.lifecycle !== "disconnected",
               )}
             />
-          ) : null}
-          {session ? <LogoutButton /> : null}
-          <ThemeSwitcher />
-        </div>
-      </header>
-      <main id="main-content">
-        {session ? (
+            <LogoutButton />
+          </div>
+        </header>
+        <main id="main-content">
           <OwnerDashboard
-            cards={cards}
+            cards={assetCards}
             assetSources={assetSources}
             dailyAssetSnapshots={dailyAssetSnapshots}
             currentDay={shanghaiDay(now)}
           />
-        ) : (
-          <section className="card-grid" data-testid="card-grid">
-            {visitorCards.length === 0 ? (
-              <div className="empty-state" data-testid="empty-state">
-                <p className="empty-title">暂无公开内容</p>
-                <p className="empty-hint">
-                  所有者还没有发布任何卡片，公开主页将在内容发布后展示在这里。
-                </p>
-              </div>
-            ) : (
-              <>
-              {visitorCards.some((card) => card.kind === "asset") ? (
-                <TotalOverviewPlaceholder />
-              ) : null}
-              {visitorCards.map((card) =>
-                // 服务端数据边界：访客永远不会收到私密卡片的真实内容，
-                // 占位模型只包含宽度。
-                card.access === "private" ? (
-                  <RestrictedCard key={card.id} span={card.span} />
-                ) : (
-                  <article
-                    key={card.id}
-                    className={`card span-${card.span}`}
-                    data-testid="card"
-                  >
-                    <CardContent card={card} />
-                  </article>
-                ),
-              )}
-              </>
-            )}
-          </section>
-        )}
-      </main>
-    </>
-  );
-
-  return (
-    <div className="page">
-      <a className="skip-link" href="#main-content">
-        跳到主要内容
-      </a>
-      {session ? <SessionGuard>{content}</SessionGuard> : content}
+        </main>
+      </SessionGuard>
     </div>
   );
 }

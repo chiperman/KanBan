@@ -31,16 +31,12 @@ async function loginAsOwner(page: Page): Promise<void> {
 }
 
 async function unlockAsOwner(page: Page): Promise<void> {
-  await page
-    .getByTestId("restricted-card")
-    .first()
-    .getByRole("button", { name: "验证身份后查看" })
-    .click();
+
   const [verification] = await Promise.all([
     page.waitForResponse((response) =>
       response.url().endsWith("/api/auth/login/verify"),
     ),
-    page.getByRole("button", { name: "使用 Passkey 解锁" }).click(),
+    page.getByRole("button", { name: "使用 Passkey 登录" }).click(),
   ]);
   expect(verification.ok()).toBeTruthy();
   await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
@@ -220,17 +216,6 @@ test("未估值趋势不伪造零值，平台盈亏只出现在来源提供的�
     page.getByTestId("asset-source-trend-source-unvalued"),
   ).toContainText("未估值");
 
-  const alpha = page.getByTestId("asset-source-card-source-alpha");
-  await alpha.getByRole("button", { name: "查看全部持仓" }).click();
-  const alphaDialog = page.getByRole("dialog", { name: "Alpha Securities 全部持仓" });
-  await expect(alphaDialog).toContainText("平台盈亏");
-  await expect(alphaDialog).toContainText("12.34");
-  await alphaDialog.getByRole("button", { name: "关闭详情" }).click();
-
-  const beta = page.getByTestId("asset-source-card-source-beta");
-  await beta.getByRole("button", { name: "查看全部持仓" }).click();
-  const betaDialog = page.getByRole("dialog", { name: "Beta Crypto 全部持仓" });
-  await expect(betaDialog).not.toContainText("平台盈亏");
 });
 
 test("来源确认的首次可信快照先建基准，随后刷新全失败也不会丢失", async ({
@@ -287,7 +272,7 @@ test("同日新增来源从首次成功同步开始加入来源趋势但不改�
   });
 });
 
-test("访客收不到日快照、今日变动或来源趋势", async ({ page, request }) => {
+test("未认证状态收不到日快照、今日变动或来源趋势", async ({ page, request }) => {
   await configure(request);
   await page.goto("/");
   const content = await page.locator("body").innerText();

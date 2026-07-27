@@ -25,7 +25,7 @@ import type {
   OkxAuthorizationResult,
   DailyAssetSnapshot,
   DailyAssetSnapshots,
-  CardStore,
+  AssetCardStore,
   Clock,
   OwnerAuth,
   OwnerCredential,
@@ -36,7 +36,7 @@ import type {
   LongbridgeAuthorizationResult,
 } from "@/server/ports";
 import { SessionOwnerAuth } from "@/server/auth/session-auth";
-import { parseCards } from "@/server/cards";
+import { parseAssetCards } from "@/server/asset-cards";
 import {
   LongbridgeConnectionState,
   ProductionLongbridgeOAuth,
@@ -73,13 +73,13 @@ class SystemClock implements Clock {
 }
 
 interface DashboardState {
-  schemaVersion: 4;
-  cards: Card[];
+  schemaVersion: 5;
+  assetCards: Card[];
   assetSources: AssetSourceSummary[];
   dailyAssetSnapshots: DailyAssetSnapshot[];
 }
 
-const DASHBOARD_SCHEMA_VERSION = 4 as const;
+const DASHBOARD_SCHEMA_VERSION = 5 as const;
 
 function withoutSnapshotSource(
   snapshot: DailyAssetSnapshot,
@@ -239,34 +239,36 @@ export class FileDashboardDatabase {
       raw = await readFile(this.filePath, "utf8");
     } catch (error) {
       if (!isMissingFile(error)) throw error;
-      let cards: Card[] = [];
+      let assetCards: Card[] = [];
       try {
-        const legacy = parseCards(
+        const legacy = parseAssetCards(
           JSON.parse(await readFile(this.legacyCardsPath, "utf8")),
         );
         if (legacy === null) throw new Error("旧卡片数据格式无效");
-        cards = legacy;
+        assetCards = legacy;
       } catch (legacyError) {
         if (!isMissingFile(legacyError)) throw legacyError;
       }
       return {
         schemaVersion: DASHBOARD_SCHEMA_VERSION,
-        cards,
+        assetCards,
         assetSources: [],
         dailyAssetSnapshots: [],
       };
     }
-    const value = JSON.parse(raw) as Partial<DashboardState>;
-    const cards = parseCards(value.cards);
+    const value = JSON.parse(raw) as Partial<DashboardState> & {
+      cards?: unknown;
+    };
+    const assetCards = parseAssetCards(value.assetCards ?? value.cards);
     if (
-      cards === null ||
+      assetCards === null ||
       !Array.isArray(value.assetSources)
     ) {
       throw new Error(`Dashboard 数据文件格式无效: ${this.filePath}`);
     }
     return {
       schemaVersion: DASHBOARD_SCHEMA_VERSION,
-      cards,
+      assetCards,
       assetSources: value.assetSources.map(migrateAssetSource),
       dailyAssetSnapshots: Array.isArray(value.dailyAssetSnapshots)
         ? value.dailyAssetSnapshots
@@ -298,14 +300,14 @@ export class FileDashboardDatabase {
     return run;
   }
 
-  async listCards(): Promise<Card[]> {
+  async listAssetCards(): Promise<Card[]> {
     await this.queue;
-    return (await this.load()).cards;
+    return (await this.load()).assetCards;
   }
 
-  async replaceCards(cards: Card[]): Promise<void> {
+  async replaceAssetCards(cards: Card[]): Promise<void> {
     await this.mutate((state) => {
-      state.cards = cards;
+      state.assetCards = cards;
     });
   }
 
@@ -363,7 +365,7 @@ export class FileDashboardDatabase {
       if (!state.assetSources.some((source) => source.id === sourceId)) {
         throw new Error("资产来源不存在");
       }
-      const card = state.cards.find(
+      const card = state.assetCards.find(
         (item) => item.kind === "asset" && item.sourceId === sourceId,
       );
       if (!card || card.kind !== "asset") throw new Error("资产卡片不存在");
@@ -385,7 +387,7 @@ export class FileDashboardDatabase {
       const source = state.assetSources.find((item) => item.id === sourceId);
       if (!source) throw new Error("资产来源不存在");
       state.assetSources = state.assetSources.filter((item) => item.id !== sourceId);
-      state.cards = state.cards.filter(
+      state.assetCards = state.assetCards.filter(
         (card) => card.kind !== "asset" || card.sourceId !== sourceId,
       );
       state.dailyAssetSnapshots = state.dailyAssetSnapshots.flatMap((snapshot) => {
@@ -486,10 +488,9 @@ export class FileDashboardDatabase {
           error: null,
         },
       });
-      state.cards.push({
+      state.assetCards.push({
         id: randomUUID(),
         kind: "asset",
-        access: "private",
         title: card.title,
         body: card.body,
         sourceId,
@@ -657,10 +658,10 @@ export class FileEncryptedSecretStore implements SecretStore {
   }
 }
 
-class DatabaseCardStore implements CardStore {
+class DatabaseAssetCardStore implements AssetCardStore {
   constructor(private readonly database: FileDashboardDatabase) {}
-  list() { return this.database.listCards(); }
-  replaceAll(cards: Card[]) { return this.database.replaceCards(cards); }
+  list() { return this.database.listAssetCards(); }
+  replaceAll(cards: Card[]) { return this.database.replaceAssetCards(cards); }
 }
 
 class DatabaseAssetSources implements AssetSources {
@@ -884,7 +885,7 @@ export function createProductionServices(): AppServices {
   const evmRefresher = new ProductionEvmWatchSourceRefresher();
   return {
     clock,
-    cards: new DatabaseCardStore(database),
+    assetCards: new DatabaseAssetCardStore(database),
     assetSources,
     assetSourceLifecycle: new DatabaseAssetSourceLifecycle(
       database,

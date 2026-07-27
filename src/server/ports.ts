@@ -7,60 +7,23 @@ export interface Clock {
   now(): Date;
 }
 
-export type CardAccess = "public" | "private";
 export type CardSpan = 1 | 2 | 3;
 
-interface BaseCard {
+export interface AssetCard {
   id: string;
-  span: CardSpan;
-  access: CardAccess;
-}
-
-export interface IdentityCard extends BaseCard {
-  kind: "identity";
-  avatarUrl: string;
-  nickname: string;
-  introduction: string;
-}
-
-export interface NowCard extends BaseCard {
-  kind: "now";
-  content: string;
-}
-
-export interface LinkItem {
-  label: string;
-  url: string;
-}
-
-export interface LinksCard extends BaseCard {
-  kind: "links";
-  links: LinkItem[];
-}
-
-export interface MarkdownCard extends BaseCard {
-  kind: "markdown";
-  title: string;
-  markdown: string;
-}
-
-export interface AssetCard extends Omit<BaseCard, "access"> {
   kind: "asset";
-  access: "private";
   title: string;
   body: string;
   sourceId?: string;
   hidden?: boolean;
+  span: CardSpan;
+  /** 从新行开始，避免自动网格填补上一行的空位。 */
+  startsNewRow?: boolean;
 }
 
-export type Card =
-  | IdentityCard
-  | NowCard
-  | LinksCard
-  | MarkdownCard
-  | AssetCard;
+export type Card = AssetCard;
 
-export interface CardStore {
+export interface AssetCardStore {
   list(): Promise<Card[]>;
   replaceAll(cards: Card[]): Promise<void>;
 }
@@ -346,7 +309,7 @@ export interface OwnerSession {
   lastActivityAt: Date;
 }
 
-/** 所有者身份认证；未验证身份时返回 null（访客）。 */
+/** 所有者身份认证；未验证身份时返回 null（锁定状态）。 */
 export interface OwnerAuth {
   currentSession(): Promise<OwnerSession | null>;
 }

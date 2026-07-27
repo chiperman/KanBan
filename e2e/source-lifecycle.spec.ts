@@ -23,12 +23,8 @@ async function loginAsOwner(page: Page): Promise<void> {
   await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
   await expect(page.getByRole("status")).toContainText("已完成预置");
   await page.goto("/");
-  await page
-    .getByTestId("restricted-card")
-    .first()
-    .getByRole("button", { name: "验证身份后查看" })
-    .click();
-  await page.getByRole("button", { name: "使用 Passkey 解锁" }).click();
+
+  await page.getByRole("button", { name: "使用 Passkey 登录" }).click();
   await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
 }
 

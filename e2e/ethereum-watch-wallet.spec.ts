@@ -24,12 +24,8 @@ async function loginAsOwner(page: Page): Promise<void> {
   await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
   await expect(page.getByRole("status")).toContainText("已完成预置");
   await page.goto("/");
-  await page
-    .getByTestId("restricted-card")
-    .first()
-    .getByRole("button", { name: "验证身份后查看" })
-    .click();
-  await page.getByRole("button", { name: "使用 Passkey 解锁" }).click();
+
+  await page.getByRole("button", { name: "使用 Passkey 登录" }).click();
   await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
 }
 
@@ -64,8 +60,4 @@ test("Ethereum 观察钱包只用公开地址预览并保存，按链与合约�
   const card = page.getByTestId("ethereum-watch-card");
   await expect(card.getByTestId("asset-source-total")).toHaveText("5,519 USD");
   await expect(card).toContainText("含 1 项未估值资产");
-  await card.getByRole("button", { name: "查看全部持仓" }).click();
-  const detail = page.getByRole("dialog", { name: "Ethereum 观察钱包全部持仓" });
-  await expect(detail.getByText("SAME · Ethereum ERC-20")).toHaveCount(2);
-  await expect(detail).toContainText("未估值");
 });

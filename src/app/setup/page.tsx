@@ -13,9 +13,9 @@ export default async function SetupPage() {
   }
 
   return (
-    <div className="page">
+    <div className="page page-setup">
       <main className="setup-panel">
-        <p className="card-label">所有者预置</p>
+        <p className="card-label">OWNER PROVISION / 00</p>
         <h1 className="setup-title">预置唯一所有者的 Passkey</h1>
         <p className="setup-copy">
           此操作仅可完成一次。完成后注册入口永久关闭，

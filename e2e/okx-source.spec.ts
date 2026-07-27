@@ -26,12 +26,8 @@ async function loginAsOwner(page: Page): Promise<void> {
   await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
   await expect(page.getByRole("status")).toContainText("已完成预置");
   await page.goto("/");
-  await page
-    .getByTestId("restricted-card")
-    .first()
-    .getByRole("button", { name: "验证身份后查看" })
-    .click();
-  await page.getByRole("button", { name: "使用 Passkey 解锁" }).click();
+
+  await page.getByRole("button", { name: "使用 Passkey 登录" }).click();
   await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
 }
 
@@ -93,15 +89,8 @@ test("OKX 只读凭证先预览后原子保存，并展示现货、资金与 Ear
   );
   await expect(
     card.getByTestId("holding-top-list").getByRole("listitem"),
-  ).toHaveCount(5);
+  ).toHaveCount(3);
   await expect(card).toContainText("现货");
-  await card.getByRole("button", { name: "查看全部持仓" }).click();
-  const detail = page.getByRole("dialog", { name: "OKX 全部持仓" });
-  await expect(detail).toContainText("资金");
-  await expect(detail).toContainText("活期 Earn");
-  await detail.getByLabel("持仓排序").selectOption("name");
-  await expect(detail.getByRole("row").nth(1)).toContainText("BNB");
-
   expect(responseBodies.join("\n")).not.toContain(API_SECRET);
   expect(responseBodies.join("\n")).not.toContain(PASSPHRASE);
 });
@@ -400,7 +389,7 @@ test("OKX 价格刷新保持公开边界，并规范化时间偏差、认证错�
   await expect(eea.json()).resolves.toMatchObject({ allHostsPinned: true });
 });
 
-test("访客与生产测试替身都不能读取 OKX 私密来源或凭证", async ({
+test("未认证状态与生产测试替身都不能读取 OKX 私密来源或凭证", async ({
   page,
   playwright,
 }) => {

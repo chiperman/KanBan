@@ -1,7 +1,5 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
-
 import type {
   AssetHolding,
   AssetSnapshot,
@@ -29,14 +27,14 @@ function providerCardLabel(source: AssetSourceView): string {
   return "资产来源";
 }
 
-function providerHoldingsLabel(source: AssetSourceView): string {
-  if (source.kind === "longbridge") return "长桥全部持仓";
-  if (source.kind === "binance") return "Binance 全部持仓";
-  if (source.kind === "okx") return "OKX 全部持仓";
-  if (source.kind === "bitget") return "Bitget 全部持仓";
-  if (source.kind === "evm-watch-ethereum") return "Ethereum 观察钱包全部持仓";
-  if (source.kind === "evm-watch-bsc") return "BNB Smart Chain 观察钱包全部持仓";
-  return `${source.label} 全部持仓`;
+function providerCode(source: AssetSourceView): string {
+  if (source.kind === "longbridge") return "LB";
+  if (source.kind === "binance") return "BN";
+  if (source.kind === "okx") return "OK";
+  if (source.kind === "bitget") return "BG";
+  if (source.kind === "evm-watch-ethereum") return "ETH";
+  if (source.kind === "evm-watch-bsc") return "BSC";
+  return "SRC";
 }
 
 function amount(value: string): string {
@@ -45,36 +43,11 @@ function amount(value: string): string {
   return fraction ? `${grouped}.${fraction}` : grouped;
 }
 
-function compareDecimal(left: string | null, right: string | null): number {
-  if (left === null) return right === null ? 0 : -1;
-  if (right === null) return 1;
-  const parts = (value: string) => {
-    const negative = value.startsWith("-");
-    const unsigned = value.replace(/^[+-]/, "");
-    const [integer = "0", fraction = ""] = unsigned.split(".");
-    return { negative, integer: integer.replace(/^0+(?=\d)/, ""), fraction };
-  };
-  const a = parts(left);
-  const b = parts(right);
-  if (a.negative !== b.negative) return a.negative ? -1 : 1;
-  const direction = a.negative ? -1 : 1;
-  if (a.integer.length !== b.integer.length) {
-    return direction * (a.integer.length - b.integer.length);
-  }
-  const integerOrder = a.integer.localeCompare(b.integer);
-  if (integerOrder !== 0) return direction * integerOrder;
-  const width = Math.max(a.fraction.length, b.fraction.length);
-  return (
-    direction *
-    a.fraction.padEnd(width, "0").localeCompare(b.fraction.padEnd(width, "0"))
-  );
-}
-
 function dayLabel(day: string): string {
   return `${day.slice(5, 7)}月${day.slice(8, 10)}日`;
 }
 
-function HoldingRow({
+function HoldingDetailRow({
   holding,
   showPlatformProfit,
   showSensitiveInfo,
@@ -92,9 +65,7 @@ function HoldingRow({
       <td>
         <strong>{holding.name}</strong>
         <span className="holding-symbol">{holding.symbol}</span>
-        <span className="holding-price-source">
-          {valuationDetail}
-        </span>
+        <span className="holding-price-source">{valuationDetail}</span>
       </td>
       <td>{showSensitiveInfo ? amount(holding.quantity) : masked}</td>
       <td>
@@ -104,7 +75,11 @@ function HoldingRow({
             ? `未估值（${holding.currency}）`
             : "—"}
       </td>
-      <td>{holding.marketValue === null ? `未估值（${holding.currency}）` : `${showSensitiveInfo ? amount(holding.marketValue) : masked} ${holding.currency}`}</td>
+      <td>
+        {holding.marketValue === null
+          ? `未估值（${holding.currency}）`
+          : `${showSensitiveInfo ? amount(holding.marketValue) : masked} ${holding.currency}`}
+      </td>
       <td>{holding.costPrice === null ? "—" : showSensitiveInfo ? amount(holding.costPrice) : masked}</td>
       {showPlatformProfit ? (
         <td>{holding.platformProfit === null ? "—" : showSensitiveInfo ? amount(holding.platformProfit) : masked}</td>
@@ -123,9 +98,6 @@ export function AssetSourceCard({
   history: DailyAssetSnapshot[];
   showSensitiveInfo: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  const [sort, setSort] = useState("market-value");
-  const scrollPosition = useRef(0);
   const showPlatformProfit = source.snapshot.holdings.some(
     (holding) => holding.platformProfit !== null,
   );
@@ -136,30 +108,19 @@ export function AssetSourceCard({
   const unvaluedCount = source.snapshot.holdings.filter(
     ({ valuation }) => valuation.status === "unvalued",
   ).length;
-  const holdings = useMemo(() => {
-    return [...source.snapshot.holdings].sort((left, right) => {
-      if (sort === "name") return left.name.localeCompare(right.name, "en");
-      if (sort === "change") return compareDecimal(right.changePercent, left.changePercent);
-      return compareDecimal(
-        right.sourceMarketValue?.amount ?? null,
-        left.sourceMarketValue?.amount ?? null,
-      );
-    });
-  }, [sort, source.snapshot.holdings]);
-
-  function showDetails() {
-    scrollPosition.current = window.scrollY;
-    setOpen(true);
-  }
-
-  function closeDetails() {
-    setOpen(false);
-    requestAnimationFrame(() => window.scrollTo(0, scrollPosition.current));
-  }
-
+  const valuedCount = source.snapshot.holdings.length - unvaluedCount;
+  const meterSegments = 12;
+  const filledSegments =
+    source.snapshot.holdings.length === 0
+      ? 0
+      : Math.max(
+          1,
+          Math.round((valuedCount / source.snapshot.holdings.length) * meterSegments),
+        );
   return (
     <>
       <div
+        className="asset-source-card"
         data-testid={
           source.kind === "longbridge"
             ? "longbridge-card"
@@ -176,11 +137,28 @@ export function AssetSourceCard({
               : `asset-source-card-${source.id}`
         }
       >
-        <p className="card-label">{providerCardLabel(source)}</p>
-        {source.kind === "longbridge" ? null : <h2 className="asset-source-title">{source.label}</h2>}
+        <header className="asset-source-head">
+          <p className="card-label">{providerCardLabel(source)}</p>
+          <p className={`source-live-state ${source.sync.status}`}>
+            <span />
+            {providerCode(source)} / {source.sync.status === "expired" ? "STALE" : "LIVE"}
+          </p>
+        </header>
+        <h2 className="asset-source-title">{source.label}</h2>
         <p className="asset-total" data-testid="asset-source-total">{showSensitiveInfo ? amount(source.snapshot.total.amount) : "••••••"} <span>{source.snapshot.total.currency}</span></p>
+        <div className="source-meter" aria-hidden="true">
+          {Array.from({ length: meterSegments }, (_, index) => (
+            <span key={index} className={index < filledSegments ? "is-filled" : ""} />
+          ))}
+        </div>
+        <p className="source-meter-caption">
+          <span>{String(source.snapshot.holdings.length).padStart(2, "0")} POSITIONS</span>
+          <span className={unvaluedCount > 0 ? "is-incomplete" : undefined}>
+            {unvaluedCount === 0 ? "VALUATION / COMPLETE" : `${unvaluedCount} UNVALUED`}
+          </span>
+        </p>
         <ol className="holding-top-list" data-testid="holding-top-list">
-          {source.snapshot.holdings.slice(0, 5).map((holding) => (
+          {source.snapshot.holdings.map((holding) => (
             <li key={`${holding.sourceAccount ?? "default"}:${holding.sourceAsset ?? holding.symbol}`}>
               <span>{holding.name}</span>
               <strong>
@@ -191,6 +169,38 @@ export function AssetSourceCard({
             </li>
           ))}
         </ol>
+        <section
+          className="asset-holdings-detail"
+          data-testid="asset-holdings-detail"
+          aria-label={`${source.label} 持仓明细`}
+        >
+          <p className="card-label">持仓明细</p>
+          <div className="asset-table-wrap">
+            <table className="asset-table">
+              <thead>
+                <tr>
+                  <th>名称</th>
+                  <th>数量</th>
+                  <th>当前价格</th>
+                  <th>原始市值</th>
+                  <th>成本</th>
+                  {showPlatformProfit ? <th>平台盈亏（来源提供）</th> : null}
+                  <th>涨跌</th>
+                </tr>
+              </thead>
+              <tbody>
+                {source.snapshot.holdings.map((holding) => (
+                  <HoldingDetailRow
+                    key={`${holding.sourceAccount ?? "default"}:${holding.sourceAsset ?? holding.symbol}`}
+                    holding={holding}
+                    showPlatformProfit={showPlatformProfit}
+                    showSensitiveInfo={showSensitiveInfo}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
         {unvaluedCount > 0 ? (
           <p className="asset-sync-status">含 {unvaluedCount} 项未估值资产</p>
         ) : null}
@@ -232,36 +242,7 @@ export function AssetSourceCard({
             {source.label} 同步失败：{source.sync.error}
           </p>
         ) : null}
-        <button type="button" className="secondary-button" onClick={showDetails}>查看全部持仓</button>
       </div>
-      {open ? (
-        <div
-          className="asset-detail-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-label={providerHoldingsLabel(source)}
-        >
-          <div className="asset-detail-dialog">
-            <div className="asset-detail-header">
-              <div><p className="card-label">全部持仓</p><h2>{source.label}</h2></div>
-              <button type="button" className="login-cancel" onClick={closeDetails}>关闭详情</button>
-            </div>
-            <label className="asset-sort">持仓排序
-              <select aria-label="持仓排序" value={sort} onChange={(event) => setSort(event.target.value)}>
-                <option value="market-value">市值</option>
-                <option value="change">涨跌</option>
-                <option value="name">名称</option>
-              </select>
-            </label>
-            <div className="asset-table-wrap">
-              <table className="asset-table">
-                <thead><tr><th>名称</th><th>数量</th><th>当前价格</th><th>原始市值</th><th>成本</th>{showPlatformProfit ? <th>平台盈亏（来源提供）</th> : null}<th>涨跌</th></tr></thead>
-                <tbody>{holdings.map((holding) => <HoldingRow key={`${holding.sourceAccount ?? "default"}:${holding.sourceAsset ?? holding.symbol}`} holding={holding} showPlatformProfit={showPlatformProfit} showSensitiveInfo={showSensitiveInfo} />)}</tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </>
   );
 }

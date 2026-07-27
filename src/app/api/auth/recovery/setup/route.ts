@@ -47,7 +47,7 @@ export async function POST(request: Request) {
     }
   } catch (error) {
     return Response.json(
-      { error: error instanceof Error ? error.message : "恢复认证数据无效" },
+      { error: error instanceof Error ? error.message : "备用登录配置无效" },
       { status: 400 },
     );
   }

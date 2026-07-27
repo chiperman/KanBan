@@ -214,6 +214,24 @@ function manyRoundingSources(): AssetSourceSummary[] {
   } satisfies AssetSourceSummary));
 }
 
+function missingSourceFxSources(): AssetSourceSummary[] {
+  return [{
+    id: "source-missing-fx",
+    kind: "longbridge",
+    label: "Longbridge HKD Account",
+    accountId: "longbridge:missing-fx",
+    permissions: ["account", "positions", "market-data"],
+    credentialReference: "test-secret-missing-fx",
+    snapshot: {
+      total: { amount: "586774.67", currency: "HKD" },
+      holdings: [],
+      exchangeRates: [],
+      syncedAt: SYNCED_AT,
+    },
+    sync: CURRENT_SYNC,
+  }];
+}
+
 export async function POST(request: Request) {
   if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
   const url = new URL(request.url);
@@ -222,6 +240,8 @@ export async function POST(request: Request) {
     ? roundingSources()
     : scenario === "rounding-many"
       ? manyRoundingSources()
+      : scenario === "missing-source-fx"
+        ? missingSourceFxSources()
       : standardSources({
         inverse: url.searchParams.get("fx") === "inverse",
         alphaAdjustment:
@@ -234,7 +254,6 @@ export async function POST(request: Request) {
   const cards: Card[] = sources.map((source, index) => ({
     id: `asset-${source.id}`,
     kind: "asset",
-    access: "private",
     title: source.label,
     body: "估值浏览器测试来源",
     sourceId: source.id,
@@ -242,6 +261,6 @@ export async function POST(request: Request) {
   }));
   const services = getTestServices();
   await services.assetSources.replaceAll(sources);
-  await services.cards.replaceAll(cards);
+  await services.assetCards.replaceAll(cards);
   return Response.json({ ok: true });
 }

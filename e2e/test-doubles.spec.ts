@@ -28,7 +28,7 @@ test("测试环境可以替换时间、资产来源、价格、身份认证和�
   }
 });
 
-test("公开主页使用测试替身提供的时间", async ({ page, request }) => {
+test("资产看板登录页使用测试替身提供的时间", async ({ page, request }) => {
   await request.post("/test-doubles/clock", {
     data: { now: "2030-01-02T03:04:00.000Z" },
   });
@@ -36,8 +36,9 @@ test("公开主页使用测试替身提供的时间", async ({ page, request }) 
   await page.goto("/");
 
   await expect(page.getByTestId("server-time")).toContainText(
-    "2030-01-02 03:04",
+    "11:04",
   );
+  await expect(page.getByTestId("server-time")).toContainText("UTC+08");
 });
 
 test("生产运行不暴露测试替身", async ({ playwright }) => {
@@ -49,8 +50,8 @@ test("生产运行不暴露测试替身", async ({ playwright }) => {
   expect((await prodRequest.post("/test-doubles/reset")).status()).toBe(404);
   expect(
     (
-      await prodRequest.post("/test-doubles/cards", {
-        data: { cards: [] },
+      await prodRequest.post("/test-doubles/asset-cards", {
+        data: { assetCards: [] },
       })
     ).status(),
   ).toBe(404);

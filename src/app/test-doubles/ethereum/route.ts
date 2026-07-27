@@ -20,11 +20,10 @@ export async function POST(request: Request) {
   }
   services.evm.configure(body.scenario ?? "valid");
   services.assetSourceConnections.failNext(body.commitError);
-  if ((await services.cards.list()).length === 0) {
-    await services.cards.replaceAll([{
+  if ((await services.assetCards.list()).length === 0) {
+    await services.assetCards.replaceAll([{
       id: "ethereum-test-private-card",
       kind: "asset",
-      access: "private",
       title: "资产",
       body: "仅供身份测试的安全占位",
       span: 1,
@@ -39,7 +38,7 @@ export async function GET() {
   const sources = (await services.assetSources.list()).filter(({ kind }) =>
     kind.startsWith("evm-watch-"),
   );
-  const cards = (await services.cards.list()).filter(
+  const cards = (await services.assetCards.list()).filter(
     (card) => card.kind === "asset" && card.sourceId !== undefined &&
       sources.some((source) => source.id === card.sourceId),
   );

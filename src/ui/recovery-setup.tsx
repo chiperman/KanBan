@@ -7,19 +7,24 @@ interface SetupOptions {
   provisioningUri: string;
 }
 
-export function RecoverySetup() {
+interface RecoverySetupProps {
+  configured: boolean;
+}
+
+export function RecoverySetup({ configured }: RecoverySetupProps) {
   const [options, setOptions] = useState<SetupOptions | null>(null);
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const recoveryConfigured = configured || saved;
 
   async function begin() {
     setError("");
     setSaved(false);
     const response = await fetch("/api/auth/recovery/setup");
     if (!response.ok) {
-      setError("无法开始恢复认证配置");
+      setError("无法开始备用登录配置");
       return;
     }
     setOptions((await response.json()) as SetupOptions);
@@ -46,7 +51,7 @@ export function RecoverySetup() {
       | { error?: string }
       | null;
     if (!response.ok) {
-      setError(result?.error ?? "恢复认证配置失败");
+      setError(result?.error ?? "备用登录配置失败");
       setPending(false);
       return;
     }
@@ -59,23 +64,24 @@ export function RecoverySetup() {
   return (
     <>
       <button type="button" className="logout-button" onClick={() => void begin()}>
-        配置恢复认证
+        {recoveryConfigured ? "更新备用登录" : "配置备用登录"}
       </button>
-      {saved ? <span role="status" className="recovery-status">恢复认证已配置</span> : null}
+      {saved ? <span role="status" className="recovery-status">备用登录已配置</span> : null}
       {!open && error ? <span role="alert" className="login-error">{error}</span> : null}
       {open && options ? (
         <div className="editor-overlay" role="dialog" aria-modal="true">
           <form className="editor-dialog" onSubmit={save}>
-            <p className="card-label">恢复认证配置</p>
+            <p className="card-label">备用登录配置</p>
             <p className="login-copy">
-              在验证器中手动添加下列 TOTP 密钥，再用当前验证码确认。密钥只在本次配置中显示。
+              邮箱仅作为本机登录标识，不发送验证邮件。请把下方 TOTP
+              密钥添加到验证器，再输入当前验证码确认；密钥只在本次配置中显示。
             </p>
             <label className="field-label">
-              恢复邮箱
+              备用登录邮箱
               <input name="email" type="email" autoComplete="email" required />
             </label>
             <label className="field-label">
-              强密码
+              备用登录密码
               <input name="password" type="password" autoComplete="new-password" required />
             </label>
             <label className="field-label">
@@ -89,7 +95,7 @@ export function RecoverySetup() {
             {error ? <p className="login-error" role="alert">{error}</p> : null}
             <div className="editor-actions">
               <button type="submit" className="login-primary" disabled={pending}>
-                保存恢复认证
+                保存备用登录
               </button>
               <button
                 type="button"

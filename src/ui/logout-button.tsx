@@ -2,7 +2,7 @@
 
 import { OWNER_LOCK_EVENT } from "@/shared/session-policy";
 
-/** 所有者主动锁定：销毁服务端会话并重新加载，敏感内容立即恢复为受限卡片。 */
+/** 所有者主动锁定：销毁服务端会话并重新加载到所有者登录入口。 */
 export function LogoutButton() {
   function lock() {
     window.dispatchEvent(new Event(OWNER_LOCK_EVENT));

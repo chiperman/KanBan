@@ -29,7 +29,7 @@ export async function POST(request: Request) {
   const now = services.clock.now();
   const attempt = claimRecoveryPasswordAttempt(now);
   if (attempt === "password-limited") {
-    return Response.json({ error: "恢复认证尝试过多，请稍后重试" }, { status: 429 });
+    return Response.json({ error: "备用登录尝试过多，请稍后重试" }, { status: 429 });
   }
   if (attempt === "totp-limited") {
     return Response.json({ error: "TOTP 尝试过多，请稍后重试" }, { status: 429 });
@@ -43,12 +43,12 @@ export async function POST(request: Request) {
       )
     : false;
   if (!credential || email !== credential.email || !passwordMatches) {
-    return Response.json({ error: "恢复邮箱或密码错误" }, { status: 401 });
+    return Response.json({ error: "备用登录邮箱或密码错误" }, { status: 401 });
   }
 
   const totpSecret = decryptRecoverySecret(password, credential);
   if (!totpSecret) {
-    return Response.json({ error: "恢复邮箱或密码错误" }, { status: 401 });
+    return Response.json({ error: "备用登录邮箱或密码错误" }, { status: 401 });
   }
   clearRecoveryPasswordFailures();
   const token = createPendingRecovery("owner", totpSecret, now);

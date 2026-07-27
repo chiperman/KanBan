@@ -41,7 +41,6 @@ export async function POST(request: Request) {
         cards: [{
           id: "legacy-card",
           kind: "asset",
-          access: "private",
           title: "长桥资产",
           body: "只读证券账户",
           sourceId: "legacy-source",
@@ -84,7 +83,7 @@ export async function POST(request: Request) {
         path.join(root, "legacy-cards.json"),
       );
       const services = getTestServices();
-      await services.cards.replaceAll(await database.listCards());
+      await services.assetCards.replaceAll(await database.listAssetCards());
       await services.assetSources.replaceAll(await database.listSources());
       return Response.json({ ok: true });
     } finally {

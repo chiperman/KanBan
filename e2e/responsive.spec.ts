@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 const VIEWPORTS = [
   { name: "桌面", width: 1280, height: 800 },
@@ -8,37 +8,53 @@ const VIEWPORTS = [
 
 test.beforeEach(async ({ request }) => {
   await request.post("/test-doubles/reset");
-  await request.post("/test-doubles/cards", {
+  await request.post("/test-doubles/asset-cards", {
     data: {
-      cards: [
+      assetCards: [
         {
           id: "wide",
-          kind: "markdown",
+          kind: "asset",
           title: "宽卡片",
-          markdown: "占据三列的内容卡片",
+          body: "占据三列的内容卡片",
           span: 3,
-          access: "public",
         },
         {
           id: "mid",
-          kind: "markdown",
+          kind: "asset",
           title: "中卡片",
-          markdown: "占据两列的内容卡片",
+          body: "占据两列的内容卡片",
           span: 2,
-          access: "public",
         },
         {
           id: "narrow",
-          kind: "markdown",
+          kind: "asset",
           title: "窄卡片",
-          markdown: "占据一列的内容卡片",
+          body: "占据一列的内容卡片",
           span: 1,
-          access: "public",
         },
       ],
     },
   });
 });
+
+async function loginAsOwner(page: Page): Promise<void> {
+  const client = await page.context().newCDPSession(page);
+  await client.send("WebAuthn.enable");
+  await client.send("WebAuthn.addVirtualAuthenticator", {
+    options: {
+      protocol: "ctap2",
+      transport: "internal",
+      hasResidentKey: true,
+      hasUserVerification: true,
+      isUserVerified: true,
+    },
+  });
+  await page.goto("/setup");
+  await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
+  await expect(page.getByRole("status")).toContainText("已完成预置");
+  await page.goto("/");
+  await page.getByRole("button", { name: "使用 Passkey 登录" }).click();
+}
 
 for (const viewport of VIEWPORTS) {
   test(`${viewport.name}宽度下无横向溢出且内容可访问`, async ({ page }) => {
@@ -46,7 +62,7 @@ for (const viewport of VIEWPORTS) {
       width: viewport.width,
       height: viewport.height,
     });
-    await page.goto("/");
+    await loginAsOwner(page);
 
     const overflow = await page.evaluate(
       () =>
@@ -57,8 +73,6 @@ for (const viewport of VIEWPORTS) {
 
     await expect(page.getByTestId("card-grid")).toBeVisible();
     await expect(page.getByTestId("card").first()).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "跟随系统" }),
-    ).toBeVisible();
+    await expect(page.getByRole("group", { name: "主题" })).toHaveCount(0);
   });
 }

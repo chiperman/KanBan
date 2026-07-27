@@ -6,10 +6,9 @@ export const dynamic = "force-dynamic";
 
 const LOGIN_CARD: Card = {
   id: "binance-login-card",
-  kind: "markdown",
+  kind: "asset",
   title: "私密内容",
-  markdown: "Binance 测试登录入口",
-  access: "private",
+  body: "Binance 测试登录入口",
   span: 1,
 };
 
@@ -34,8 +33,8 @@ export async function POST(request: Request) {
   services.assetSourceConnections.failNext(
     body.scenario === "commit-failure" ? "原子事务写入失败" : undefined,
   );
-  if ((await services.cards.list()).length === 0) {
-    await services.cards.replaceAll([LOGIN_CARD]);
+  if ((await services.assetCards.list()).length === 0) {
+    await services.assetCards.replaceAll([LOGIN_CARD]);
   }
   return Response.json({ ok: true });
 }

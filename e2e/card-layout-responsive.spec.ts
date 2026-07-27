@@ -8,37 +8,41 @@ interface VirtualPasskey {
 const CARDS = [
   {
     id: "wide",
-    kind: "markdown",
+    kind: "asset",
     title: "宽卡片",
-    markdown: "桌面三格内容",
+    body: "桌面三格内容",
     span: 3,
-    access: "public",
   },
   {
     id: "mid",
-    kind: "markdown",
+    kind: "asset",
     title: "中卡片",
-    markdown: "桌面两格内容",
+    body: "桌面两格内容",
     span: 2,
-    access: "private",
   },
   {
     id: "narrow",
-    kind: "markdown",
+    kind: "asset",
     title: "窄卡片",
-    markdown: "桌面一格内容",
+    body: "桌面一格内容",
     span: 1,
-    access: "public",
   },
   {
     id: "long",
-    kind: "markdown",
+    kind: "asset",
     title: "长内容卡片",
-    markdown:
+    body:
       "第一段内容。\n\n第二段内容用于证明高度跟随内容。\n\n- 项目一\n- 项目二\n- 项目三",
     span: 1,
-    access: "public",
   },
+] as const;
+
+const ROW_BREAK_CARDS = [
+  { id: "first", kind: "asset", title: "第一张卡片", body: "第一列", span: 1 },
+  { id: "second", kind: "asset", title: "第二张卡片", body: "第二列", span: 1 },
+  { id: "third", kind: "asset", title: "第三张卡片", body: "第三列", span: 1 },
+  { id: "fourth", kind: "asset", title: "第四张卡片", body: "第二行第一列", span: 1 },
+  { id: "fifth", kind: "asset", title: "第五张卡片", body: "应从第三行开始", span: 3 },
 ] as const;
 
 async function attachPasskey(page: Page): Promise<VirtualPasskey> {
@@ -65,11 +69,8 @@ async function loginAsOwner(page: Page): Promise<void> {
   await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
   await expect(page.getByRole("status")).toContainText("已完成预置");
   await page.goto("/");
-  await page
-    .getByTestId("restricted-card")
-    .getByRole("button", { name: "验证身份后查看" })
-    .click();
-  await page.getByRole("button", { name: "使用 Passkey 解锁" }).click();
+
+  await page.getByRole("button", { name: "使用 Passkey 登录" }).click();
   await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
 }
 
@@ -95,33 +96,310 @@ async function pointerDrag(
   await page.mouse.up();
 }
 
+async function resizeCard(
+  page: Page,
+  card: ReturnType<Page["locator"]>,
+  deltaColumns: number,
+): Promise<void> {
+  const handle = card.getByRole("button", { name: /调整.*宽度/ });
+  await handle.scrollIntoViewIfNeeded();
+  const handleBox = await handle.boundingBox();
+  const gridBox = await page.getByTestId("card-grid").boundingBox();
+  expect(handleBox).not.toBeNull();
+  expect(gridBox).not.toBeNull();
+  const columnStep = (gridBox!.width + 16) / 3;
+  await page.mouse.move(
+    handleBox!.x + handleBox!.width / 2,
+    handleBox!.y + handleBox!.height / 2,
+  );
+  await page.mouse.down();
+  await expect(card).toHaveClass(/card-resizing/);
+  await page.mouse.move(
+    handleBox!.x + handleBox!.width / 2 + columnStep * deltaColumns,
+    handleBox!.y + handleBox!.height / 2,
+    { steps: 5 },
+  );
+  await page.mouse.up();
+}
+
+async function reorderCard(
+  page: Page,
+  source: ReturnType<Page["locator"]>,
+  target: ReturnType<Page["locator"]>,
+): Promise<void> {
+  const handle = source.getByRole("button", { name: /拖动.*调整排序/ });
+  await handle.scrollIntoViewIfNeeded();
+  const handleBox = await handle.boundingBox();
+  const targetBox = await target.boundingBox();
+  expect(handleBox).not.toBeNull();
+  expect(targetBox).not.toBeNull();
+  await page.mouse.move(
+    handleBox!.x + handleBox!.width / 2,
+    handleBox!.y + handleBox!.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    handleBox!.x + handleBox!.width / 2 + 6,
+    handleBox!.y + handleBox!.height / 2,
+  );
+  await expect(source).toHaveClass(/card-dragging/);
+  await page.mouse.move(targetBox!.x + 4, targetBox!.y + targetBox!.height / 2, {
+    steps: 8,
+  });
+  await expect(page.getByTestId("layout-drop-slot")).toBeVisible();
+  await page.mouse.up();
+}
+
+async function reorderCardToNewRow(
+  page: Page,
+  source: ReturnType<Page["locator"]>,
+): Promise<void> {
+  const handle = source.getByRole("button", { name: /拖动.*调整排序/ });
+  await handle.scrollIntoViewIfNeeded();
+  const handleBox = await handle.boundingBox();
+  const sourceBox = await source.boundingBox();
+  expect(handleBox).not.toBeNull();
+  expect(sourceBox).not.toBeNull();
+  await page.mouse.move(
+    handleBox!.x + handleBox!.width / 2,
+    handleBox!.y + handleBox!.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    handleBox!.x + handleBox!.width / 2 + 6,
+    handleBox!.y + handleBox!.height / 2,
+  );
+  await expect(source).toHaveClass(/card-dragging/);
+  const endTarget = page.locator('[data-candidate-kind="new-row"]').last();
+  await expect(endTarget).toBeVisible();
+  const endTargetBox = await endTarget.boundingBox();
+  expect(endTargetBox).not.toBeNull();
+  await page.mouse.move(
+    endTargetBox!.x + endTargetBox!.width / 2,
+    endTargetBox!.y + endTargetBox!.height / 2,
+    { steps: 8 },
+  );
+  await expect(page.getByTestId("layout-drop-slot")).toBeVisible();
+  await page.mouse.up();
+}
+
+test("三格资产卡片可缩小并放入两格卡片右侧空位", async ({
+  page,
+  request,
+}) => {
+  const fixture = await request.post("/test-doubles/asset-cards", {
+    data: {
+      assetCards: [
+        { id: "mid", kind: "asset", title: "两格卡片", body: "左侧内容", span: 2 },
+        { id: "wide", kind: "asset", title: "三格卡片", body: "待放入空位", span: 3 },
+      ],
+    },
+  });
+  expect(fixture.ok()).toBeTruthy();
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await loginAsOwner(page);
+
+  const source = page.getByTestId("card").filter({ hasText: "三格卡片" });
+  const target = page.getByTestId("card").filter({ hasText: "两格卡片" });
+  const handle = source.getByRole("button", { name: /拖动三格卡片调整排序/ });
+  const handleBox = await handle.boundingBox();
+  expect(handleBox).not.toBeNull();
+  await page.mouse.move(
+    handleBox!.x + handleBox!.width / 2,
+    handleBox!.y + handleBox!.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    handleBox!.x + handleBox!.width / 2 + 6,
+    handleBox!.y + handleBox!.height / 2,
+  );
+
+  const candidate = page.locator(
+    '[data-candidate-kind="fill-gap"][data-candidate-span="1"][data-candidate-column="2"]',
+  );
+  await expect(candidate).toBeVisible();
+  const candidateBox = await candidate.boundingBox();
+  expect(candidateBox).not.toBeNull();
+  await page.mouse.move(
+    candidateBox!.x + candidateBox!.width / 2,
+    candidateBox!.y + candidateBox!.height / 2,
+    { steps: 6 },
+  );
+  const active = page.getByTestId("layout-drop-slot");
+  await expect(active).toContainText("SPAN 3 → 1 · COL 3");
+  const saved = page.waitForResponse(
+    (response) => response.url().endsWith("/api/asset-cards/layout") && response.request().method() === "PUT",
+  );
+  await page.mouse.up();
+  await saved;
+
+  await expect(source).toHaveClass(/span-1/);
+  expect(Math.abs((await source.boundingBox())!.y - (await target.boundingBox())!.y)).toBeLessThanOrEqual(2);
+  await page.reload();
+  await expect(source).toHaveClass(/span-1/);
+});
+
+test("同一行候选使用互不重叠的固定命中区域", async ({ page, request }) => {
+  const fixture = await request.post("/test-doubles/asset-cards", {
+    data: {
+      assetCards: [
+        { id: "anchor", kind: "asset", title: "锚点卡片", body: "一格", span: 1 },
+        { id: "dragged", kind: "asset", title: "待移动卡片", body: "两格", span: 2 },
+      ],
+    },
+  });
+  expect(fixture.ok()).toBeTruthy();
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await loginAsOwner(page);
+
+  const source = page.locator('[data-layout-card-id="dragged"]');
+  const handle = source.getByRole("button", { name: "拖动待移动卡片调整排序" });
+  const handleBox = await handle.boundingBox();
+  expect(handleBox).not.toBeNull();
+  await page.mouse.move(handleBox!.x + 10, handleBox!.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(handleBox!.x + 18, handleBox!.y + 10);
+  await expect(source).toHaveClass(/card-dragging/);
+
+  const rowTargets = page.locator(
+    '[data-candidate-id][data-candidate-row="0"]',
+  );
+  await expect(rowTargets).toHaveCount(2);
+  const boxes = await rowTargets.evaluateAll((elements) =>
+    elements.map((element) => {
+      const box = element.getBoundingClientRect();
+      return {
+        left: box.left,
+        right: box.right,
+        top: box.top,
+        bottom: box.bottom,
+      };
+    }),
+  );
+  const horizontalOverlap = Math.min(boxes[0].right, boxes[1].right) -
+    Math.max(boxes[0].left, boxes[1].left);
+  const verticalOverlap = Math.min(boxes[0].bottom, boxes[1].bottom) -
+    Math.max(boxes[0].top, boxes[1].top);
+  expect(Math.min(horizontalOverlap, verticalOverlap)).toBeLessThanOrEqual(0);
+  await page.keyboard.press("Escape");
+});
+
+test("Escape 取消网格放置且不保存布局", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await loginAsOwner(page);
+  const source = page.getByTestId("card").filter({ hasText: "宽卡片" });
+  const handle = source.getByRole("button", { name: /拖动宽卡片调整排序/ });
+  const handleBox = await handle.boundingBox();
+  expect(handleBox).not.toBeNull();
+  let saveCount = 0;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/api/asset-cards/layout") && request.method() === "PUT") {
+      saveCount += 1;
+    }
+  });
+  await page.mouse.move(handleBox!.x + 10, handleBox!.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(handleBox!.x + 18, handleBox!.y + 10);
+  await expect(source).toHaveClass(/card-dragging/);
+  await expect(page.locator("[data-candidate-id]")).not.toHaveCount(0);
+
+  await page.keyboard.press("Escape");
+  await expect(source).not.toHaveClass(/card-dragging/);
+  await expect(page.locator("[data-candidate-id]")).toHaveCount(0);
+  expect(saveCount).toBe(0);
+});
+
+test("键盘可以选择与指针相同的自适应缩小候选", async ({
+  page,
+  request,
+}) => {
+  await request.post("/test-doubles/asset-cards", {
+    data: {
+      assetCards: [
+        { id: "mid", kind: "asset", title: "两格卡片", body: "左侧内容", span: 2 },
+        { id: "wide", kind: "asset", title: "三格卡片", body: "待放入空位", span: 3 },
+      ],
+    },
+  });
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await loginAsOwner(page);
+  const source = page.getByTestId("card").filter({ hasText: "三格卡片" });
+  const handle = source.getByRole("button", { name: /拖动三格卡片调整排序/ });
+  await handle.focus();
+  await page.keyboard.press("Space");
+  await expect(source).toHaveClass(/card-dragging/);
+  const candidates = page.locator("[data-candidate-id]");
+  await expect(candidates).not.toHaveCount(0);
+  await candidates.first().evaluate(
+    () => new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    }),
+  );
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByTestId("layout-drop-slot")).toContainText("SPAN 3 → 1 · COL 3");
+  const saved = page.waitForResponse(
+    (response) => response.url().endsWith("/api/asset-cards/layout") && response.request().method() === "PUT",
+  );
+  await page.keyboard.press("Enter");
+  await saved;
+  await expect(source).toHaveClass(/span-1/);
+});
+
+test("布局保存失败时恢复拖动前布局", async ({ page, request }) => {
+  await request.post("/test-doubles/asset-cards", {
+    data: {
+      assetCards: [
+        { id: "mid", kind: "asset", title: "两格卡片", body: "左侧内容", span: 2 },
+        { id: "wide", kind: "asset", title: "三格卡片", body: "待放入空位", span: 3 },
+      ],
+    },
+  });
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await loginAsOwner(page);
+  await page.route("**/api/asset-cards/layout", async (route) => {
+    await route.fulfill({ status: 500, contentType: "application/json", body: '{"error":"测试失败"}' });
+  });
+  const source = page.getByTestId("card").filter({ hasText: "三格卡片" });
+  const handle = source.getByRole("button", { name: /拖动三格卡片调整排序/ });
+  const handleBox = await handle.boundingBox();
+  expect(handleBox).not.toBeNull();
+  await page.mouse.move(handleBox!.x + 10, handleBox!.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(handleBox!.x + 18, handleBox!.y + 10);
+  const candidate = page.locator(
+    '[data-candidate-kind="fill-gap"][data-candidate-span="1"][data-candidate-column="2"]',
+  );
+  await expect(candidate).toBeVisible();
+  const candidateBox = await candidate.boundingBox();
+  await page.mouse.move(candidateBox!.x + candidateBox!.width / 2, candidateBox!.y + candidateBox!.height / 2);
+  await page.mouse.up();
+
+  await expect(page.locator(".content-error")).toContainText("布局保存失败，已恢复原布局");
+  await expect(source).toHaveClass(/span-3/);
+});
+
 test.beforeEach(async ({ request }) => {
   await request.post("/test-doubles/reset");
-  const response = await request.post("/test-doubles/cards", {
-    data: { cards: CARDS },
+  const response = await request.post("/test-doubles/asset-cards", {
+    data: { assetCards: CARDS },
   });
   expect(response.ok()).toBeTruthy();
 });
 
-test("访客不能进入布局编辑模式，所有者正常浏览时也不会误拖动或改宽度", async ({
+test("未认证状态不能调整布局，所有者可直接排序并调整资产卡片宽度", async ({
   page,
 }) => {
   await page.goto("/");
   await expect(page.getByRole("button", { name: "编辑布局" })).toHaveCount(0);
-  await expect(page.getByLabel(/卡片宽度/)).toHaveCount(0);
+  await expect(page.locator(".layout-span-control select")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /调整.*宽度/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /拖动.*调整排序/ })).toHaveCount(0);
   await expect(page.locator('[draggable="true"]')).toHaveCount(0);
-  await pointerDrag(
-    page,
-    page.getByTestId("card").filter({ hasText: "窄卡片" }),
-    page.getByTestId("card").filter({ hasText: "宽卡片" }),
-  );
-  await expect(page.locator('[data-testid="card"], [data-testid="restricted-card"]').first()).toContainText("宽卡片");
-  await page.reload();
-  await expect(page.locator('[data-testid="card"], [data-testid="restricted-card"]').first()).toContainText("宽卡片");
+  await expect(page.getByTestId("card")).toHaveCount(0);
 
   const visitorAttempt = await page.evaluate(
     async (cards) =>
-      fetch("/api/cards/layout", {
+      fetch("/api/asset-cards/layout", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cards }),
@@ -131,129 +409,287 @@ test("访客不能进入布局编辑模式，所有者正常浏览时也不会�
   expect(visitorAttempt).toBe(401);
 
   await loginAsOwner(page);
-  await expect(page.getByRole("button", { name: "编辑布局" })).toBeVisible();
-  await expect(page.getByLabel(/卡片宽度/)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "编辑布局" })).toHaveCount(0);
+  await expect(page.locator(".layout-span-control select")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /调整.*宽度/ })).toHaveCount(CARDS.length);
+  await expect(page.getByRole("button", { name: /拖动.*调整排序/ })).toHaveCount(CARDS.length);
   await expect(page.locator('[draggable="true"]')).toHaveCount(0);
-  await pointerDrag(
-    page,
-    page.getByTestId("card").filter({ hasText: "窄卡片" }),
-    page.getByTestId("card").filter({ hasText: "宽卡片" }),
+  const savedResize = page.waitForResponse(
+    (response) => response.url().endsWith("/api/asset-cards/layout") && response.request().method() === "PUT",
   );
-  await expect(page.getByTestId("card").first()).toContainText("宽卡片");
+  await resizeCard(page, page.getByTestId("card").filter({ hasText: "窄卡片" }), 1);
+  await savedResize;
+  await expect(page.getByTestId("card").filter({ hasText: "窄卡片" })).toHaveClass(/span-2/);
   await page.reload();
-  await expect(page.getByTestId("card").first()).toContainText("宽卡片");
-
-  await page.getByRole("button", { name: "编辑布局" }).click();
-  await expect(page.getByRole("status")).toContainText("布局编辑模式");
-  await expect(page.getByLabel(/卡片宽度/)).toHaveCount(CARDS.length);
-  await expect(page.locator('[draggable="true"]')).toHaveCount(CARDS.length);
-
-  await page.getByRole("button", { name: "取消布局编辑" }).click();
-  await expect(page.getByLabel(/卡片宽度/)).toHaveCount(0);
-  await expect(page.locator('[draggable="true"]')).toHaveCount(0);
+  await expect(page.getByTestId("card").filter({ hasText: "窄卡片" })).toHaveClass(/span-2/);
+  expect(
+    await page.getByTestId("card").first().evaluate(
+      (card) => window.getComputedStyle(card, "::before").content,
+    ),
+  ).toBe("none");
 });
 
-test("所有者拖拽并设置一二三格宽度后，刷新与访客视图保留同一布局", async ({
+test("旧高度数据不会撑大资产卡片，卡片高度始终跟随内容", async ({
   page,
   request,
 }) => {
+  const fixture = await request.post("/test-doubles/asset-cards", {
+    data: {
+      assetCards: [
+        {
+          ...CARDS[2],
+          minHeight: 960,
+        },
+      ],
+    },
+  });
+  expect(fixture.ok()).toBeTruthy();
   await loginAsOwner(page);
-  await page.getByRole("button", { name: "编辑布局" }).click();
+
+  const card = page.getByTestId("card").filter({ hasText: "窄卡片" });
+  expect(await card.evaluate((element) => element.style.minHeight)).toBe("");
+  const autoHeight = (await card.boundingBox())!.height;
+  expect(autoHeight).toBeLessThan(400);
+  const resizeHandle = card.getByRole("button", {
+    name: "调整窄卡片宽度，当前宽度 1 格；可拖动或使用左右方向键",
+  });
+  await resizeHandle.press("ArrowDown");
+  expect((await card.boundingBox())!.height).toBe(autoHeight);
+});
+
+test("所有者通过卡片手柄排序并调整宽度后刷新仍保留布局", async ({
+  page,
+}) => {
+  await loginAsOwner(page);
 
   const wide = page.getByTestId("card").filter({ hasText: "宽卡片" });
   const narrow = page.getByTestId("card").filter({ hasText: "窄卡片" });
-  await narrow.dragTo(wide);
+  const mid = page.getByTestId("card").filter({ hasText: "中卡片" });
+  const savedReorder = page.waitForResponse(
+    (response) => response.url().endsWith("/api/asset-cards/layout") && response.request().method() === "PUT",
+  );
+  await reorderCard(page, narrow, wide);
+  await savedReorder;
+  await page.waitForTimeout(200);
 
-  await page.getByLabel("窄卡片宽度").selectOption("2");
-  await page.getByLabel("宽卡片宽度").selectOption("1");
-  await page.getByLabel("中卡片宽度").selectOption("3");
-  await page.getByRole("button", { name: "保存布局" }).click();
-
-  await expect(page.getByRole("button", { name: "编辑布局" })).toBeVisible();
+  const savedNarrow = page.waitForResponse(
+    (response) => response.url().endsWith("/api/asset-cards/layout") && response.request().method() === "PUT",
+  );
+  await resizeCard(page, narrow, 1);
+  await savedNarrow;
+  const savedWide = page.waitForResponse(
+    (response) => response.url().endsWith("/api/asset-cards/layout") && response.request().method() === "PUT",
+  );
+  await resizeCard(page, wide, -2);
+  await savedWide;
+  const savedMid = page.waitForResponse(
+    (response) => response.url().endsWith("/api/asset-cards/layout") && response.request().method() === "PUT",
+  );
+  await resizeCard(page, mid, 1);
+  await savedMid;
   await expect(page.getByTestId("card").first()).toContainText("窄卡片");
   await page.reload();
   await expect(page.getByTestId("card").nth(0)).toContainText("窄卡片");
   await expect(page.getByTestId("card").nth(1)).toContainText("宽卡片");
   await expect(page.getByTestId("card").nth(2)).toContainText("中卡片");
 
-  const ownerBoxes = await page.getByTestId("card").evaluateAll((cards) =>
-    cards.map((card) => {
-      const box = card.getBoundingClientRect();
-      const grid = card.parentElement!.getBoundingClientRect();
-      return {
-        x: box.x,
-        y: box.y - grid.y,
-        width: box.width,
-        height: box.height,
-      };
-    }),
-  );
-
   await page.getByRole("button", { name: "退出登录" }).click();
-  const visitorCards = page.locator(
-    '[data-testid="card"], [data-testid="restricted-card"]',
-  );
-  await expect(visitorCards).toHaveCount(CARDS.length);
-  await expect(visitorCards.nth(0)).toContainText("窄卡片");
-  await expect(visitorCards.nth(1)).toContainText("宽卡片");
-  await expect(visitorCards.nth(2)).toHaveAttribute(
-    "data-testid",
-    "restricted-card",
-  );
+  await expect(page.getByTestId("login-gate")).toBeVisible();
+  await expect(page.getByTestId("card")).toHaveCount(0);
+});
 
-  const restrictedVisitorBoxes = await visitorCards.evaluateAll((cards) =>
-    cards.map((card) => {
-      const box = card.getBoundingClientRect();
-      const grid = card.parentElement!.getBoundingClientRect();
-      return {
-        x: box.x,
-        y: box.y - grid.y,
-        width: box.width,
-        height: box.height,
-      };
-    }),
-  );
-  for (const [index, visitorBox] of restrictedVisitorBoxes.entries()) {
-    expect(visitorBox.x).toBe(ownerBoxes[index].x);
-    expect(visitorBox.width).toBe(ownerBoxes[index].width);
-  }
-
-  const publishFixture = await request.post("/test-doubles/cards", {
-    data: {
-      cards: [
-        { ...CARDS[2], span: 2 },
-        { ...CARDS[0], span: 1 },
-        { ...CARDS[1], span: 3, access: "public" },
-        CARDS[3],
-      ],
-    },
+test("资产卡片调整为三格并移动时红色预览框覆盖完整占用范围", async ({
+  page,
+  request,
+}) => {
+  await request.post("/test-doubles/reset");
+  const seeded = await request.post("/test-doubles/release-acceptance", {
+    data: { action: "seed" },
   });
-  expect(publishFixture.ok()).toBeTruthy();
-  await page.reload();
-  const publicVisitorBoxes = await page.getByTestId("card").evaluateAll((cards) =>
-    cards.map((card) => {
-      const box = card.getBoundingClientRect();
-      const grid = card.parentElement!.getBoundingClientRect();
-      return {
-        x: box.x,
-        y: box.y - grid.y,
-        width: box.width,
-        height: box.height,
-      };
-    }),
+  expect(seeded.ok()).toBeTruthy();
+  await page.setViewportSize({ width: 1280, height: 1400 });
+  await loginAsOwner(page);
+
+  const grid = page.getByTestId("card-grid");
+  const card = page.getByTestId("longbridge-card").locator("..");
+  const gridBox = await grid.boundingBox();
+  expect(gridBox).not.toBeNull();
+  const columnGap = await grid.evaluate((element) =>
+    Number.parseFloat(window.getComputedStyle(element).columnGap),
   );
-  for (const [index, restrictedBox] of restrictedVisitorBoxes.entries()) {
-    expect(restrictedBox.x).toBe(publicVisitorBoxes[index].x);
-    expect(restrictedBox.width).toBe(publicVisitorBoxes[index].width);
-    expect(
-      Math.abs(restrictedBox.y - publicVisitorBoxes[index].y),
-    ).toBeLessThanOrEqual(48);
+  const columnStep = (gridBox!.width + columnGap) / 3;
+  const columnWidth = (gridBox!.width - columnGap * 2) / 3;
+
+  async function resizeToNextSpan(expectedSpan: 2 | 3, expectedWidth: number) {
+    const resizeHandle = card.getByRole("button", { name: /调整.*宽度/ });
+    await resizeHandle.scrollIntoViewIfNeeded();
+    const handleBox = await resizeHandle.boundingBox();
+    expect(handleBox).not.toBeNull();
+    const hitClass = await page.evaluate(
+      ({ x, y }) => document.elementFromPoint(x, y)?.getAttribute("class"),
+      {
+        x: handleBox!.x + handleBox!.width / 2,
+        y: handleBox!.y + handleBox!.height / 2,
+      },
+    );
+    expect(hitClass).toContain("layout-resize-handle");
+    const savedResize = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/asset-cards/layout") &&
+        response.request().method() === "PUT",
+    );
+    await page.mouse.move(
+      handleBox!.x + handleBox!.width / 2,
+      handleBox!.y + handleBox!.height / 2,
+    );
+    await page.mouse.down();
+    await expect(card).toHaveClass(/card-resizing/);
+    await expect(page.getByTestId("layout-resize-preview")).toBeVisible();
+    await page.mouse.move(
+      handleBox!.x + handleBox!.width / 2 + columnStep,
+      handleBox!.y + handleBox!.height / 2,
+      { steps: 5 },
+    );
+
+    const resizePreview = page.getByTestId("layout-resize-preview");
+    const resizePreviewBox = await resizePreview.boundingBox();
+    expect(resizePreviewBox).not.toBeNull();
+    expect(Math.abs(resizePreviewBox!.width - expectedWidth)).toBeLessThanOrEqual(2);
+    await expect(resizePreview).toHaveCSS("outline-color", "rgb(215, 25, 33)");
+    await page.mouse.up();
+    await savedResize;
+
+    await expect(card).toHaveClass(new RegExp(`span-${expectedSpan}`));
+    const cardBox = await card.boundingBox();
+    expect(cardBox).not.toBeNull();
+    expect(Math.abs(cardBox!.width - expectedWidth)).toBeLessThanOrEqual(2);
+    await card.evaluate(async (element) => {
+      await Promise.all(
+        element.getAnimations().map((animation) => animation.finished.catch(() => undefined)),
+      );
+    });
   }
-  expect(
-    Math.abs(
-      restrictedVisitorBoxes[2].height - publicVisitorBoxes[2].height,
-    ),
-  ).toBeLessThanOrEqual(48);
+
+  await resizeToNextSpan(2, columnWidth * 2 + columnGap);
+  await resizeToNextSpan(3, gridBox!.width);
+  const resizedCardBox = await card.boundingBox();
+  expect(resizedCardBox).not.toBeNull();
+  expect(Math.abs(resizedCardBox!.width - gridBox!.width)).toBeLessThanOrEqual(2);
+
+  const dragHandle = card.getByRole("button", { name: /拖动.*调整排序/ });
+  const dragHandleBox = await dragHandle.boundingBox();
+  const target = page.getByTestId("binance-card").locator("..");
+  const targetBox = await target.boundingBox();
+  expect(dragHandleBox).not.toBeNull();
+  expect(targetBox).not.toBeNull();
+  await page.mouse.move(
+    dragHandleBox!.x + dragHandleBox!.width / 2,
+    dragHandleBox!.y + dragHandleBox!.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(targetBox!.x + 4, targetBox!.y + targetBox!.height / 2, {
+    steps: 8,
+  });
+  const dropSlot = page.getByTestId("layout-drop-slot");
+  await expect(dropSlot).toBeVisible();
+  await expect(dropSlot).toHaveClass(/span-3/);
+  const dropSlotBox = await dropSlot.boundingBox();
+  expect(dropSlotBox).not.toBeNull();
+  expect(Math.abs(dropSlotBox!.width - gridBox!.width)).toBeLessThanOrEqual(2);
+  await expect.poll(async () => {
+    const currentBox = await dropSlot.boundingBox();
+    return Math.abs(currentBox!.height - resizedCardBox!.height);
+  }).toBeLessThanOrEqual(2);
+  await expect(dropSlot).toHaveCSS("outline-color", "rgb(215, 25, 33)");
+  await page.mouse.up();
+});
+
+test("所有者拖至末尾会强制从新行开始并在刷新后保留", async ({
+  page,
+  request,
+}) => {
+  const fixture = await request.post("/test-doubles/asset-cards", {
+    data: { assetCards: ROW_BREAK_CARDS },
+  });
+  expect(fixture.ok()).toBeTruthy();
+  await page.setViewportSize({ width: 1280, height: 1400 });
+  await loginAsOwner(page);
+  const fifth = page.getByTestId("card").filter({ hasText: "第五张卡片" });
+  const savedReorder = page.waitForResponse(
+    (response) => response.url().endsWith("/api/asset-cards/layout") && response.request().method() === "PUT",
+  );
+  await reorderCardToNewRow(page, fifth);
+  await savedReorder;
+  const fourth = page.getByTestId("card").filter({ hasText: "第四张卡片" });
+  const gridBox = await page.getByTestId("card-grid").boundingBox();
+  expect(gridBox).not.toBeNull();
+  await expect(fifth).toHaveClass(/starts-new-row/);
+  await expect(fifth).toHaveClass(/span-3/);
+  expect(Math.abs((await fifth.boundingBox())!.width - gridBox!.width)).toBeLessThanOrEqual(2);
+  expect((await fifth.boundingBox())!.y).toBeGreaterThan((await fourth.boundingBox())!.y);
+  await page.reload();
+  await expect(fifth).toHaveClass(/starts-new-row/);
+  await expect(fifth).toHaveClass(/span-3/);
+  expect(Math.abs((await fifth.boundingBox())!.width - gridBox!.width)).toBeLessThanOrEqual(2);
+  expect((await fifth.boundingBox())!.y).toBeGreaterThan((await fourth.boundingBox())!.y);
+});
+
+test("卡片较多时可从视口顶部拖到页面底部新行", async ({ page, request }) => {
+  const manyCards = Array.from({ length: 18 }, (_, index) => ({
+    id: `card-${index + 1}`,
+    kind: "asset",
+    title: `资产卡片 ${index + 1}`,
+    body: `第 ${index + 1} 张卡片`,
+    span: 1,
+  }));
+  const fixture = await request.post("/test-doubles/asset-cards", {
+    data: { assetCards: manyCards },
+  });
+  expect(fixture.ok()).toBeTruthy();
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await loginAsOwner(page);
+
+  const source = page.locator('[data-layout-card-id="card-1"]');
+  const handle = source.getByRole("button", { name: /拖动资产卡片 1调整排序/ });
+  const handleBox = await handle.boundingBox();
+  expect(handleBox).not.toBeNull();
+  await page.mouse.move(handleBox!.x + 10, handleBox!.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(handleBox!.x + 18, handleBox!.y + 10);
+  await expect(source).toHaveClass(/card-dragging/);
+
+  const startScrollY = await page.evaluate(() => window.scrollY);
+  for (let index = 0; index < 12; index += 1) {
+    await page.mouse.move(640, 892);
+    await page.waitForTimeout(40);
+  }
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(startScrollY);
+  const newRow = page.locator('[data-candidate-kind="new-row"]').last();
+  await expect(newRow).toHaveCount(1);
+  const newRowBox = await newRow.boundingBox();
+  expect(newRowBox).not.toBeNull();
+  expect(newRowBox!.y).toBeLessThan(900);
+  await page.mouse.move(
+    newRowBox!.x + newRowBox!.width / 2,
+    newRowBox!.y + newRowBox!.height / 2,
+  );
+  await expect(page.getByTestId("layout-drop-slot")).toHaveAttribute(
+    "data-candidate-kind",
+    "new-row",
+  );
+  await page.waitForTimeout(100);
+  const activeNewRowBox = await newRow.boundingBox();
+  expect(activeNewRowBox).not.toBeNull();
+  expect(Math.abs(activeNewRowBox!.y - newRowBox!.y)).toBeLessThanOrEqual(2);
+  const saved = page.waitForResponse(
+    (response) => response.url().endsWith("/api/asset-cards/layout") && response.request().method() === "PUT",
+  );
+  await page.mouse.up();
+  await saved;
+
+  const cards = page.getByTestId("card");
+  await expect(cards.last()).toContainText("资产卡片 1");
+  await expect(cards.last()).toHaveClass(/starts-new-row/);
 });
 
 const VIEWPORTS = [
@@ -267,11 +703,9 @@ for (const viewport of VIEWPORTS) {
     page,
   }) => {
     await page.setViewportSize(viewport);
-    await page.goto("/");
+    await loginAsOwner(page);
 
-    const cards = page.locator(
-      '[data-testid="card"], [data-testid="restricted-card"]',
-    );
+    const cards = page.getByTestId("card");
     await expect(cards).toHaveCount(CARDS.length);
     const boxes = await cards.evaluateAll((items) =>
       items.map((item) => {

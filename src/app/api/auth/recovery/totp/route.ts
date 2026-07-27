@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     : null;
   if (!pending || !canAttemptRecoveryTotp(now)) {
     return Response.json(
-      { error: "恢复验证已过期，请重新开始" },
+      { error: "备用登录验证已过期，请重新开始" },
       { status: 401 },
     );
   }

@@ -1,4 +1,4 @@
-import { updateCardLayout } from "@/server/cards";
+import { updateAssetCardLayout } from "@/server/asset-cards";
 import { getServices } from "@/server/composition";
 
 export const dynamic = "force-dynamic";
@@ -10,11 +10,11 @@ export async function PUT(request: Request) {
   }
 
   try {
-    const cards = updateCardLayout(
-      await services.cards.list(),
+    const cards = updateAssetCardLayout(
+      await services.assetCards.list(),
       await request.json(),
     );
-    await services.cards.replaceAll(cards);
+    await services.assetCards.replaceAll(cards);
   } catch (error) {
     return Response.json(
       { error: error instanceof Error ? error.message : "布局数据格式无效" },
