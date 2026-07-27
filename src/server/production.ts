@@ -4,7 +4,6 @@ import {
   randomBytes,
   randomUUID,
 } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { decimalAdd, decimalCompare, decimalDivide } from "@/domain/decimal";
@@ -65,6 +64,11 @@ import {
   ProductionEvmWatchSourceRefresher,
   ProductionEvmWatchWallet,
 } from "@/server/asset-sources/ethereum";
+import {
+  atomicWritePrivateFile,
+  hardenLocalDataPermissions,
+  readPrivateFile,
+} from "@/server/local-data-permissions";
 
 class SystemClock implements Clock {
   now(): Date {
@@ -236,13 +240,13 @@ export class FileDashboardDatabase {
   private async load(): Promise<DashboardState> {
     let raw: string;
     try {
-      raw = await readFile(this.filePath, "utf8");
+      raw = await readPrivateFile(this.filePath);
     } catch (error) {
       if (!isMissingFile(error)) throw error;
       let assetCards: Card[] = [];
       try {
         const legacy = parseAssetCards(
-          JSON.parse(await readFile(this.legacyCardsPath, "utf8")),
+          JSON.parse(await readPrivateFile(this.legacyCardsPath)),
         );
         if (legacy === null) throw new Error("旧卡片数据格式无效");
         assetCards = legacy;
@@ -277,13 +281,10 @@ export class FileDashboardDatabase {
   }
 
   private async write(state: DashboardState): Promise<void> {
-    await mkdir(path.dirname(this.filePath), { recursive: true, mode: 0o700 });
-    const temporary = `${this.filePath}.${randomUUID()}.tmp`;
-    await writeFile(temporary, JSON.stringify(state, null, 2), {
-      encoding: "utf8",
-      mode: 0o600,
-    });
-    await rename(temporary, this.filePath);
+    await atomicWritePrivateFile(
+      this.filePath,
+      JSON.stringify(state, null, 2),
+    );
   }
 
   private mutate<T>(operation: (state: DashboardState) => T): Promise<T> {
@@ -571,7 +572,7 @@ export class FileEncryptedSecretStore implements SecretStore {
 
   private async load(): Promise<Record<string, StoredSecret>> {
     try {
-      const value: unknown = JSON.parse(await readFile(this.filePath, "utf8"));
+      const value: unknown = JSON.parse(await readPrivateFile(this.filePath));
       if (typeof value !== "object" || value === null || Array.isArray(value)) {
         throw new Error(`凭证存储格式无效: ${this.filePath}`);
       }
@@ -583,13 +584,7 @@ export class FileEncryptedSecretStore implements SecretStore {
   }
 
   private async write(values: Record<string, StoredSecret>): Promise<void> {
-    await mkdir(path.dirname(this.filePath), { recursive: true, mode: 0o700 });
-    const temporary = `${this.filePath}.${randomUUID()}.tmp`;
-    await writeFile(temporary, JSON.stringify(values), {
-      encoding: "utf8",
-      mode: 0o600,
-    });
-    await rename(temporary, this.filePath);
+    await atomicWritePrivateFile(this.filePath, JSON.stringify(values));
   }
 
   private mutate<T>(operation: (values: Record<string, StoredSecret>) => T): Promise<T> {
@@ -794,15 +789,16 @@ function isOwnerCredential(value: unknown): value is OwnerCredential {
   );
 }
 
-class FileOwnerCredentialStore implements OwnerCredentialStore {
+export class FileOwnerCredentialStore implements OwnerCredentialStore {
   constructor(private readonly filePath: string) {}
 
   async get(): Promise<OwnerCredential | null> {
     let raw: string;
     try {
-      raw = await readFile(this.filePath, "utf8");
-    } catch {
-      return null;
+      raw = await readPrivateFile(this.filePath);
+    } catch (error) {
+      if (isMissingFile(error)) return null;
+      throw error;
     }
     const value: unknown = JSON.parse(raw);
     if (!isOwnerCredential(value)) {
@@ -812,8 +808,10 @@ class FileOwnerCredentialStore implements OwnerCredentialStore {
   }
 
   async save(credential: OwnerCredential): Promise<void> {
-    await mkdir(path.dirname(this.filePath), { recursive: true });
-    await writeFile(this.filePath, JSON.stringify(credential, null, 2), "utf8");
+    await atomicWritePrivateFile(
+      this.filePath,
+      JSON.stringify(credential, null, 2),
+    );
   }
 }
 
@@ -832,7 +830,7 @@ function isOwnerRecoveryCredential(
   );
 }
 
-class FileOwnerRecoveryCredentialStore
+export class FileOwnerRecoveryCredentialStore
   implements OwnerRecoveryCredentialStore
 {
   constructor(private readonly filePath: string) {}
@@ -840,9 +838,10 @@ class FileOwnerRecoveryCredentialStore
   async get(): Promise<OwnerRecoveryCredential | null> {
     let raw: string;
     try {
-      raw = await readFile(this.filePath, "utf8");
-    } catch {
-      return null;
+      raw = await readPrivateFile(this.filePath);
+    } catch (error) {
+      if (isMissingFile(error)) return null;
+      throw error;
     }
     const value: unknown = JSON.parse(raw);
     if (!isOwnerRecoveryCredential(value)) {
@@ -852,13 +851,17 @@ class FileOwnerRecoveryCredentialStore
   }
 
   async save(credential: OwnerRecoveryCredential): Promise<void> {
-    await mkdir(path.dirname(this.filePath), { recursive: true });
-    await writeFile(this.filePath, JSON.stringify(credential, null, 2), "utf8");
+    await atomicWritePrivateFile(
+      this.filePath,
+      JSON.stringify(credential, null, 2),
+    );
   }
 }
 
-export function createProductionServices(): AppServices {
-  const dataDir = path.join(process.cwd(), "data");
+export function createProductionServices(
+  dataDir = path.join(process.cwd(), "data"),
+): AppServices {
+  hardenLocalDataPermissions(dataDir);
   const clock = new SystemClock();
   const database = new FileDashboardDatabase(
     path.join(dataDir, "dashboard.json"),
