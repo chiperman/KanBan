@@ -3,6 +3,11 @@ node_modules/
 data/
 test-results/
 playwright-report/
+.playwright-cli/
+output/
 .env*
 *.tsbuildinfo
 next-env.d.ts
+/native/longbridge-keychain-sdk/target/
+/native/longbridge-keychain-sdk/vendor/longbridge-oauth/target/
+/native/longbridge-keychain-sdk/*.node
