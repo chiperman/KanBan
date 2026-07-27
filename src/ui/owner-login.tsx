@@ -94,7 +94,12 @@ export function OwnerLogin({
             ? "OWNER VERIFICATION REQUIRED"
             : "FIRST RUN · OWNER PROVISION REQUIRED"}
         </p>
-        <h1 id="login-title">{ownerProvisioned ? "LOCKED" : "SETUP"}</h1>
+        <p className="login-display-state" aria-hidden="true">
+          {ownerProvisioned ? "LOCKED" : "SETUP"}
+        </p>
+        <h1 id="login-title">
+          {ownerProvisioned ? "个人资产看板已锁定" : "预置唯一所有者"}
+        </h1>
         <p className="login-copy">
           {ownerProvisioned
             ? "验证后加载本机资产数据。"

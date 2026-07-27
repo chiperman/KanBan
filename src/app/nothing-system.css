@@ -2216,10 +2216,15 @@ body {
   position: absolute;
   top: var(--space-5);
   right: 0;
-  color: var(--ink-muted);
+  color: var(--ink-secondary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--caption);
   letter-spacing: 0.1em;
+}
+
+.page-setup .card-label {
+  color: var(--ink-secondary);
+  font-size: var(--caption);
 }
 
 .editor-dialog,
@@ -2320,6 +2325,7 @@ body {
 .locked-brand {
   position: relative;
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: var(--space-5);
 }
@@ -2332,20 +2338,15 @@ body {
 }
 
 .page-locked .header-wordmark {
-  color: var(--ink-muted);
-  font-size: 9px;
+  color: var(--ink-secondary);
+  font-size: var(--caption);
   font-weight: 400;
 }
 
 .locked-view-mode {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
+  color: var(--ink-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--caption);
 }
 
 .page-locked .header-side {
@@ -2357,7 +2358,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  color: var(--ink-muted);
+  color: var(--ink-secondary);
   font-family: var(--font-mono);
   font-style: normal;
   font-variant-numeric: tabular-nums;
@@ -2365,23 +2366,28 @@ body {
 }
 
 .locked-clock > span {
-  font-size: 8px;
+  font-size: var(--caption);
   letter-spacing: 0.1em;
 }
 
 .locked-clock > strong {
   color: var(--ink-display);
-  font-family: var(--font-display);
+  font-family: var(--font-mono);
   font-size: 22px;
-  font-variation-settings: "ROND" 100;
-  font-weight: 620;
+  font-variation-settings: normal;
+  font-weight: 700;
   letter-spacing: -0.04em;
   line-height: 1;
 }
 
 .locked-clock > small {
-  font-size: 7px;
+  font-size: var(--caption);
   letter-spacing: 0.08em;
+}
+
+.page-locked .header-system {
+  color: var(--ink-secondary);
+  font-size: var(--caption);
 }
 
 .page-locked .login-main {
@@ -2405,9 +2411,9 @@ body {
 .page-locked .card-label,
 .login-eyebrow,
 .login-trust-line {
-  color: var(--ink-muted);
+  color: var(--ink-secondary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--caption);
   letter-spacing: 0.1em;
 }
 
@@ -2419,7 +2425,7 @@ body {
   margin: 0;
 }
 
-.page-locked .login-gate h1 {
+.login-display-state {
   max-width: 8em;
   margin: 18px 0 0;
   color: var(--ink-display);
@@ -2429,6 +2435,18 @@ body {
   font-weight: 620;
   letter-spacing: -0.06em;
   line-height: 0.86;
+}
+
+.page-locked .login-gate h1 {
+  max-width: 20em;
+  margin: var(--space-3) 0 0;
+  color: var(--ink-display);
+  font-family: var(--font-ui);
+  font-size: var(--heading);
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.3;
+  text-wrap: balance;
 }
 
 .page-locked .login-copy {
@@ -2445,6 +2463,11 @@ body {
 
 .page-locked .login-actions {
   margin-top: 36px;
+}
+
+.page-locked .login-hint {
+  color: var(--ink-secondary);
+  font-size: var(--caption);
 }
 
 .page-locked .login-form {
@@ -2465,9 +2488,9 @@ body {
   justify-content: space-between;
   gap: var(--space-6);
   border-top: 1px solid var(--line);
-  color: var(--ink-muted);
+  color: var(--ink-secondary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--caption);
   letter-spacing: 0.1em;
 }
 
@@ -2511,7 +2534,7 @@ body {
     padding: 36px 22px;
   }
 
-  .page-locked .login-gate h1 {
+  .login-display-state {
     font-size: 68px;
   }
 
@@ -2525,13 +2548,16 @@ body {
   }
 
   .locked-footer {
-    min-height: 64px;
+    min-height: 88px;
+    flex-direction: column;
     align-items: flex-start;
-    padding-top: var(--space-4);
+    justify-content: center;
+    gap: var(--space-1);
+    padding-block: var(--space-4);
   }
 
   .locked-footer span:last-child {
-    max-width: 16em;
-    text-align: right;
+    max-width: none;
+    text-align: left;
   }
 }
