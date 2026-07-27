@@ -7,10 +7,14 @@ type LoginState = "idle" | "pending" | "failed" | "unavailable";
 type LoginMode = "choice" | "recovery-password" | "recovery-totp";
 
 interface OwnerLoginProps {
+  ownerProvisioned: boolean;
   recoveryConfigured: boolean;
 }
 
-export function OwnerLogin({ recoveryConfigured }: OwnerLoginProps) {
+export function OwnerLogin({
+  ownerProvisioned,
+  recoveryConfigured,
+}: OwnerLoginProps) {
   const [state, setState] = useState<LoginState>("idle");
   const [mode, setMode] = useState<LoginMode>("choice");
   const [recoveryError, setRecoveryError] = useState("");
@@ -85,9 +89,17 @@ export function OwnerLogin({ recoveryConfigured }: OwnerLoginProps) {
     <section className="login-gate" data-testid="login-gate" aria-labelledby="login-title">
       <p className="card-label">PRIVATE ACCESS / 00</p>
       <div className="login-intro">
-        <p className="login-eyebrow">OWNER VERIFICATION REQUIRED</p>
-        <h1 id="login-title">LOCKED</h1>
-        <p className="login-copy">验证后加载本机资产数据。</p>
+        <p className="login-eyebrow">
+          {ownerProvisioned
+            ? "OWNER VERIFICATION REQUIRED"
+            : "FIRST RUN · OWNER PROVISION REQUIRED"}
+        </p>
+        <h1 id="login-title">{ownerProvisioned ? "LOCKED" : "SETUP"}</h1>
+        <p className="login-copy">
+          {ownerProvisioned
+            ? "验证后加载本机资产数据。"
+            : "此终端尚未预置所有者 Passkey，请先完成一次性预置。"}
+        </p>
       </div>
       <div className="login-flow">
         {state === "failed" ? (
@@ -97,10 +109,23 @@ export function OwnerLogin({ recoveryConfigured }: OwnerLoginProps) {
         ) : null}
         {state === "unavailable" ? (
           <p className="login-error" role="alert">
-            [ERROR] 所有者尚未预置登录凭证。
+            [ERROR] 所有者尚未预置登录凭证，请先完成首次预置。
           </p>
         ) : null}
-        {mode === "choice" ? (
+        {!ownerProvisioned ? (
+          <div className="login-actions first-run-actions">
+            <a className="login-primary provision-primary" href="/setup">
+              <span>开始首次预置</span>
+              <span className="provision-primary-arrow" aria-hidden="true">
+                →
+              </span>
+            </a>
+            <p className="login-hint">
+              仅可预置一位所有者 / 完成后仍需使用 Passkey 登录
+            </p>
+          </div>
+        ) : null}
+        {ownerProvisioned && mode === "choice" ? (
           <div className="login-actions">
             <button
               type="button"

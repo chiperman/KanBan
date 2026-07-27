@@ -17,6 +17,7 @@ function formatUtc(date: Date): string {
 export default async function AssetDashboardPage() {
   const services = getServices();
   const session = await services.auth.currentSession();
+  const ownerProvisioned = (await services.ownerCredentials.get()) !== null;
   const recoveryConfigured =
     (await services.ownerRecoveryCredentials.get()) !== null;
   const now = services.clock.now();
@@ -43,7 +44,10 @@ export default async function AssetDashboardPage() {
           </div>
         </header>
         <main id="main-content" className="login-main">
-          <OwnerLogin recoveryConfigured={recoveryConfigured} />
+          <OwnerLogin
+            ownerProvisioned={ownerProvisioned}
+            recoveryConfigured={recoveryConfigured}
+          />
         </main>
         <footer className="locked-footer">
           <span>LOCAL-FIRST · OWNER ONLY</span>

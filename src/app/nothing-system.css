@@ -981,6 +981,15 @@ body {
   margin-top: var(--space-8);
 }
 
+.first-run-actions {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.first-run-actions .login-hint {
+  flex: none;
+}
+
 .login-form {
   max-width: 520px;
   margin-top: var(--space-8);
@@ -1016,6 +1025,32 @@ body {
   border-color: var(--ink-display);
   background: var(--ink-display);
   color: var(--canvas);
+}
+
+.provision-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  min-width: 196px;
+  min-height: 48px;
+  padding: 0 var(--space-5) 0 var(--space-6);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.login-primary.provision-primary::before {
+  content: none;
+  margin: 0;
+}
+
+.provision-primary-arrow {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  line-height: 1;
 }
 
 .login-cancel,
@@ -1505,6 +1540,41 @@ body {
 .setup-actions,
 .setup-done {
   margin-top: var(--space-8);
+}
+
+.setup-feedback-message {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3);
+  max-width: 42rem;
+  margin: 0;
+  line-height: 1.6;
+}
+
+.setup-feedback-code {
+  white-space: nowrap;
+}
+
+.setup-feedback-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.setup-secondary-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  margin: 0;
+  padding: 0 var(--space-5);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
 }
 
 .card-drag-preview {

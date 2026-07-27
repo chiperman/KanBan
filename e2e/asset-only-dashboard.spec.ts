@@ -46,7 +46,7 @@ test.beforeEach(async ({ request }) => {
   expect(response.ok()).toBeTruthy();
 });
 
-test("未认证首页只是所有者登录入口，不再提供公开主页或资产占位", async ({
+test("未认证首页只是所有者访问入口，不再提供公开主页或资产占位", async ({
   page,
 }) => {
   const bodies: string[] = [];
@@ -61,7 +61,12 @@ test("未认证首页只是所有者登录入口，不再提供公开主页或�
 
   await expect(page).toHaveTitle(/个人资产看板/);
   await expect(page.getByTestId("login-gate")).toBeVisible();
-  await expect(page.getByRole("button", { name: "使用 Passkey 登录" })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "开始首次预置" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "使用 Passkey 登录" }),
+  ).toHaveCount(0);
   await expect(page.getByTestId("card-grid")).toHaveCount(0);
   await expect(page.getByTestId("restricted-card")).toHaveCount(0);
   await expect(page.getByText(/公开主页|访客视图|Now|链接卡片/)).toHaveCount(0);
