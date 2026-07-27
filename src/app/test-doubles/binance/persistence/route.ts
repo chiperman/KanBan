@@ -56,12 +56,14 @@ export async function POST() {
     return Response.json({
       sourceKind: source.kind,
       dashboardHasOnlyReference:
+        source.credentialReference !== null &&
         dashboardRaw.includes(source.credentialReference) &&
         !dashboardRaw.includes(API_KEY) &&
         !dashboardRaw.includes(API_SECRET),
       encryptedStoreHasNoPlaintext:
         !secretRaw.includes(API_KEY) && !secretRaw.includes(API_SECRET),
       committedSecretReadable:
+        source.credentialReference !== null &&
         (await secrets.get(source.credentialReference)) === credentials,
       dailySnapshotCount: (await database.listDailyAssetSnapshots()).length,
     });

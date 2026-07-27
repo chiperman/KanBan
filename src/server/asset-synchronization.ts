@@ -36,7 +36,9 @@ export class SourceIsolatedAssetSynchronization
 
   private async execute(mode: AssetRefreshMode): Promise<AssetRefreshReport> {
     const sources = (await this.sources.list()).filter(
-      (source) => source.lifecycle !== "disconnected",
+      (source) =>
+        source.lifecycle !== "disconnected" &&
+        source.credentialReference !== null,
     );
     const attemptedAt = this.clock.now().toISOString();
     const outcomes = await Promise.all(
@@ -44,7 +46,9 @@ export class SourceIsolatedAssetSynchronization
         const controller = new AbortController();
         let timeout: ReturnType<typeof setTimeout> | undefined;
         try {
-          const credentials = await this.secrets.get(source.credentialReference);
+          const credentialReference = source.credentialReference;
+          if (credentialReference === null) throw new Error("只读凭证不可用");
+          const credentials = await this.secrets.get(credentialReference);
           if (credentials === null) throw new Error("只读凭证不可用");
           const result = await Promise.race([
             this.refresher.refresh({
@@ -54,7 +58,7 @@ export class SourceIsolatedAssetSynchronization
               attemptedAt,
               signal: controller.signal,
               persistCredentials: (value) =>
-                this.secrets.replace(source.credentialReference, value),
+                this.secrets.replace(credentialReference, value),
             }),
             new Promise<never>((_, reject) => {
               timeout = setTimeout(() => {

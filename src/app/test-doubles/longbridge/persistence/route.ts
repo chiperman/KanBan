@@ -205,6 +205,7 @@ export async function POST(request: Request) {
         rotationReport.failureCount === 1 &&
         rotatedSource.credentialReference === rotationReference &&
         rotatedSource.sync.status === "expired" &&
+        rotationReference !== null &&
         (await rotationSecrets.get(rotationReference)) === ROTATED_SECRET &&
         !rotationRaw.includes(ROTATED_SECRET),
     });

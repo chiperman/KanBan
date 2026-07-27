@@ -56,6 +56,7 @@ export async function POST() {
     return Response.json({
       sourceKind: source.kind,
       dashboardHasOnlyReference:
+        source.credentialReference !== null &&
         dashboardRaw.includes(source.credentialReference) &&
         !dashboardRaw.includes(API_KEY) &&
         !dashboardRaw.includes(API_SECRET) &&
@@ -65,6 +66,7 @@ export async function POST() {
         !secretRaw.includes(API_SECRET) &&
         !secretRaw.includes(PASSPHRASE),
       committedSecretReadable:
+        source.credentialReference !== null &&
         (await secrets.get(source.credentialReference)) === credentials,
       dailySnapshotCount: (await database.listDailyAssetSnapshots()).length,
     });

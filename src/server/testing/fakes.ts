@@ -888,7 +888,9 @@ export class InMemoryAssetSourceLifecycle implements AssetSourceLifecycle {
     const source = sources.find((item) => item.id === sourceId);
     if (!source) throw new Error("资产来源不存在");
     await this.sources.update({ ...source, lifecycle: "disconnected" });
-    await this.secrets.remove(source.credentialReference);
+    if (source.credentialReference !== null) {
+      await this.secrets.remove(source.credentialReference);
+    }
   }
 
   async deleteData(sourceId: string): Promise<void> {
@@ -902,7 +904,9 @@ export class InMemoryAssetSourceLifecycle implements AssetSourceLifecycle {
       ),
     );
     this.dailySnapshots.removeSource(sourceId);
-    await this.secrets.remove(source.credentialReference);
+    if (source.credentialReference !== null) {
+      await this.secrets.remove(source.credentialReference);
+    }
   }
 }
 
@@ -985,5 +989,16 @@ export function createTestServices(): TestServices {
       dailyAssetSnapshots,
       clock,
     ),
+    businessDataBackups: {
+      async exportBackup() {
+        throw new Error("内存测试服务不提供本地备份文件");
+      },
+      async previewRestore() {
+        throw new Error("内存测试服务不提供本地备份文件");
+      },
+      async restore() {
+        throw new Error("内存测试服务不提供本地备份文件");
+      },
+    },
   };
 }

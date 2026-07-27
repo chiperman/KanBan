@@ -76,6 +76,10 @@ import {
   hardenLocalDataPermissions,
   readPrivateFile,
 } from "@/server/local-data-permissions";
+import {
+  CredentialFreeBusinessDataBackup,
+  type BusinessDataState,
+} from "@/server/business-data-backup";
 
 class SystemClock implements Clock {
   now(): Date {
@@ -91,7 +95,7 @@ interface DashboardState {
 }
 
 const DASHBOARD_SCHEMA_VERSION = 5 as const;
-const SQLITE_SCHEMA_VERSION = 1;
+const SQLITE_SCHEMA_VERSION = 2;
 
 type SourceConnectionKind = "longbridge" | "binance" | "okx" | "bitget" | "evm";
 type SourceAuthorizationResult =
@@ -184,8 +188,8 @@ interface DashboardDatabase {
     snapshot: DailyAssetSnapshot,
   ): Promise<boolean>;
   setAssetCardHidden(sourceId: string, hidden: boolean): Promise<void>;
-  disconnectAssetSource(sourceId: string): Promise<string>;
-  deleteAssetSourceData(sourceId: string): Promise<string>;
+  disconnectAssetSource(sourceId: string): Promise<string | null>;
+  deleteAssetSourceData(sourceId: string): Promise<string | null>;
   connectLongbridge(
     result: LongbridgeAuthorizationResult,
     credentialReference: string,
@@ -502,7 +506,7 @@ export class FileDashboardDatabase {
     });
   }
 
-  async disconnectAssetSource(sourceId: string): Promise<string> {
+  async disconnectAssetSource(sourceId: string): Promise<string | null> {
     return this.mutate((state) => {
       const source = state.assetSources.find((item) => item.id === sourceId);
       if (!source) throw new Error("资产来源不存在");
@@ -511,7 +515,7 @@ export class FileDashboardDatabase {
     });
   }
 
-  async deleteAssetSourceData(sourceId: string): Promise<string> {
+  async deleteAssetSourceData(sourceId: string): Promise<string | null> {
     return this.mutate((state) => {
       const source = state.assetSources.find((item) => item.id === sourceId);
       if (!source) throw new Error("资产来源不存在");
@@ -697,7 +701,7 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
         label TEXT NOT NULL,
         account_id TEXT NOT NULL,
         permissions_json TEXT NOT NULL CHECK (json_valid(permissions_json)),
-        credential_reference TEXT NOT NULL,
+        credential_reference TEXT,
         lifecycle TEXT CHECK (lifecycle IS NULL OR lifecycle IN ('connected', 'disconnected'))
       ) STRICT;
       CREATE TABLE IF NOT EXISTS asset_source_snapshots (
@@ -750,9 +754,32 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
       this.database
         .prepare("INSERT INTO schema_metadata (key, value) VALUES (?, ?)")
         .run("schema_version", String(SQLITE_SCHEMA_VERSION));
+    } else if (schemaVersion === "1") {
+      this.migrateSchemaVersionOne();
     } else if (schemaVersion !== String(SQLITE_SCHEMA_VERSION)) {
       throw new Error(`不支持的 SQLite schema 版本: ${schemaVersion}`);
     }
+  }
+
+  private migrateSchemaVersionOne(): void {
+    this.transaction(() => {
+      this.database.exec(`
+        CREATE TEMP TABLE credential_references_before_migration AS
+        SELECT id, credential_reference FROM asset_sources;
+        ALTER TABLE asset_sources DROP COLUMN credential_reference;
+        ALTER TABLE asset_sources ADD COLUMN credential_reference TEXT;
+        UPDATE asset_sources
+        SET credential_reference = (
+          SELECT credential_reference
+          FROM credential_references_before_migration
+          WHERE credential_references_before_migration.id = asset_sources.id
+        );
+        DROP TABLE credential_references_before_migration;
+      `);
+      this.database
+        .prepare("UPDATE schema_metadata SET value = ? WHERE key = ?")
+        .run(String(SQLITE_SCHEMA_VERSION), "schema_version");
+    });
   }
 
   private initializeLegacyData(): void {
@@ -837,7 +864,7 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
     }
   }
 
-  private replaceState(state: DashboardState): void {
+  private replaceState(state: DashboardState | BusinessDataState): void {
     this.database.exec(`
       DELETE FROM daily_asset_source_snapshots;
       DELETE FROM daily_asset_snapshots;
@@ -1034,7 +1061,10 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
         label: row.label as string,
         accountId: row.account_id as string,
         permissions: JSON.parse(row.permissions_json as string),
-        credentialReference: row.credential_reference as string,
+        credentialReference:
+          typeof row.credential_reference === "string"
+            ? row.credential_reference
+            : null,
         snapshot: {
           total: {
             amount: snapshot.total_amount as string,
@@ -1156,6 +1186,29 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
     return this.listDailyAssetSnapshotsSync();
   }
 
+  async validateBusinessData(state: BusinessDataState): Promise<void> {
+    this.database.exec("BEGIN IMMEDIATE");
+    try {
+      this.replaceState(state);
+      this.assertIntegrity();
+      this.database.exec("ROLLBACK");
+    } catch (error) {
+      try {
+        this.database.exec("ROLLBACK");
+      } catch {
+        // 优先抛出备份验证错误。
+      }
+      throw error;
+    }
+  }
+
+  async replaceBusinessData(state: BusinessDataState): Promise<void> {
+    this.transaction(() => {
+      this.replaceState(state);
+      this.assertIntegrity();
+    });
+  }
+
   async createDailyAssetSnapshotIfAbsent(
     snapshot: DailyAssetSnapshot,
   ): Promise<boolean> {
@@ -1178,7 +1231,7 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
     });
   }
 
-  async disconnectAssetSource(sourceId: string): Promise<string> {
+  async disconnectAssetSource(sourceId: string): Promise<string | null> {
     return this.transaction(() => {
       const source = this.database
         .prepare(
@@ -1189,11 +1242,13 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
       this.database
         .prepare("UPDATE asset_sources SET lifecycle = 'disconnected' WHERE id = ?")
         .run(sourceId);
-      return source.credential_reference as string;
+      return typeof source.credential_reference === "string"
+        ? source.credential_reference
+        : null;
     });
   }
 
-  async deleteAssetSourceData(sourceId: string): Promise<string> {
+  async deleteAssetSourceData(sourceId: string): Promise<string | null> {
     return this.transaction(() => {
       const source = this.database
         .prepare(
@@ -1216,7 +1271,9 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
       this.compactPositions("asset_sources");
       this.compactPositions("asset_cards");
       for (const { day } of days) this.recalculateDailySnapshot(day as string);
-      return source.credential_reference as string;
+      return typeof source.credential_reference === "string"
+        ? source.credential_reference
+        : null;
     });
   }
 
@@ -1455,12 +1512,12 @@ class DatabaseAssetSourceLifecycle implements AssetSourceLifecycle {
 
   async disconnect(sourceId: string): Promise<void> {
     const reference = await this.database.disconnectAssetSource(sourceId);
-    await this.secrets.remove(reference);
+    if (reference !== null) await this.secrets.remove(reference);
   }
 
   async deleteData(sourceId: string): Promise<void> {
     const reference = await this.database.deleteAssetSourceData(sourceId);
-    await this.secrets.remove(reference);
+    if (reference !== null) await this.secrets.remove(reference);
   }
 }
 
@@ -1657,12 +1714,22 @@ export function createProductionServices(
   );
   const secretRecovery = database.listSources().then(async (sources) => {
     await secrets.recover(
-      new Set(sources.map((source) => source.credentialReference)),
+      new Set(
+        sources.flatMap((source) =>
+          source.credentialReference === null
+            ? []
+            : [source.credentialReference],
+        ),
+      ),
     );
     await Promise.all(
       sources
-        .filter((source) => source.lifecycle === "disconnected")
-        .map((source) => secrets.remove(source.credentialReference)),
+        .filter(
+          (source) =>
+            source.lifecycle === "disconnected" &&
+            source.credentialReference !== null,
+        )
+        .map((source) => secrets.remove(source.credentialReference!)),
     );
   });
   void secretRecovery.catch(() => undefined);
@@ -1718,6 +1785,11 @@ export function createProductionServices(
       database,
       secrets,
       secretRecovery,
+      clock,
+    ),
+    businessDataBackups: new CredentialFreeBusinessDataBackup(
+      database,
+      path.join(dataDir, "backups"),
       clock,
     ),
   };

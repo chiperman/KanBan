@@ -568,6 +568,7 @@ export async function POST(request: Request) {
         sourceCount: (await services.assetSources.list()).length,
         dailySourceCount: retainedDailySnapshot.sources.length,
         secretRemoved:
+          connected.credentialReference !== null &&
           (await services.secrets.get(connected.credentialReference)) === null,
       };
       await services.assetSourceLifecycle.deleteData(connected.id);

@@ -34,7 +34,8 @@ export interface AssetSourceSummary {
   label: string;
   accountId: string;
   permissions: AssetPermission[];
-  credentialReference: string;
+  /** 断开来源可不再持有任何凭证引用；连接来源必须为非空引用。 */
+  credentialReference: string | null;
   snapshot: AssetSnapshot;
   sync: AssetSourceSyncState;
   /** 旧数据缺省为 connected；断开后仅保留历史身份与快照。 */

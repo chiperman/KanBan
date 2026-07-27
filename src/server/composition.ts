@@ -24,6 +24,7 @@ import { BinanceConnectionState } from "@/server/asset-sources/binance";
 import { OkxConnectionState } from "@/server/asset-sources/okx";
 import { BitgetConnectionState } from "@/server/asset-sources/bitget";
 import { EvmConnectionState } from "@/server/asset-sources/ethereum";
+import type { BusinessDataBackup } from "@/server/business-data-backup";
 import {
   createTestServices,
   type TestServices,
@@ -55,6 +56,7 @@ export interface AppServices {
   evm: EvmWatchWalletReadOnly;
   evmConnections: EvmConnectionState;
   assetSourceConnections: AssetSourceConnections;
+  businessDataBackups: BusinessDataBackup;
 }
 
 const GLOBAL_KEY = "__personal_asset_dashboard_services__";
