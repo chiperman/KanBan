@@ -4,7 +4,14 @@ import {
   randomBytes,
   randomUUID,
 } from "node:crypto";
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  readFileSync,
+} from "node:fs";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 
 import { decimalAdd, decimalCompare, decimalDivide } from "@/domain/decimal";
 import { buildDailyAssetSnapshot } from "@/domain/daily-asset-snapshots";
@@ -84,6 +91,127 @@ interface DashboardState {
 }
 
 const DASHBOARD_SCHEMA_VERSION = 5 as const;
+const SQLITE_SCHEMA_VERSION = 1;
+
+type SourceConnectionKind = "longbridge" | "binance" | "okx" | "bitget" | "evm";
+type SourceAuthorizationResult =
+  | LongbridgeAuthorizationResult
+  | BinanceAuthorizationResult
+  | OkxAuthorizationResult
+  | BitgetAuthorizationResult
+  | EvmWatchAuthorizationResult;
+
+const SOURCE_CARD_DETAILS = {
+  longbridge: {
+    kind: "longbridge",
+    title: "长桥资产",
+    body: "只读证券账户",
+  },
+  binance: {
+    kind: "binance",
+    title: "Binance 资产",
+    body: "现货、资金与 Simple Earn 只读账户",
+  },
+  okx: {
+    kind: "okx",
+    title: "OKX 资产",
+    body: "现货、资金与 Earn 只读账户",
+  },
+  bitget: {
+    kind: "bitget",
+    title: "Bitget 资产",
+    body: "现货、资金与 Earn 只读账户",
+  },
+} as const;
+
+function buildConnectedSource(
+  sourceKind: SourceConnectionKind,
+  result: SourceAuthorizationResult,
+  credentialReference: string,
+): { source: AssetSourceSummary; card: Card } {
+  const details = sourceKind === "evm"
+    ? (() => {
+        const evm = result as EvmWatchAuthorizationResult;
+        return evm.chain === "ethereum"
+          ? {
+              kind: "evm-watch-ethereum",
+              title: "Ethereum 观察钱包",
+              body: "公开地址 ETH 与 ERC-20 只读来源",
+            }
+          : {
+              kind: "evm-watch-bsc",
+              title: "BNB Smart Chain 观察钱包",
+              body: "公开地址 BNB 与 BEP-20 只读来源",
+            };
+      })()
+    : SOURCE_CARD_DETAILS[sourceKind];
+  const sourceId = randomUUID();
+  return {
+    source: {
+      id: sourceId,
+      kind: details.kind,
+      label: result.account.label,
+      accountId: result.account.id,
+      permissions: result.permissions,
+      credentialReference,
+      snapshot: result.snapshot,
+      sync: {
+        status: "current",
+        lastSuccessfulAt: result.snapshot.syncedAt,
+        lastAttemptAt: result.snapshot.syncedAt,
+        error: null,
+      },
+    },
+    card: {
+      id: randomUUID(),
+      kind: "asset",
+      title: details.title,
+      body: details.body,
+      sourceId,
+      span: 1,
+    },
+  };
+}
+
+interface DashboardDatabase {
+  listAssetCards(): Promise<Card[]>;
+  replaceAssetCards(cards: Card[]): Promise<void>;
+  listSources(): Promise<AssetSourceSummary[]>;
+  replaceSources(sources: AssetSourceSummary[]): Promise<void>;
+  updateSource(source: AssetSourceSummary): Promise<void>;
+  listDailyAssetSnapshots(): Promise<DailyAssetSnapshot[]>;
+  createDailyAssetSnapshotIfAbsent(
+    snapshot: DailyAssetSnapshot,
+  ): Promise<boolean>;
+  setAssetCardHidden(sourceId: string, hidden: boolean): Promise<void>;
+  disconnectAssetSource(sourceId: string): Promise<string>;
+  deleteAssetSourceData(sourceId: string): Promise<string>;
+  connectLongbridge(
+    result: LongbridgeAuthorizationResult,
+    credentialReference: string,
+    capturedAt: string,
+  ): Promise<void>;
+  connectBinance(
+    result: BinanceAuthorizationResult,
+    credentialReference: string,
+    capturedAt: string,
+  ): Promise<void>;
+  connectOkx(
+    result: OkxAuthorizationResult,
+    credentialReference: string,
+    capturedAt: string,
+  ): Promise<void>;
+  connectBitget(
+    result: BitgetAuthorizationResult,
+    credentialReference: string,
+    capturedAt: string,
+  ): Promise<void>;
+  connectEvm(
+    result: EvmWatchAuthorizationResult,
+    credentialReference: string,
+    capturedAt: string,
+  ): Promise<void>;
+}
 
 function withoutSnapshotSource(
   snapshot: DailyAssetSnapshot,
@@ -404,11 +532,7 @@ export class FileDashboardDatabase {
     credentialReference: string,
     capturedAt: string,
   ): Promise<void> {
-    return this.connectAssetSource(result, credentialReference, capturedAt, {
-      kind: "longbridge",
-      title: "长桥资产",
-      body: "只读证券账户",
-    });
+    return this.connectAssetSource("longbridge", result, credentialReference, capturedAt);
   }
 
   async connectBinance(
@@ -416,11 +540,7 @@ export class FileDashboardDatabase {
     credentialReference: string,
     capturedAt: string,
   ): Promise<void> {
-    return this.connectAssetSource(result, credentialReference, capturedAt, {
-      kind: "binance",
-      title: "Binance 资产",
-      body: "现货、资金与 Simple Earn 只读账户",
-    });
+    return this.connectAssetSource("binance", result, credentialReference, capturedAt);
   }
 
   async connectOkx(
@@ -428,11 +548,7 @@ export class FileDashboardDatabase {
     credentialReference: string,
     capturedAt: string,
   ): Promise<void> {
-    return this.connectAssetSource(result, credentialReference, capturedAt, {
-      kind: "okx",
-      title: "OKX 资产",
-      body: "现货、资金与 Earn 只读账户",
-    });
+    return this.connectAssetSource("okx", result, credentialReference, capturedAt);
   }
 
   async connectBitget(
@@ -440,11 +556,7 @@ export class FileDashboardDatabase {
     credentialReference: string,
     capturedAt: string,
   ): Promise<void> {
-    return this.connectAssetSource(result, credentialReference, capturedAt, {
-      kind: "bitget",
-      title: "Bitget 资产",
-      body: "现货、资金与 Earn 只读账户",
-    });
+    return this.connectAssetSource("bitget", result, credentialReference, capturedAt);
   }
 
   async connectEvm(
@@ -452,51 +564,23 @@ export class FileDashboardDatabase {
     credentialReference: string,
     capturedAt: string,
   ): Promise<void> {
-    return this.connectAssetSource(result, credentialReference, capturedAt, {
-      kind: result.chain === "ethereum" ? "evm-watch-ethereum" : "evm-watch-bsc",
-      title: result.chain === "ethereum" ? "Ethereum 观察钱包" : "BNB Smart Chain 观察钱包",
-      body: result.chain === "ethereum"
-        ? "公开地址 ETH 与 ERC-20 只读来源"
-        : "公开地址 BNB 与 BEP-20 只读来源",
-    });
+    return this.connectAssetSource("evm", result, credentialReference, capturedAt);
   }
 
   private async connectAssetSource(
-    result:
-      | LongbridgeAuthorizationResult
-      | BinanceAuthorizationResult
-      | OkxAuthorizationResult
-      | BitgetAuthorizationResult
-      | EvmWatchAuthorizationResult,
+    sourceKind: SourceConnectionKind,
+    result: SourceAuthorizationResult,
     credentialReference: string,
     capturedAt: string,
-    card: { kind: string; title: string; body: string },
   ): Promise<void> {
     await this.mutate((state) => {
-      const sourceId = randomUUID();
-      state.assetSources.push({
-        id: sourceId,
-        kind: card.kind,
-        label: result.account.label,
-        accountId: result.account.id,
-        permissions: result.permissions,
+      const connected = buildConnectedSource(
+        sourceKind,
+        result,
         credentialReference,
-        snapshot: result.snapshot,
-        sync: {
-          status: "current",
-          lastSuccessfulAt: result.snapshot.syncedAt,
-          lastAttemptAt: result.snapshot.syncedAt,
-          error: null,
-        },
-      });
-      state.assetCards.push({
-        id: randomUUID(),
-        kind: "asset",
-        title: card.title,
-        body: card.body,
-        sourceId,
-        span: 1,
-      });
+      );
+      state.assetSources.push(connected.source);
+      state.assetCards.push(connected.card);
       const dailySnapshot = buildDailyAssetSnapshot(
         state.assetSources,
         capturedAt,
@@ -523,10 +607,695 @@ export class FileDashboardDatabase {
   }
 }
 
+type SqliteRow = Record<string, string | number | null>;
+
+function parseLegacyDashboardStateSync(
+  dashboardPath: string,
+  legacyCardsPath: string,
+): DashboardState {
+  if (!existsSync(dashboardPath)) {
+    if (!existsSync(legacyCardsPath)) {
+      return {
+        schemaVersion: DASHBOARD_SCHEMA_VERSION,
+        assetCards: [],
+        assetSources: [],
+        dailyAssetSnapshots: [],
+      };
+    }
+    const assetCards = parseAssetCards(
+      JSON.parse(readFileSync(legacyCardsPath, "utf8")),
+    );
+    if (assetCards === null) throw new Error("旧卡片数据格式无效");
+    return {
+      schemaVersion: DASHBOARD_SCHEMA_VERSION,
+      assetCards,
+      assetSources: [],
+      dailyAssetSnapshots: [],
+    };
+  }
+
+  const value = JSON.parse(readFileSync(dashboardPath, "utf8")) as
+    Partial<DashboardState> & { cards?: unknown };
+  const assetCards = parseAssetCards(value.assetCards ?? value.cards);
+  if (assetCards === null || !Array.isArray(value.assetSources)) {
+    throw new Error(`Dashboard 数据文件格式无效: ${dashboardPath}`);
+  }
+  return {
+    schemaVersion: DASHBOARD_SCHEMA_VERSION,
+    assetCards,
+    assetSources: value.assetSources.map(migrateAssetSource),
+    dailyAssetSnapshots: Array.isArray(value.dailyAssetSnapshots)
+      ? value.dailyAssetSnapshots
+      : [],
+  };
+}
+
+/** SQLite 只保存业务数据与不透明凭证引用；秘密正文仍由 SecretStore 持有。 */
+export class SqliteDashboardDatabase implements DashboardDatabase {
+  private database!: DatabaseSync;
+
+  constructor(
+    private readonly databasePath: string,
+    private readonly legacyDashboardPath: string,
+    private readonly legacyCardsPath: string,
+  ) {
+    try {
+      this.database = new DatabaseSync(databasePath);
+      chmodSync(databasePath, 0o600);
+      this.database.exec("PRAGMA busy_timeout = 5000");
+      this.database.exec("PRAGMA foreign_keys = ON");
+      this.database.exec("PRAGMA journal_mode = WAL");
+      this.database.exec("PRAGMA synchronous = FULL");
+      this.createSchema();
+      this.initializeLegacyData();
+      this.assertIntegrity();
+      this.hardenDatabaseFiles();
+    } catch (error) {
+      try {
+        this.database?.close();
+      } catch {
+        // 保留原始启动错误。
+      }
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `SQLite 业务数据初始化失败，已停止启动；请保留 ${databasePath} 和旧 JSON 后恢复: ${detail}`,
+        { cause: error },
+      );
+    }
+  }
+
+  private createSchema(): void {
+    this.database.exec(`
+      CREATE TABLE IF NOT EXISTS schema_metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      ) STRICT;
+      CREATE TABLE IF NOT EXISTS asset_sources (
+        id TEXT PRIMARY KEY,
+        position INTEGER NOT NULL UNIQUE,
+        kind TEXT NOT NULL,
+        label TEXT NOT NULL,
+        account_id TEXT NOT NULL,
+        permissions_json TEXT NOT NULL CHECK (json_valid(permissions_json)),
+        credential_reference TEXT NOT NULL,
+        lifecycle TEXT CHECK (lifecycle IS NULL OR lifecycle IN ('connected', 'disconnected'))
+      ) STRICT;
+      CREATE TABLE IF NOT EXISTS asset_source_snapshots (
+        source_id TEXT PRIMARY KEY REFERENCES asset_sources(id) ON DELETE CASCADE,
+        total_amount TEXT NOT NULL,
+        total_currency TEXT NOT NULL,
+        holdings_json TEXT NOT NULL CHECK (json_valid(holdings_json)),
+        exchange_rates_json TEXT NOT NULL CHECK (json_valid(exchange_rates_json)),
+        synced_at TEXT NOT NULL
+      ) STRICT;
+      CREATE TABLE IF NOT EXISTS asset_source_sync_states (
+        source_id TEXT PRIMARY KEY REFERENCES asset_sources(id) ON DELETE CASCADE,
+        status TEXT NOT NULL CHECK (status IN ('current', 'expired')),
+        last_successful_at TEXT NOT NULL,
+        last_attempt_at TEXT NOT NULL,
+        error TEXT,
+        failed_mode TEXT CHECK (failed_mode IS NULL OR failed_mode IN ('all', 'prices', 'holdings'))
+      ) STRICT;
+      CREATE TABLE IF NOT EXISTS asset_cards (
+        id TEXT PRIMARY KEY,
+        position INTEGER NOT NULL UNIQUE,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        source_id TEXT,
+        hidden INTEGER CHECK (hidden IS NULL OR hidden IN (0, 1)),
+        span INTEGER NOT NULL CHECK (span IN (1, 2, 3)),
+        starts_new_row INTEGER CHECK (starts_new_row IS NULL OR starts_new_row IN (0, 1))
+      ) STRICT;
+      CREATE TABLE IF NOT EXISTS daily_asset_snapshots (
+        day TEXT PRIMARY KEY,
+        captured_at TEXT NOT NULL,
+        complete INTEGER NOT NULL CHECK (complete IN (0, 1)),
+        total_usd TEXT,
+        total_cny TEXT
+      ) STRICT;
+      CREATE TABLE IF NOT EXISTS daily_asset_source_snapshots (
+        day TEXT NOT NULL REFERENCES daily_asset_snapshots(day) ON DELETE CASCADE,
+        source_id TEXT NOT NULL,
+        label TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        captured_at TEXT NOT NULL,
+        complete INTEGER NOT NULL CHECK (complete IN (0, 1)),
+        total_usd TEXT,
+        total_cny TEXT,
+        PRIMARY KEY (day, source_id)
+      ) STRICT;
+    `);
+    const schemaVersion = this.metadata("schema_version");
+    if (schemaVersion === null) {
+      this.database
+        .prepare("INSERT INTO schema_metadata (key, value) VALUES (?, ?)")
+        .run("schema_version", String(SQLITE_SCHEMA_VERSION));
+    } else if (schemaVersion !== String(SQLITE_SCHEMA_VERSION)) {
+      throw new Error(`不支持的 SQLite schema 版本: ${schemaVersion}`);
+    }
+  }
+
+  private initializeLegacyData(): void {
+    if (this.metadata("json_import_complete") === "1") return;
+    const state = parseLegacyDashboardStateSync(
+      this.legacyDashboardPath,
+      this.legacyCardsPath,
+    );
+    this.transaction(() => {
+      this.replaceState(state);
+      this.backupLegacyDashboard();
+      this.database
+        .prepare(
+          "INSERT OR REPLACE INTO schema_metadata (key, value) VALUES (?, ?)",
+        )
+        .run("json_import_complete", "1");
+    });
+  }
+
+  private backupLegacyDashboard(): void {
+    if (!existsSync(this.legacyDashboardPath)) return;
+    const backupPath = `${this.legacyDashboardPath}.migration-backup`;
+    const source = readFileSync(this.legacyDashboardPath);
+    if (existsSync(backupPath)) {
+      if (!source.equals(readFileSync(backupPath))) {
+        throw new Error(`迁移备份与旧 Dashboard 不一致: ${backupPath}`);
+      }
+    } else {
+      copyFileSync(this.legacyDashboardPath, backupPath);
+    }
+    chmodSync(backupPath, 0o600);
+  }
+
+  private metadata(key: string): string | null {
+    const row = this.database
+      .prepare("SELECT value FROM schema_metadata WHERE key = ?")
+      .get(key) as SqliteRow | undefined;
+    return typeof row?.value === "string" ? row.value : null;
+  }
+
+  private assertIntegrity(): void {
+    const result = this.database.prepare("PRAGMA quick_check").get() as
+      | SqliteRow
+      | undefined;
+    if (result === undefined || !Object.values(result).includes("ok")) {
+      throw new Error("SQLite 完整性检查失败");
+    }
+    const foreignKeyViolation = this.database
+      .prepare("PRAGMA foreign_key_check")
+      .get();
+    if (foreignKeyViolation !== undefined) {
+      throw new Error("SQLite 外键完整性检查失败");
+    }
+  }
+
+  private hardenDatabaseFiles(): void {
+    for (const filePath of [
+      this.databasePath,
+      `${this.databasePath}-wal`,
+      `${this.databasePath}-shm`,
+    ]) {
+      if (existsSync(/* turbopackIgnore: true */ filePath)) {
+        chmodSync(/* turbopackIgnore: true */ filePath, 0o600);
+      }
+    }
+  }
+
+  private transaction<T>(operation: () => T): T {
+    this.database.exec("BEGIN IMMEDIATE");
+    try {
+      const result = operation();
+      this.database.exec("COMMIT");
+      this.hardenDatabaseFiles();
+      return result;
+    } catch (error) {
+      try {
+        this.database.exec("ROLLBACK");
+      } catch {
+        // 优先抛出导致事务失败的原始错误。
+      }
+      throw error;
+    }
+  }
+
+  private replaceState(state: DashboardState): void {
+    this.database.exec(`
+      DELETE FROM daily_asset_source_snapshots;
+      DELETE FROM daily_asset_snapshots;
+      DELETE FROM asset_cards;
+      DELETE FROM asset_source_snapshots;
+      DELETE FROM asset_source_sync_states;
+      DELETE FROM asset_sources;
+    `);
+    state.assetSources.forEach((source, position) =>
+      this.insertSource(source, position),
+    );
+    state.assetCards.forEach((card, position) => this.insertCard(card, position));
+    state.dailyAssetSnapshots.forEach((snapshot) =>
+      this.insertDailySnapshot(snapshot),
+    );
+  }
+
+  private insertSource(source: AssetSourceSummary, position: number): void {
+    this.database
+      .prepare(`
+        INSERT INTO asset_sources (
+          id, position, kind, label, account_id, permissions_json,
+          credential_reference, lifecycle
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      .run(
+        source.id,
+        position,
+        source.kind,
+        source.label,
+        source.accountId,
+        JSON.stringify(source.permissions),
+        source.credentialReference,
+        source.lifecycle ?? null,
+      );
+    this.upsertSourceDetails(source);
+  }
+
+  private upsertSourceDetails(source: AssetSourceSummary): void {
+    this.database
+      .prepare(`
+        INSERT OR REPLACE INTO asset_source_snapshots (
+          source_id, total_amount, total_currency, holdings_json,
+          exchange_rates_json, synced_at
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `)
+      .run(
+        source.id,
+        source.snapshot.total.amount,
+        source.snapshot.total.currency,
+        JSON.stringify(source.snapshot.holdings),
+        JSON.stringify(source.snapshot.exchangeRates),
+        source.snapshot.syncedAt,
+      );
+    this.database
+      .prepare(`
+        INSERT OR REPLACE INTO asset_source_sync_states (
+          source_id, status, last_successful_at, last_attempt_at, error, failed_mode
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `)
+      .run(
+        source.id,
+        source.sync.status,
+        source.sync.lastSuccessfulAt,
+        source.sync.lastAttemptAt,
+        source.sync.error,
+        source.sync.failedMode ?? null,
+      );
+  }
+
+  private insertCard(card: Card, position: number): void {
+    this.database
+      .prepare(`
+        INSERT INTO asset_cards (
+          id, position, title, body, source_id, hidden, span, starts_new_row
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      .run(
+        card.id,
+        position,
+        card.title,
+        card.body,
+        card.sourceId ?? null,
+        card.hidden === undefined ? null : Number(card.hidden),
+        card.span,
+        card.startsNewRow === undefined ? null : Number(card.startsNewRow),
+      );
+  }
+
+  private insertDailySnapshot(snapshot: DailyAssetSnapshot): boolean {
+    const inserted = this.database
+      .prepare(`
+        INSERT OR IGNORE INTO daily_asset_snapshots (
+          day, captured_at, complete, total_usd, total_cny
+        ) VALUES (?, ?, ?, ?, ?)
+      `)
+      .run(
+        snapshot.day,
+        snapshot.capturedAt,
+        Number(snapshot.complete),
+        snapshot.total.USD,
+        snapshot.total.CNY,
+      ).changes > 0;
+    const statement = this.database.prepare(`
+      INSERT OR IGNORE INTO daily_asset_source_snapshots (
+        day, source_id, label, kind, captured_at, complete, total_usd, total_cny
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const source of snapshot.sources) {
+      statement.run(
+        snapshot.day,
+        source.sourceId,
+        source.label,
+        source.kind,
+        source.capturedAt,
+        Number(source.complete),
+        source.total.USD,
+        source.total.CNY,
+      );
+    }
+    this.recalculateDailySnapshot(snapshot.day);
+    return inserted;
+  }
+
+  private recalculateDailySnapshot(day: string): void {
+    const sources = this.dailySourceRows(day);
+    if (sources.length === 0) {
+      this.database.prepare("DELETE FROM daily_asset_snapshots WHERE day = ?").run(day);
+      return;
+    }
+    const totals = (column: "total_usd" | "total_cny") => {
+      const values = sources.flatMap((source) =>
+        typeof source[column] === "string" ? [source[column]] : [],
+      );
+      return values.length > 0 ? decimalAdd(...values) : null;
+    };
+    const totalUsd = totals("total_usd");
+    this.database
+      .prepare(`
+        UPDATE daily_asset_snapshots
+        SET complete = ?, total_usd = ?, total_cny = ?
+        WHERE day = ?
+      `)
+      .run(
+        Number(
+          totalUsd !== null &&
+            sources.every((source) => source.complete === 1),
+        ),
+        totalUsd,
+        totals("total_cny"),
+        day,
+      );
+  }
+
+  private dailySourceRows(day: string): SqliteRow[] {
+    return this.database
+      .prepare(`
+        SELECT source_id, label, kind, captured_at, complete, total_usd, total_cny
+        FROM daily_asset_source_snapshots
+        WHERE day = ?
+        ORDER BY rowid
+      `)
+      .all(day) as SqliteRow[];
+  }
+
+  private compactPositions(table: "asset_sources" | "asset_cards"): void {
+    const rows = this.database
+      .prepare(`SELECT id, position FROM ${table} ORDER BY position`)
+      .all() as SqliteRow[];
+    const update = this.database.prepare(
+      `UPDATE ${table} SET position = ? WHERE id = ?`,
+    );
+    rows.forEach((row, position) => {
+      if (row.position !== position) update.run(position, row.id as string);
+    });
+  }
+
+  private listSourcesSync(): AssetSourceSummary[] {
+    const rows = this.database
+      .prepare("SELECT * FROM asset_sources ORDER BY position")
+      .all() as SqliteRow[];
+    const snapshotStatement = this.database.prepare(
+      "SELECT * FROM asset_source_snapshots WHERE source_id = ?",
+    );
+    const syncStatement = this.database.prepare(
+      "SELECT * FROM asset_source_sync_states WHERE source_id = ?",
+    );
+    return rows.map((row) => {
+      const snapshot = snapshotStatement.get(row.id as string) as SqliteRow;
+      const sync = syncStatement.get(row.id as string) as SqliteRow;
+      return {
+        id: row.id as string,
+        kind: row.kind as string,
+        label: row.label as string,
+        accountId: row.account_id as string,
+        permissions: JSON.parse(row.permissions_json as string),
+        credentialReference: row.credential_reference as string,
+        snapshot: {
+          total: {
+            amount: snapshot.total_amount as string,
+            currency: snapshot.total_currency as string,
+          },
+          holdings: JSON.parse(snapshot.holdings_json as string),
+          exchangeRates: JSON.parse(snapshot.exchange_rates_json as string),
+          syncedAt: snapshot.synced_at as string,
+        },
+        sync: {
+          status: sync.status as "current" | "expired",
+          lastSuccessfulAt: sync.last_successful_at as string,
+          lastAttemptAt: sync.last_attempt_at as string,
+          error: sync.error as string | null,
+          ...(sync.failed_mode === null
+            ? {}
+            : { failedMode: sync.failed_mode as "all" | "prices" | "holdings" }),
+        },
+        ...(row.lifecycle === null
+          ? {}
+          : { lifecycle: row.lifecycle as "connected" | "disconnected" }),
+      };
+    });
+  }
+
+  private listDailyAssetSnapshotsSync(): DailyAssetSnapshot[] {
+    const rows = this.database
+      .prepare("SELECT * FROM daily_asset_snapshots ORDER BY day")
+      .all() as SqliteRow[];
+    return rows.map((row) => ({
+      day: row.day as string,
+      capturedAt: row.captured_at as string,
+      complete: row.complete === 1,
+      total: {
+        USD: row.total_usd as string | null,
+        CNY: row.total_cny as string | null,
+      },
+      sources: this.dailySourceRows(row.day as string).map((source) => ({
+        sourceId: source.source_id as string,
+        label: source.label as string,
+        kind: source.kind as string,
+        capturedAt: source.captured_at as string,
+        complete: source.complete === 1,
+        total: {
+          USD: source.total_usd as string | null,
+          CNY: source.total_cny as string | null,
+        },
+      })),
+    }));
+  }
+
+  async listAssetCards(): Promise<Card[]> {
+    const rows = this.database
+      .prepare("SELECT * FROM asset_cards ORDER BY position")
+      .all() as SqliteRow[];
+    return rows.map((row) => ({
+      id: row.id as string,
+      kind: "asset",
+      title: row.title as string,
+      body: row.body as string,
+      span: row.span as 1 | 2 | 3,
+      ...(row.source_id === null ? {} : { sourceId: row.source_id as string }),
+      ...(row.hidden === null ? {} : { hidden: row.hidden === 1 }),
+      ...(row.starts_new_row === null
+        ? {}
+        : { startsNewRow: row.starts_new_row === 1 }),
+    }));
+  }
+
+  async replaceAssetCards(cards: Card[]): Promise<void> {
+    this.transaction(() => {
+      this.database.exec("DELETE FROM asset_cards");
+      cards.forEach((card, position) => this.insertCard(card, position));
+    });
+  }
+
+  async listSources(): Promise<AssetSourceSummary[]> {
+    return this.listSourcesSync();
+  }
+
+  async replaceSources(sources: AssetSourceSummary[]): Promise<void> {
+    this.transaction(() => {
+      this.database.exec(`
+        DELETE FROM asset_source_snapshots;
+        DELETE FROM asset_source_sync_states;
+        DELETE FROM asset_sources;
+      `);
+      sources.forEach((source, position) => this.insertSource(source, position));
+    });
+  }
+
+  async updateSource(source: AssetSourceSummary): Promise<void> {
+    this.transaction(() => {
+      const existing = this.database
+        .prepare("SELECT id FROM asset_sources WHERE id = ?")
+        .get(source.id);
+      if (existing === undefined) return;
+      this.database
+        .prepare(`
+          UPDATE asset_sources
+          SET kind = ?, label = ?, account_id = ?, permissions_json = ?,
+              credential_reference = ?, lifecycle = ?
+          WHERE id = ?
+        `)
+        .run(
+          source.kind,
+          source.label,
+          source.accountId,
+          JSON.stringify(source.permissions),
+          source.credentialReference,
+          source.lifecycle ?? null,
+          source.id,
+        );
+      this.upsertSourceDetails(source);
+    });
+  }
+
+  async listDailyAssetSnapshots(): Promise<DailyAssetSnapshot[]> {
+    return this.listDailyAssetSnapshotsSync();
+  }
+
+  async createDailyAssetSnapshotIfAbsent(
+    snapshot: DailyAssetSnapshot,
+  ): Promise<boolean> {
+    return this.transaction(() => this.insertDailySnapshot(snapshot));
+  }
+
+  async setAssetCardHidden(sourceId: string, hidden: boolean): Promise<void> {
+    this.transaction(() => {
+      if (
+        this.database
+          .prepare("SELECT id FROM asset_sources WHERE id = ?")
+          .get(sourceId) === undefined
+      ) {
+        throw new Error("资产来源不存在");
+      }
+      const result = this.database
+        .prepare("UPDATE asset_cards SET hidden = ? WHERE source_id = ?")
+        .run(Number(hidden), sourceId);
+      if (result.changes === 0) throw new Error("资产卡片不存在");
+    });
+  }
+
+  async disconnectAssetSource(sourceId: string): Promise<string> {
+    return this.transaction(() => {
+      const source = this.database
+        .prepare(
+          "SELECT credential_reference FROM asset_sources WHERE id = ?",
+        )
+        .get(sourceId) as SqliteRow | undefined;
+      if (source === undefined) throw new Error("资产来源不存在");
+      this.database
+        .prepare("UPDATE asset_sources SET lifecycle = 'disconnected' WHERE id = ?")
+        .run(sourceId);
+      return source.credential_reference as string;
+    });
+  }
+
+  async deleteAssetSourceData(sourceId: string): Promise<string> {
+    return this.transaction(() => {
+      const source = this.database
+        .prepare(
+          "SELECT credential_reference FROM asset_sources WHERE id = ?",
+        )
+        .get(sourceId) as SqliteRow | undefined;
+      if (source === undefined) throw new Error("资产来源不存在");
+      const days = this.database
+        .prepare(
+          "SELECT day FROM daily_asset_source_snapshots WHERE source_id = ?",
+        )
+        .all(sourceId) as SqliteRow[];
+      this.database
+        .prepare("DELETE FROM asset_cards WHERE source_id = ?")
+        .run(sourceId);
+      this.database
+        .prepare("DELETE FROM daily_asset_source_snapshots WHERE source_id = ?")
+        .run(sourceId);
+      this.database.prepare("DELETE FROM asset_sources WHERE id = ?").run(sourceId);
+      this.compactPositions("asset_sources");
+      this.compactPositions("asset_cards");
+      for (const { day } of days) this.recalculateDailySnapshot(day as string);
+      return source.credential_reference as string;
+    });
+  }
+
+  async connectLongbridge(
+    result: LongbridgeAuthorizationResult,
+    credentialReference: string,
+    capturedAt: string,
+  ): Promise<void> {
+    this.connectAssetSource("longbridge", result, credentialReference, capturedAt);
+  }
+
+  async connectBinance(
+    result: BinanceAuthorizationResult,
+    credentialReference: string,
+    capturedAt: string,
+  ): Promise<void> {
+    this.connectAssetSource("binance", result, credentialReference, capturedAt);
+  }
+
+  async connectOkx(
+    result: OkxAuthorizationResult,
+    credentialReference: string,
+    capturedAt: string,
+  ): Promise<void> {
+    this.connectAssetSource("okx", result, credentialReference, capturedAt);
+  }
+
+  async connectBitget(
+    result: BitgetAuthorizationResult,
+    credentialReference: string,
+    capturedAt: string,
+  ): Promise<void> {
+    this.connectAssetSource("bitget", result, credentialReference, capturedAt);
+  }
+
+  async connectEvm(
+    result: EvmWatchAuthorizationResult,
+    credentialReference: string,
+    capturedAt: string,
+  ): Promise<void> {
+    this.connectAssetSource("evm", result, credentialReference, capturedAt);
+  }
+
+  private connectAssetSource(
+    sourceKind: SourceConnectionKind,
+    result: SourceAuthorizationResult,
+    credentialReference: string,
+    capturedAt: string,
+  ): void {
+    this.transaction(() => {
+      const connected = buildConnectedSource(
+        sourceKind,
+        result,
+        credentialReference,
+      );
+      const sourcePosition = (
+        this.database.prepare("SELECT COUNT(*) AS count FROM asset_sources").get() as SqliteRow
+      ).count as number;
+      const cardPosition = (
+        this.database.prepare("SELECT COUNT(*) AS count FROM asset_cards").get() as SqliteRow
+      ).count as number;
+      this.insertSource(connected.source, sourcePosition);
+      this.insertCard(connected.card, cardPosition);
+      this.insertDailySnapshot(
+        buildDailyAssetSnapshot(this.listSourcesSync(), capturedAt),
+      );
+    });
+  }
+}
+
 /** 独立加密凭证文件；普通 Dashboard 数据与同步快照无法读取其内容。 */
 interface StoredSecret {
   sealed: string;
   state: "pending" | "committed";
+}
+
+interface TransactionalSecretStore extends SecretStore {
+  stage(value: string): Promise<string>;
+  commit(reference: string): Promise<void>;
 }
 
 export class FileEncryptedSecretStore implements SecretStore {
@@ -654,20 +1423,20 @@ export class FileEncryptedSecretStore implements SecretStore {
 }
 
 class DatabaseAssetCardStore implements AssetCardStore {
-  constructor(private readonly database: FileDashboardDatabase) {}
+  constructor(private readonly database: DashboardDatabase) {}
   list() { return this.database.listAssetCards(); }
   replaceAll(cards: Card[]) { return this.database.replaceAssetCards(cards); }
 }
 
 class DatabaseAssetSources implements AssetSources {
-  constructor(private readonly database: FileDashboardDatabase) {}
+  constructor(private readonly database: DashboardDatabase) {}
   list() { return this.database.listSources(); }
   replaceAll(sources: AssetSourceSummary[]) { return this.database.replaceSources(sources); }
   update(source: AssetSourceSummary) { return this.database.updateSource(source); }
 }
 
 class DatabaseDailyAssetSnapshots implements DailyAssetSnapshots {
-  constructor(private readonly database: FileDashboardDatabase) {}
+  constructor(private readonly database: DashboardDatabase) {}
   list() { return this.database.listDailyAssetSnapshots(); }
   createIfAbsent(snapshot: DailyAssetSnapshot) {
     return this.database.createDailyAssetSnapshotIfAbsent(snapshot);
@@ -676,7 +1445,7 @@ class DatabaseDailyAssetSnapshots implements DailyAssetSnapshots {
 
 class DatabaseAssetSourceLifecycle implements AssetSourceLifecycle {
   constructor(
-    private readonly database: FileDashboardDatabase,
+    private readonly database: DashboardDatabase,
     private readonly secrets: SecretStore,
   ) {}
 
@@ -697,8 +1466,8 @@ class DatabaseAssetSourceLifecycle implements AssetSourceLifecycle {
 
 export class DatabaseAssetSourceConnections implements AssetSourceConnections {
   constructor(
-    private readonly database: FileDashboardDatabase,
-    private readonly secrets: FileEncryptedSecretStore,
+    private readonly database: DashboardDatabase,
+    private readonly secrets: TransactionalSecretStore,
     private readonly ready: Promise<void> = Promise.resolve(),
     private readonly clock: Clock = new SystemClock(),
   ) {}
@@ -726,8 +1495,23 @@ export class DatabaseAssetSourceConnections implements AssetSourceConnections {
       }
       throw error;
     }
-    // Dashboard 中的引用是提交点；若标记写入中断，启动恢复会按该引用提升 pending。
-    await this.secrets.commit(credentialReference).catch(() => undefined);
+    try {
+      await this.secrets.commit(credentialReference);
+    } catch (error) {
+      try {
+        const source = (await this.database.listSources()).find(
+          (item) => item.credentialReference === credentialReference,
+        );
+        if (source) await this.database.deleteAssetSourceData(source.id);
+        await this.secrets.remove(credentialReference);
+      } catch (cleanupError) {
+        throw new AggregateError(
+          [error, cleanupError],
+          "凭证提交失败，资产来源补偿回滚也未能完成",
+        );
+      }
+      throw error;
+    }
   }
 
   connectLongbridge(result: LongbridgeAuthorizationResult) {
@@ -863,7 +1647,8 @@ export function createProductionServices(
 ): AppServices {
   hardenLocalDataPermissions(dataDir);
   const clock = new SystemClock();
-  const database = new FileDashboardDatabase(
+  const database = new SqliteDashboardDatabase(
+    path.join(dataDir, "dashboard.sqlite"),
     path.join(dataDir, "dashboard.json"),
     path.join(dataDir, "cards.json"),
   );
