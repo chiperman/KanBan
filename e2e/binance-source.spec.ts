@@ -326,6 +326,58 @@ test("生产 Binance 适配器只调用允许的读取端点并覆盖权限、�
       ]));
 });
 
+test("Binance 不重复展示已由 Flexible Earn 总额包含的 LD 抵押凭证", async ({
+  request,
+}) => {
+  const response = await request.post("/test-doubles/binance/production-start", {
+    data: { action: "preview-collateral-receipt" },
+  });
+
+  expect(response.ok()).toBeTruthy();
+  const body = await response.json();
+  expect(body.snapshot.total).toEqual({ amount: "12849.5", currency: "USDT" });
+  expect(body.snapshot.holdings).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      sourceAccount: "earn-flexible",
+      sourceAsset: "BNB",
+      quantity: "2",
+    }),
+    expect.objectContaining({
+      sourceAccount: "spot",
+      sourceAsset: "LDORPHAN",
+      quantity: "4",
+      valuation: expect.objectContaining({ status: "unvalued" }),
+    }),
+  ]));
+  expect(body.snapshot.holdings).not.toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      sourceAccount: "spot",
+      sourceAsset: "LDBNB",
+    }),
+  ]));
+});
+
+test("Binance 默认隐藏低于 1 USDT 的持仓，并允许手动展示全部", async ({
+  page,
+}) => {
+  await configure(page, "dust");
+  await loginAsOwner(page);
+  await startBinanceFlow(page);
+  const preview = page.getByRole("dialog", { name: "确认 Binance 资产来源" });
+  await expect(preview).toContainText("12,850.00 USDT");
+  await preview.getByRole("button", { name: "确认并保存" }).click();
+
+  const card = page.getByTestId("binance-card");
+  const toggle = card.getByRole("checkbox", { name: /隐藏低于 1 USDT/ });
+  await expect(toggle).toBeChecked();
+  await expect(card).not.toContainText("DUST");
+  await toggle.uncheck();
+  await expect(card).toContainText("DUST");
+  await expect(card.getByTestId("asset-source-total")).toHaveText(
+    "12,850.00 USDT",
+  );
+});
+
 test("Binance 同步失败保留最后成功数据并接入过期状态和日快照", async ({
   page,
 }) => {
