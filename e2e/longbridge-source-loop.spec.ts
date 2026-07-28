@@ -501,7 +501,9 @@ test("锁定首页只显示登录入口，不含长桥账户、证券、金额�
     .click();
 
   await page.getByRole("button", { name: "退出登录" }).click();
-  await expect(page.getByTestId("view-mode")).toContainText("已锁定");
+  await expect(
+    page.getByRole("heading", { name: "个人资产看板已锁定" }),
+  ).toBeVisible();
   const visitorResponses: string[] = [];
   page.on("response", async (response) => {
     if (response.url().startsWith("http://localhost:3101")) {
@@ -514,12 +516,12 @@ test("锁定首页只显示登录入口，不含长桥账户、证券、金额�
 
   const html = await page.content();
   const serverHtml = await (await page.request.get("/")).text();
+  await expect(page.getByText("最后更新：")).toHaveCount(0);
   for (const privateValue of [
     "U12345",
     "AAPL.US",
     "NVIDIA",
     "123456",
-    "2026-01-01T00:00",
     SECRET_TOKEN,
   ]) {
     expect(html).not.toContain(privateValue);

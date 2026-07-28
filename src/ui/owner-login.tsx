@@ -87,7 +87,6 @@ export function OwnerLogin({
 
   return (
     <section className="login-gate" data-testid="login-gate" aria-labelledby="login-title">
-      <p className="card-label">PRIVATE ACCESS / 00</p>
       <div className="login-intro">
         <p className="login-eyebrow">
           {ownerProvisioned
@@ -220,8 +219,8 @@ export function OwnerLogin({
           </form>
         ) : null}
         <div className="login-trust-line" aria-label="安全属性">
-          <span>PRIVATE</span>
-          <span>LOCAL ONLY</span>
+          <span>PASSKEY</span>
+          <span>LOCAL</span>
           <span>READ ONLY</span>
         </div>
       </div>

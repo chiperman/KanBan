@@ -181,7 +181,9 @@ test("所有者可配置邮箱、强密码和 TOTP，并以两阶段恢复认证
     page.getByRole("status").filter({ hasText: "敏感内容已锁定" }),
   ).toContainText("敏感内容已锁定");
   await page.unroute("**/api/auth/logout");
-  await expect(page.getByTestId("view-mode")).toContainText("已锁定");
+  await expect(
+    page.getByRole("heading", { name: "个人资产看板已锁定" }),
+  ).toBeVisible();
   expect(await page.content()).not.toContain(SENSITIVE_BODY);
 
   await page.getByRole("button", { name: "使用备用方式登录" }).click();
@@ -193,7 +195,9 @@ test("所有者可配置邮箱、强密码和 TOTP，并以两阶段恢复认证
   await page.getByLabel("备用登录密码").fill(STRONG_PASSWORD);
   await page.getByRole("button", { name: "继续验证 TOTP" }).click();
   await expect(page.getByLabel("TOTP 验证码")).toBeVisible();
-  await expect(page.getByTestId("view-mode")).toContainText("已锁定");
+  await expect(
+    page.getByRole("heading", { name: "个人资产看板已锁定" }),
+  ).toBeVisible();
 
   const incompleteAttempt = await page.evaluate(async () =>
     fetch("/api/asset-cards/layout", {
@@ -218,7 +222,9 @@ test("所有者可配置邮箱、强密码和 TOTP，并以两阶段恢复认证
       page.getByRole("alert").filter({ hasText: "TOTP 验证失败" }),
     ).toContainText("TOTP 验证失败");
   }
-  await expect(page.getByTestId("view-mode")).toContainText("已锁定");
+  await expect(
+    page.getByRole("heading", { name: "个人资产看板已锁定" }),
+  ).toBeVisible();
 
   await page.getByLabel("TOTP 验证码").fill(correctCode);
   await page.getByRole("button", { name: "完成备用登录" }).click();
@@ -265,7 +271,9 @@ test("连续三十分钟无操作后自动锁定，随后仍可使用 Passkey �
   });
   await page.clock.fastForward(60 * 1000);
 
-  await expect(page.getByTestId("view-mode")).toContainText("已锁定");
+  await expect(
+    page.getByRole("heading", { name: "个人资产看板已锁定" }),
+  ).toBeVisible();
   expect(await page.content()).not.toContain(SENSITIVE_BODY);
   await unlockWithPasskey(page);
   await expect(page.getByText(SENSITIVE_BODY)).toBeVisible();
@@ -275,7 +283,9 @@ test("并发恢复密码请求共享五次尝试上限", async ({ page, request 
   await provisionAndLogin(page);
   await configureRecovery(page);
   await page.getByRole("button", { name: "立即锁定" }).click();
-  await expect(page.getByTestId("view-mode")).toContainText("已锁定");
+  await expect(
+    page.getByRole("heading", { name: "个人资产看板已锁定" }),
+  ).toBeVisible();
 
   const statuses = await page.evaluate(
     async ({ email }) =>
@@ -317,7 +327,9 @@ test("并发恢复密码请求共享五次尝试上限", async ({ page, request 
     { email: RECOVERY_EMAIL, password: STRONG_PASSWORD },
   );
   expect(recoveredAttempt).toBe(200);
-  await expect(page.getByTestId("view-mode")).toContainText("已锁定");
+  await expect(
+    page.getByRole("heading", { name: "个人资产看板已锁定" }),
+  ).toBeVisible();
 });
 
 test("关闭浏览器上下文后敏感会话不会在新上下文恢复", async ({
@@ -345,7 +357,9 @@ test("关闭浏览器上下文后敏感会话不会在新上下文恢复", async
   const reopenedPage =
     reopenedContext.pages()[0] ?? (await reopenedContext.newPage());
   await reopenedPage.goto("/");
-  await expect(reopenedPage.getByTestId("view-mode")).toContainText("已锁定");
+  await expect(
+    reopenedPage.getByRole("heading", { name: "个人资产看板已锁定" }),
+  ).toBeVisible();
   await expect(reopenedPage.getByTestId("login-gate")).toBeVisible();
   expect(await reopenedPage.content()).not.toContain(SENSITIVE_BODY);
   await reopenedContext.close();

@@ -93,18 +93,17 @@ test("锁定页以可读中文状态传达安全边界并保留清晰键盘焦�
 
   for (const locator of [
     page.locator(".page-locked .header-wordmark"),
-    page.getByTestId("view-mode"),
     page.locator(".locked-clock > strong"),
-    page.locator(".page-locked .card-label"),
     page.locator(".login-eyebrow"),
     page.locator(".page-locked .login-copy"),
     page.locator(".login-hint"),
     page.locator(".login-trust-line"),
-    page.locator(".locked-footer span").first(),
-    page.locator(".locked-footer span").last(),
   ]) {
     await expectReadableText(locator);
   }
+
+  await expect(page.locator(".page-locked .header-system")).toHaveCount(0);
+  await expect(page.locator(".locked-footer")).toHaveCount(0);
 
   await expect(page.locator(".locked-clock > strong")).toHaveCSS(
     "font-family",
@@ -129,6 +128,16 @@ test("锁定页以可读中文状态传达安全边界并保留清晰键盘焦�
   expect(actionStyles.height).toBeGreaterThanOrEqual(44);
   expect(actionStyles.outlineStyle).not.toBe("none");
   expect(actionStyles.outlineWidth).toBeGreaterThanOrEqual(2);
+
+  const copyBounds = await page
+    .locator(".page-locked .login-copy")
+    .boundingBox();
+  const actionBounds = await primaryAction.boundingBox();
+  expect(copyBounds).not.toBeNull();
+  expect(actionBounds).not.toBeNull();
+  expect(
+    actionBounds!.y - (copyBounds!.y + copyBounds!.height),
+  ).toBeLessThanOrEqual(64);
 });
 
 test("所有者预置页在桌面提供合理正文宽度和可读反馈", async ({ page }) => {

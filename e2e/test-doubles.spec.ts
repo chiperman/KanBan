@@ -28,17 +28,16 @@ test("测试环境可以替换时间、资产来源、价格、身份认证和�
   }
 });
 
-test("资产看板登录页使用测试替身提供的时间", async ({ page, request }) => {
+test("资产看板登录页显示浏览器当前的上海时间", async ({ page, request }) => {
   await request.post("/test-doubles/clock", {
     data: { now: "2030-01-02T03:04:00.000Z" },
   });
+  await page.clock.install({ time: new Date("2026-07-27T18:53:00.000Z") });
 
   await page.goto("/");
 
-  await expect(page.getByTestId("server-time")).toContainText(
-    "11:04",
-  );
-  await expect(page.getByTestId("server-time")).toContainText("UTC+08");
+  await expect(page.locator(".locked-clock > strong")).toContainText("02:53");
+  await expect(page.getByTestId("server-time")).not.toContainText("UTC+08");
 });
 
 test("生产运行不暴露测试替身", async ({ playwright }) => {

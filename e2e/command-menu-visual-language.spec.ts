@@ -73,6 +73,69 @@ test.beforeEach(async ({ request }) => {
   expect(response.ok()).toBeTruthy();
 });
 
+test("已登录看板遵守 Nothing 字体层级、操作语义和点击区域", async ({
+  page,
+}) => {
+  await loginAsOwner(page);
+  await connectEthereum(page);
+
+  const overviewBox = await page.getByTestId("total-overview-card").boundingBox();
+  const controlsBox = await page.locator(".dashboard-control-deck").boundingBox();
+  expect(overviewBox).not.toBeNull();
+  expect(controlsBox).not.toBeNull();
+  expect(overviewBox!.y).toBeLessThan(controlsBox!.y);
+
+  const label = page.getByTestId("total-asset-overview").locator(".card-label").first();
+  await expect(label).toHaveCSS("font-family", /Space Mono/);
+  expect(
+    await label.evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
+  ).toBeGreaterThanOrEqual(11);
+
+  const standardButton = page.getByTestId("sensitive-info-toggle");
+  await expect(standardButton).toHaveCSS("font-family", /Space Mono/);
+  await expect(standardButton).toHaveCSS("font-size", "13px");
+
+  const sourceCard = page.getByTestId("ethereum-watch-card");
+  await expect(sourceCard.locator(".source-live-state")).toHaveCSS(
+    "font-size",
+    "12px",
+  );
+  await expect(sourceCard.locator(".source-meter-caption")).toHaveCSS(
+    "font-family",
+    /Space Mono/,
+  );
+  await expect(sourceCard.locator(".source-meter-caption")).toHaveCSS(
+    "font-size",
+    "12px",
+  );
+
+  const card = sourceCard.locator("..");
+  const cardBorders = await card.evaluate((element) => {
+    const computed = getComputedStyle(element);
+    return {
+      top: computed.borderTopWidth,
+      right: computed.borderRightWidth,
+    };
+  });
+  expect(cardBorders).toEqual({ top: "1px", right: "1px" });
+  for (const control of [
+    card.getByRole("button", { name: /调整.*宽度/ }),
+    card.getByRole("button", { name: /拖动.*调整排序/ }),
+  ]) {
+    const bounds = await control.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(bounds!.width).toBeGreaterThanOrEqual(44);
+    expect(bounds!.height).toBeGreaterThanOrEqual(44);
+  }
+
+  await card.getByRole("button", { name: "管理 Ethereum 观察钱包" }).click();
+  const danger = page
+    .getByRole("dialog", { name: "管理 Ethereum 观察钱包" })
+    .getByRole("button", { name: "永久删除 Ethereum 观察钱包数据" });
+  await expect(danger).toHaveCSS("color", "rgb(215, 25, 33)");
+  await expect(danger).toHaveCSS("border-color", "rgb(215, 25, 33)");
+});
+
 test("未认证状态无命令菜单，所有者可用 Command-K 与 Ctrl-K 搜索并跳转资产卡片", async ({
   page,
 }) => {
@@ -123,6 +186,8 @@ test("鼠标可打开菜单、刷新资产并锁定，隐藏卡片不会进入�
   await page.getByRole("button", { name: "打开快捷命令" }).click();
   await page.getByRole("searchbox", { name: "搜索命令" }).fill("锁定");
   await page.getByRole("button", { name: "立即锁定敏感内容" }).click();
-  await expect(page.getByTestId("view-mode")).toContainText("已锁定");
+  await expect(
+    page.getByRole("heading", { name: "个人资产看板已锁定" }),
+  ).toBeVisible();
   await expect(page.getByRole("dialog", { name: "快捷命令" })).toHaveCount(0);
 });

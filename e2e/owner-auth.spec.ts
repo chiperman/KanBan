@@ -81,7 +81,9 @@ test("未认证首页只显示所有者登录入口且不泄露资产数据", as
 
   await page.goto("/");
 
-  await expect(page.getByTestId("view-mode")).toContainText("已锁定");
+  await expect(
+    page.getByRole("heading", { name: "预置唯一所有者" }),
+  ).toBeVisible();
   await expect(page.getByTestId("login-gate")).toBeVisible();
   await expect(page.getByTestId("card-grid")).toHaveCount(0);
   expect(await page.content()).not.toContain(SENSITIVE_TITLE);
@@ -234,7 +236,9 @@ test("Passkey 登录失败后仍停留在锁定状态", async ({ page }) => {
   await expect(
     page.getByText("验证失败或已取消，资产看板仍处于锁定状态"),
   ).toBeVisible();
-  await expect(page.getByTestId("view-mode")).toContainText("已锁定");
+  await expect(
+    page.getByRole("heading", { name: "个人资产看板已锁定" }),
+  ).toBeVisible();
   expect(await page.content()).not.toContain(SENSITIVE_TITLE);
   const cookies = await page.context().cookies();
   expect(cookies.find((cookie) => cookie.name === "pad_session")).toBeUndefined();
@@ -256,5 +260,7 @@ test("所有者退出后立即返回登录入口且旧会话失效", async ({ pa
   expect(await page.content()).not.toContain(SENSITIVE_BODY);
 
   await page.goto("/");
-  await expect(page.getByTestId("view-mode")).toContainText("已锁定");
+  await expect(
+    page.getByRole("heading", { name: "个人资产看板已锁定" }),
+  ).toBeVisible();
 });

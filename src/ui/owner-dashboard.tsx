@@ -397,6 +397,22 @@ export function OwnerDashboard({
 
   return (
     <>
+      {assetSources.length > 0 ? (
+        <article
+          className="card total-overview-card"
+          data-testid="total-overview-card"
+          data-command-target="total-overview"
+          data-command-label="总资产概览"
+          tabIndex={-1}
+        >
+          <TotalAssetOverview
+            sources={assetSources}
+            history={dailyAssetSnapshots}
+            currentDay={currentDay}
+            showSensitiveInfo={showSensitiveInfo}
+          />
+        </article>
+      ) : null}
       <div className="dashboard-control-deck">
         <div className="owner-toolbar" aria-label="资产管理">
           <button
@@ -415,22 +431,6 @@ export function OwnerDashboard({
         />
       </div>
       {error ? <p className="content-error" role="alert">{error}</p> : null}
-      {assetSources.length > 0 ? (
-        <article
-          className="card total-overview-card"
-          data-testid="total-overview-card"
-          data-command-target="total-overview"
-          data-command-label="总资产概览"
-          tabIndex={-1}
-        >
-          <TotalAssetOverview
-            sources={assetSources}
-            history={dailyAssetSnapshots}
-            currentDay={currentDay}
-            showSensitiveInfo={showSensitiveInfo}
-          />
-        </article>
-      ) : null}
       <CardLayoutEditor
         cards={displayCards}
         renderCard={renderLayoutCard}

@@ -111,6 +111,15 @@ a {
   letter-spacing: 0.1em;
 }
 
+.card-label {
+  color: var(--ink-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--label);
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+}
+
 .header-context {
   margin-left: var(--space-2);
 }
@@ -318,7 +327,7 @@ a {
 .layout-span-control {
   color: var(--ink-secondary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--label);
 }
 
 .layout-resize-guide {
@@ -329,16 +338,16 @@ a {
   border-left: 2px solid var(--signal);
   color: var(--ink-secondary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--label);
 }
 
 .layout-resize-handle {
   position: absolute;
   z-index: 4;
-  right: 4px;
-  bottom: 4px;
-  width: 28px;
-  height: 28px;
+  right: 0;
+  bottom: 0;
+  width: 44px;
+  height: 44px;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -351,8 +360,8 @@ a {
 .layout-resize-handle::before {
   content: "";
   position: absolute;
-  right: 5px;
-  bottom: 7px;
+  right: 9px;
+  bottom: 11px;
   width: 1px;
   height: 14px;
   background: var(--ink-secondary);
@@ -361,8 +370,8 @@ a {
 .layout-resize-handle::after {
   content: "";
   position: absolute;
-  right: 10px;
-  bottom: 7px;
+  right: 14px;
+  bottom: 11px;
   width: 1px;
   height: 14px;
   background: var(--ink-secondary);
@@ -406,10 +415,10 @@ a {
 .layout-drag-handle {
   position: absolute;
   z-index: 4;
-  top: 8px;
-  right: 8px;
-  width: 22px;
-  height: 22px;
+  top: 0;
+  right: 0;
+  width: 44px;
+  height: 44px;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -422,8 +431,8 @@ a {
 .layout-drag-handle::before {
   content: "";
   position: absolute;
-  top: 7px;
-  left: 4px;
+  top: 15px;
+  left: 18px;
   width: 14px;
   height: 1px;
   background: var(--ink-secondary);
@@ -889,7 +898,7 @@ body {
 .header-time {
   color: var(--ink-muted);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--label);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.06em;
   white-space: nowrap;
@@ -1028,9 +1037,9 @@ body {
   min-height: 44px;
   border-radius: var(--radius-round);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 400;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
 }
 
 .login-primary {
@@ -1209,7 +1218,7 @@ body {
   padding-left: var(--space-3);
   border-left: 1px solid var(--line-strong);
   color: var(--ink-muted);
-  font-size: 9px;
+  font-size: var(--label);
   letter-spacing: 0.04em;
 }
 
@@ -1411,7 +1420,7 @@ body {
 }
 
 .text-button {
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 var(--space-2);
   border: 0;
   border-radius: var(--radius-xs);
@@ -1432,7 +1441,7 @@ body {
 
 .asset-table th {
   color: var(--ink-muted);
-  font-size: 10px;
+  font-size: var(--label);
 }
 
 .asset-table td {
@@ -1845,20 +1854,6 @@ body {
   font-weight: 700;
 }
 
-.header-system {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.header-system::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--success);
-}
-
 .login-instrument-state,
 .total-overview-amount {
   font-variation-settings: "ROND" 0;
@@ -1894,7 +1889,7 @@ body {
 .source-live-state {
   color: var(--ink-muted);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--label);
   letter-spacing: 0.08em;
   line-height: 1.4;
 }
@@ -1943,8 +1938,9 @@ body {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  padding-top: var(--space-8);
-  border-top: 1px solid var(--line);
+  margin: var(--space-8) 0 var(--space-8);
+  padding-top: var(--space-10);
+  border-top: 0;
 }
 
 .dashboard-control-deck::before {
@@ -1954,7 +1950,7 @@ body {
   left: 0;
   color: var(--ink-muted);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--label);
   letter-spacing: 0.1em;
 }
 
@@ -2006,7 +2002,7 @@ body {
   left: 0;
   color: var(--ink-muted);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--label);
   letter-spacing: 0.1em;
   white-space: nowrap;
 }
@@ -2076,7 +2072,7 @@ body {
 .distribution-index {
   color: var(--ink-muted);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--label);
 }
 
 .trend-list {
@@ -2091,11 +2087,14 @@ body {
   content: counter(trend-row, decimal-leading-zero);
   color: var(--ink-muted);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--label);
 }
 
 .trend-list li {
   grid-template-columns: 24px minmax(74px, auto) 1fr auto;
+  min-height: 44px;
+  font-family: var(--font-mono);
+  font-size: var(--caption);
 }
 
 .card:not(.total-overview-card) {
@@ -2227,7 +2226,7 @@ body {
   content: counter(holding-row, decimal-leading-zero);
   color: var(--ink-muted);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--label);
 }
 
 .holding-top-list strong {
@@ -2237,18 +2236,20 @@ body {
 .card-actions {
   margin-inline: calc(var(--space-6) * -1);
   margin-bottom: calc(var(--space-6) * -1);
-  padding: var(--space-3) var(--space-6);
+  padding: var(--space-3) calc(var(--space-6) + 44px) var(--space-3) var(--space-6);
   border-top: 1px solid var(--line);
   background: var(--raised);
 }
 
 .card-actions .text-button {
-  font-size: 9px;
-  letter-spacing: 0.04em;
+  font-size: 13px;
+  letter-spacing: 0.06em;
 }
 
-.card-actions .danger-button {
-  color: var(--ink-secondary);
+.source-management-dialog .danger-button {
+  border: 1px solid var(--signal);
+  border-radius: var(--radius-round);
+  color: var(--signal-text);
 }
 
 .page-setup::before {
@@ -2296,7 +2297,7 @@ body {
   margin-bottom: var(--space-3);
   color: var(--ink-muted);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--label);
   letter-spacing: 0.1em;
 }
 
@@ -2305,7 +2306,7 @@ body {
     border-color: var(--ink-muted);
   }
 
-  .card-actions .danger-button:hover {
+  .source-management-dialog .danger-button:hover {
     color: var(--signal-text);
   }
 }
@@ -2351,7 +2352,8 @@ body {
   .card-actions {
     margin-inline: calc(var(--space-5) * -1);
     margin-bottom: calc(var(--space-5) * -1);
-    padding-inline: var(--space-5);
+    padding-right: calc(var(--space-5) + 44px);
+    padding-left: var(--space-5);
   }
 
   .login-security-meter {
@@ -2363,7 +2365,7 @@ body {
 
 .page-locked {
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto 1fr;
   width: min(100%, 1360px);
   min-height: 100dvh;
   padding: 0 40px;
@@ -2384,14 +2386,7 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--space-5);
-}
-
-.locked-brand > strong {
-  color: var(--ink-display);
-  font-family: var(--font-mono);
-  font-size: var(--caption);
-  font-weight: 400;
+  gap: var(--space-3);
 }
 
 .page-locked .header-wordmark {
@@ -2437,16 +2432,6 @@ body {
   line-height: 1;
 }
 
-.locked-clock > small {
-  font-size: var(--caption);
-  letter-spacing: 0.08em;
-}
-
-.page-locked .header-system {
-  color: var(--ink-secondary);
-  font-size: var(--caption);
-}
-
 .page-locked .login-main {
   display: grid;
   min-height: 0;
@@ -2457,15 +2442,15 @@ body {
 .page-locked .login-gate {
   display: grid;
   grid-template-columns: 1fr;
-  grid-template-rows: auto 1fr auto;
-  gap: 0;
+  grid-template-rows: auto auto;
+  align-content: center;
+  gap: var(--space-8);
   min-height: clamp(500px, 58vh, 580px);
   padding: var(--space-10);
   border: 0;
   background: transparent;
 }
 
-.page-locked .card-label,
 .login-eyebrow,
 .login-trust-line {
   color: var(--ink-secondary);
@@ -2515,11 +2500,11 @@ body {
 }
 
 .login-flow {
-  align-self: end;
+  align-self: auto;
 }
 
 .page-locked .login-actions {
-  margin-top: 36px;
+  margin-top: 0;
 }
 
 .page-locked .login-hint {
@@ -2536,19 +2521,6 @@ body {
   flex-wrap: wrap;
   gap: var(--space-6);
   margin-top: var(--space-5);
-}
-
-.locked-footer {
-  display: flex;
-  min-height: 48px;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-6);
-  border-top: 1px solid var(--line);
-  color: var(--ink-secondary);
-  font-family: var(--font-mono);
-  font-size: var(--caption);
-  letter-spacing: 0.1em;
 }
 
 @media (max-width: 639px) {
@@ -2572,10 +2544,6 @@ body {
     width: auto;
     margin-left: auto;
     gap: 0;
-  }
-
-  .page-locked .header-system {
-    display: none;
   }
 
   .locked-clock > strong {
@@ -2604,19 +2572,6 @@ body {
     width: auto;
   }
 
-  .locked-footer {
-    min-height: 88px;
-    flex-direction: column;
-    align-items: flex-start;
-    justify-content: center;
-    gap: var(--space-1);
-    padding-block: var(--space-4);
-  }
-
-  .locked-footer span:last-child {
-    max-width: none;
-    text-align: left;
-  }
 }
 
 /* Responsive source workflow and dashboard shell */

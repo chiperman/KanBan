@@ -1,20 +1,19 @@
-import { shanghaiDay } from "@/domain/daily-asset-snapshots";
-import { getServices } from "@/server/composition";
-import { HeaderUtilities } from "@/ui/header-utilities";
-import { LogoutButton } from "@/ui/logout-button";
-import { OwnerDashboard } from "@/ui/owner-dashboard";
-import { OwnerLogin } from "@/ui/owner-login";
-import { SessionGuard } from "@/ui/session-guard";
-import { ShanghaiClock } from "@/ui/shanghai-clock";
+import { shanghaiDay } from "@/domain/daily-asset-snapshots"
+import { getServices } from "@/server/composition"
+import { HeaderUtilities } from "@/ui/header-utilities"
+import { LogoutButton } from "@/ui/logout-button"
+import { OwnerDashboard } from "@/ui/owner-dashboard"
+import { OwnerLogin } from "@/ui/owner-login"
+import { SessionGuard } from "@/ui/session-guard"
+import { ShanghaiClock } from "@/ui/shanghai-clock"
 
-export const dynamic = "force-dynamic";
+export const dynamic = "force-dynamic"
 
 export default async function AssetDashboardPage() {
-  const services = getServices();
-  const session = await services.auth.currentSession();
-  const ownerProvisioned = (await services.ownerCredentials.get()) !== null;
-  const recoveryConfigured =
-    (await services.ownerRecoveryCredentials.get()) !== null;
+  const services = getServices()
+  const session = await services.auth.currentSession()
+  const ownerProvisioned = (await services.ownerCredentials.get()) !== null
+  const recoveryConfigured = (await services.ownerRecoveryCredentials.get()) !== null
 
   if (session === null) {
     return (
@@ -27,37 +26,24 @@ export default async function AssetDashboardPage() {
             <span className="header-wordmark" lang="en">
               PERSONAL ASSET DASHBOARD
             </span>
-            <strong>OWNER ACCESS</strong>
-            <span className="locked-view-mode" data-testid="view-mode">
-              已锁定 · 仅限所有者
-            </span>
           </div>
           <div className="header-side">
-            <span className="header-system">LOCAL / READ ONLY</span>
             <ShanghaiClock initialTime={new Date().toISOString()} />
           </div>
         </header>
         <main id="main-content" className="login-main">
-          <OwnerLogin
-            ownerProvisioned={ownerProvisioned}
-            recoveryConfigured={recoveryConfigured}
-          />
+          <OwnerLogin ownerProvisioned={ownerProvisioned} recoveryConfigured={recoveryConfigured} />
         </main>
-        <footer className="locked-footer">
-          <span>LOCAL-FIRST · OWNER ONLY</span>
-          <span>NO TRADING · NO CLOUD SYNC</span>
-        </footer>
       </div>
-    );
+    )
   }
 
-  const now = services.clock.now();
-  const assetCards = await services.assetCards.list();
+  const now = services.clock.now()
+  const assetCards = await services.assetCards.list()
   const assetSources = (await services.assetSources.list()).map(
-    ({ credentialReference: _credentialReference, permissions: _permissions, ...source }) =>
-      source,
-  );
-  const dailyAssetSnapshots = await services.dailyAssetSnapshots.list();
+    ({ credentialReference: _credentialReference, permissions: _permissions, ...source }) => source
+  )
+  const dailyAssetSnapshots = await services.dailyAssetSnapshots.list()
 
   return (
     <div className="page page-dashboard">
@@ -84,9 +70,7 @@ export default async function AssetDashboardPage() {
             <ShanghaiClock initialTime={now.toISOString()} compact />
             <HeaderUtilities
               recoveryConfigured={recoveryConfigured}
-              refreshEnabled={assetSources.some(
-                (source) => source.lifecycle !== "disconnected",
-              )}
+              refreshEnabled={assetSources.some((source) => source.lifecycle !== "disconnected")}
             />
             <LogoutButton />
           </div>
@@ -101,5 +85,5 @@ export default async function AssetDashboardPage() {
         </main>
       </SessionGuard>
     </div>
-  );
+  )
 }
