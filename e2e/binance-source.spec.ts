@@ -55,7 +55,7 @@ async function startBinanceFlow(page: Page) {
   }
   const provider = page.getByRole("radio", { name: "Binance" });
   if (await provider.isVisible()) {
-    await provider.check();
+    await provider.click();
   }
   await page.getByLabel("Binance API Key").fill(API_KEY);
   await page.getByLabel("Binance API Secret").fill(API_SECRET);
@@ -77,7 +77,7 @@ test("取消添加资产来源后再次打开时只读凭证字段为空", async
   await loginAsOwner(page);
 
   await page.getByRole("button", { name: "添加资产来源" }).click();
-  await page.getByRole("radio", { name: "Binance" }).check();
+  await page.getByRole("radio", { name: "Binance" }).click();
   await page.getByLabel("Binance API Key").fill(API_KEY);
   await page.getByLabel("Binance API Secret").fill(API_SECRET);
   await page
@@ -86,7 +86,7 @@ test("取消添加资产来源后再次打开时只读凭证字段为空", async
     .click();
 
   await page.getByRole("button", { name: "添加资产来源" }).click();
-  await page.getByRole("radio", { name: "Binance" }).check();
+  await page.getByRole("radio", { name: "Binance" }).click();
   await expect(page.getByLabel("Binance API Key")).toHaveValue("");
   await expect(page.getByLabel("Binance API Secret")).toHaveValue("");
 });
@@ -424,7 +424,7 @@ test("未认证状态与生产测试替身都不能读取 Binance 私密来源�
     .click();
   await expect(page.getByTestId("binance-card")).toBeVisible();
   await page.getByRole("button", { name: "退出登录" }).click();
-  await page.reload();
+  await expect(page.getByRole("heading", { name: "个人资产看板已锁定" })).toBeVisible();
   const publicSurface = `${await page.content()}\n${await (await page.request.get("/")).text()}`;
   for (const value of ["900001", "BTC", "12,849", API_KEY, API_SECRET]) {
     expect(publicSurface).not.toContain(value);

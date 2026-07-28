@@ -45,7 +45,7 @@ async function startBitgetFlow(page: Page, accountMode = "classic") {
   }
   const provider = page.getByRole("radio", { name: "Bitget" });
   if (await provider.isVisible()) {
-    await provider.check();
+    await provider.click();
   }
   await page.getByLabel("Bitget 账户类型").selectOption(accountMode);
   await page.getByLabel("Bitget API Key").fill(API_KEY);

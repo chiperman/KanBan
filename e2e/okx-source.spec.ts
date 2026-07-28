@@ -45,7 +45,7 @@ async function startOkxFlow(page: Page) {
   }
   const provider = page.getByRole("radio", { name: "OKX" });
   if (await provider.isVisible()) {
-    await provider.check();
+    await provider.click();
   }
   await page.getByLabel("OKX 注册区域").selectOption("eea");
   await page.getByLabel("OKX API Key").fill(API_KEY);
@@ -405,7 +405,7 @@ test("未认证状态与生产测试替身都不能读取 OKX 私密来源或凭
     .click();
   await expect(page.getByTestId("okx-card")).toBeVisible();
   await page.getByRole("button", { name: "退出登录" }).click();
-  await page.reload();
+  await expect(page.getByRole("heading", { name: "个人资产看板已锁定" })).toBeVisible();
   const publicSurface = `${await page.content()}\n${await (await page.request.get("/")).text()}`;
   for (const value of [
     "880001",

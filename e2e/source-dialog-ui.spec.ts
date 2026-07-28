@@ -34,7 +34,7 @@ test("添加来源先选择类型再配置，返回保留草稿而取消会清�
   await expect(dialog.getByRole("heading", { name: "选择来源类型" })).toBeVisible();
   await expect(dialog.getByLabel("Ethereum 公开地址（每行一个）")).toHaveCount(0);
 
-  await dialog.getByRole("radio", { name: "Ethereum 观察钱包" }).check();
+  await dialog.getByRole("radio", { name: "Ethereum 观察钱包" }).click();
   await expect(dialog.getByRole("heading", { name: "Ethereum 观察钱包" })).toBeVisible();
   await expect(dialog.getByRole("radio")).toHaveCount(0);
 
@@ -49,7 +49,7 @@ test("添加来源先选择类型再配置，返回保留草稿而取消会清�
 
   await page.getByRole("button", { name: "添加资产来源" }).click();
   await expect(dialog.getByRole("heading", { name: "选择来源类型" })).toBeVisible();
-  await dialog.getByRole("radio", { name: "Ethereum 观察钱包" }).check();
+  await dialog.getByRole("radio", { name: "Ethereum 观察钱包" }).click();
   await expect(dialog.getByLabel("Ethereum 公开地址（每行一个）")).toHaveValue("");
 });
 
@@ -68,7 +68,7 @@ test("移动端来源配置采用全屏 sheet，页头次要操作收进本机�
 
   await page.getByRole("button", { name: "添加资产来源" }).click();
   const dialog = page.getByRole("dialog", { name: "添加资产来源" });
-  await dialog.getByRole("radio", { name: "Binance" }).check();
+  await dialog.getByRole("radio", { name: "Binance" }).click();
 
   const sheet = dialog.locator(".source-dialog");
   const box = await sheet.boundingBox();

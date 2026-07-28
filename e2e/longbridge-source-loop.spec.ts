@@ -149,7 +149,7 @@ async function startLongbridgeFlow(page: Page): Promise<void> {
   if (!(await dialog.isVisible())) {
     await page.getByRole("button", { name: "添加资产来源" }).click();
   }
-  await page.getByRole("radio", { name: "长桥 Longbridge" }).check();
+  await page.getByRole("radio", { name: "长桥 Longbridge" }).click();
   await page.getByRole("button", { name: "开始 OAuth 授权" }).click();
 }
 

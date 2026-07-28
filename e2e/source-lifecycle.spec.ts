@@ -30,7 +30,7 @@ async function loginAsOwner(page: Page): Promise<void> {
 
 async function connectEthereum(page: Page): Promise<void> {
   await page.getByRole("button", { name: "添加资产来源" }).click();
-  await page.getByRole("radio", { name: "Ethereum 观察钱包" }).check();
+  await page.getByRole("radio", { name: "Ethereum 观察钱包" }).click();
   await page.getByLabel("Ethereum 公开地址（每行一个）").fill(ADDRESS);
   await page.getByRole("button", { name: "验证公开地址" }).click();
   await page
@@ -125,7 +125,7 @@ test("其他来源次日成功同步时，不为已断开来源生成新快照",
   await loginAsOwner(page);
   await connectEthereum(page);
   await page.getByRole("button", { name: "添加资产来源" }).click();
-  await page.getByRole("radio", { name: "BNB Smart Chain 观察钱包" }).check();
+  await page.getByRole("radio", { name: "BNB Smart Chain 观察钱包" }).click();
   await page.getByLabel("BNB Smart Chain 公开地址（每行一个）").fill(ADDRESS);
   await page.getByRole("button", { name: "验证公开地址" }).click();
   await page

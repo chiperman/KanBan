@@ -182,7 +182,7 @@ test("Ethereum 余额失败只使该来源过期，BSC 继续当前且未认证�
   await expect(page.getByTestId("ethereum-watch-card")).toContainText("Ethereum 同步失败");
   await expect(page.getByTestId("bsc-watch-card")).toContainText("数据当前");
   await page.getByRole("button", { name: "退出登录" }).click();
-  await page.reload();
+  await expect(page.getByRole("heading", { name: "个人资产看板已锁定" })).toBeVisible();
   const publicSurface = await page.content();
   for (const sensitive of [ADDRESS.toLowerCase(), "SAME", "5,519", "2,019"]) {
     expect(publicSurface.toLowerCase()).not.toContain(sensitive.toLowerCase());
