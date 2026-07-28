@@ -92,6 +92,8 @@ export function OwnerDashboard({
     source: AssetSourceView;
     stage: 1 | 2;
   } | null>(null);
+  const [managementTarget, setManagementTarget] =
+    useState<AssetSourceView | null>(null);
   const [lifecyclePending, setLifecyclePending] = useState(false);
 
   useEffect(() => {
@@ -338,13 +340,8 @@ export function OwnerDashboard({
               <button type="button" className="text-button" onClick={() => void setSourceHidden(source, true)}>
                 隐藏 {sourceName(source)}
               </button>
-              {source.lifecycle !== "disconnected" ? (
-                <button type="button" className="text-button" onClick={() => void disconnectSource(source)}>
-                  断开 {sourceName(source)}
-                </button>
-              ) : null}
-              <button type="button" className="text-button danger-button" onClick={() => setDeleteTarget({ source, stage: 1 })}>
-                永久删除 {sourceName(source)}数据
+              <button type="button" className="text-button" onClick={() => setManagementTarget(source)}>
+                管理 {sourceName(source)}
               </button>
             </>
           ) : null}
@@ -388,13 +385,8 @@ export function OwnerDashboard({
               <button type="button" className="text-button" disabled tabIndex={-1}>
                 隐藏 {sourceName(source)}
               </button>
-              {source.lifecycle !== "disconnected" ? (
-                <button type="button" className="text-button" disabled tabIndex={-1}>
-                  断开 {sourceName(source)}
-                </button>
-              ) : null}
-              <button type="button" className="text-button danger-button" disabled tabIndex={-1}>
-                永久删除 {sourceName(source)}数据
+              <button type="button" className="text-button" disabled tabIndex={-1}>
+                管理 {sourceName(source)}
               </button>
             </>
           ) : null}
@@ -480,17 +472,56 @@ export function OwnerDashboard({
               <button type="button" className="text-button" onClick={() => void setSourceHidden(source, false)}>
                 重新显示 {sourceName(source)}
               </button>
-              {source.lifecycle !== "disconnected" ? (
-                <button type="button" className="text-button" onClick={() => void disconnectSource(source)}>
-                  断开 {sourceName(source)}
-                </button>
-              ) : null}
-              <button type="button" className="text-button danger-button" onClick={() => setDeleteTarget({ source, stage: 1 })}>
-                永久删除 {sourceName(source)}数据
+              <button type="button" className="text-button" onClick={() => setManagementTarget(source)}>
+                管理 {sourceName(source)}
               </button>
             </div>
           ))}
         </section>
+      ) : null}
+      {managementTarget ? (
+        <div
+          className="editor-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`管理 ${sourceName(managementTarget)}`}
+        >
+          <div className="editor-dialog source-management-dialog">
+            <p className="card-label">来源管理</p>
+            <h2>{sourceName(managementTarget)}</h2>
+            <p className="login-copy">
+              断开会移除只读凭证并停止同步，但保留已有数据；永久删除会清除全部历史。
+            </p>
+            <div className="editor-actions">
+              {managementTarget.lifecycle !== "disconnected" ? (
+                <button
+                  type="button"
+                  className="danger-button"
+                  onClick={() => void disconnectSource(managementTarget)}
+                >
+                  断开 {sourceName(managementTarget)}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="danger-button"
+                onClick={() => {
+                  setDeleteTarget({ source: managementTarget, stage: 1 });
+                  setManagementTarget(null);
+                }}
+              >
+                永久删除 {sourceName(managementTarget)}数据
+              </button>
+              <button
+                type="button"
+                className="login-cancel"
+                onClick={() => setManagementTarget(null)}
+              >
+                关闭
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
       {deleteTarget ? (
         <div className="editor-overlay" role="dialog" aria-modal="true" aria-label={deleteTarget.stage === 1 ? "永久删除来源数据" : "第二次确认永久删除"}>

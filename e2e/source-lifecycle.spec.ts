@@ -53,6 +53,11 @@ async function lifecycleState(page: Page) {
   };
 }
 
+async function openSourceManagement(page: Page, source: string) {
+  await page.getByRole("button", { name: `管理 ${source}` }).click();
+  return page.getByRole("dialog", { name: `管理 ${source}` });
+}
+
 test.beforeEach(async ({ request }) => {
   await request.post("/test-doubles/reset");
   await request.post("/test-doubles/ethereum", {
@@ -92,8 +97,10 @@ test("断开删除凭证并停止同步，保留来源身份和已有快照", as
   await loginAsOwner(page);
   await connectEthereum(page);
 
+  await expect(page.getByRole("button", { name: "断开 Ethereum 观察钱包" })).toHaveCount(0);
+  const management = await openSourceManagement(page, "Ethereum 观察钱包");
   page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "断开 Ethereum 观察钱包" }).click();
+  await management.getByRole("button", { name: "断开 Ethereum 观察钱包" }).click();
   await expect(page.getByText("已断开 · 历史数据保留")).toBeVisible();
 
   const disconnected = await lifecycleState(page);
@@ -127,7 +134,8 @@ test("其他来源次日成功同步时，不为已断开来源生成新快照",
     .click();
 
   page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "断开 Ethereum 观察钱包" }).click();
+  const management = await openSourceManagement(page, "Ethereum 观察钱包");
+  await management.getByRole("button", { name: "断开 Ethereum 观察钱包" }).click();
   await page.request.post("/test-doubles/clock", {
     data: { now: "2026-01-01T16:01:00.000Z" },
   });
@@ -155,7 +163,9 @@ test("永久删除需要第二次确认，取消无变化，确认后清除来�
   await loginAsOwner(page);
   await connectEthereum(page);
 
-  await page.getByRole("button", { name: "永久删除 Ethereum 观察钱包数据" }).click();
+  await expect(page.getByRole("button", { name: "永久删除 Ethereum 观察钱包数据" })).toHaveCount(0);
+  let management = await openSourceManagement(page, "Ethereum 观察钱包");
+  await management.getByRole("button", { name: "永久删除 Ethereum 观察钱包数据" }).click();
   const first = page.getByRole("dialog", { name: "永久删除来源数据" });
   await expect(first).toContainText("持仓记录、同步记录和全部资产快照");
   await first.getByRole("button", { name: "继续删除" }).click();
@@ -165,7 +175,8 @@ test("永久删除需要第二次确认，取消无变化，确认后清除来�
   expect((await lifecycleState(page)).sources).toHaveLength(1);
   await expect(page.getByTestId("ethereum-watch-card")).toBeVisible();
 
-  await page.getByRole("button", { name: "永久删除 Ethereum 观察钱包数据" }).click();
+  management = await openSourceManagement(page, "Ethereum 观察钱包");
+  await management.getByRole("button", { name: "永久删除 Ethereum 观察钱包数据" }).click();
   await page.getByRole("button", { name: "继续删除" }).click();
   await page.getByRole("button", { name: "确认永久删除" }).click();
 
