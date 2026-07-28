@@ -176,6 +176,9 @@ test("Binance 钱包残差会同时传播到来源卡、总资产和完整性状
   await expect(page.getByTestId("binance-product-coverage")).toContainText(
     "Dual Investment · 明细 · 当前",
   );
+  await expect(page.getByTestId("binance-card")).toContainText(
+    "USDT · 双币投资",
+  );
 });
 
 test("正负对账差额与逐组舍入后的分布始终守恒", async ({ page, request }) => {
