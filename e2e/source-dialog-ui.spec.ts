@@ -52,3 +52,46 @@ test("添加来源先选择类型再配置，返回保留草稿而取消会清�
   await dialog.getByRole("radio", { name: "Ethereum 观察钱包" }).check();
   await expect(dialog.getByLabel("Ethereum 公开地址（每行一个）")).toHaveValue("");
 });
+
+test("移动端来源配置采用全屏 sheet，页头次要操作收进本机设置", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await loginAsOwner(page);
+
+  await expect(page.getByText("EXTERNAL ACCESS / READ ONLY")).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "立即锁定（退出登录）" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "本机设置" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "打开快捷命令" })).toBeHidden();
+
+  await page.getByRole("button", { name: "本机设置" }).click();
+  await expect(page.getByRole("button", { name: "打开快捷命令" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "配置备用登录" })).toBeVisible();
+
+  await page.getByRole("button", { name: "添加资产来源" }).click();
+  const dialog = page.getByRole("dialog", { name: "添加资产来源" });
+  await dialog.getByRole("radio", { name: "Binance" }).check();
+
+  const sheet = dialog.locator(".source-dialog");
+  const box = await sheet.boundingBox();
+  expect(box).toMatchObject({ x: 0, y: 0, width: 390, height: 844 });
+  await expect(dialog.locator(".source-dialog-heading")).toHaveCSS("position", "sticky");
+  await expect(dialog.locator(".source-dialog-actions")).toHaveCSS("position", "sticky");
+});
+
+test("宽屏扩展来源工作区但约束总览阅读宽度", async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  const seeded = await page.request.post("/test-doubles/release-acceptance", {
+    data: { action: "seed" },
+  });
+  expect(seeded.ok()).toBeTruthy();
+  await loginAsOwner(page);
+
+  const pageWidth = await page.locator(".page-dashboard").evaluate(
+    (element) => element.getBoundingClientRect().width,
+  );
+  const overviewWidth = await page.getByTestId("total-overview-card").evaluate(
+    (element) => element.getBoundingClientRect().width,
+  );
+  expect(pageWidth).toBeGreaterThanOrEqual(1560);
+  expect(overviewWidth).toBeLessThanOrEqual(1280);
+  expect(pageWidth - overviewWidth).toBeGreaterThanOrEqual(240);
+});

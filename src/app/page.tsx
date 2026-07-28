@@ -1,10 +1,9 @@
 import { shanghaiDay } from "@/domain/daily-asset-snapshots";
 import { getServices } from "@/server/composition";
-import { CommandMenu } from "@/ui/command-menu";
+import { HeaderUtilities } from "@/ui/header-utilities";
 import { LogoutButton } from "@/ui/logout-button";
 import { OwnerDashboard } from "@/ui/owner-dashboard";
 import { OwnerLogin } from "@/ui/owner-login";
-import { RecoverySetup } from "@/ui/recovery-setup";
 import { SessionGuard } from "@/ui/session-guard";
 import { ShanghaiClock } from "@/ui/shanghai-clock";
 
@@ -81,10 +80,10 @@ export default async function AssetDashboardPage() {
             </p>
           </div>
           <div className="header-side">
-            <span className="header-system">LOCAL / READ ONLY</span>
+            <span className="header-system">EXTERNAL ACCESS / READ ONLY</span>
             <ShanghaiClock initialTime={now.toISOString()} compact />
-            <RecoverySetup configured={recoveryConfigured} />
-            <CommandMenu
+            <HeaderUtilities
+              recoveryConfigured={recoveryConfigured}
               refreshEnabled={assetSources.some(
                 (source) => source.lifecycle !== "disconnected",
               )}
