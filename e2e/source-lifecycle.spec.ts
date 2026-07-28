@@ -90,7 +90,7 @@ test("隐藏与恢复只改变卡片可见性，来源仍同步并计入总额�
 
   await page.getByRole("button", { name: "重新显示 Ethereum 观察钱包" }).click();
   await expect(page.getByTestId("ethereum-watch-card")).toBeVisible();
-  await expect(page.getByTestId("ethereum-watch-card")).toContainText("5,519 USD");
+  await expect(page.getByTestId("ethereum-watch-card")).toContainText("5,519.00 USD");
 });
 
 test("断开删除凭证并停止同步，保留来源身份和已有快照", async ({ page }) => {

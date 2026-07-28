@@ -39,6 +39,14 @@ test("总资产使用来源原生价格与显式汇率，保留原值并正确�
 
   const overview = page.getByTestId("total-asset-overview");
   await expect(overview).toBeVisible();
+  const sourceTotal = page
+    .getByTestId("asset-source-card-source-alpha")
+    .getByTestId("asset-source-total");
+  await expect(sourceTotal).toHaveCSS("font-family", /Doto/);
+  await expect(sourceTotal.locator("span")).toHaveCSS(
+    "font-family",
+    /Space Mono/,
+  );
   await expect(overview).toContainText("561.34 USD");
   await expect(overview).toContainText("当前估值：不完整 · 1 项未估值");
   await expect(overview).toContainText("证券");

@@ -54,10 +54,10 @@ test("Ethereum 观察钱包只用公开地址预览并保存，按链与合约�
   const preview = page.getByRole("dialog", { name: "确认 Ethereum 观察钱包" });
   await expect(preview).toContainText("Ethereum 观察钱包 · 2 个地址");
   await expect(preview).toContainText("ETH、ERC-20（公开地址只读）");
-  await expect(preview).toContainText("5,519 USD");
+  await expect(preview).toContainText("5,519.00 USD");
   await preview.getByRole("button", { name: "确认并保存" }).click();
 
   const card = page.getByTestId("ethereum-watch-card");
-  await expect(card.getByTestId("asset-source-total")).toHaveText("5,519 USD");
+  await expect(card.getByTestId("asset-source-total")).toHaveText("5,519.00 USD");
   await expect(card).toContainText("含 1 项未估值资产");
 });

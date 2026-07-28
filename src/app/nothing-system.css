@@ -2059,13 +2059,6 @@ body {
   background-size: 5px 5px;
 }
 
-.today-change-amount,
-.asset-total {
-  font-family: var(--font-mono);
-  font-variation-settings: normal;
-  font-weight: 400;
-}
-
 .today-change-amount {
   line-height: 1.1;
 }
@@ -2161,6 +2154,17 @@ body {
   margin-top: var(--space-3);
 }
 
+.asset-source-meta {
+  position: relative;
+  z-index: 1;
+  margin: var(--space-1) 0 0;
+  color: var(--ink-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--label);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .asset-total {
   position: relative;
   z-index: 1;
@@ -2191,6 +2195,21 @@ body {
 
 .source-meter-caption .is-incomplete {
   color: var(--warning);
+}
+
+.crypto-small-holding-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  color: var(--ink-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--label);
+  cursor: pointer;
+}
+
+.crypto-small-holding-filter input {
+  accent-color: var(--ink-display);
 }
 
 .holding-top-list {

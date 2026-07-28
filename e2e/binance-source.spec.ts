@@ -107,7 +107,9 @@ test("Binance 只读凭证先预览后原子保存，并展示现货、资金与
   const preview = page.getByRole("dialog", { name: "确认 Binance 资产来源" });
   await expect(preview).toContainText("Binance 账户 · UID 900001");
   await expect(preview).toContainText("现货、资金、Simple Earn（只读）");
-  await expect(preview).toContainText("12,849.5 USDT");
+  await expect(
+    preview.getByText("12,849.50 USDT", { exact: true }),
+  ).toBeVisible();
   expect(await state(page)).toEqual({ savedSources: 0, savedSecrets: 0 });
   expect(await page.content()).not.toContain(API_SECRET);
 
@@ -115,7 +117,7 @@ test("Binance 只读凭证先预览后原子保存，并展示现货、资金与
   const card = page.getByTestId("binance-card");
   await expect(card).toContainText("Binance 资产");
   await expect(card.getByTestId("asset-source-total")).toHaveText(
-    "12,849.5 USDT",
+    "12,849.50 USDT",
   );
   await expect(card.getByTestId("holding-top-list").getByRole("listitem")).toHaveCount(3);
   await expect(card).toContainText("现货");
@@ -389,7 +391,7 @@ test("Binance 同步失败保留最后成功数据并接入过期状态和日快
     .getByRole("button", { name: "确认并保存" })
     .click();
   const card = page.getByTestId("binance-card");
-  await expect(card).toContainText("12,849.5 USDT");
+  await expect(card).toContainText("12,849.50 USDT");
   await expect(page.getByTestId("asset-refresh-status")).toContainText(
     "同步完成",
   );
@@ -401,7 +403,7 @@ test("Binance 同步失败保留最后成功数据并接入过期状态和日快
   await expect(page.getByTestId("asset-refresh-status")).toContainText(
     "1 个来源失败",
   );
-  await expect(card).toContainText("12,849.5 USDT");
+  await expect(card).toContainText("12,849.50 USDT");
   await expect(card).toContainText("过期数据");
   await expect(card).toContainText("Binance 同步失败");
   await expect(page.getByTestId("total-asset-overview")).toContainText(

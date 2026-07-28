@@ -109,6 +109,14 @@ test("北京时间日界线建立唯一基准，同日幂等且跨日不回填",
   await expect(page.getByTestId("today-asset-change")).toContainText(
     "+0.00 USD",
   );
+  const todayChange = page
+    .getByTestId("today-asset-change")
+    .locator(".today-change-amount");
+  await expect(todayChange).toHaveCSS("font-family", /Doto/);
+  await expect(todayChange.locator(".amount-unit")).toHaveCSS(
+    "font-family",
+    /Space Mono/,
+  );
   await expect(page.getByTestId("total-asset-trend")).toContainText(
     "04月01日",
   );

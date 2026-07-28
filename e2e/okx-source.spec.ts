@@ -81,14 +81,14 @@ test("OKX 只读凭证先预览后原子保存，并展示现货、资金与 Ear
   const preview = page.getByRole("dialog", { name: "确认 OKX 资产来源" });
   await expect(preview).toContainText("OKX 账户 · UID 880001");
   await expect(preview).toContainText("现货、资金、Simple Earn Flexible（只读）");
-  await expect(preview).toContainText("10,987.654321 USDT");
+  await expect(preview).toContainText("10,987.65 USDT");
   await expect(page.getByText(API_SECRET)).toHaveCount(0);
   await expect(page.getByText(PASSPHRASE)).toHaveCount(0);
 
   await preview.getByRole("button", { name: "确认并保存" }).click();
   const card = page.getByTestId("okx-card");
   await expect(card.getByTestId("asset-source-total")).toHaveText(
-    "10,987.654321 USDT",
+    "10,987.65 USDT",
   );
   await expect(
     card.getByTestId("holding-top-list").getByRole("listitem"),
@@ -301,7 +301,7 @@ test("OKX 同步失败保留最后成功数据并接入过期状态和日快照"
     .getByRole("button", { name: "确认并保存" })
     .click();
   const card = page.getByTestId("okx-card");
-  await expect(card).toContainText("10,987.654321 USDT");
+  await expect(card).toContainText("10,987.65 USDT");
   await expect(page.getByTestId("asset-source-trend-test-okx-source-1")).toContainText(
     "01月01日",
   );
@@ -311,7 +311,7 @@ test("OKX 同步失败保留最后成功数据并接入过期状态和日快照"
   await expect(page.getByTestId("asset-refresh-status")).toContainText(
     "1 个来源失败",
   );
-  await expect(card).toContainText("10,987.654321 USDT");
+  await expect(card).toContainText("10,987.65 USDT");
   await expect(card).toContainText("过期数据");
   await expect(card).toContainText("OKX 同步失败");
   await expect(page.getByTestId("total-asset-overview")).toContainText(

@@ -118,10 +118,10 @@ test("统一来源流程可独立保存 BNB Smart Chain 公开地址", async ({ 
   await page.getByRole("button", { name: "验证公开地址" }).click();
   const preview = page.getByRole("dialog", { name: "确认 BNB Smart Chain 观察钱包" });
   await expect(preview).toContainText("BNB、BEP-20（公开地址只读）");
-  await expect(preview).toContainText("2,019 USD");
+  await expect(preview).toContainText("2,019.00 USD");
   await preview.getByRole("button", { name: "确认并保存" }).click();
   const card = page.getByTestId("bsc-watch-card");
-  await expect(card.getByTestId("asset-source-total")).toHaveText("2,019 USD");
+  await expect(card.getByTestId("asset-source-total")).toHaveText("2,019.00 USD");
   await expect(card).toContainText("BNB Smart Chain");
 });
 

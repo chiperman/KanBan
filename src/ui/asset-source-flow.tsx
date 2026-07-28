@@ -10,6 +10,7 @@ import {
   type AssetSourceFieldId,
   type AssetSourceProviderId,
 } from "@/domain/asset-source-providers";
+import { decimalToFixed } from "@/domain/decimal";
 import type {
   AssetMoney,
   AssetPermission,
@@ -25,8 +26,8 @@ interface Preview {
   accountMode?: BitgetAccountMode;
 }
 
-function formatAmount(amount: string): string {
-  const [integer, fraction] = amount.split(".");
+function formatAmount(amount: string, fixed = false): string {
+  const [integer, fraction] = (fixed ? decimalToFixed(amount, 2) : amount).split(".");
   const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   return fraction ? `${grouped}.${fraction}` : grouped;
 }
@@ -382,7 +383,10 @@ export function AssetSourceFlow() {
               <div>
                 <dt>账户总额</dt>
                 <dd>
-                  {formatAmount(preview.total.amount)} {preview.total.currency}
+                  {formatAmount(
+                    preview.total.amount,
+                    preview.provider !== "longbridge",
+                  )} {preview.total.currency}
                 </dd>
               </div>
             </dl>

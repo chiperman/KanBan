@@ -1,5 +1,8 @@
 "use client";
 
+import { useState } from "react";
+
+import { decimalCompare, decimalToFixed } from "@/domain/decimal";
 import type {
   AssetHolding,
   AssetSnapshot,
@@ -38,10 +41,24 @@ function providerCode(source: AssetSourceView): string {
   return "SRC";
 }
 
+function sourceHeading(source: AssetSourceView): {
+  title: string;
+  metadata: string | null;
+} {
+  if (source.kind === "longbridge") {
+    return { title: "长桥账户", metadata: null };
+  }
+  return { title: source.label, metadata: null };
+}
+
 function amount(value: string): string {
   const [integer, fraction] = value.split(".");
   const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   return fraction ? `${grouped}.${fraction}` : grouped;
+}
+
+function moneyAmount(value: string): string {
+  return amount(decimalToFixed(value, 2));
 }
 
 function dayLabel(day: string): string {
@@ -52,10 +69,12 @@ function HoldingDetailRow({
   holding,
   showPlatformProfit,
   showSensitiveInfo,
+  formatMoney,
 }: {
   holding: AssetHolding;
   showPlatformProfit: boolean;
   showSensitiveInfo: boolean;
+  formatMoney: (value: string) => string;
 }) {
   const masked = "••••••";
   const valuationDetail = holding.valuation.status === "valued"
@@ -79,11 +98,11 @@ function HoldingDetailRow({
       <td>
         {holding.marketValue === null
           ? `未估值（${holding.currency}）`
-          : `${showSensitiveInfo ? amount(holding.marketValue) : masked} ${holding.currency}`}
+          : `${showSensitiveInfo ? formatMoney(holding.marketValue) : masked} ${holding.currency}`}
       </td>
       <td>{holding.costPrice === null ? "—" : showSensitiveInfo ? amount(holding.costPrice) : masked}</td>
       {showPlatformProfit ? (
-        <td>{holding.platformProfit === null ? "—" : showSensitiveInfo ? amount(holding.platformProfit) : masked}</td>
+        <td>{holding.platformProfit === null ? "—" : showSensitiveInfo ? formatMoney(holding.platformProfit) : masked}</td>
       ) : null}
       <td>{holding.changePercent === null ? "—" : showSensitiveInfo ? `${holding.changePercent}%` : masked}</td>
     </tr>
@@ -99,25 +118,43 @@ export function AssetSourceCard({
   history: DailyAssetSnapshot[];
   showSensitiveInfo: boolean;
 }) {
-  const showPlatformProfit = source.snapshot.holdings.some(
+  const [hideSmallCryptoHoldings, setHideSmallCryptoHoldings] = useState(true);
+  const supportsSmallHoldingFilter = source.kind !== "longbridge";
+  const hiddenSmallHoldingCount = supportsSmallHoldingFilter
+    ? source.snapshot.holdings.filter(
+        (holding) =>
+          holding.marketValue !== null &&
+          decimalCompare(holding.marketValue, "1") < 0,
+      ).length
+    : 0;
+  const visibleHoldings = supportsSmallHoldingFilter && hideSmallCryptoHoldings
+    ? source.snapshot.holdings.filter(
+        (holding) =>
+          holding.marketValue === null ||
+          decimalCompare(holding.marketValue, "1") >= 0,
+      )
+    : source.snapshot.holdings;
+  const showPlatformProfit = visibleHoldings.some(
     (holding) => holding.platformProfit !== null,
   );
   const sourceHistory = history.flatMap((snapshot) => {
     const item = snapshot.sources.find(({ sourceId }) => sourceId === source.id);
     return item ? [{ day: snapshot.day, ...item }] : [];
   });
-  const unvaluedCount = source.snapshot.holdings.filter(
+  const unvaluedCount = visibleHoldings.filter(
     ({ valuation }) => valuation.status === "unvalued",
   ).length;
-  const valuedCount = source.snapshot.holdings.length - unvaluedCount;
+  const valuedCount = visibleHoldings.length - unvaluedCount;
   const meterSegments = 12;
   const filledSegments =
-    source.snapshot.holdings.length === 0
+    visibleHoldings.length === 0
       ? 0
       : Math.max(
           1,
-          Math.round((valuedCount / source.snapshot.holdings.length) * meterSegments),
+          Math.round((valuedCount / visibleHoldings.length) * meterSegments),
         );
+  const heading = sourceHeading(source);
+  const formatMoney = source.kind === "longbridge" ? amount : moneyAmount;
   return (
     <>
       <div
@@ -145,8 +182,11 @@ export function AssetSourceCard({
             {providerCode(source)} / {source.sync.status === "expired" ? "STALE" : "LIVE"}
           </p>
         </header>
-        <h2 className="asset-source-title">{source.label}</h2>
-        <p className="asset-total" data-testid="asset-source-total">{showSensitiveInfo ? amount(source.snapshot.total.amount) : "••••••"} <span>{source.snapshot.total.currency}</span></p>
+        <h2 className="asset-source-title">{heading.title}</h2>
+        {heading.metadata ? (
+          <p className="asset-source-meta">{heading.metadata}</p>
+        ) : null}
+        <p className="asset-total" data-testid="asset-source-total">{showSensitiveInfo ? formatMoney(source.snapshot.total.amount) : "••••••"} <span>{source.snapshot.total.currency}</span></p>
         {source.kind === "binance" ? (
           <BinanceCoverage coverage={source.snapshot.coverage} />
         ) : null}
@@ -156,19 +196,34 @@ export function AssetSourceCard({
           ))}
         </div>
         <p className="source-meter-caption">
-          <span>{String(source.snapshot.holdings.length).padStart(2, "0")} POSITIONS</span>
+          <span>{String(visibleHoldings.length).padStart(2, "0")} POSITIONS</span>
           <span className={unvaluedCount > 0 ? "is-incomplete" : undefined}>
             {unvaluedCount === 0 ? "VALUATION / COMPLETE" : `${unvaluedCount} UNVALUED`}
           </span>
         </p>
+        {supportsSmallHoldingFilter ? (
+          <label className="crypto-small-holding-filter">
+            <input
+              type="checkbox"
+              checked={hideSmallCryptoHoldings}
+              onChange={(event) => setHideSmallCryptoHoldings(event.target.checked)}
+            />
+            <span>
+              隐藏低于 1 {source.snapshot.total.currency} 的持仓
+              {hideSmallCryptoHoldings && hiddenSmallHoldingCount > 0
+                ? `（已隐藏 ${hiddenSmallHoldingCount} 项）`
+                : ""}
+            </span>
+          </label>
+        ) : null}
         <ol className="holding-top-list" data-testid="holding-top-list">
-          {source.snapshot.holdings.map((holding) => (
+          {visibleHoldings.map((holding) => (
             <li key={assetHoldingKey(holding)}>
               <span>{holding.name}</span>
               <strong>
                 {holding.marketValue === null
                   ? `未估值（${holding.currency}）`
-                  : `${showSensitiveInfo ? amount(holding.marketValue) : "••••••"} ${holding.currency}`}
+                  : `${showSensitiveInfo ? formatMoney(holding.marketValue) : "••••••"} ${holding.currency}`}
               </strong>
             </li>
           ))}
@@ -193,12 +248,13 @@ export function AssetSourceCard({
                 </tr>
               </thead>
               <tbody>
-                {source.snapshot.holdings.map((holding) => (
+                {visibleHoldings.map((holding) => (
                   <HoldingDetailRow
                     key={assetHoldingKey(holding)}
                     holding={holding}
                     showPlatformProfit={showPlatformProfit}
                     showSensitiveInfo={showSensitiveInfo}
+                    formatMoney={formatMoney}
                   />
                 ))}
               </tbody>
@@ -223,7 +279,7 @@ export function AssetSourceCard({
                   <strong>
                     {snapshot.total.USD === null
                       ? "未估值"
-                      : `${showSensitiveInfo ? amount(snapshot.total.USD) : "••••••"} USD`}
+                      : `${showSensitiveInfo ? formatMoney(snapshot.total.USD) : "••••••"} USD`}
                   </strong>
                   <span>{snapshot.complete ? "完整" : "不完整"}</span>
                 </li>
