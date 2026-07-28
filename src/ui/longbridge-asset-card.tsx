@@ -9,7 +9,11 @@ import type {
   AssetSourceSyncState,
   DailyAssetSnapshot,
 } from "@/server/ports";
-import { assetHoldingKey, BinanceCoverage } from "@/ui/binance-coverage";
+import {
+  assetHoldingKey,
+  binanceHoldingDisplayName,
+  BinanceCoverage,
+} from "@/ui/binance-coverage";
 
 export interface AssetSourceView {
   id: string;
@@ -83,7 +87,7 @@ function HoldingDetailRow({
   return (
     <tr>
       <td>
-        <strong>{holding.name}</strong>
+        <strong>{binanceHoldingDisplayName(holding)}</strong>
         <span className="holding-symbol">{holding.symbol}</span>
         <span className="holding-price-source">{valuationDetail}</span>
       </td>
@@ -219,7 +223,7 @@ export function AssetSourceCard({
         <ol className="holding-top-list" data-testid="holding-top-list">
           {visibleHoldings.map((holding) => (
             <li key={assetHoldingKey(holding)}>
-              <span>{holding.name}</span>
+              <span>{binanceHoldingDisplayName(holding)}</span>
               <strong>
                 {holding.marketValue === null
                   ? `未估值（${holding.currency}）`

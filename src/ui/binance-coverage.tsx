@@ -21,6 +21,22 @@ const PRODUCT_LABELS: Record<string, string> = {
   megadrop: "Megadrop",
 };
 
+const HOLDING_PRODUCT_LABELS: Record<string, string> = {
+  spot: "现货",
+  funding: "资金",
+  "simple-earn-flexible": "活期 Earn",
+  "simple-earn-locked": "定期 Earn",
+  "dual-investment": "双币投资",
+  "discount-buy": "折价买币",
+  bfusd: "BFUSD",
+  rwusd: "RWUSD",
+  "eth-staking": "ETH 质押",
+  "sol-staking": "SOL 质押",
+  "onchain-yields": "链上收益",
+  "onchain-yields-locked": "链上收益（定期）",
+  "soft-staking": "软质押",
+};
+
 const CAPABILITY_LABELS = {
   detailed: "明细",
   "aggregate-only": "仅汇总",
@@ -42,6 +58,13 @@ export function assetHoldingKey(holding: AssetHolding): string {
     holding.providerPositionId ?? holding.economicAssetKey ?? "aggregate",
     holding.sourceAsset ?? holding.symbol,
   ].join(":");
+}
+
+export function binanceHoldingDisplayName(holding: AssetHolding): string {
+  const productLabel = holding.sourceProduct
+    ? HOLDING_PRODUCT_LABELS[holding.sourceProduct]
+    : undefined;
+  return productLabel ? `${holding.symbol} · ${productLabel}` : holding.name;
 }
 
 export function BinanceCoverage({
