@@ -13,7 +13,7 @@ export async function POST(request: Request) {
       request.url,
     ).toString();
     const started = await services.longbridge.start(callback);
-    services.longbridgeConnections.rememberStart(started.state, {
+    services.longbridgeOAuthState.rememberStart(started.state, {
       codeVerifier: started.codeVerifier,
       redirectUri: callback,
     });

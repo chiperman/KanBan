@@ -37,14 +37,13 @@ import type {
 import type { AppServices } from "@/server/composition";
 import { SessionOwnerAuth } from "@/server/auth/session-auth";
 import {
-  LongbridgeConnectionState,
+  LongbridgeOAuthState,
   mapLongbridgeSnapshot,
 } from "@/server/asset-sources/longbridge";
 import { SourceIsolatedAssetSynchronization } from "@/server/asset-synchronization";
 import { buildDailyAssetSnapshot } from "@/domain/daily-asset-snapshots";
 import { decimalAdd } from "@/domain/decimal";
 import {
-  BinanceConnectionState,
   mapBinanceSnapshot,
   validateBinanceReadOnlyPermissions,
 } from "@/server/asset-sources/binance";
@@ -53,16 +52,15 @@ import {
   binancePermissions,
 } from "@/server/testing/binance-fixtures";
 import {
-  OkxConnectionState,
   validateOkxReadOnlyPermission,
 } from "@/server/asset-sources/okx";
 import { okxFixtureSnapshot } from "@/server/testing/okx-fixtures";
 import {
-  BitgetConnectionState,
   validateBitgetReadOnlyPermission,
 } from "@/server/asset-sources/bitget";
 import { bitgetFixtureSnapshot } from "@/server/testing/bitget-fixtures";
-import { EvmConnectionState } from "@/server/asset-sources/ethereum";
+import { AssetSourceOnboarding } from "@/server/asset-source-onboarding";
+import { createAssetSourceProviderAdapters } from "@/server/asset-source-provider-adapters";
 
 export class FakeClock implements Clock {
   private current = new Date("2026-01-01T00:00:00.000Z");
@@ -204,6 +202,10 @@ export class FakeLongbridgeOAuth implements LongbridgeOAuth {
         syncedAt: "2026-01-01T00:00:00.000Z",
       }),
     };
+  }
+
+  async revalidate() {
+    return this.finish();
   }
 }
 
@@ -922,16 +924,13 @@ export interface TestServices extends AppServices {
   ownerRecoveryCredentials: InMemoryOwnerRecoveryCredentialStore;
   secrets: InMemorySecretStore;
   longbridge: FakeLongbridgeOAuth;
-  longbridgeConnections: LongbridgeConnectionState;
+  longbridgeOAuthState: LongbridgeOAuthState;
   binance: FakeBinanceReadOnly;
-  binanceConnections: BinanceConnectionState;
   okx: FakeOkxReadOnly;
-  okxConnections: OkxConnectionState;
   bitget: FakeBitgetReadOnly;
-  bitgetConnections: BitgetConnectionState;
   evm: FakeEvmWatchWallet;
-  evmConnections: EvmConnectionState;
   assetSourceConnections: InMemoryAssetSourceConnections;
+  assetSourceOnboarding: AssetSourceOnboarding;
   assetSourceLifecycle: InMemoryAssetSourceLifecycle;
 }
 
@@ -960,6 +959,28 @@ export function createTestServices(): TestServices {
     secrets,
     dailyAssetSnapshots,
   );
+  const longbridge = new FakeLongbridgeOAuth();
+  const binance = new FakeBinanceReadOnly(prices);
+  const okx = new FakeOkxReadOnly();
+  const bitget = new FakeBitgetReadOnly();
+  const evm = new FakeEvmWatchWallet();
+  const assetSourceConnections = new InMemoryAssetSourceConnections(
+    assetSources,
+    assetCards,
+    secrets,
+    dailyAssetSnapshots,
+    clock,
+  );
+  const assetSourceOnboarding = new AssetSourceOnboarding(
+    createAssetSourceProviderAdapters({
+      longbridge,
+      binance,
+      okx,
+      bitget,
+      evm,
+      connections: assetSourceConnections,
+    }),
+  );
   return {
     clock,
     assetCards,
@@ -972,23 +993,14 @@ export function createTestServices(): TestServices {
     ownerCredentials: new InMemoryOwnerCredentialStore(),
     ownerRecoveryCredentials: new InMemoryOwnerRecoveryCredentialStore(),
     secrets,
-    longbridge: new FakeLongbridgeOAuth(),
-    longbridgeConnections: new LongbridgeConnectionState(),
-    binance: new FakeBinanceReadOnly(prices),
-    binanceConnections: new BinanceConnectionState(),
-    okx: new FakeOkxReadOnly(),
-    okxConnections: new OkxConnectionState(),
-    bitget: new FakeBitgetReadOnly(),
-    bitgetConnections: new BitgetConnectionState(),
-    evm: new FakeEvmWatchWallet(),
-    evmConnections: new EvmConnectionState(),
-    assetSourceConnections: new InMemoryAssetSourceConnections(
-      assetSources,
-      assetCards,
-      secrets,
-      dailyAssetSnapshots,
-      clock,
-    ),
+    longbridge,
+    longbridgeOAuthState: new LongbridgeOAuthState(),
+    binance,
+    okx,
+    bitget,
+    evm,
+    assetSourceConnections,
+    assetSourceOnboarding,
     businessDataBackups: {
       async exportBackup() {
         throw new Error("内存测试服务不提供本地备份文件");

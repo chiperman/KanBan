@@ -1,9 +1,6 @@
 import {
   createHash,
-  createCipheriv,
-  createDecipheriv,
   randomBytes,
-  randomUUID,
 } from "node:crypto";
 
 import type {
@@ -276,84 +273,22 @@ function multiplyDecimal(left: string, right: string): string {
   return fraction ? `${sign}${integer}.${fraction}` : `${sign}${integer}`;
 }
 
-export interface LongbridgePendingPreview extends LongbridgeAuthorizationResult {
-  id: string;
-  expiresAt: number;
-}
-
-export type LongbridgePublicPreview = Omit<
-  LongbridgePendingPreview,
-  "credentials"
->;
-
-interface StoredPreview {
-  id: string;
-  expiresAt: number;
-  result: Omit<LongbridgeAuthorizationResult, "credentials">;
-  credentials: { iv: string; tag: string; value: string };
-}
-
 interface StartedAuthorization {
   codeVerifier: string;
   redirectUri: string;
   expiresAt: number;
 }
 
-/** OAuth 临时态只在服务端内存中存活；确认前不写来源或安全存储。 */
-export class LongbridgeConnectionState {
+/** OAuth PKCE 临时态只在服务端内存中存活。 */
+export class LongbridgeOAuthState {
   private readonly starts = new Map<string, StartedAuthorization>();
-  private readonly previews = new Map<string, StoredPreview>();
   private readonly startTimers = new Map<string, NodeJS.Timeout>();
-  private readonly previewTimers = new Map<string, NodeJS.Timeout>();
-  private readonly claimedPreviews = new Set<string>();
-  private readonly transientKey = randomBytes(32);
 
   private clearStart(state: string): void {
     this.starts.delete(state);
     const timer = this.startTimers.get(state);
     if (timer) clearTimeout(timer);
     this.startTimers.delete(state);
-  }
-
-  private clearPreview(id: string): void {
-    this.previews.delete(id);
-    this.claimedPreviews.delete(id);
-    const timer = this.previewTimers.get(id);
-    if (timer) clearTimeout(timer);
-    this.previewTimers.delete(id);
-  }
-
-  private seal(credentials: string): StoredPreview["credentials"] {
-    const iv = randomBytes(12);
-    const cipher = createCipheriv("aes-256-gcm", this.transientKey, iv);
-    const encrypted = Buffer.concat([
-      cipher.update(credentials, "utf8"),
-      cipher.final(),
-    ]);
-    return {
-      iv: iv.toString("base64"),
-      tag: cipher.getAuthTag().toString("base64"),
-      value: encrypted.toString("base64"),
-    };
-  }
-
-  private open(value: StoredPreview): LongbridgePendingPreview {
-    const decipher = createDecipheriv(
-      "aes-256-gcm",
-      this.transientKey,
-      Buffer.from(value.credentials.iv, "base64"),
-    );
-    decipher.setAuthTag(Buffer.from(value.credentials.tag, "base64"));
-    const credentials = Buffer.concat([
-      decipher.update(Buffer.from(value.credentials.value, "base64")),
-      decipher.final(),
-    ]).toString("utf8");
-    return {
-      ...value.result,
-      credentials,
-      id: value.id,
-      expiresAt: value.expiresAt,
-    };
   }
 
   rememberStart(
@@ -374,80 +309,6 @@ export class LongbridgeConnectionState {
     return value && value.expiresAt >= Date.now() ? value : null;
   }
 
-  hasStart(state: string): boolean {
-    const value = this.starts.get(state) ?? null;
-    if (value && value.expiresAt < Date.now()) {
-      this.clearStart(state);
-      return false;
-    }
-    return value !== null;
-  }
-
-  rememberPreview(result: LongbridgeAuthorizationResult): string {
-    const id = randomUUID();
-    const expiresAt = Date.now() + 10 * 60_000;
-    const { credentials, ...safeResult } = result;
-    this.previews.set(id, {
-      id,
-      expiresAt,
-      result: safeResult,
-      credentials: this.seal(credentials),
-    });
-    const timer = setTimeout(() => this.clearPreview(id), expiresAt - Date.now());
-    timer.unref();
-    this.previewTimers.set(id, timer);
-    return id;
-  }
-
-  getPreview(id: string): LongbridgePendingPreview | null {
-    if (this.claimedPreviews.has(id)) return null;
-    const value = this.previews.get(id) ?? null;
-    if (value && value.expiresAt < Date.now()) {
-      this.clearPreview(id);
-      return null;
-    }
-    return value ? this.open(value) : null;
-  }
-
-  getPublicPreview(id: string): LongbridgePublicPreview | null {
-    const value = this.previews.get(id) ?? null;
-    if (value && value.expiresAt < Date.now()) {
-      this.clearPreview(id);
-      return null;
-    }
-    return value
-      ? { ...value.result, id: value.id, expiresAt: value.expiresAt }
-      : null;
-  }
-
-  discardPreview(id: string): void {
-    this.clearPreview(id);
-  }
-
-  consumePreview(id: string): LongbridgePendingPreview | null {
-    const value = this.previews.get(id) ?? null;
-    this.clearPreview(id);
-    return value && value.expiresAt >= Date.now() ? this.open(value) : null;
-  }
-
-  claimPreview(id: string): LongbridgePendingPreview | null {
-    if (this.claimedPreviews.has(id)) return null;
-    const value = this.previews.get(id) ?? null;
-    if (!value || value.expiresAt < Date.now()) {
-      if (value) this.clearPreview(id);
-      return null;
-    }
-    this.claimedPreviews.add(id);
-    return this.open(value);
-  }
-
-  releasePreview(id: string): void {
-    this.claimedPreviews.delete(id);
-  }
-
-  completePreview(id: string): void {
-    this.clearPreview(id);
-  }
 }
 
 const LONGBRIDGE_AUTHORIZATION_ENDPOINT =
@@ -626,6 +487,47 @@ function jwtAccountIdentity(
 export class ProductionLongbridgeOAuth implements LongbridgeOAuth {
   constructor(private readonly request: LongbridgeFetch = globalThis.fetch) {}
 
+  private async readAuthorization(
+    credentials: string,
+    accessToken: string,
+    observedAt: string,
+  ): Promise<LongbridgeAuthorizationResult> {
+    const identity = jwtAccountIdentity(accessToken);
+    if (!identity) throw new Error("长桥未返回可确认的 OAuth 账户主体");
+    const pages: unknown[] = [];
+    for (const path of ASSET_PATHS) {
+      const response = await this.request(`${LONGBRIDGE_API_ORIGIN}${path}`, {
+        method: "GET",
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+          accept: "application/json",
+        },
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        throw new Error(`长桥资产读取失败（HTTP ${response.status}）`);
+      }
+      pages.push(responseData(await response.json()));
+    }
+    const [accountPage, stockPage, fundPage] = pages;
+    const account = listFromPage(accountPage).at(0);
+    if (!account) throw new Error("长桥账户预览为空");
+    const accountCurrency = text(account.currency, "currency");
+    return {
+      credentials,
+      permissions: ["account", "positions"],
+      account: {
+        id: `longbridge:${identity.fingerprint}`,
+        label: `长桥账户（类型 ${identity.channel} · ${accountCurrency} · ${identity.fingerprint}）`,
+      },
+      snapshot: mapLongbridgeSnapshot({
+        accountPages: [accountPage],
+        positionPages: [stockPage, fundPage],
+        syncedAt: observedAt,
+      }),
+    };
+  }
+
   async start(redirectUri: string): Promise<{
     authorizationUrl: string;
     state: string;
@@ -669,49 +571,31 @@ export class ProductionLongbridgeOAuth implements LongbridgeOAuth {
       throw new Error(`长桥授权兑换失败（HTTP ${tokenResponse.status}）`);
     }
     const token = parseTokenResponse(await tokenResponse.json());
-
-    const pages: unknown[] = [];
-    for (const path of ASSET_PATHS) {
-      const response = await this.request(`${LONGBRIDGE_API_ORIGIN}${path}`, {
-        method: "GET",
-        headers: {
-          authorization: `Bearer ${token.accessToken}`,
-          accept: "application/json",
-        },
-        cache: "no-store",
-      });
-      if (!response.ok) {
-        throw new Error(`长桥资产读取失败（HTTP ${response.status}）`);
-      }
-      pages.push(responseData(await response.json()));
-    }
-    const [accountPage, stockPage, fundPage] = pages;
-    const positionPages = [stockPage, fundPage];
-    const identity = jwtAccountIdentity(token.accessToken);
-    if (!identity) throw new Error("长桥未返回可确认的 OAuth 账户主体");
-    const account = listFromPage(accountPage).at(0);
-    if (!account) throw new Error("长桥账户预览为空");
-    const accountCurrency = text(account.currency, "currency");
     const syncedAt = new Date().toISOString();
-    return {
-      credentials: JSON.stringify({
+    const credentials = JSON.stringify({
         accessToken: token.accessToken,
         refreshToken: token.refreshToken,
         expiresIn: token.expiresIn,
         obtainedAt: syncedAt,
         validatedScopes: token.scopes,
-      }),
-      permissions: ["account", "positions"],
-      account: {
-        id: `longbridge:${identity.fingerprint}`,
-        label: `长桥账户（类型 ${identity.channel} · ${accountCurrency} · ${identity.fingerprint}）`,
-      },
-      snapshot: mapLongbridgeSnapshot({
-        accountPages: [accountPage],
-        positionPages,
-        syncedAt,
-      }),
-    };
+      });
+    return this.readAuthorization(
+      credentials,
+      token.accessToken,
+      syncedAt,
+    );
+  }
+
+  async revalidate(input: {
+    credentials: string;
+    observedAt: string;
+  }): Promise<LongbridgeAuthorizationResult> {
+    const stored = parseStoredCredentials(input.credentials);
+    return this.readAuthorization(
+      input.credentials,
+      stored.accessToken,
+      input.observedAt,
+    );
   }
 }
 
@@ -919,25 +803,38 @@ export class KeychainLongbridgeOAuth implements LongbridgeOAuth {
         `长桥 OAuth 令牌保存失败：${error instanceof Error ? error.message : "未知错误"}`,
       );
     }
+    return this.revalidate({
+      credentials: this.sdk.credentialReference(),
+      observedAt: new Date().toISOString(),
+    });
+  }
+
+  async revalidate(input: {
+    credentials: string;
+    observedAt: string;
+  }): Promise<LongbridgeAuthorizationResult> {
     const status = this.sdk.authorizationStatus();
     if (status.status !== "authorized") {
       throw new Error("长桥 OAuth 令牌未写入 macOS Keychain");
     }
-    const syncedAt = new Date().toISOString();
+    const credentialReference = this.sdk.credentialReference();
+    if (input.credentials !== credentialReference) {
+      throw new Error("长桥 OAuth 凭证引用已变化，请重新授权");
+    }
     let snapshot: AssetSnapshot;
     try {
-      snapshot = await keychainSnapshot(this.sdk, syncedAt);
+      snapshot = await keychainSnapshot(this.sdk, input.observedAt);
     } catch (error) {
       throw new Error(
         `长桥授权后读取账户失败：${error instanceof Error ? error.message : "未知错误"}`,
       );
     }
     const fingerprint = createHash("sha256")
-      .update(this.sdk.credentialReference())
+      .update(credentialReference)
       .digest("hex")
       .slice(0, 12);
     return {
-      credentials: this.sdk.credentialReference(),
+      credentials: credentialReference,
       permissions: ["account", "positions", "market-data"],
       account: {
         id: `longbridge:${fingerprint}`,

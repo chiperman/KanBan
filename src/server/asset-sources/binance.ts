@@ -1,10 +1,6 @@
 import {
-  createCipheriv,
-  createDecipheriv,
   createHash,
   createHmac,
-  randomBytes,
-  randomUUID,
 } from "node:crypto";
 
 import {
@@ -814,116 +810,5 @@ export class CoinGeckoUsdtUsdPrices implements Prices {
     } catch {
       return null;
     }
-  }
-}
-
-export interface BinancePendingPreview extends BinanceAuthorizationResult {
-  id: string;
-  expiresAt: number;
-}
-
-export type BinancePublicPreview = Omit<BinancePendingPreview, "credentials">;
-
-interface StoredBinancePreview {
-  id: string;
-  expiresAt: number;
-  result: Omit<BinanceAuthorizationResult, "credentials">;
-  credentials: { iv: string; tag: string; value: string };
-}
-
-/** API Secret 预览态仅在服务端内存中以进程临时密钥加密保存。 */
-export class BinanceConnectionState {
-  private readonly previews = new Map<string, StoredBinancePreview>();
-  private readonly claimed = new Set<string>();
-  private readonly timers = new Map<string, NodeJS.Timeout>();
-  private readonly transientKey = randomBytes(32);
-
-  private clear(id: string): void {
-    this.previews.delete(id);
-    this.claimed.delete(id);
-    const timer = this.timers.get(id);
-    if (timer) clearTimeout(timer);
-    this.timers.delete(id);
-  }
-
-  private seal(value: string): StoredBinancePreview["credentials"] {
-    const iv = randomBytes(12);
-    const cipher = createCipheriv("aes-256-gcm", this.transientKey, iv);
-    const encrypted = Buffer.concat([
-      cipher.update(value, "utf8"),
-      cipher.final(),
-    ]);
-    return {
-      iv: iv.toString("base64"),
-      tag: cipher.getAuthTag().toString("base64"),
-      value: encrypted.toString("base64"),
-    };
-  }
-
-  private open(value: StoredBinancePreview): BinancePendingPreview {
-    const decipher = createDecipheriv(
-      "aes-256-gcm",
-      this.transientKey,
-      Buffer.from(value.credentials.iv, "base64"),
-    );
-    decipher.setAuthTag(Buffer.from(value.credentials.tag, "base64"));
-    const credentials = Buffer.concat([
-      decipher.update(Buffer.from(value.credentials.value, "base64")),
-      decipher.final(),
-    ]).toString("utf8");
-    return {
-      ...value.result,
-      credentials,
-      id: value.id,
-      expiresAt: value.expiresAt,
-    };
-  }
-
-  rememberPreview(result: BinanceAuthorizationResult): string {
-    const id = randomUUID();
-    const expiresAt = Date.now() + 10 * 60_000;
-    const { credentials, ...safeResult } = result;
-    this.previews.set(id, {
-      id,
-      expiresAt,
-      result: safeResult,
-      credentials: this.seal(credentials),
-    });
-    const timer = setTimeout(() => this.clear(id), expiresAt - Date.now());
-    timer.unref();
-    this.timers.set(id, timer);
-    return id;
-  }
-
-  getPublicPreview(id: string): BinancePublicPreview | null {
-    const value = this.previews.get(id) ?? null;
-    if (value && value.expiresAt < Date.now()) {
-      this.clear(id);
-      return null;
-    }
-    return value ? { ...value.result, id, expiresAt: value.expiresAt } : null;
-  }
-
-  claimPreview(id: string): BinancePendingPreview | null {
-    if (this.claimed.has(id)) return null;
-    const value = this.previews.get(id) ?? null;
-    if (!value || value.expiresAt < Date.now()) {
-      if (value) this.clear(id);
-      return null;
-    }
-    this.claimed.add(id);
-    return this.open(value);
-  }
-
-  releasePreview(id: string): void {
-    this.claimed.delete(id);
-  }
-
-  completePreview(id: string): void {
-    this.clear(id);
-  }
-
-  discardPreview(id: string): void {
-    this.clear(id);
   }
 }

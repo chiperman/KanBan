@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 
 import {
   decimalAdd,
@@ -545,62 +545,4 @@ export class ProductionEvmWatchSourceRefresher implements AssetSourceRefresher {
       }),
     };
   }
-}
-
-export interface EvmPendingPreview extends EvmWatchAuthorizationResult {
-  id: string;
-  expiresAt: number;
-}
-
-export type EvmPublicPreview = Omit<EvmPendingPreview, "credentials">;
-
-/** 公开地址预览仍只保留在服务端；浏览器只收到身份、范围与总额。 */
-export class EvmConnectionState {
-  private readonly previews = new Map<string, EvmPendingPreview>();
-  private readonly claimed = new Set<string>();
-  private readonly timers = new Map<string, NodeJS.Timeout>();
-
-  private clear(id: string): void {
-    this.previews.delete(id);
-    this.claimed.delete(id);
-    const timer = this.timers.get(id);
-    if (timer) clearTimeout(timer);
-    this.timers.delete(id);
-  }
-
-  rememberPreview(result: EvmWatchAuthorizationResult): string {
-    const id = randomUUID();
-    const expiresAt = Date.now() + 10 * 60_000;
-    this.previews.set(id, { ...result, id, expiresAt });
-    const timer = setTimeout(() => this.clear(id), expiresAt - Date.now());
-    timer.unref();
-    this.timers.set(id, timer);
-    return id;
-  }
-
-  getPublicPreview(id: string): EvmPublicPreview | null {
-    const value = this.previews.get(id) ?? null;
-    if (value && value.expiresAt < Date.now()) {
-      this.clear(id);
-      return null;
-    }
-    if (!value) return null;
-    const { credentials: _credentials, ...safe } = value;
-    return safe;
-  }
-
-  claimPreview(id: string): EvmPendingPreview | null {
-    if (this.claimed.has(id)) return null;
-    const value = this.previews.get(id) ?? null;
-    if (!value || value.expiresAt < Date.now()) {
-      if (value) this.clear(id);
-      return null;
-    }
-    this.claimed.add(id);
-    return value;
-  }
-
-  releasePreview(id: string): void { this.claimed.delete(id); }
-  completePreview(id: string): void { this.clear(id); }
-  discardPreview(id: string): void { this.clear(id); }
 }

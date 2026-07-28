@@ -19,12 +19,9 @@ import type {
 } from "@/server/ports";
 import { createProductionServices } from "@/server/production";
 import { clearAllSessions } from "@/server/auth/session";
-import { LongbridgeConnectionState } from "@/server/asset-sources/longbridge";
-import { BinanceConnectionState } from "@/server/asset-sources/binance";
-import { OkxConnectionState } from "@/server/asset-sources/okx";
-import { BitgetConnectionState } from "@/server/asset-sources/bitget";
-import { EvmConnectionState } from "@/server/asset-sources/ethereum";
+import { LongbridgeOAuthState } from "@/server/asset-sources/longbridge";
 import type { BusinessDataBackup } from "@/server/business-data-backup";
+import type { AssetSourceOnboarding } from "@/server/asset-source-onboarding";
 import {
   createTestServices,
   type TestServices,
@@ -46,16 +43,13 @@ export interface AppServices {
   ownerRecoveryCredentials: OwnerRecoveryCredentialStore;
   secrets: SecretStore;
   longbridge: LongbridgeOAuth;
-  longbridgeConnections: LongbridgeConnectionState;
+  longbridgeOAuthState: LongbridgeOAuthState;
   binance: BinanceReadOnly;
-  binanceConnections: BinanceConnectionState;
   okx: OkxReadOnly;
-  okxConnections: OkxConnectionState;
   bitget: BitgetReadOnly;
-  bitgetConnections: BitgetConnectionState;
   evm: EvmWatchWalletReadOnly;
-  evmConnections: EvmConnectionState;
   assetSourceConnections: AssetSourceConnections;
+  assetSourceOnboarding: AssetSourceOnboarding;
   businessDataBackups: BusinessDataBackup;
 }
 

@@ -1,79 +1,35 @@
-import { getServices } from "@/server/composition";
+import { createPreviewRoute } from "@/server/asset-source-onboarding-http";
 
 export const dynamic = "force-dynamic";
 
-function publicPreview(id: string) {
-  const preview = getServices().okxConnections.getPublicPreview(id);
-  return preview
-    ? {
-        id: preview.id,
-        provider: "okx",
-        account: preview.account,
-        permissions: preview.permissions,
-        total: preview.snapshot.total,
-      }
-    : null;
-}
+const route = createPreviewRoute({
+  provider: "okx",
+  parse(body: unknown) {
+    const value = body as {
+      apiKey?: unknown;
+      apiSecret?: unknown;
+      passphrase?: unknown;
+      region?: unknown;
+    } | null;
+    return typeof value?.apiKey === "string" &&
+      typeof value.apiSecret === "string" &&
+      typeof value.passphrase === "string" &&
+      (value.region === "global" ||
+        value.region === "us" ||
+        value.region === "eea")
+      ? {
+          provider: "okx" as const,
+          apiKey: value.apiKey,
+          apiSecret: value.apiSecret,
+          passphrase: value.passphrase,
+          region: value.region,
+        }
+      : null;
+  },
+  invalidInput: "OKX API 凭证格式无效",
+  previewFailed: "OKX 凭证验证失败",
+  previewExpired: "OKX 预览已失效，请重新验证",
+  readable: true,
+});
 
-export async function POST(request: Request) {
-  const services = getServices();
-  if ((await services.auth.currentSession()) === null) {
-    return Response.json({ error: "需要所有者身份" }, { status: 401 });
-  }
-  const body = (await request.json().catch(() => null)) as {
-    apiKey?: unknown;
-    apiSecret?: unknown;
-    passphrase?: unknown;
-    region?: unknown;
-  } | null;
-  if (
-    typeof body?.apiKey !== "string" ||
-    typeof body.apiSecret !== "string" ||
-    typeof body.passphrase !== "string" ||
-    !(
-      body.region === "global" ||
-      body.region === "us" ||
-      body.region === "eea"
-    )
-  ) {
-    return Response.json({ error: "OKX API 凭证格式无效" }, { status: 400 });
-  }
-  try {
-    const result = await services.okx.preview({
-      apiKey: body.apiKey,
-      apiSecret: body.apiSecret,
-      passphrase: body.passphrase,
-      region: body.region,
-      observedAt: services.clock.now().toISOString(),
-    });
-    const id = services.okxConnections.rememberPreview(result);
-    return Response.json(publicPreview(id));
-  } catch (error) {
-    return Response.json(
-      { error: error instanceof Error ? error.message : "OKX 凭证验证失败" },
-      { status: 400 },
-    );
-  }
-}
-
-export async function GET(request: Request) {
-  const services = getServices();
-  if ((await services.auth.currentSession()) === null) {
-    return Response.json({ error: "需要所有者身份" }, { status: 401 });
-  }
-  const id = new URL(request.url).searchParams.get("id") ?? "";
-  const preview = publicPreview(id);
-  return preview
-    ? Response.json(preview)
-    : Response.json({ error: "OKX 预览已失效，请重新验证" }, { status: 404 });
-}
-
-export async function DELETE(request: Request) {
-  const services = getServices();
-  if ((await services.auth.currentSession()) === null) {
-    return Response.json({ error: "需要所有者身份" }, { status: 401 });
-  }
-  const id = new URL(request.url).searchParams.get("id") ?? "";
-  services.okxConnections.discardPreview(id);
-  return Response.json({ ok: true });
-}
+export const { POST, GET, DELETE } = route;

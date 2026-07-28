@@ -269,6 +269,10 @@ export interface LongbridgeOAuth {
     codeVerifier: string;
     redirectUri: string;
   }): Promise<LongbridgeAuthorizationResult>;
+  revalidate(input: {
+    credentials: string;
+    observedAt: string;
+  }): Promise<LongbridgeAuthorizationResult>;
 }
 
 export interface AssetSourceConnections {

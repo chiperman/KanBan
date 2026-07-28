@@ -44,30 +44,26 @@ import type {
 import { SessionOwnerAuth } from "@/server/auth/session-auth";
 import { parseAssetCards } from "@/server/asset-cards";
 import {
-  LongbridgeConnectionState,
+  LongbridgeOAuthState,
   KeychainLongbridgeOAuth,
   KeychainLongbridgeSourceRefresher,
 } from "@/server/asset-sources/longbridge";
 import { SourceIsolatedAssetSynchronization } from "@/server/asset-synchronization";
 import {
-  BinanceConnectionState,
   CoinGeckoUsdtUsdPrices,
   ProductionBinanceReadOnly,
   ProductionBinanceSourceRefresher,
 } from "@/server/asset-sources/binance";
 import { RoutedAssetSourceRefresher } from "@/server/asset-sources/router";
 import {
-  OkxConnectionState,
   ProductionOkxReadOnly,
   ProductionOkxSourceRefresher,
 } from "@/server/asset-sources/okx";
 import {
-  BitgetConnectionState,
   ProductionBitgetReadOnly,
   ProductionBitgetSourceRefresher,
 } from "@/server/asset-sources/bitget";
 import {
-  EvmConnectionState,
   ProductionEvmWatchSourceRefresher,
   ProductionEvmWatchWallet,
 } from "@/server/asset-sources/ethereum";
@@ -80,6 +76,8 @@ import {
   CredentialFreeBusinessDataBackup,
   type BusinessDataState,
 } from "@/server/business-data-backup";
+import { AssetSourceOnboarding } from "@/server/asset-source-onboarding";
+import { createAssetSourceProviderAdapters } from "@/server/asset-source-provider-adapters";
 
 class SystemClock implements Clock {
   now(): Date {
@@ -1738,6 +1736,27 @@ export function createProductionServices(
   const prices = new CoinGeckoUsdtUsdPrices();
   const readySecrets = new ReadySecretStore(secrets, secretRecovery);
   const evmRefresher = new ProductionEvmWatchSourceRefresher();
+  const longbridge = new KeychainLongbridgeOAuth();
+  const binance = new ProductionBinanceReadOnly(prices);
+  const okx = new ProductionOkxReadOnly(prices);
+  const bitget = new ProductionBitgetReadOnly(prices);
+  const evm = new ProductionEvmWatchWallet();
+  const assetSourceConnections = new DatabaseAssetSourceConnections(
+    database,
+    secrets,
+    secretRecovery,
+    clock,
+  );
+  const assetSourceOnboarding = new AssetSourceOnboarding(
+    createAssetSourceProviderAdapters({
+      longbridge,
+      binance,
+      okx,
+      bitget,
+      evm,
+      connections: assetSourceConnections,
+    }),
+  );
   return {
     clock,
     assetCards: new DatabaseAssetCardStore(database),
@@ -1771,22 +1790,14 @@ export function createProductionServices(
       path.join(dataDir, "owner-recovery.json"),
     ),
     secrets: readySecrets,
-    longbridge: new KeychainLongbridgeOAuth(),
-    longbridgeConnections: new LongbridgeConnectionState(),
-    binance: new ProductionBinanceReadOnly(prices),
-    binanceConnections: new BinanceConnectionState(),
-    okx: new ProductionOkxReadOnly(prices),
-    okxConnections: new OkxConnectionState(),
-    bitget: new ProductionBitgetReadOnly(prices),
-    bitgetConnections: new BitgetConnectionState(),
-    evm: new ProductionEvmWatchWallet(),
-    evmConnections: new EvmConnectionState(),
-    assetSourceConnections: new DatabaseAssetSourceConnections(
-      database,
-      secrets,
-      secretRecovery,
-      clock,
-    ),
+    longbridge,
+    longbridgeOAuthState: new LongbridgeOAuthState(),
+    binance,
+    okx,
+    bitget,
+    evm,
+    assetSourceConnections,
+    assetSourceOnboarding,
     businessDataBackups: new CredentialFreeBusinessDataBackup(
       database,
       path.join(dataDir, "backups"),
