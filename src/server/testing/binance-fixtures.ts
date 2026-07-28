@@ -38,7 +38,16 @@ export function binancePermissions(scenario: string): Record<string, unknown> {
   return value;
 }
 
-export function binanceFixture(missingPrice = false) {
+export function binanceFixture(
+  missingPrice = false,
+  collateralReceipt = false,
+  dust = false,
+  investmentScenario: "baseline" | "investments" | "wallet-gap" | "unknown-state" | "wrapped-staking" = "baseline",
+) {
+  const includesInvestments = investmentScenario !== "baseline";
+  const walletGap = investmentScenario === "wallet-gap";
+  const unknownState = investmentScenario === "unknown-state";
+  const wrappedStaking = investmentScenario === "wrapped-staking";
   return {
     spotAccount: {
       makerCommission: 10,
@@ -51,6 +60,19 @@ export function binanceFixture(missingPrice = false) {
         { asset: "BTC", free: "0.1", locked: "0" },
         { asset: "USDT", free: "1000", locked: "0" },
         { asset: "USDC", free: "500", locked: "0" },
+        ...(wrappedStaking
+          ? [
+              { asset: "WBETH", free: "0.5", locked: "0" },
+              { asset: "BNSOL", free: "2", locked: "0" },
+            ]
+          : []),
+        ...(dust ? [{ asset: "DUST", free: "5", locked: "0" }] : []),
+        ...(collateralReceipt
+          ? [
+              { asset: "LDBNB", free: "1.5", locked: "0" },
+              { asset: "LDORPHAN", free: "4", locked: "0" },
+            ]
+          : []),
         ...(missingPrice
           ? [{ asset: "UNKNOWN", free: "8.123456789", locked: "0" }]
           : []),
@@ -77,11 +99,21 @@ export function binanceFixture(missingPrice = false) {
     flexiblePages: [
       {
         total: 2,
-        rows: [{ asset: "BNB", productId: "BNB001", totalAmount: "2" }],
+        rows: [{
+          asset: "BNB",
+          productId: "BNB001",
+          totalAmount: "2",
+          collateralAmount: collateralReceipt ? "1.25" : "0",
+        }],
       },
       {
         total: 2,
-        rows: [{ asset: "USDT", productId: "USDT001", totalAmount: "100" }],
+        rows: [{
+          asset: "USDT",
+          productId: "USDT001",
+          totalAmount: "100",
+          collateralAmount: "0",
+        }],
       },
     ],
     lockedPages: [
@@ -106,6 +138,109 @@ export function binanceFixture(missingPrice = false) {
         }],
       },
     ],
+    walletBalances: [
+      { walletName: "Spot", balance: "0.124991666666666667" },
+      { walletName: "Funding", balance: "0.053333333333333333" },
+      {
+        walletName: "Earn",
+        balance: includesInvestments
+          ? walletGap
+            ? "0.108333333333333333"
+            : "0.098333333333333333"
+          : "0.035833333333333333",
+      },
+      { walletName: "Cross Margin", balance: "0" },
+      { walletName: "Isolated Margin", balance: "0" },
+      { walletName: "USD-M Futures", balance: "0" },
+      { walletName: "COIN-M Futures", balance: "0" },
+      { walletName: "Options", balance: "0" },
+      { walletName: "Trading Bots", balance: walletGap ? "0.001" : "0" },
+      { walletName: "Copy Trading", balance: "0" },
+    ],
+    simpleEarnAccount: {
+      totalAmountInBTC: includesInvestments ? "0.098333333333333333" : "0.035833333333333333",
+    },
+    dualAccounts: { totalAmountInBTC: includesInvestments ? "0.01" : "0" },
+    dualPages: includesInvestments
+      ? [
+          {
+            total: 2,
+            list: [{
+              orderId: "dual-settled",
+              investCoin: "BTC",
+              subscriptionAmount: "0.02",
+              purchaseStatus: "SETTLED",
+            }],
+          },
+          {
+            total: 2,
+            list: [{
+              orderId: "dual-current",
+              investCoin: "BTC",
+              subscriptionAmount: "0.01",
+              purchaseStatus: unknownState ? "NEW_PROVIDER_STATE" : "PURCHASE_SUCCESS",
+            }],
+          },
+        ]
+      : [{ total: 0, list: [] }],
+    discountAccount: { totalHoldingInUSDT: includesInvestments ? "250" : "0" },
+    discountPages: includesInvestments
+      ? [
+          {
+            total: 2,
+            list: [{
+              positionId: "discount-current",
+              subscriptionAsset: "USDT",
+              subscriptionAmount: "250",
+              status: "SETTLING",
+            }],
+          },
+          {
+            total: 2,
+            list: [{
+              positionId: "discount-settled",
+              subscriptionAsset: "USDT",
+              subscriptionAmount: "100",
+              status: "SETTLED",
+            }],
+          },
+        ]
+      : [{ total: 0, list: [] }],
+    bfusdAccount: {
+      bfusdAmount: includesInvestments ? "300" : "0",
+      usdtProfit: "0",
+      bfusdProfit: "0",
+    },
+    rwusdAccount: {
+      rwusdAmount: includesInvestments ? "400" : "0",
+      totalProfit: "0",
+    },
+    ethStakingAccount: {
+      holdingInETH: includesInvestments ? "0.5" : "0",
+      thirtyDaysProfitInETH: "0",
+    },
+    solStakingAccount: {
+      bnsolAmount: includesInvestments ? "2" : "0",
+      holdingInSOL: includesInvestments ? "2" : "0",
+      thirtyDaysProfitInSOL: "0",
+    },
+    onchainAccount: {
+      totalAmountInBTC: includesInvestments ? "0.008333333333333333" : "0",
+      flexibleAmount: "0",
+      totalFlexibleAmountInUSDT: "0",
+    },
+    onchainPages: includesInvestments
+      ? [{
+          total: 1,
+          rows: [{
+            positionId: "onchain-current",
+            asset: "BNB",
+            amount: "1",
+            status: "HOLDING",
+          }],
+        }]
+      : [{ total: 0, rows: [] }],
+    softStaking: [{ asset: "BTC", stakedAmount: "0", totalProfit: "0.001" }],
     exchangeInfo: {
       timezone: "UTC",
       symbols: [
@@ -115,6 +250,12 @@ export function binanceFixture(missingPrice = false) {
         ["BNB", "BNBUSDT"],
         ["SOL", "SOLUSDT"],
         ["XRP", "XRPUSDT"],
+        ["BFUSD", "BFUSDUSDT"],
+        ["RWUSD", "RWUSDUSDT"],
+        ...(wrappedStaking
+          ? [["WBETH", "WBETHUSDT"], ["BNSOL", "BNSOLUSDT"]]
+          : []),
+        ...(dust ? [["DUST", "DUSTUSDT"]] : []),
       ].map(([baseAsset, symbol]) => ({
         symbol,
         status: "TRADING",
@@ -130,6 +271,15 @@ export function binanceFixture(missingPrice = false) {
       { symbol: "BNBUSDT", price: "500" },
       { symbol: "SOLUSDT", price: "100" },
       { symbol: "XRPUSDT", price: "0.5" },
+      { symbol: "BFUSDUSDT", price: "1" },
+      { symbol: "RWUSDUSDT", price: "1" },
+      ...(wrappedStaking
+        ? [
+            { symbol: "WBETHUSDT", price: "3000" },
+            { symbol: "BNSOLUSDT", price: "100" },
+          ]
+        : []),
+      ...(dust ? [{ symbol: "DUSTUSDT", price: "0.1" }] : []),
     ],
   };
 }

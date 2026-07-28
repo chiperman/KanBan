@@ -232,6 +232,64 @@ function missingSourceFxSources(): AssetSourceSummary[] {
   }];
 }
 
+function binancePartialSources(): AssetSourceSummary[] {
+  return [{
+    id: "source-binance-partial",
+    kind: "binance",
+    label: "Binance 账户 · 测试",
+    accountId: "binance:test",
+    permissions: ["market-data", "account", "positions"],
+    credentialReference: "test-secret-binance",
+    snapshot: {
+      total: { amount: "17199.5", currency: "USDT" },
+      holdings: [{
+        symbol: "USDT",
+        name: "USDT · 投资产品",
+        sourceAsset: "USDT",
+        sourceAccount: "earn",
+        sourceProduct: "dual-investment",
+        providerPositionId: "test-current",
+        economicAssetKey: "binance:earn:USDT",
+        positionState: "active",
+        quantity: "16599.5",
+        currency: "USDT",
+        assetClass: "crypto",
+        currentPrice: { amount: "1", currency: "USDT" },
+        marketValue: "16599.5",
+        sourceMarketValue: { amount: "16599.5", currency: "USDT" },
+        valuation: {
+          status: "valued",
+          priceSource: "Binance 账户 USDT 计价单位",
+          pricedAt: SYNCED_AT,
+        },
+        costPrice: null,
+        platformProfit: null,
+        changePercent: null,
+      }],
+      exchangeRates: [{
+        baseCurrency: "USDT",
+        quoteCurrency: "USD",
+        rate: "0.998",
+        source: "CoinGecko Tether/USD 参考价格",
+        observedAt: SYNCED_AT,
+      }],
+      syncedAt: SYNCED_AT,
+      coverage: {
+        status: "partial",
+        products: [{
+          product: "dual-investment",
+          capability: "detailed",
+          freshness: "current",
+          message: null,
+        }],
+        unexplainedValue: { amount: "600", currency: "USDT" },
+        excludedPositiveAccounts: ["Trading Bots"],
+      },
+    },
+    sync: CURRENT_SYNC,
+  }];
+}
+
 export async function POST(request: Request) {
   if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
   const url = new URL(request.url);
@@ -242,6 +300,8 @@ export async function POST(request: Request) {
       ? manyRoundingSources()
       : scenario === "missing-source-fx"
         ? missingSourceFxSources()
+      : scenario === "binance-coverage-partial"
+        ? binancePartialSources()
       : standardSources({
         inverse: url.searchParams.get("fx") === "inverse",
         alphaAdjustment:

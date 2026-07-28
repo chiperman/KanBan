@@ -196,15 +196,42 @@ test("生产 Binance 适配器只调用允许的读取端点并覆盖权限、�
   expect(body.snapshot.holdings).toEqual(expect.arrayContaining([
       expect.objectContaining({ sourceAccount: "spot", sourceAsset: "BTC", quantity: "0.1" }),
       expect.objectContaining({ sourceAccount: "funding", sourceAsset: "ETH", quantity: "1" }),
-      expect.objectContaining({ sourceAccount: "earn-flexible", sourceAsset: "BNB", quantity: "2" }),
+      expect.objectContaining({
+        sourceAccount: "earn-flexible",
+        sourceProduct: "simple-earn-flexible",
+        sourceAsset: "BNB",
+        providerPositionId: "BNB:BNB001",
+        economicAssetKey: "binance:earn-flexible:BNB",
+        positionState: "active",
+        quantity: "2",
+      }),
       expect.objectContaining({
         sourceAccount: "earn-locked",
+        sourceProduct: "simple-earn-locked",
         sourceAsset: "XRP",
+        providerPositionId: "11000000002",
+        economicAssetKey: "binance:earn-locked:XRP",
+        positionState: "active",
         quantity: "100",
         currentPrice: { amount: "0.5", currency: "USDT" },
       }),
     ]));
-  expect(body.privateRequests).toEqual([
+  expect(body.snapshot.coverage).toMatchObject({
+    status: "complete",
+    products: expect.arrayContaining([
+      { product: "spot", capability: "detailed", freshness: "current", message: null },
+      { product: "funding", capability: "detailed", freshness: "current", message: null },
+      { product: "simple-earn-flexible", capability: "detailed", freshness: "current", message: null },
+      { product: "simple-earn-locked", capability: "detailed", freshness: "current", message: null },
+      { product: "dual-investment", capability: "detailed", freshness: "current", message: null },
+      { product: "dual-investment-rfq", capability: "unsupported", freshness: "current", message: expect.any(String) },
+      { product: "smart-arbitrage", capability: "indirect", freshness: "current", message: expect.any(String) },
+    ]),
+    unexplainedValue: null,
+    excludedPositiveAccounts: [],
+  });
+  expect(body.privateRequests).toHaveLength(20);
+  expect(body.privateRequests).toEqual(expect.arrayContaining([
     "GET /sapi/v1/account/apiRestrictions",
     "GET /api/v3/account?omitZeroBalances=true",
     "POST /sapi/v1/asset/get-funding-asset?needBtcValuation=true",
@@ -212,7 +239,20 @@ test("生产 Binance 适配器只调用允许的读取端点并覆盖权限、�
     "GET /sapi/v1/simple-earn/flexible/position?current=2&size=100",
     "GET /sapi/v1/simple-earn/locked/position?current=1&size=100",
     "GET /sapi/v1/simple-earn/locked/position?current=2&size=100",
-  ]);
+    "GET /sapi/v1/asset/wallet/balance",
+    "GET /sapi/v1/simple-earn/account",
+    "GET /sapi/v1/dci/product/accounts",
+    "GET /sapi/v1/dci/product/positions?pageIndex=1&pageSize=100",
+    "GET /sapi/v1/accumulator/product/sum-holding",
+    "GET /sapi/v1/accumulator/product/position/list?pageIndex=1&pageSize=100",
+    "GET /sapi/v1/bfusd/account",
+    "GET /sapi/v1/rwusd/account",
+    "GET /sapi/v2/eth-staking/account",
+    "GET /sapi/v1/sol-staking/account",
+    "GET /sapi/v1/onchain-yields/account",
+    "GET /sapi/v1/onchain-yields/locked/position?pageIndex=1&pageSize=100",
+    "GET /sapi/v1/soft-staking/list",
+  ]));
   expect(body.privateRequests.join("\n")).not.toMatch(/margin|futures|loan|withdraw/i);
   expect(body.allRequestsSigned).toBeTruthy();
   expect(body.allHostsPinned).toBeTruthy();

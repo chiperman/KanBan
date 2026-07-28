@@ -6,6 +6,7 @@ import type {
   AssetSourceSyncState,
   DailyAssetSnapshot,
 } from "@/server/ports";
+import { assetHoldingKey, BinanceCoverage } from "@/ui/binance-coverage";
 
 export interface AssetSourceView {
   id: string;
@@ -146,6 +147,9 @@ export function AssetSourceCard({
         </header>
         <h2 className="asset-source-title">{source.label}</h2>
         <p className="asset-total" data-testid="asset-source-total">{showSensitiveInfo ? amount(source.snapshot.total.amount) : "••••••"} <span>{source.snapshot.total.currency}</span></p>
+        {source.kind === "binance" ? (
+          <BinanceCoverage coverage={source.snapshot.coverage} />
+        ) : null}
         <div className="source-meter" aria-hidden="true">
           {Array.from({ length: meterSegments }, (_, index) => (
             <span key={index} className={index < filledSegments ? "is-filled" : ""} />
@@ -159,7 +163,7 @@ export function AssetSourceCard({
         </p>
         <ol className="holding-top-list" data-testid="holding-top-list">
           {source.snapshot.holdings.map((holding) => (
-            <li key={`${holding.sourceAccount ?? "default"}:${holding.sourceAsset ?? holding.symbol}`}>
+            <li key={assetHoldingKey(holding)}>
               <span>{holding.name}</span>
               <strong>
                 {holding.marketValue === null
@@ -191,7 +195,7 @@ export function AssetSourceCard({
               <tbody>
                 {source.snapshot.holdings.map((holding) => (
                   <HoldingDetailRow
-                    key={`${holding.sourceAccount ?? "default"}:${holding.sourceAsset ?? holding.symbol}`}
+                    key={assetHoldingKey(holding)}
                     holding={holding}
                     showPlatformProfit={showPlatformProfit}
                     showSensitiveInfo={showSensitiveInfo}

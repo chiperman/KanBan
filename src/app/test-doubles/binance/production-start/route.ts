@@ -21,7 +21,14 @@ const API_SECRET = "binance-browser-secret-must-not-leak";
 
 function businessLabel(method: string, url: URL, body: URLSearchParams | null) {
   const params = method === "POST" ? body! : url.searchParams;
-  const allowed = ["omitZeroBalances", "needBtcValuation", "current", "size"];
+  const allowed = [
+    "omitZeroBalances",
+    "needBtcValuation",
+    "current",
+    "size",
+    "pageIndex",
+    "pageSize",
+  ];
   const query = new URLSearchParams();
   for (const key of allowed) {
     const value = params.get(key);
@@ -37,14 +44,36 @@ export async function POST(request: Request) {
     body?.action !== "preview-valid" &&
     body?.action !== "preview-trade" &&
     body?.action !== "preview-missing-price" &&
+    body?.action !== "preview-collateral-receipt" &&
     body?.action !== "preview-invalid-locked-status" &&
     body?.action !== "preview-unsafe-position-id" &&
+    body?.action !== "preview-investments" &&
+    body?.action !== "preview-wallet-gap" &&
+    body?.action !== "preview-unknown-product-state" &&
+    body?.action !== "preview-wrapped-staking" &&
+    body?.action !== "preview-product-failure" &&
     body?.action !== "refresh-prices"
   ) {
     return Response.json({ error: "Binance 生产测试场景无效" }, { status: 400 });
   }
   const missingPrice = body.action === "preview-missing-price";
-  const fixture = binanceFixture(missingPrice);
+  const investmentScenario = body.action === "preview-wallet-gap"
+    ? "wallet-gap"
+    : body.action === "preview-unknown-product-state"
+      ? "unknown-state"
+      : body.action === "preview-investments"
+        ? "investments"
+        : body.action === "preview-product-failure"
+          ? "investments"
+        : body.action === "preview-wrapped-staking"
+          ? "wrapped-staking"
+        : "baseline";
+  const fixture = binanceFixture(
+    missingPrice,
+    body.action === "preview-collateral-receipt",
+    false,
+    investmentScenario,
+  );
   const privateRequests: string[] = [];
   const publicRequests: string[] = [];
   const signedChecks: boolean[] = [];
@@ -64,6 +93,19 @@ export async function POST(request: Request) {
       "/sapi/v1/asset/get-funding-asset",
       "/sapi/v1/simple-earn/flexible/position",
       "/sapi/v1/simple-earn/locked/position",
+      "/sapi/v1/asset/wallet/balance",
+      "/sapi/v1/simple-earn/account",
+      "/sapi/v1/dci/product/accounts",
+      "/sapi/v1/dci/product/positions",
+      "/sapi/v1/accumulator/product/sum-holding",
+      "/sapi/v1/accumulator/product/position/list",
+      "/sapi/v1/bfusd/account",
+      "/sapi/v1/rwusd/account",
+      "/sapi/v2/eth-staking/account",
+      "/sapi/v1/sol-staking/account",
+      "/sapi/v1/onchain-yields/account",
+      "/sapi/v1/onchain-yields/locked/position",
+      "/sapi/v1/soft-staking/list",
     ].includes(url.pathname);
     if (privatePath) {
       privateRequests.push(businessLabel(method, url, requestBody));
@@ -87,6 +129,16 @@ export async function POST(request: Request) {
       publicRequests.push(`${method} ${url.pathname}`);
     }
 
+    if (
+      body.action === "preview-product-failure" &&
+      url.pathname === "/sapi/v1/bfusd/account"
+    ) {
+      return Response.json(
+        { code: -1000, msg: "fixture BFUSD unavailable" },
+        { status: 500 },
+      );
+    }
+
     let response: unknown;
     if (url.pathname === "/api/v3/time") {
       response = { serverTime: Date.parse(BINANCE_OBSERVED_AT) };
@@ -102,6 +154,35 @@ export async function POST(request: Request) {
     } else if (url.pathname === "/sapi/v1/simple-earn/locked/position") {
       const current = Number(url.searchParams.get("current"));
       response = fixture.lockedPages[current - 1];
+    } else if (url.pathname === "/sapi/v1/asset/wallet/balance") {
+      response = fixture.walletBalances;
+    } else if (url.pathname === "/sapi/v1/simple-earn/account") {
+      response = fixture.simpleEarnAccount;
+    } else if (url.pathname === "/sapi/v1/dci/product/accounts") {
+      response = fixture.dualAccounts;
+    } else if (url.pathname === "/sapi/v1/dci/product/positions") {
+      const pageIndex = Number(url.searchParams.get("pageIndex"));
+      response = fixture.dualPages[pageIndex - 1];
+    } else if (url.pathname === "/sapi/v1/accumulator/product/sum-holding") {
+      response = fixture.discountAccount;
+    } else if (url.pathname === "/sapi/v1/accumulator/product/position/list") {
+      const pageIndex = Number(url.searchParams.get("pageIndex"));
+      response = fixture.discountPages[pageIndex - 1];
+    } else if (url.pathname === "/sapi/v1/bfusd/account") {
+      response = fixture.bfusdAccount;
+    } else if (url.pathname === "/sapi/v1/rwusd/account") {
+      response = fixture.rwusdAccount;
+    } else if (url.pathname === "/sapi/v2/eth-staking/account") {
+      response = fixture.ethStakingAccount;
+    } else if (url.pathname === "/sapi/v1/sol-staking/account") {
+      response = fixture.solStakingAccount;
+    } else if (url.pathname === "/sapi/v1/onchain-yields/account") {
+      response = fixture.onchainAccount;
+    } else if (url.pathname === "/sapi/v1/onchain-yields/locked/position") {
+      const pageIndex = Number(url.searchParams.get("pageIndex"));
+      response = fixture.onchainPages[pageIndex - 1];
+    } else if (url.pathname === "/sapi/v1/soft-staking/list") {
+      response = fixture.softStaking;
     } else if (url.pathname === "/api/v3/exchangeInfo") {
       response = fixture.exchangeInfo;
     } else if (url.pathname === "/api/v3/ticker/price") {

@@ -239,7 +239,11 @@ export class FakeBinanceReadOnly implements BinanceReadOnly {
     const permissions = validateBinanceReadOnlyPermissions(
       binancePermissions(this.scenario),
     );
-    const fixture = binanceFixture(this.scenario === "missing-price");
+    const fixture = binanceFixture(
+      this.scenario === "missing-price",
+      false,
+      this.scenario === "dust",
+    );
     return {
       credentials: JSON.stringify({
         apiKey: input.apiKey,
@@ -832,7 +836,7 @@ export class InMemoryAssetSourceConnections implements AssetSourceConnections {
     return this.connect(result, {
       kind: "binance",
       title: "Binance 资产",
-      body: "现货、资金与 Simple Earn 只读账户",
+      body: "投资产品明细、钱包守恒与覆盖状态",
     });
   }
 

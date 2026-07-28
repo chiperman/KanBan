@@ -149,6 +149,27 @@ test("来源总额无法折算时显示未知而不是零资产", async ({ page,
   await expect(overview).not.toContainText("0.00 USD");
 });
 
+test("Binance 钱包残差会同时传播到来源卡、总资产和完整性状态", async ({
+  page,
+  request,
+}) => {
+  const configured = await request.post(
+    "/test-doubles/valuation?scenario=binance-coverage-partial",
+  );
+  expect(configured.ok()).toBeTruthy();
+  await loginAsOwner(page);
+
+  await expect(page.getByTestId("binance-coverage-status")).toContainText(
+    "产品统计不完整 · 未解释 600.00 USDT · 未纳入 Trading Bots",
+  );
+  await expect(page.getByTestId("total-asset-overview")).toContainText(
+    "当前估值：不完整 · 0 项未估值",
+  );
+  await expect(page.getByTestId("binance-product-coverage")).toContainText(
+    "Dual Investment · 明细 · 当前",
+  );
+});
+
 test("正负对账差额与逐组舍入后的分布始终守恒", async ({ page, request }) => {
   await loginAsOwner(page);
   const overview = page.getByTestId("total-asset-overview");

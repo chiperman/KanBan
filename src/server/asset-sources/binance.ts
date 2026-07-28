@@ -6,7 +6,9 @@ import {
 import {
   decimalAdd,
   decimalCompare,
+  decimalSubtract,
   decimalMultiply,
+  decimalToFixed,
 } from "@/domain/decimal";
 import type {
   AssetHolding,
@@ -104,6 +106,10 @@ function scopeLabel(scope: AssetHolding["sourceAccount"]): string {
       return "活期 Earn";
     case "earn-locked":
       return "定期 Earn";
+    case "earn":
+      return "投资产品";
+    case "staking":
+      return "质押";
     default:
       return "Binance";
   }
@@ -149,6 +155,11 @@ interface BinancePosition {
   asset: string;
   quantity: string;
   account: NonNullable<AssetHolding["sourceAccount"]>;
+  product: string;
+  providerPositionId: string | null;
+  economicAssetKey: string;
+  state: NonNullable<AssetHolding["positionState"]>;
+  providerState: string | null;
 }
 
 function addPosition(
@@ -156,15 +167,58 @@ function addPosition(
   asset: string,
   quantity: string,
   account: BinancePosition["account"],
+  product: string,
+  providerPositionId: string | null = null,
+  options: {
+    state?: BinancePosition["state"];
+    providerState?: string;
+    economicAssetKey?: string;
+  } = {},
 ): void {
   if (!positive(quantity)) return;
-  const key = `${account}:${asset}`;
+  const key = providerPositionId === null
+    ? `${account}:${asset}`
+    : `${product}:${providerPositionId}`;
   const previous = positions.get(key);
   positions.set(key, {
     asset,
     account,
+    product,
+    providerPositionId,
+    economicAssetKey: options.economicAssetKey ?? `binance:${account}:${asset}`,
+    state: options.state ?? "active",
+    providerState: options.providerState ?? null,
     quantity: previous ? decimalAdd(previous.quantity, quantity) : quantity,
   });
+}
+
+function rowsFromPositionPages(
+  pages: unknown[],
+  context: string,
+  identity: (row: JsonRecord) => string,
+): JsonRecord[] {
+  if (pages.length === 0) throw new Error(`${context}分页为空`);
+  const output: JsonRecord[] = [];
+  const identities = new Set<string>();
+  let expectedTotal: number | null = null;
+  for (const raw of pages) {
+    const page = record(raw, `${context}分页`);
+    const total = integer(page.total, "total");
+    if (expectedTotal === null) expectedTotal = total;
+    if (total !== expectedTotal) throw new Error(`${context}分页 total 发生变化`);
+    const rows = list(page.rows ?? page.list, `${context} rows`);
+    if (rows.length === 0 && output.length < total) {
+      throw new Error(`${context}分页提前结束`);
+    }
+    for (const row of rows) {
+      const key = identity(row);
+      if (identities.has(key)) throw new Error(`${context}分页出现重复仓位`);
+      identities.add(key);
+      output.push(row);
+    }
+  }
+  if (output.length !== expectedTotal) throw new Error(`${context}分页不完整`);
+  return output;
 }
 
 function rowsFromEarnPages(
@@ -214,17 +268,43 @@ function extractPositions(input: {
   fundingAssets: unknown;
   flexiblePages: unknown[];
   lockedPages: unknown[];
+  exchangeInfo: unknown;
 }): BinancePosition[] {
   const positions = new Map<string, BinancePosition>();
+  const flexibleRows = rowsFromEarnPages(input.flexiblePages, "flexible");
+  const flexibleAssets = new Set(
+    flexibleRows.map((item) => text(item.asset, "asset")),
+  );
+  const listedSpotAssets = new Set(
+    list(record(input.exchangeInfo, "Binance exchangeInfo 响应").symbols, "Binance exchangeInfo symbols")
+      .flatMap((item) =>
+        item.status === "TRADING" &&
+        item.isSpotTradingAllowed !== false &&
+        typeof item.baseAsset === "string"
+          ? [item.baseAsset]
+          : []
+      ),
+  );
   const spot = record(input.spotAccount, "Binance 现货账户响应");
   for (const item of list(spot.balances, "Binance 现货 balances")) {
+    const asset = text(item.asset, "asset");
+    const quantity = decimalAdd(
+      decimal(item.free, "free"),
+      decimal(item.locked, "locked"),
+    );
+    const underlyingAsset = asset.startsWith("LD") ? asset.slice(2) : null;
+    if (
+      underlyingAsset &&
+      flexibleAssets.has(underlyingAsset) &&
+      !listedSpotAssets.has(asset)
+    ) {
+      continue;
+    }
     addPosition(
       positions,
-      text(item.asset, "asset"),
-      decimalAdd(
-        decimal(item.free, "free"),
-        decimal(item.locked, "locked"),
-      ),
+      asset,
+      quantity,
+      "spot",
       "spot",
     );
   }
@@ -239,14 +319,19 @@ function extractPositions(input: {
         decimal(item.withdrawing, "withdrawing"),
       ),
       "funding",
+      "funding",
     );
   }
-  for (const item of rowsFromEarnPages(input.flexiblePages, "flexible")) {
+  for (const item of flexibleRows) {
+    const asset = text(item.asset, "asset");
+    const productId = text(item.productId, "productId");
     addPosition(
       positions,
-      text(item.asset, "asset"),
+      asset,
       decimal(item.totalAmount, "totalAmount"),
       "earn-flexible",
+      "simple-earn-flexible",
+      `${asset}:${productId}`,
     );
   }
   for (const item of rowsFromEarnPages(input.lockedPages, "locked")) {
@@ -258,9 +343,340 @@ function extractPositions(input: {
       text(item.asset, "asset"),
       decimal(item.amount, "amount"),
       "earn-locked",
+      "simple-earn-locked",
+      identifier(item.positionId, "positionId"),
     );
   }
   return [...positions.values()];
+}
+
+interface BinanceInvestmentInput {
+  dualPages: unknown[];
+  discountPages: unknown[];
+  bfusdAccount: unknown;
+  rwusdAccount: unknown;
+  ethStakingAccount: unknown;
+  solStakingAccount: unknown;
+  onchainAccount: unknown;
+  onchainPages: unknown[];
+  softStaking: unknown;
+  failures?: Record<string, string>;
+}
+
+function productCoverage(
+  product: string,
+  capability: NonNullable<AssetSnapshot["coverage"]>["products"][number]["capability"],
+  message: string | null = null,
+) {
+  return { product, capability, freshness: "current" as const, message };
+}
+
+function addInvestmentPositions(
+  baseline: BinancePosition[],
+  input: BinanceInvestmentInput,
+): {
+  positions: BinancePosition[];
+  products: NonNullable<AssetSnapshot["coverage"]>["products"];
+  incomplete: boolean;
+} {
+  const positions = new Map(
+    baseline.map((position) => [
+      `${position.product}:${position.providerPositionId ?? position.economicAssetKey}`,
+      position,
+    ]),
+  );
+  const products = baselineBinanceCoverage().products;
+  let incomplete = false;
+
+  let dualMessage: string | null = null;
+  for (const row of rowsFromPositionPages(
+    input.dualPages,
+    "Binance Dual Investment",
+    (item) => identifier(item.id ?? item.orderId, "id"),
+  )) {
+    const status = text(row.purchaseStatus ?? row.status, "purchaseStatus");
+    const id = identifier(row.id ?? row.orderId, "id");
+    if (["SETTLED", "PURCHASE_FAIL", "REFUND_SUCCESS"].includes(status)) continue;
+    if (!["PENDING", "PURCHASE_SUCCESS", "SETTLING", "REFUNDING"].includes(status)) {
+      incomplete = true;
+      dualMessage = `发现未知状态 ${status}，未把该仓位假定为当前资产`;
+      continue;
+    }
+    addPosition(
+      positions,
+      text(row.investCoin ?? row.asset, "investCoin"),
+      decimal(row.subscriptionAmount ?? row.amount, "subscriptionAmount"),
+      "earn",
+      "dual-investment",
+      id,
+      {
+        state: status === "SETTLING"
+          ? "settling"
+          : status === "REFUNDING"
+            ? "redeeming"
+            : "active",
+        providerState: status,
+      },
+    );
+  }
+  products.push(productCoverage(
+    "dual-investment",
+    dualMessage === null ? "detailed" : "unknown",
+    dualMessage,
+  ));
+
+  let discountMessage: string | null = null;
+  for (const row of rowsFromPositionPages(
+    input.discountPages,
+    "Binance Discount Buy",
+    (item) => identifier(item.positionId ?? item.orderId ?? item.id, "positionId"),
+  )) {
+    const status = text(row.status ?? row.purchaseStatus, "status");
+    const id = identifier(row.positionId ?? row.orderId ?? row.id, "positionId");
+    if (["SETTLED", "PURCHASE_FAIL", "REFUND_SUCCESS"].includes(status)) continue;
+    if (!["PENDING", "PURCHASE_SUCCESS", "SETTLING", "REFUNDING"].includes(status)) {
+      incomplete = true;
+      discountMessage = `发现未知状态 ${status}，未把该仓位假定为当前资产`;
+      continue;
+    }
+    addPosition(
+      positions,
+      text(row.subscriptionAsset ?? row.investCoin ?? row.asset, "subscriptionAsset"),
+      decimal(row.subscriptionAmount ?? row.amount, "subscriptionAmount"),
+      "earn",
+      "discount-buy",
+      id,
+      {
+        state: status === "SETTLING"
+          ? "settling"
+          : status === "REFUNDING"
+            ? "redeeming"
+            : "active",
+        providerState: status,
+      },
+    );
+  }
+  products.push(productCoverage(
+    "discount-buy",
+    discountMessage === null ? "detailed" : "unknown",
+    discountMessage,
+  ));
+
+  const bfusd = record(input.bfusdAccount, "Binance BFUSD 账户响应");
+  addPosition(
+    positions,
+    "BFUSD",
+    decimal(bfusd.bfusdAmount, "bfusdAmount"),
+    "earn",
+    "bfusd",
+    "account",
+  );
+  products.push(productCoverage("bfusd", "detailed"));
+
+  const rwusd = record(input.rwusdAccount, "Binance RWUSD 账户响应");
+  addPosition(
+    positions,
+    "RWUSD",
+    decimal(rwusd.rwusdAmount, "rwusdAmount"),
+    "earn",
+    "rwusd",
+    "account",
+  );
+  products.push(productCoverage("rwusd", "detailed"));
+
+  const eth = record(input.ethStakingAccount, "Binance ETH Staking 账户响应");
+  const ethHolding = decimal(eth.holdingInETH, "holdingInETH");
+  const ethWrappers = [...positions.values()].filter(
+    (position) => ["BETH", "WBETH"].includes(position.asset),
+  );
+  if (ethWrappers.length > 0) {
+    for (const wrapper of ethWrappers) wrapper.economicAssetKey = "binance:staking:ETH";
+  } else {
+    addPosition(
+      positions,
+      "ETH",
+      ethHolding,
+      "staking",
+      "eth-staking",
+      "account",
+      { economicAssetKey: "binance:staking:ETH" },
+    );
+  }
+  products.push(productCoverage(
+    "eth-staking",
+    "detailed",
+    ethWrappers.length > 0 ? "Spot 包装代币作为本金主源，账户 ETH 等值仅用于对账" : null,
+  ));
+
+  const sol = record(input.solStakingAccount, "Binance SOL Staking 账户响应");
+  const solHolding = decimal(sol.holdingInSOL, "holdingInSOL");
+  const solWrappers = [...positions.values()].filter(
+    (position) => position.asset === "BNSOL",
+  );
+  if (solWrappers.length > 0) {
+    for (const wrapper of solWrappers) wrapper.economicAssetKey = "binance:staking:SOL";
+  } else {
+    addPosition(
+      positions,
+      "SOL",
+      solHolding,
+      "staking",
+      "sol-staking",
+      "account",
+      { economicAssetKey: "binance:staking:SOL" },
+    );
+  }
+  products.push(productCoverage(
+    "sol-staking",
+    "detailed",
+    solWrappers.length > 0 ? "Spot BNSOL 作为本金主源，账户 SOL 等值仅用于对账" : null,
+  ));
+
+  let onchainMessage: string | null = null;
+  for (const row of rowsFromPositionPages(
+    input.onchainPages,
+    "Binance On-chain Yields Locked",
+    (item) => identifier(item.positionId ?? item.id, "positionId"),
+  )) {
+    const status = text(row.status, "status");
+    const id = identifier(row.positionId ?? row.id, "positionId");
+    if (["REDEEMED", "SETTLED"].includes(status)) continue;
+    if (!["HOLDING", "REDEEMING"].includes(status)) {
+      incomplete = true;
+      onchainMessage = `发现未知状态 ${status}，未把该仓位假定为当前资产`;
+      continue;
+    }
+    addPosition(
+      positions,
+      text(row.asset, "asset"),
+      decimal(row.amount, "amount"),
+      "earn",
+      "onchain-yields-locked",
+      id,
+      {
+        state: status === "REDEEMING" ? "redeeming" : "active",
+        providerState: status,
+      },
+    );
+  }
+  const onchainAccount = record(input.onchainAccount, "Binance On-chain Yields 账户响应");
+  const flexibleAmount = typeof onchainAccount.totalFlexibleAmountInUSDT === "string"
+    ? decimal(onchainAccount.totalFlexibleAmountInUSDT, "totalFlexibleAmountInUSDT")
+    : typeof onchainAccount.flexibleAmount === "string"
+      ? decimal(onchainAccount.flexibleAmount, "flexibleAmount")
+      : "0";
+  if (positive(flexibleAmount)) {
+    incomplete = true;
+    onchainMessage = "账户存在无法由公开逐仓接口展开的 Flexible 余额";
+  }
+  products.push(productCoverage(
+    "onchain-yields",
+    onchainMessage === null ? "detailed" : "aggregate-only",
+    onchainMessage,
+  ));
+
+  if (!Array.isArray(input.softStaking)) {
+    record(input.softStaking, "Binance Soft Staking 响应");
+  }
+  products.push(productCoverage(
+    "soft-staking",
+    "indirect",
+    "本金复用 Spot/Funding 等钱包，仅使用当前列表作为覆盖证据",
+  ));
+  products.push(
+    productCoverage(
+      "dual-investment-rfq",
+      "unsupported",
+      "公开 API 没有专用当前仓位合同，依赖 Earn 钱包守恒发现残差",
+    ),
+    productCoverage(
+      "smart-arbitrage",
+      "indirect",
+      "公开 API 没有专用明细，监测 Earn 与 Trading Bots 钱包残差",
+    ),
+    productCoverage("bnb-vault", "indirect", "复用底层 BNB/Simple Earn，不复制本金"),
+    productCoverage("launchpool", "indirect", "复用底层资产，奖励到账后由钱包计一次"),
+    productCoverage("megadrop", "indirect", "资格与积分不作为当前资产"),
+  );
+
+  for (const [product, message] of Object.entries(input.failures ?? {})) {
+    const coverage = products.find((item) => item.product === product);
+    if (coverage) {
+      coverage.capability = "unknown";
+      coverage.message = message;
+      incomplete = true;
+    }
+  }
+
+  return { positions: [...positions.values()], products, incomplete };
+}
+
+function reconcileWallet(input: {
+  snapshot: AssetSnapshot;
+  walletBalances: unknown;
+  tickers: unknown;
+  products: NonNullable<AssetSnapshot["coverage"]>["products"];
+  incomplete: boolean;
+}): AssetSnapshot {
+  const rows = list(input.walletBalances, "Binance Wallet Balance 响应");
+  const btcPrice = tickerPrices(input.tickers).get("BTCUSDT") ?? null;
+  let includedBtc = "0";
+  const excludedPositiveAccounts: string[] = [];
+  for (const row of rows) {
+    const name = text(row.walletName, "walletName");
+    const balance = decimal(row.balance, "balance");
+    if (["Spot", "Funding", "Earn"].includes(name)) {
+      includedBtc = decimalAdd(includedBtc, balance);
+    } else if (positive(balance)) {
+      excludedPositiveAccounts.push(name);
+    }
+  }
+  if (btcPrice === null) {
+    return {
+      ...input.snapshot,
+      coverage: {
+        status: "partial",
+        products: input.products,
+        unexplainedValue: null,
+        excludedPositiveAccounts,
+      },
+    };
+  }
+  const walletValue = decimalMultiply(includedBtc, btcPrice);
+  const difference = decimalSubtract(walletValue, input.snapshot.total.amount);
+  const absoluteDifference = decimalCompare(difference, "0") < 0
+    ? decimalSubtract("0", difference)
+    : difference;
+  const proportionalTolerance = decimalMultiply(walletValue, "0.001");
+  const tolerance = decimalCompare(proportionalTolerance, "1") < 0
+    ? "1"
+    : proportionalTolerance;
+  const material = decimalCompare(absoluteDifference, tolerance) > 0;
+  const unexplained = material
+    ? decimalAdd(decimalToFixed(absoluteDifference, 2))
+    : null;
+  const walletAboveDetail = decimalCompare(difference, "0") > 0;
+  return {
+    ...input.snapshot,
+    total: material && walletAboveDetail && unexplained !== null
+      ? {
+          amount: decimalAdd(input.snapshot.total.amount, unexplained),
+          currency: input.snapshot.total.currency,
+        }
+      : input.snapshot.total,
+    coverage: {
+      status:
+        input.incomplete || material || excludedPositiveAccounts.length > 0
+          ? "partial"
+          : "complete",
+      products: input.products,
+      unexplainedValue:
+        unexplained === null
+          ? null
+          : { amount: unexplained, currency: input.snapshot.total.currency },
+      excludedPositiveAccounts,
+    },
+  };
 }
 
 function eligibleUsdtSymbols(exchangeInfo: unknown): Set<string> {
@@ -294,6 +710,7 @@ function valuePositions(input: {
   tickers: unknown;
   observedAt: string;
   usdtUsdQuote: PriceQuote | null;
+  coverage?: AssetSnapshot["coverage"];
 }): AssetSnapshot {
   const eligible = eligibleUsdtSymbols(input.exchangeInfo);
   const prices = tickerPrices(input.tickers);
@@ -320,6 +737,15 @@ function valuePositions(input: {
         name: `${position.asset} · ${scopeLabel(position.account)}`,
         sourceAsset: position.asset,
         sourceAccount: position.account,
+        sourceProduct: position.product,
+        ...(position.providerPositionId === null
+          ? {}
+          : { providerPositionId: position.providerPositionId }),
+        ...(position.providerState === null
+          ? {}
+          : { providerPositionState: position.providerState }),
+        economicAssetKey: position.economicAssetKey,
+        positionState: position.state,
         quantity: position.quantity,
         currency: "USDT",
         assetClass: "crypto",
@@ -347,6 +773,15 @@ function valuePositions(input: {
         name: `${position.asset} · ${scopeLabel(position.account)}`,
         sourceAsset: position.asset,
         sourceAccount: position.account,
+        sourceProduct: position.product,
+        ...(position.providerPositionId === null
+          ? {}
+          : { providerPositionId: position.providerPositionId }),
+        ...(position.providerState === null
+          ? {}
+          : { providerPositionState: position.providerState }),
+        economicAssetKey: position.economicAssetKey,
+        positionState: position.state,
         quantity: position.quantity,
         currency: "USDT",
         assetClass: "crypto",
@@ -369,6 +804,15 @@ function valuePositions(input: {
       name: `${position.asset} · ${scopeLabel(position.account)}`,
       sourceAsset: position.asset,
       sourceAccount: position.account,
+      sourceProduct: position.product,
+      ...(position.providerPositionId === null
+        ? {}
+        : { providerPositionId: position.providerPositionId }),
+      ...(position.providerState === null
+        ? {}
+        : { providerPositionState: position.providerState }),
+      economicAssetKey: position.economicAssetKey,
+      positionState: position.state,
       quantity: position.quantity,
       currency: "USDT",
       assetClass: "crypto",
@@ -405,6 +849,26 @@ function valuePositions(input: {
         }]
       : [],
     syncedAt: input.observedAt,
+    ...(input.coverage === undefined ? {} : { coverage: input.coverage }),
+  };
+}
+
+function baselineBinanceCoverage(): NonNullable<AssetSnapshot["coverage"]> {
+  return {
+    status: "unknown",
+    products: [
+      "spot",
+      "funding",
+      "simple-earn-flexible",
+      "simple-earn-locked",
+    ].map((product) => ({
+      product,
+      capability: "detailed" as const,
+      freshness: "current" as const,
+      message: null,
+    })),
+    unexplainedValue: null,
+    excludedPositiveAccounts: [],
   };
 }
 
@@ -424,6 +888,7 @@ export function mapBinanceSnapshot(input: {
     tickers: input.tickers,
     observedAt: input.observedAt,
     usdtUsdQuote: input.usdtUsdQuote,
+    coverage: baselineBinanceCoverage(),
   });
 }
 
@@ -571,6 +1036,67 @@ class BinanceClient {
     });
   }
 
+  walletBalances() {
+    return this.signed("GET", "/sapi/v1/asset/wallet/balance");
+  }
+
+  simpleEarnAccount() {
+    return this.signed("GET", "/sapi/v1/simple-earn/account");
+  }
+
+  dualAccounts() {
+    return this.signed("GET", "/sapi/v1/dci/product/accounts");
+  }
+
+  dualPage(pageIndex: number) {
+    return this.signed("GET", "/sapi/v1/dci/product/positions", {
+      pageIndex: String(pageIndex),
+      pageSize: "100",
+    });
+  }
+
+  discountAccount() {
+    return this.signed("GET", "/sapi/v1/accumulator/product/sum-holding");
+  }
+
+  discountPage(pageIndex: number) {
+    return this.signed("GET", "/sapi/v1/accumulator/product/position/list", {
+      pageIndex: String(pageIndex),
+      pageSize: "100",
+    });
+  }
+
+  bfusdAccount() {
+    return this.signed("GET", "/sapi/v1/bfusd/account");
+  }
+
+  rwusdAccount() {
+    return this.signed("GET", "/sapi/v1/rwusd/account");
+  }
+
+  ethStakingAccount() {
+    return this.signed("GET", "/sapi/v2/eth-staking/account");
+  }
+
+  solStakingAccount() {
+    return this.signed("GET", "/sapi/v1/sol-staking/account");
+  }
+
+  onchainAccount() {
+    return this.signed("GET", "/sapi/v1/onchain-yields/account");
+  }
+
+  onchainPage(pageIndex: number) {
+    return this.signed("GET", "/sapi/v1/onchain-yields/locked/position", {
+      pageIndex: String(pageIndex),
+      pageSize: "100",
+    });
+  }
+
+  softStaking() {
+    return this.signed("GET", "/sapi/v1/soft-staking/list");
+  }
+
   async exchangeInfo(): Promise<unknown> {
     const response = await this.request(`${BINANCE_ORIGIN}/api/v3/exchangeInfo`, {
       method: "GET",
@@ -622,6 +1148,43 @@ async function collectEarnPages(
   throw new Error(`Binance ${kind} Earn 分页超过安全上限`);
 }
 
+async function collectPositionPages(
+  context: string,
+  fetchPage: (pageIndex: number) => Promise<unknown>,
+): Promise<unknown[]> {
+  const pages: unknown[] = [];
+  let collected = 0;
+  let expectedTotal: number | null = null;
+  for (let pageIndex = 1; pageIndex <= 100; pageIndex += 1) {
+    const page = record(await fetchPage(pageIndex), `${context}分页`);
+    const total = integer(page.total, "total");
+    if (expectedTotal === null) expectedTotal = total;
+    if (total !== expectedTotal) throw new Error(`${context}分页 total 发生变化`);
+    const rows = list(page.rows ?? page.list, `${context} rows`);
+    pages.push(page);
+    collected += rows.length;
+    if (collected >= total) {
+      if (collected !== total) throw new Error(`${context}分页数量超过 total`);
+      return pages;
+    }
+    if (rows.length === 0) throw new Error(`${context}分页提前结束`);
+  }
+  throw new Error(`${context}分页超过安全上限`);
+}
+
+async function optionalProductRead<T>(
+  label: string,
+  fallback: T,
+  operation: () => Promise<T>,
+): Promise<{ value: T; error: string | null }> {
+  try {
+    return { value: await operation(), error: null };
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "未知错误";
+    return { value: fallback, error: `${label}读取失败：${detail}` };
+  }
+}
+
 async function readFullSnapshot(input: {
   client: BinanceClient;
   observedAt: string;
@@ -639,6 +1202,91 @@ async function readFullSnapshot(input: {
     "locked",
     (page) => input.client.lockedPage(page),
   );
+  const walletBalances = await input.client.walletBalances();
+  const [
+    simpleEarn,
+    dual,
+    discount,
+    bfusd,
+    rwusd,
+    ethStaking,
+    solStaking,
+    onchain,
+    softStakingResult,
+  ] = await Promise.all([
+    optionalProductRead("Simple Earn 账户汇总", {}, () =>
+      input.client.simpleEarnAccount()),
+    optionalProductRead(
+      "Dual Investment",
+      { pages: [{ total: 0, list: [] }] as unknown[] },
+      async () => {
+        await input.client.dualAccounts();
+        return {
+          pages: await collectPositionPages(
+            "Binance Dual Investment",
+            (page) => input.client.dualPage(page),
+          ),
+        };
+      },
+    ),
+    optionalProductRead(
+      "Discount Buy",
+      { pages: [{ total: 0, list: [] }] as unknown[] },
+      async () => {
+        await input.client.discountAccount();
+        return {
+          pages: await collectPositionPages(
+            "Binance Discount Buy",
+            (page) => input.client.discountPage(page),
+          ),
+        };
+      },
+    ),
+    optionalProductRead("BFUSD", { bfusdAmount: "0" } as unknown, () =>
+      input.client.bfusdAccount()),
+    optionalProductRead("RWUSD", { rwusdAmount: "0" } as unknown, () =>
+      input.client.rwusdAccount()),
+    optionalProductRead("ETH Staking", { holdingInETH: "0" } as unknown, () =>
+      input.client.ethStakingAccount()),
+    optionalProductRead(
+      "SOL Staking",
+      { holdingInSOL: "0", bnsolAmount: "0" } as unknown,
+      () => input.client.solStakingAccount(),
+    ),
+    optionalProductRead(
+      "On-chain Yields",
+      {
+        account: { totalFlexibleAmountInUSDT: "0" },
+        pages: [{ total: 0, rows: [] }] as unknown[],
+      },
+      async () => ({
+        account: await input.client.onchainAccount(),
+        pages: await collectPositionPages(
+          "Binance On-chain Yields Locked",
+          (page) => input.client.onchainPage(page),
+        ),
+      }),
+    ),
+    optionalProductRead("Soft Staking", [] as unknown, () =>
+      input.client.softStaking()),
+  ]);
+  const failures: Record<string, string> = {};
+  if (simpleEarn.error) {
+    failures["simple-earn-flexible"] = simpleEarn.error;
+    failures["simple-earn-locked"] = simpleEarn.error;
+  }
+  for (const [product, result] of [
+    ["dual-investment", dual],
+    ["discount-buy", discount],
+    ["bfusd", bfusd],
+    ["rwusd", rwusd],
+    ["eth-staking", ethStaking],
+    ["sol-staking", solStaking],
+    ["onchain-yields", onchain],
+    ["soft-staking", softStakingResult],
+  ] as const) {
+    if (result.error) failures[product] = result.error;
+  }
   const [exchangeInfo, tickers, usdtUsdQuote] = await Promise.all([
     input.client.exchangeInfo(),
     input.client.tickers(),
@@ -646,16 +1294,42 @@ async function readFullSnapshot(input: {
   ]);
   return {
     account: record(spotAccount, "Binance 现货账户响应"),
-    snapshot: mapBinanceSnapshot({
-      spotAccount,
-      fundingAssets,
-      flexiblePages,
-      lockedPages,
-      exchangeInfo,
-      tickers,
-      observedAt: input.observedAt,
-      usdtUsdQuote,
-    }),
+    snapshot: (() => {
+      const investment = addInvestmentPositions(
+        extractPositions({
+          spotAccount,
+          fundingAssets,
+          flexiblePages,
+          lockedPages,
+          exchangeInfo,
+        }),
+        {
+          dualPages: dual.value.pages,
+          discountPages: discount.value.pages,
+          bfusdAccount: bfusd.value,
+          rwusdAccount: rwusd.value,
+          ethStakingAccount: ethStaking.value,
+          solStakingAccount: solStaking.value,
+          onchainAccount: onchain.value.account,
+          onchainPages: onchain.value.pages,
+          softStaking: softStakingResult.value,
+          failures,
+        },
+      );
+      return reconcileWallet({
+        snapshot: valuePositions({
+          positions: investment.positions,
+          exchangeInfo,
+          tickers,
+          observedAt: input.observedAt,
+          usdtUsdQuote,
+        }),
+        walletBalances,
+        tickers,
+        products: investment.products,
+        incomplete: investment.incomplete,
+      });
+    })(),
   };
 }
 
@@ -746,6 +1420,13 @@ export class ProductionBinanceSourceRefresher
             return {
               asset: holding.sourceAsset,
               account: holding.sourceAccount,
+              product: holding.sourceProduct ?? holding.sourceAccount,
+              providerPositionId: holding.providerPositionId ?? null,
+              providerState: holding.providerPositionState ?? null,
+              economicAssetKey:
+                holding.economicAssetKey ??
+                `binance:${holding.sourceAccount}:${holding.sourceAsset}`,
+              state: holding.positionState ?? "active",
               quantity: holding.quantity,
             };
           }),
@@ -753,6 +1434,7 @@ export class ProductionBinanceSourceRefresher
           tickers,
           observedAt: attemptedAt,
           usdtUsdQuote,
+          coverage: source.snapshot.coverage,
         }),
       };
     }
