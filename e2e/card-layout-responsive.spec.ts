@@ -386,6 +386,36 @@ test.beforeEach(async ({ request }) => {
   expect(response.ok()).toBeTruthy();
 });
 
+test("拖拽说明 ID 在首次渲染和刷新后保持稳定", async ({ page }) => {
+  const hydrationErrors: string[] = [];
+  page.on("console", (message) => {
+    if (
+      message.type() === "error" &&
+      message.text().includes("hydrated but some attributes")
+    ) {
+      hydrationErrors.push(message.text());
+    }
+  });
+
+  await loginAsOwner(page);
+
+  const dragHandles = page.getByRole("button", { name: /拖动.*调整排序/ });
+  await expect(dragHandles.first()).toHaveAttribute(
+    "aria-describedby",
+    "asset-card-layout-dnd",
+  );
+  await expect(page.locator("#asset-card-layout-dnd")).toHaveCount(1);
+
+  await page.reload();
+
+  await expect(dragHandles.first()).toHaveAttribute(
+    "aria-describedby",
+    "asset-card-layout-dnd",
+  );
+  await expect(page.locator("#asset-card-layout-dnd")).toHaveCount(1);
+  expect(hydrationErrors).toEqual([]);
+});
+
 test("未认证状态不能调整布局，所有者可直接排序并调整资产卡片宽度", async ({
   page,
 }) => {

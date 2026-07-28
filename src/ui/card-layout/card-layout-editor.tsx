@@ -307,6 +307,7 @@ export function CardLayoutEditor({
 
   return (
     <DndContext
+      id="asset-card-layout-dnd"
       sensors={sensors}
       collisionDetection={candidateCollisionDetection}
       accessibility={{
