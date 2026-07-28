@@ -185,6 +185,12 @@ export function buildTotalValuation(
 
   for (const source of sources) {
     if (source.sync.status === "expired") expiredCount += 1;
+    if (
+      source.snapshot.coverage !== undefined &&
+      source.snapshot.coverage.status !== "complete"
+    ) {
+      incomplete = true;
+    }
     const total = convert(
       source.snapshot.total.amount,
       source.snapshot.total.currency,

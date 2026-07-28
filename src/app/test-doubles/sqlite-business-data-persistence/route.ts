@@ -313,7 +313,8 @@ export async function POST(request: Request) {
     action !== "daily-idempotency" &&
     action !== "source-lifecycle" &&
     action !== "delete-middle-source" &&
-    action !== "startup-failures"
+    action !== "startup-failures" &&
+    action !== "schema-v2-migration"
   ) {
     return Response.json({ error: "unknown action" }, { status: 400 });
   }
@@ -323,6 +324,55 @@ export async function POST(request: Request) {
   const previousKey = process.env.PAD_SECRET_ENCRYPTION_KEY;
   process.env.PAD_SECRET_ENCRYPTION_KEY = Buffer.alloc(32, 21).toString("base64");
   try {
+    if (action === "schema-v2-migration") {
+      await mkdir(dataDirectory, { recursive: true });
+      new SqliteDashboardDatabase(
+        path.join(dataDirectory, "dashboard.sqlite"),
+        path.join(dataDirectory, "dashboard.json"),
+        path.join(dataDirectory, "cards.json"),
+      );
+      const databasePath = path.join(dataDirectory, "dashboard.sqlite");
+      const downgrade = new DatabaseSync(databasePath);
+      downgrade.exec(`
+        ALTER TABLE asset_source_snapshots DROP COLUMN coverage_json;
+        UPDATE schema_metadata SET value = '2' WHERE key = 'schema_version';
+      `);
+      downgrade.close();
+
+      const migrated = new SqliteDashboardDatabase(
+        databasePath,
+        path.join(dataDirectory, "dashboard.json"),
+        path.join(dataDirectory, "cards.json"),
+      );
+      const result = authorization("schema-v2", "not-persisted-here");
+      result.snapshot.coverage = {
+        status: "partial",
+        products: [],
+        unexplainedValue: { amount: "3", currency: "USD" },
+        excludedPositiveAccounts: [],
+      };
+      await migrated.connectBinance(
+        result,
+        "opaque-v2-reference",
+        "2026-07-28T02:00:00.000Z",
+      );
+      const [source] = await migrated.listSources();
+      const inspection = new DatabaseSync(databasePath, { readOnly: true });
+      const schemaVersion = inspection
+        .prepare("SELECT value FROM schema_metadata WHERE key = 'schema_version'")
+        .get() as { value: string };
+      const columns = inspection
+        .prepare("PRAGMA table_info(asset_source_snapshots)")
+        .all() as Array<{ name: string }>;
+      inspection.close();
+      return Response.json({
+        schemaVersion: schemaVersion.value,
+        coverageColumn: columns.some(({ name }) => name === "coverage_json"),
+        coverageStatus: source.snapshot.coverage?.status,
+        unexplainedValue: source.snapshot.coverage?.unexplainedValue,
+      });
+    }
+
     if (action === "json-import" || action === "repeat-import") {
       const legacyContents = await writeLegacyDashboard(dataDirectory);
       const first = createProductionServices(dataDirectory);
@@ -359,6 +409,7 @@ export async function POST(request: Request) {
           credentialReference: source.credentialReference,
           lifecycle: source.lifecycle,
           holdings: source.snapshot.holdings,
+          coverage: source.snapshot.coverage,
         },
         dailySnapshot: {
           day: dailySnapshot.day,

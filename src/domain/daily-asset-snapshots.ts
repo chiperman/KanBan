@@ -60,6 +60,8 @@ function sourceSnapshot(
     capturedAt,
     complete:
       source.sync.status === "current" &&
+      (source.snapshot.coverage === undefined ||
+        source.snapshot.coverage.status === "complete") &&
       !unvalued &&
       total.USD !== null,
     total,

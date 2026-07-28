@@ -116,6 +116,34 @@ export interface AssetMoney {
 
 export type AssetClass = "securities" | "crypto";
 
+export type AssetPositionState =
+  | "active"
+  | "settling"
+  | "redeeming"
+  | "settled"
+  | "unknown";
+
+export type AssetCoverageCapability =
+  | "detailed"
+  | "aggregate-only"
+  | "indirect"
+  | "unsupported"
+  | "unknown";
+
+export interface AssetProductCoverage {
+  product: string;
+  capability: AssetCoverageCapability;
+  freshness: "current" | "expired";
+  message: string | null;
+}
+
+export interface AssetSnapshotCoverage {
+  status: "complete" | "partial" | "unknown";
+  products: AssetProductCoverage[];
+  unexplainedValue: AssetMoney | null;
+  excludedPositiveAccounts: string[];
+}
+
 export interface AssetExchangeRate {
   baseCurrency: string;
   quoteCurrency: string;
@@ -140,7 +168,19 @@ export interface AssetHolding {
   name: string;
   /** 来源内资产标识与账户分区；用于同一资产跨分区保持独立。 */
   sourceAsset?: string;
-  sourceAccount?: "spot" | "funding" | "earn-flexible" | "earn-locked";
+  sourceAccount?:
+    | "spot"
+    | "funding"
+    | "earn-flexible"
+    | "earn-locked"
+    | "earn"
+    | "staking";
+  /** 来源产品身份与仓位证据；旧快照可缺省。 */
+  sourceProduct?: string;
+  providerPositionId?: string;
+  providerPositionState?: string;
+  economicAssetKey?: string;
+  positionState?: AssetPositionState;
   quantity: string;
   currency: string;
   assetClass: AssetClass;
@@ -159,6 +199,8 @@ export interface AssetSnapshot {
   holdings: AssetHolding[];
   exchangeRates: AssetExchangeRate[];
   syncedAt: string;
+  /** 可选以兼容旧快照；缺省表示尚未证明产品覆盖范围。 */
+  coverage?: AssetSnapshotCoverage;
 }
 
 export interface LongbridgeAuthorizationResult {

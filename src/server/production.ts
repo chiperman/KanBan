@@ -93,7 +93,7 @@ interface DashboardState {
 }
 
 const DASHBOARD_SCHEMA_VERSION = 5 as const;
-const SQLITE_SCHEMA_VERSION = 2;
+const SQLITE_SCHEMA_VERSION = 3;
 
 type SourceConnectionKind = "longbridge" | "binance" | "okx" | "bitget" | "evm";
 type SourceAuthorizationResult =
@@ -112,7 +112,7 @@ const SOURCE_CARD_DETAILS = {
   binance: {
     kind: "binance",
     title: "Binance 资产",
-    body: "现货、资金与 Simple Earn 只读账户",
+    body: "投资产品明细、钱包守恒与覆盖状态",
   },
   okx: {
     kind: "okx",
@@ -332,6 +332,16 @@ function migrateAssetSource(raw: unknown): AssetSourceSummary {
         currency: snapshot.total.currency,
       }
     : snapshot.total;
+  const coverage =
+    snapshot.coverage ??
+    (source.kind === "binance"
+      ? {
+          status: "unknown" as const,
+          products: [],
+          unexplainedValue: null,
+          excludedPositiveAccounts: [],
+        }
+      : undefined);
   return {
     ...source,
     snapshot: {
@@ -339,6 +349,7 @@ function migrateAssetSource(raw: unknown): AssetSourceSummary {
       total,
       holdings,
       exchangeRates,
+      ...(coverage === undefined ? {} : { coverage }),
     },
     sync: source.sync ?? {
       status: "current",
@@ -708,6 +719,7 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
         total_currency TEXT NOT NULL,
         holdings_json TEXT NOT NULL CHECK (json_valid(holdings_json)),
         exchange_rates_json TEXT NOT NULL CHECK (json_valid(exchange_rates_json)),
+        coverage_json TEXT CHECK (coverage_json IS NULL OR json_valid(coverage_json)),
         synced_at TEXT NOT NULL
       ) STRICT;
       CREATE TABLE IF NOT EXISTS asset_source_sync_states (
@@ -747,14 +759,22 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
         PRIMARY KEY (day, source_id)
       ) STRICT;
     `);
-    const schemaVersion = this.metadata("schema_version");
+    let schemaVersion = this.metadata("schema_version");
     if (schemaVersion === null) {
       this.database
         .prepare("INSERT INTO schema_metadata (key, value) VALUES (?, ?)")
         .run("schema_version", String(SQLITE_SCHEMA_VERSION));
-    } else if (schemaVersion === "1") {
+      return;
+    }
+    if (schemaVersion === "1") {
       this.migrateSchemaVersionOne();
-    } else if (schemaVersion !== String(SQLITE_SCHEMA_VERSION)) {
+      schemaVersion = "2";
+    }
+    if (schemaVersion === "2") {
+      this.migrateSchemaVersionTwo();
+      schemaVersion = "3";
+    }
+    if (schemaVersion !== String(SQLITE_SCHEMA_VERSION)) {
       throw new Error(`不支持的 SQLite schema 版本: ${schemaVersion}`);
     }
   }
@@ -776,7 +796,20 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
       `);
       this.database
         .prepare("UPDATE schema_metadata SET value = ? WHERE key = ?")
-        .run(String(SQLITE_SCHEMA_VERSION), "schema_version");
+        .run("2", "schema_version");
+    });
+  }
+
+  private migrateSchemaVersionTwo(): void {
+    this.transaction(() => {
+      this.database.exec(`
+        ALTER TABLE asset_source_snapshots
+        ADD COLUMN coverage_json TEXT
+        CHECK (coverage_json IS NULL OR json_valid(coverage_json));
+      `);
+      this.database
+        .prepare("UPDATE schema_metadata SET value = ? WHERE key = ?")
+        .run("3", "schema_version");
     });
   }
 
@@ -906,8 +939,8 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
       .prepare(`
         INSERT OR REPLACE INTO asset_source_snapshots (
           source_id, total_amount, total_currency, holdings_json,
-          exchange_rates_json, synced_at
-        ) VALUES (?, ?, ?, ?, ?, ?)
+          exchange_rates_json, coverage_json, synced_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
       `)
       .run(
         source.id,
@@ -915,6 +948,9 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
         source.snapshot.total.currency,
         JSON.stringify(source.snapshot.holdings),
         JSON.stringify(source.snapshot.exchangeRates),
+        source.snapshot.coverage === undefined
+          ? null
+          : JSON.stringify(source.snapshot.coverage),
         source.snapshot.syncedAt,
       );
     this.database
@@ -1070,6 +1106,11 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
           },
           holdings: JSON.parse(snapshot.holdings_json as string),
           exchangeRates: JSON.parse(snapshot.exchange_rates_json as string),
+          ...(snapshot.coverage_json === null
+            ? {}
+            : {
+                coverage: JSON.parse(snapshot.coverage_json as string),
+              }),
           syncedAt: snapshot.synced_at as string,
         },
         sync: {

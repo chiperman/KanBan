@@ -36,6 +36,12 @@ test("首次启动完整导入 JSON 并保留私有备份", async ({ request }) 
       id: "legacy-source",
       credentialReference: "opaque-reference",
       lifecycle: "disconnected",
+      coverage: {
+        status: "unknown",
+        products: [],
+        unexplainedValue: null,
+        excludedPositiveAccounts: [],
+      },
       holdings: [
         expect.objectContaining({
           symbol: "USD",
@@ -53,6 +59,20 @@ test("首次启动完整导入 JSON 并保留私有备份", async ({ request }) 
     databaseMode: "0600",
     backupMode: "0600",
     backupMatches: true,
+  });
+});
+
+test("SQLite schema v2 自动迁移并持久化 Binance 覆盖证据", async ({ request }) => {
+  const response = await request.post(
+    "/test-doubles/sqlite-business-data-persistence?action=schema-v2-migration",
+  );
+
+  expect(response.ok()).toBeTruthy();
+  await expect(response.json()).resolves.toEqual({
+    schemaVersion: "3",
+    coverageColumn: true,
+    coverageStatus: "partial",
+    unexplainedValue: { amount: "3", currency: "USD" },
   });
 });
 

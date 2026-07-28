@@ -96,6 +96,18 @@ export class SourceIsolatedAssetSynchronization
             source.sync.failedMode !== "prices";
           const updated = {
             ...source,
+            snapshot: source.snapshot.coverage === undefined
+              ? source.snapshot
+              : {
+                  ...source.snapshot,
+                  coverage: {
+                    ...source.snapshot.coverage,
+                    products: source.snapshot.coverage.products.map((product) => ({
+                      ...product,
+                      freshness: "expired" as const,
+                    })),
+                  },
+                },
             sync: preservesBalanceFailure
               ? {
                   ...source.sync,
