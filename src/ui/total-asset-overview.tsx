@@ -162,7 +162,7 @@ export function TotalAssetOverview({
       {valuation.conversion ? (
         <p className="conversion-observation">
           汇率观察：{valuation.conversion.baseCurrency}/{valuation.conversion.quoteCurrency}{" "}
-          {valuation.conversion.rate} · {valuation.conversion.source} · {valuation.conversion.observedAt.slice(0, 16).replace("T", " ")} UTC
+          {decimalToFixed(valuation.conversion.rate, 4)} · {valuation.conversion.source} · {valuation.conversion.observedAt.slice(0, 16).replace("T", " ")} UTC
         </p>
       ) : null}
       <section className="today-asset-change" data-testid="today-asset-change">

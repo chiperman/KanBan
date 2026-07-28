@@ -136,7 +136,7 @@ test("反向汇率观察按正确方向折算总额与每个分组", async ({ pa
   const overview = page.getByTestId("total-asset-overview");
   await overview.getByLabel("计价货币").selectOption("CNY");
   await expect(overview).toContainText("4,009.57 CNY");
-  await expect(overview).toContainText("CNY/USD 0.14");
+  await expect(overview).toContainText("USD/CNY 7.1429");
   await expect(overview).toContainText("证券");
   await expect(overview).toContainText("3,314.57 CNY");
   await expect(overview).toContainText("加密资产");

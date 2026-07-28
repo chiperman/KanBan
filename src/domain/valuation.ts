@@ -175,7 +175,16 @@ export function buildTotalValuation(
   const conversionObservation = currency === "CNY"
     ? rateFor(allRates, "USD", "CNY")
     : null;
-  const conversion = conversionObservation?.rate ?? null;
+  const conversion = conversionObservation
+    ? {
+        ...conversionObservation.rate,
+        baseCurrency: "USD",
+        quoteCurrency: "CNY",
+        rate: conversionObservation.inverse
+          ? decimalDivide("1", conversionObservation.rate.rate)
+          : conversionObservation.rate.rate,
+      }
+    : null;
   let totalUsd = "0";
   let incomplete = false;
   let unvaluedCount = 0;

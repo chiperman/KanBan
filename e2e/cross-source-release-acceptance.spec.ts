@@ -90,7 +90,7 @@ test("六类来源形成正确总额、分布、真实稳定币价格与失败�
   await expect(overview.getByTestId("total-asset-amount")).toHaveText(
     "1,026,345.60 CNY",
   );
-  await expect(overview).toContainText("USD/CNY 7.2 · 发布验收汇率");
+  await expect(overview).toContainText("USD/CNY 7.2000 · 发布验收汇率");
   await overview.getByLabel("计价货币").selectOption("USD");
 
   await expect(page.getByTestId("asset-refresh-status")).toContainText("同步完成");
