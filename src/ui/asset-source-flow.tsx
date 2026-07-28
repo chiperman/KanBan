@@ -305,6 +305,7 @@ export function AssetSourceFlow() {
                 className="login-cancel"
                 disabled={pending}
                 onClick={() => {
+                  setFields(initialAssetSourceFields());
                   setChoosing(false);
                   clearCallbackQuery();
                 }}

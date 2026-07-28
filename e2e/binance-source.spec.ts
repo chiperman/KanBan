@@ -70,6 +70,24 @@ test.beforeEach(async ({ request }) => {
   await request.post("/test-doubles/reset");
 });
 
+test("取消添加资产来源后再次打开时只读凭证字段为空", async ({ page }) => {
+  await loginAsOwner(page);
+
+  await page.getByRole("button", { name: "添加资产来源" }).click();
+  await page.getByRole("radio", { name: "Binance" }).check();
+  await page.getByLabel("Binance API Key").fill(API_KEY);
+  await page.getByLabel("Binance API Secret").fill(API_SECRET);
+  await page
+    .getByRole("dialog", { name: "添加资产来源" })
+    .getByRole("button", { name: "取消" })
+    .click();
+
+  await page.getByRole("button", { name: "添加资产来源" }).click();
+  await page.getByRole("radio", { name: "Binance" }).check();
+  await expect(page.getByLabel("Binance API Key")).toHaveValue("");
+  await expect(page.getByLabel("Binance API Secret")).toHaveValue("");
+});
+
 test("Binance 只读凭证先预览后原子保存，并展示现货、资金与 Earn 持仓", async ({
   page,
 }) => {
