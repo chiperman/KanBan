@@ -43,7 +43,10 @@ async function startOkxFlow(page: Page) {
   if (!(await dialog.isVisible())) {
     await page.getByRole("button", { name: "添加资产来源" }).click();
   }
-  await page.getByRole("radio", { name: "OKX" }).check();
+  const provider = page.getByRole("radio", { name: "OKX" });
+  if (await provider.isVisible()) {
+    await provider.check();
+  }
   await page.getByLabel("OKX 注册区域").selectOption("eea");
   await page.getByLabel("OKX API Key").fill(API_KEY);
   await page.getByLabel("OKX API Secret").fill(API_SECRET);

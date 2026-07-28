@@ -53,7 +53,10 @@ async function startBinanceFlow(page: Page) {
   if (!(await dialog.isVisible())) {
     await page.getByRole("button", { name: "添加资产来源" }).click();
   }
-  await page.getByRole("radio", { name: "Binance" }).check();
+  const provider = page.getByRole("radio", { name: "Binance" });
+  if (await provider.isVisible()) {
+    await provider.check();
+  }
   await page.getByLabel("Binance API Key").fill(API_KEY);
   await page.getByLabel("Binance API Secret").fill(API_SECRET);
   await page.getByRole("button", { name: "验证只读凭证" }).click();

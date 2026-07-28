@@ -33,6 +33,7 @@ function formatAmount(amount: string): string {
 
 export function AssetSourceFlow() {
   const [choosing, setChoosing] = useState(false);
+  const [step, setStep] = useState<"choose" | "configure">("choose");
   const [providerId, setProviderId] = useState<AssetSourceProviderId | "">("");
   const [preview, setPreview] = useState<Preview | null>(null);
   const [error, setError] = useState("");
@@ -70,6 +71,20 @@ export function AssetSourceFlow() {
 
   function updateField(id: AssetSourceFieldId, value: string) {
     setFields((current) => ({ ...current, [id]: value }));
+  }
+
+  function chooseProvider(id: AssetSourceProviderId) {
+    setProviderId(id);
+    setError("");
+    window.requestAnimationFrame(() => setStep("configure"));
+  }
+
+  function cancelChoosing() {
+    setFields(initialAssetSourceFields());
+    setProviderId("");
+    setStep("choose");
+    setChoosing(false);
+    clearCallbackQuery();
   }
 
   async function startOAuth() {
@@ -204,6 +219,8 @@ export function AssetSourceFlow() {
         type="button"
         onClick={() => {
           setError("");
+          setProviderId("");
+          setStep("choose");
           setChoosing(true);
         }}
       >
@@ -221,31 +238,62 @@ export function AssetSourceFlow() {
           aria-modal="true"
           aria-label="添加资产来源"
         >
-          <div className="editor-dialog">
-            <p className="card-label">添加资产来源</p>
+          <div className="editor-dialog source-dialog">
+            <div className="source-dialog-heading">
+              <p className="card-label">添加资产来源</p>
+              {step === "choose" ? (
+                <h2>选择来源类型</h2>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="text-button source-dialog-back"
+                    disabled={pending}
+                    onClick={() => {
+                      setError("");
+                      setStep("choose");
+                    }}
+                  >
+                    返回来源列表
+                  </button>
+                  <h2>{provider?.label}</h2>
+                </>
+              )}
+            </div>
             <p className="login-copy">
-              选择只读来源。连接成功前不会保存凭证或来源。
+              {step === "choose"
+                ? "先选择只读账户或观察钱包，再填写对应的连接信息。"
+                : "连接成功前不会保存凭证或来源。"}
             </p>
             {error ? (
               <p className="login-error" role="alert">
                 {error}
               </p>
             ) : null}
-            {ASSET_SOURCE_PROVIDERS.map((description) => (
-              <label className="source-option" key={description.id}>
-                <input
-                  type="radio"
-                  name="asset-provider"
-                  value={description.id}
-                  checked={providerId === description.id}
-                  onChange={(event) =>
-                    setProviderId(event.target.value as AssetSourceProviderId)
-                  }
-                />
-                {description.label}
-              </label>
-            ))}
-            {provider?.fields.length ? (
+            {step === "choose" ? (
+              <div className="source-provider-list">
+                {ASSET_SOURCE_PROVIDERS.map((description) => (
+                  <label className="source-option" key={description.id}>
+                    <input
+                      type="radio"
+                      name="asset-provider"
+                      value={description.id}
+                      checked={providerId === description.id}
+                      onClick={() => {
+                        if (providerId === description.id) {
+                          chooseProvider(description.id);
+                        }
+                      }}
+                      onChange={(event) =>
+                        chooseProvider(event.target.value as AssetSourceProviderId)
+                      }
+                    />
+                    {description.label}
+                  </label>
+                ))}
+              </div>
+            ) : null}
+            {step === "configure" && provider?.fields.length ? (
               <div className="source-credential-fields">
                 {provider.fields.map((field) => (
                   <label className="field-label" key={field.id}>
@@ -291,24 +339,22 @@ export function AssetSourceFlow() {
                 ) : null}
               </div>
             ) : null}
-            <div className="editor-actions">
-              <button
-                type="button"
-                className="login-primary"
-                disabled={pending || !ready}
-                onClick={() => void start()}
-              >
-                {provider?.startLabel ?? "开始 OAuth 授权"}
-              </button>
+            <div className="editor-actions source-dialog-actions">
+              {step === "configure" ? (
+                <button
+                  type="button"
+                  className="login-primary"
+                  disabled={pending || !ready}
+                  onClick={() => void start()}
+                >
+                  {provider?.startLabel ?? "开始 OAuth 授权"}
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="login-cancel"
                 disabled={pending}
-                onClick={() => {
-                  setFields(initialAssetSourceFields());
-                  setChoosing(false);
-                  clearCallbackQuery();
-                }}
+                onClick={cancelChoosing}
               >
                 取消
               </button>

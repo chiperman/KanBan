@@ -43,7 +43,10 @@ async function startBitgetFlow(page: Page, accountMode = "classic") {
   if (!(await dialog.isVisible())) {
     await page.getByRole("button", { name: "添加资产来源" }).click();
   }
-  await page.getByRole("radio", { name: "Bitget" }).check();
+  const provider = page.getByRole("radio", { name: "Bitget" });
+  if (await provider.isVisible()) {
+    await provider.check();
+  }
   await page.getByLabel("Bitget 账户类型").selectOption(accountMode);
   await page.getByLabel("Bitget API Key").fill(API_KEY);
   await page.getByLabel("Bitget API Secret").fill(API_SECRET);
