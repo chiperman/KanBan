@@ -211,7 +211,7 @@ test("未估值趋势不伪造零值，平台盈亏只出现在来源提供的�
     complete: false,
     total: { USD: null, CNY: null },
   });
-  await expect(page.getByTestId("total-asset-trend")).toContainText("不完整");
+  await expect(page.getByTestId("total-asset-trend")).toContainText("历史快照：不完整");
   await expect(
     page.getByTestId("asset-source-trend-source-unvalued"),
   ).toContainText("未估值");
@@ -239,7 +239,7 @@ test("来源确认的首次可信快照先建基准，随后刷新全失败也�
     "+0.00 USD",
   );
   await expect(page.getByTestId("today-asset-change")).toContainText(
-    "数据不完整",
+    "今日变动：包含过期来源",
   );
   expect((await history(request)).days).toHaveLength(1);
 });

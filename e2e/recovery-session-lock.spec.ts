@@ -98,6 +98,7 @@ function totpCode(secret: string, now: Date): string {
 
 async function configureRecovery(page: Page): Promise<string> {
   await page.getByRole("button", { name: "配置备用登录" }).click();
+  await page.getByRole("button", { name: "开始配置" }).click();
   await expect(page.getByText("邮箱仅作为本机登录标识，不发送验证邮件。")).toBeVisible();
   const secret = await page.getByLabel("TOTP 密钥").inputValue();
   const code = totpCode(secret, new Date(FIXED_NOW));
@@ -123,6 +124,31 @@ test.beforeEach(async ({ request }) => {
     data: { assetCards: CARDS },
   });
   expect(response.ok()).toBeTruthy();
+});
+
+test("打开备用登录说明时不会立即生成或展示 TOTP 密钥", async ({ page }) => {
+  await provisionAndLogin(page);
+
+  let setupRequests = 0;
+  page.on("request", (request) => {
+    if (request.method() === "GET" && request.url().endsWith("/api/auth/recovery/setup")) {
+      setupRequests += 1;
+    }
+  });
+
+  await page.getByRole("button", { name: "配置备用登录" }).click();
+
+  await expect(
+    page.getByRole("dialog", { name: "配置备用登录" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("TOTP 密钥")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "开始配置" })).toBeVisible();
+  expect(setupRequests).toBe(0);
+
+  await page.getByRole("button", { name: "开始配置" }).click();
+  await expect(page.getByLabel("TOTP 密钥")).toHaveAttribute("type", "password");
+  await expect(page.getByRole("button", { name: "显示密钥" })).toBeVisible();
+  expect(setupRequests).toBe(1);
 });
 
 test("未配置备用登录时锁定页只提供 Passkey 登录", async ({ page }) => {

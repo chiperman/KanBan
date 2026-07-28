@@ -1,5 +1,3 @@
-import { notFound } from "next/navigation";
-
 import { getServices } from "@/server/composition";
 import { SetupPasskey } from "@/ui/setup-passkey";
 
@@ -9,7 +7,22 @@ export const dynamic = "force-dynamic";
 export default async function SetupPage() {
   const services = getServices();
   if ((await services.ownerCredentials.get()) !== null) {
-    notFound();
+    return (
+      <div className="page page-setup">
+        <main className="setup-panel">
+          <p className="card-label">OWNER PROVISION / CLOSED</p>
+          <h1 className="setup-title">所有者已完成预置</h1>
+          <p className="setup-copy">
+            此终端的唯一所有者已经建立，预置入口已永久关闭。
+            请返回所有者登录页继续使用资产看板。
+          </p>
+          <a className="login-primary provision-primary" href="/">
+            返回所有者登录
+            <span className="provision-primary-arrow" aria-hidden="true">→</span>
+          </a>
+        </main>
+      </div>
+    );
   }
 
   return (

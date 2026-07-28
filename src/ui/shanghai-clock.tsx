@@ -4,19 +4,18 @@ import { useEffect, useState } from "react";
 
 interface ShanghaiClockProps {
   initialTime: string;
+  compact?: boolean;
 }
 
-export function ShanghaiClock({ initialTime }: ShanghaiClockProps) {
-  const initialTimestamp = Date.parse(initialTime);
-  const [now, setNow] = useState(() => new Date(initialTimestamp));
+export function ShanghaiClock({ initialTime, compact = false }: ShanghaiClockProps) {
+  const [now, setNow] = useState(() => new Date(initialTime));
 
   useEffect(() => {
-    const startedAt = Date.now();
-    const timer = window.setInterval(() => {
-      setNow(new Date(initialTimestamp + Date.now() - startedAt));
-    }, 1000);
+    const updateNow = () => setNow(new Date());
+    updateNow();
+    const timer = window.setInterval(updateNow, 1000);
     return () => window.clearInterval(timer);
-  }, [initialTimestamp]);
+  }, []);
 
   const timeParts = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Asia/Shanghai",
@@ -30,7 +29,7 @@ export function ShanghaiClock({ initialTime }: ShanghaiClockProps) {
 
   return (
     <time
-      className="locked-clock"
+      className={compact ? "header-time" : "locked-clock"}
       dateTime={now.toISOString()}
       data-testid="server-time"
       aria-label="上海当前时间"
@@ -39,7 +38,6 @@ export function ShanghaiClock({ initialTime }: ShanghaiClockProps) {
       <strong>
         {timeParts[0]}:{timeParts[1]}:{timeParts[2]}
       </strong>
-      <small>/ UTC+08</small>
     </time>
   );
 }

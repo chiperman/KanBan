@@ -40,7 +40,7 @@ test("总资产使用来源原生价格与显式汇率，保留原值并正确�
   const overview = page.getByTestId("total-asset-overview");
   await expect(overview).toBeVisible();
   await expect(overview).toContainText("561.34 USD");
-  await expect(overview).toContainText("汇总不完整 · 1 项未估值");
+  await expect(overview).toContainText("当前估值：不完整 · 1 项未估值");
   await expect(overview).toContainText("证券");
   await expect(overview).toContainText("464.04 USD");
   await expect(overview).toContainText("加密资产");
@@ -201,6 +201,6 @@ test("Ticket 06 旧落盘快照会迁移后在所有者页面正常显示", asyn
   await expect(overview.locator(".total-overview-amount")).toHaveText(
     "200.00 USD",
   );
-  await expect(overview).toContainText("汇总不完整 · 1 项未估值");
+  await expect(overview).toContainText("当前估值：不完整 · 1 项未估值");
   await expect(page.getByTestId("longbridge-card").locator(".asset-total")).toHaveText("200 USD");
 });

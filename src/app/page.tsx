@@ -10,17 +10,12 @@ import { ShanghaiClock } from "@/ui/shanghai-clock";
 
 export const dynamic = "force-dynamic";
 
-function formatUtc(date: Date): string {
-  return `${date.toISOString().slice(0, 16).replace("T", " ")} UTC`;
-}
-
 export default async function AssetDashboardPage() {
   const services = getServices();
   const session = await services.auth.currentSession();
   const ownerProvisioned = (await services.ownerCredentials.get()) !== null;
   const recoveryConfigured =
     (await services.ownerRecoveryCredentials.get()) !== null;
-  const now = services.clock.now();
 
   if (session === null) {
     return (
@@ -40,7 +35,7 @@ export default async function AssetDashboardPage() {
           </div>
           <div className="header-side">
             <span className="header-system">LOCAL / READ ONLY</span>
-            <ShanghaiClock initialTime={now.toISOString()} />
+            <ShanghaiClock initialTime={new Date().toISOString()} />
           </div>
         </header>
         <main id="main-content" className="login-main">
@@ -57,6 +52,7 @@ export default async function AssetDashboardPage() {
     );
   }
 
+  const now = services.clock.now();
   const assetCards = await services.assetCards.list();
   const assetSources = (await services.assetSources.list()).map(
     ({ credentialReference: _credentialReference, permissions: _permissions, ...source }) =>
@@ -86,9 +82,7 @@ export default async function AssetDashboardPage() {
           </div>
           <div className="header-side">
             <span className="header-system">LOCAL / READ ONLY</span>
-            <time className="header-time" data-testid="server-time">
-              {formatUtc(now)}
-            </time>
+            <ShanghaiClock initialTime={now.toISOString()} compact />
             <RecoverySetup configured={recoveryConfigured} />
             <CommandMenu
               refreshEnabled={assetSources.some(

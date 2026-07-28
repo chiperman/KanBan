@@ -69,7 +69,7 @@ test("六类来源形成正确总额、分布、真实稳定币价格与失败�
   expect(sourceCardTops[3]).toBeGreaterThan(sourceCardTops[0]);
   const overview = page.getByTestId("total-overview-card");
   await expect(overview.getByTestId("total-asset-amount")).toHaveText("142,548.00 USD");
-  await expect(overview).toContainText("汇总不完整 · 2 项未估值");
+  await expect(overview).toContainText("当前估值：不完整 · 2 项未估值");
   await expect(overview.getByLabel("资产分布")).toContainText("证券");
   await expect(overview.getByLabel("资产分布")).toContainText("100,000.00 USD");
   await expect(overview.getByLabel("资产分布")).toContainText("加密资产");

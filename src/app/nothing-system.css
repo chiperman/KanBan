@@ -899,6 +899,19 @@ body {
   margin-right: var(--space-2);
 }
 
+.header-time {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--ink-secondary);
+  font-size: var(--caption);
+}
+
+.header-time > strong {
+  color: inherit;
+  font-weight: 400;
+}
+
 .theme-switcher {
   min-height: 40px;
   border: 1px solid var(--line-strong);
@@ -1379,7 +1392,7 @@ body {
 .trend-empty {
   color: var(--ink-secondary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--caption);
 }
 
 .card-actions {
@@ -1389,8 +1402,11 @@ body {
 }
 
 .card-actions .source-status {
-  color: var(--ink-muted);
-  font-size: 9px;
+  color: var(--ink-secondary);
+  flex: 1 0 100%;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--caption);
   letter-spacing: 0.08em;
 }
 
@@ -1486,6 +1502,20 @@ body {
   flex-wrap: wrap;
   gap: var(--space-2);
   margin-top: var(--space-6);
+}
+
+.recovery-secret-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.recovery-secret-actions > span {
+  color: var(--ink-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--caption);
 }
 
 .source-option {
@@ -1785,7 +1815,7 @@ body {
     top: -0.45em;
   }
 
-  .today-change-amount span {
+  .today-change-amount .today-change-note {
     display: block;
     margin-top: var(--space-2);
   }
@@ -1867,6 +1897,15 @@ body {
   font-size: 9px;
   letter-spacing: 0.08em;
   line-height: 1.4;
+}
+
+.source-meter-caption,
+.source-live-state {
+  font-size: var(--caption);
+}
+
+.source-meter-caption {
+  color: var(--ink-secondary);
 }
 
 .login-security-reading strong {
@@ -2070,7 +2109,6 @@ body {
   position: relative;
   overflow: hidden;
   border-color: var(--line-strong);
-  border-top: 3px solid var(--ink-display);
 }
 
 .asset-source-card {

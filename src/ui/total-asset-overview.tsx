@@ -72,6 +72,14 @@ export function TotalAssetOverview({
     valuation.incomplete ||
     valuation.expiredCount > 0 ||
     todayBaseline?.complete === false;
+  const todayChangeStatus =
+    todayBaseline?.complete === false
+      ? "今日变动：基准不完整"
+      : valuation.incomplete
+        ? "今日变动：当前估值不完整"
+        : valuation.expiredCount > 0
+          ? "今日变动：包含过期来源"
+          : null;
   const allocationGroups = valuation.groups.filter(
     (group) => group.amount !== null && decimalCompare(group.amount, "0") > 0,
   );
@@ -102,8 +110,8 @@ export function TotalAssetOverview({
           <p className={`total-status${valuation.incomplete ? " incomplete" : ""}${valuation.expiredCount > 0 ? " expired" : ""}`}>
             {[
               valuation.incomplete
-                ? `汇总不完整 · ${valuation.unvaluedCount} 项未估值`
-                : "汇总完整",
+                ? `当前估值：不完整 · ${valuation.unvaluedCount} 项未估值`
+                : "当前估值：完整",
               valuation.expiredCount > 0
                 ? `包含 ${valuation.expiredCount} 个过期来源`
                 : null,
@@ -167,8 +175,11 @@ export function TotalAssetOverview({
           </p>
         ) : (
           <p className="today-change-amount">
-            {showSensitiveInfo ? signedAmount(todayChange) : "••••••"} {currency}
-            {changeIncomplete ? <span> · 数据不完整</span> : null}
+            {showSensitiveInfo ? signedAmount(todayChange) : "••••••"}{" "}
+            <span className="amount-unit">{currency}</span>
+            {changeIncomplete && todayChangeStatus ? (
+              <span className="today-change-note"> · {todayChangeStatus}</span>
+            ) : null}
           </p>
         )}
       </section>
@@ -208,8 +219,8 @@ export function TotalAssetOverview({
                 </strong>
                 <span>
                   {snapshot.complete && snapshot.total[currency] !== null
-                    ? "完整"
-                    : "不完整"}
+                    ? "历史快照：完整"
+                    : "历史快照：不完整"}
                 </span>
               </li>
             ))}

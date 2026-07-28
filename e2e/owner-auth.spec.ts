@@ -157,6 +157,8 @@ test("所有者可从锁定首页完成首次预置并返回登录资产看板",
 
   await login(page);
   await expect(page.getByTestId("view-mode")).toContainText("资产看板");
+  await expect(page.getByTestId("server-time")).toContainText("SHANGHAI");
+  await expect(page.getByTestId("server-time")).not.toContainText("UTC");
   const asset = page.getByTestId("card").filter({ hasText: SENSITIVE_TITLE });
   await expect(asset).toHaveCount(1);
   await expect(asset).toContainText(SENSITIVE_BODY);
@@ -164,7 +166,13 @@ test("所有者可从锁定首页完成首次预置并返回登录资产看板",
 
   await page.goto("/setup");
   await expect(page.getByRole("status")).toHaveCount(0);
-  await expect(page.locator("body")).toContainText("404");
+  await expect(
+    page.getByRole("heading", { name: "所有者已完成预置" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "返回所有者登录" }),
+  ).toBeVisible();
+  await expect(page.locator("body")).not.toContainText("404");
   expect((await request.post("/api/auth/register/options")).status()).toBe(404);
 });
 
