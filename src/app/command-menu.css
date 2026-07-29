@@ -2,10 +2,10 @@
 .command-menu-close {
   appearance: none;
   min-height: 40px;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--line-2);
   border-radius: 999px;
-  background: var(--card-bg);
-  color: var(--text);
+  background: var(--surface);
+  color: var(--primary);
   font: inherit;
   font-size: 12px;
   cursor: pointer;
@@ -18,7 +18,7 @@
 
 .command-menu-trigger kbd {
   margin-left: 6px;
-  color: var(--text-dim);
+  color: var(--secondary);
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-size: 10px;
 }
@@ -38,10 +38,10 @@
 .command-menu-panel {
   width: min(620px, 100%);
   overflow: hidden;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--line-2);
   border-radius: 10px;
-  background: var(--card-bg);
-  box-shadow: 0 18px 60px color-mix(in srgb, var(--text) 16%, transparent);
+  background: var(--surface);
+  box-shadow: 0 18px 60px color-mix(in srgb, var(--primary) 16%, transparent);
 }
 
 .command-menu-head {
@@ -50,7 +50,7 @@
   justify-content: space-between;
   gap: 16px;
   padding: 16px 18px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--line);
 }
 
 .command-menu-eyebrow,
@@ -61,14 +61,14 @@
 }
 
 .command-menu-eyebrow {
-  color: var(--text);
+  color: var(--primary);
   font-size: 11px;
   letter-spacing: 0.1em;
 }
 
 .command-menu-hint {
   margin-top: 3px;
-  color: var(--text-dim);
+  color: var(--secondary);
   font-size: 10px;
 }
 
@@ -81,17 +81,17 @@
   display: grid;
   gap: 6px;
   padding: 16px 18px 10px;
-  color: var(--text-dim);
+  color: var(--secondary);
   font-size: 11px;
 }
 
 .command-menu-search input {
   width: 100%;
   min-height: 44px;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--line-2);
   border-radius: 6px;
   background: var(--bg);
-  color: var(--text);
+  color: var(--primary);
   font: inherit;
   padding: 10px 12px;
 }
@@ -114,7 +114,7 @@
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--text);
+  color: var(--primary);
   font: inherit;
   padding: 9px 10px;
   text-align: left;
@@ -123,27 +123,27 @@
 }
 
 .command-menu-item small {
-  color: var(--text-dim);
+  color: var(--secondary);
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-size: 10px;
   white-space: nowrap;
 }
 
 .command-menu-item[data-active="true"] {
-  background: var(--bg-subtle);
-  outline: 1px solid var(--border);
+  background: var(--raised);
+  outline: 1px solid var(--line);
 }
 
 .command-menu-empty {
   padding: 22px 10px;
-  color: var(--text-dim);
+  color: var(--secondary);
   font-size: 11px;
   text-align: center;
 }
 
 [data-command-target]:focus-visible,
 [data-command-highlight="true"] {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--display);
   outline-offset: 3px;
 }
 
@@ -156,7 +156,7 @@
 @media (hover: hover) {
   .command-menu-trigger:hover,
   .command-menu-close:hover {
-    background: var(--bg-subtle);
+    background: var(--raised);
   }
 }
 

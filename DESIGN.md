@@ -1,154 +1,69 @@
-# Personal Asset Dashboard Design System
+# Personal Asset Dashboard design system
 
-Status: active baseline
+Status: pinned Vibe-Nothing-UI baseline integrated
 
-Reference: [Vibe-Nothing-UI-Design](https://github.com/wangbh030722/vibe-nothing-ui-design)
+## 1. Canonical source and traceability
 
-This project uses the reference as an independent, Nothing-inspired visual source. It does not ship Nothing proprietary fonts or brand assets. Doto, Space Grotesk, and Space Mono are loaded through `next/font/google`, localized into the Next.js build, and exposed as CSS font variables.
+KanBan uses [wangbh030722/vibe-nothing-ui-design](https://github.com/wangbh030722/vibe-nothing-ui-design) as its only visual design system.
 
-## 1. Visual theme and atmosphere
+The project pins upstream commit [`46661e55ae04537215a229be49f2ac1bd37a4255`](https://github.com/wangbh030722/vibe-nothing-ui-design/commit/46661e55ae04537215a229be49f2ac1bd37a4255). The complete local snapshot and its license record live at [`vendor/vibe-nothing-ui-design/`](vendor/vibe-nothing-ui-design/UPSTREAM.md).
 
-The dashboard is a precise personal instrument: monochrome, quiet, compact, and recognizably dot-matrix. It combines Nothing-style round-dot display typography with Bloomberg-style financial alignment and the existing flexible card composition.
+Design truth is resolved in this order:
 
-- Visual thesis: black, grey, and white carry hierarchy; round dots carry identity; signal red communicates an exceptional state only.
-- Content plan: orient with identity and freshness, show the total, compare sources, then expose holding detail.
-- Interaction thesis: selection inverts black and white, card borders brighten without floating, refresh and valuation state use stepped segments. Card resize and reorder previews use a signal-red solid outline covering the complete target footprint.
+1. [`vendor/vibe-nothing-ui-design/SPEC.md`](vendor/vibe-nothing-ui-design/SPEC.md) — normative implementation contract.
+2. [`vendor/vibe-nothing-ui-design/index.html`](vendor/vibe-nothing-ui-design/index.html) — visual source of truth.
+3. [`vendor/vibe-nothing-ui-design/DESIGN.md`](vendor/vibe-nothing-ui-design/DESIGN.md) — rationale and design decisions.
+4. [`vendor/vibe-nothing-ui-design/css/tokens.css`](vendor/vibe-nothing-ui-design/css/tokens.css) and [`css/nothing-ui.css`](vendor/vibe-nothing-ui-design/css/nothing-ui.css) — implementation evidence.
+5. This file — KanBan integration rules only.
 
-## 2. Color palette and roles
+If this file conflicts with the pinned upstream specification on a visual decision, upstream wins. Product security, privacy, accessibility, and read-only-domain constraints remain mandatory and must be adapted without inventing a second visual language.
 
-The exact neutral and signal values follow the supplied reference repository so screenshots and components remain comparable.
+## 2. Runtime integration
 
-| Token | Light | Dark | Role |
-| --- | --- | --- | --- |
-| Canvas | `#F5F5F5` | `#000000` | Page background |
-| Surface | `#FFFFFF` | `#111111` | Menus and dialogs |
-| Raised | `#F0F0F0` | `#1A1A1A` | Active rows and secondary panels |
-| Line | `#E8E8E8` | `#222222` | Quiet separators |
-| Line strong | `#CCCCCC` | `#333333` | Control outlines |
-| Primary ink | `#1A1A1A` | `#E8E8E8` | Body and control text |
-| Display ink | `#000000` | `#FFFFFF` | Headlines and large numbers |
-| Secondary ink | `#666666` | `#999999` | Labels and supporting data |
-| Muted ink | `#999999` | `#666666` | Disabled and placeholder text |
-| Signal red | `#D71921` | `#D71921` | Needs attention, stale or failed |
-| Success | `#4A9E5C` | `#62B873` | Fresh or completed value |
-| Warning | `#9A6D00` | `#D4A843` | Incomplete valuation |
-| Error | `#D71921` | `#FF5A52` | Failed synchronization |
+- Fonts are self-hosted from `public/fonts/nothing-open/`: Doto, Geist, Geist Mono, and Newsreader Italic.
+- Runtime tokens use upstream names and values: `--bg`, `--surface`, `--raised`, `--line`, `--line-2`, `--muted`, `--secondary`, `--primary`, `--display`, `--accent`, status colors, glass colors, font roles, and radii.
+- Visual semantics use upstream token names directly. KanBan-only `--vibe-*` tokens are limited to the documented 4px layout/type scale and must not redefine color, font-role, radius, or state semantics.
+- Upstream `js/nothing-ui.js` is not executed. It is a vanilla-JavaScript showcase implementation; KanBan implements the same observable behavior in React.
+- Business pages consume the React design module under `src/ui/vibe/` instead of duplicating upstream class recipes in each page.
+- `src/app/product-layout.css` is the product layout/interaction adapter. It consumes the upstream contract and is not a second design system.
 
-Rules:
+## 3. Product adapter rules
 
-- Signal red appears on at most two semantic elements in one viewport.
-- Selected controls use display/canvas inversion, never signal red.
-- Gradients, decorative shadows, and colored marketing accents are prohibited.
-- Sensitive-data placeholders use only safe neutral geometry. Their dots never encode real values.
+These rules adapt the upstream system without changing its visual contract:
 
-## 3. Typography rules
+- Chinese body text falls back from Geist to `PingFang SC`, `Noto Sans SC`, and system sans-serif.
+- Financial values retain full precision, tabular alignment, explicit currency units, and truthful unavailable states.
+- Missing valuation is displayed as `未估值`; it is never converted to zero.
+- Sensitive asset values remain server-authorized and are never encoded into decorative dots, placeholders, or client-only state.
+- Passkey, TOTP, recovery, source credentials, and browser-session boundaries remain security-domain behavior, not visual state.
+- Interactive controls retain accessible names, keyboard operation, visible focus, and at least a 40px hit target even when the visible control uses the upstream 6px technical radius.
+- Reduced-motion preferences disable nonessential motion while preserving state communication.
 
-| Role | Family | Size | Weight | Tracking | Usage |
-| --- | --- | --- | --- | --- | --- |
-| Display XL | Doto | 48px | 500 | `-0.02em` | Total asset amount |
-| Display L | Doto | 36–48px | 500 | `-0.01em` | Locked state and rare secondary hero |
-| Headline | Space Grotesk, PingFang SC | 18–24px | 500 | normal | Card and dialog titles |
-| UI body | Space Grotesk, PingFang SC | 14–16px | 400 | normal | Chinese descriptions and controls |
-| Data | Space Mono | 11–48px | 400 or 700 | normal | Source totals, prices, quantities, timestamps, tables |
-| Label | Space Mono | 10–11px | 400 or 700 | `0.08em` | Uppercase labels and statuses |
+## 4. Migration status
 
-- Use Doto only for the total-asset hero and locked-state instrument. Source totals, changes, dates, timestamps, table cells, and compact list data remain Space Mono for scanning accuracy.
-- Data columns use Space Mono with tabular numerals and right alignment.
-- Chinese body copy stays in a readable sans-serif fallback and uses line-height 1.7.
-- Negative tracking is never applied to Chinese text.
-- Units such as USD, CNY, ETH, and `%` remain compact Space Mono beside the number.
-- Font variables are attached to the root `html` element so derived aliases resolve correctly; visual acceptance must verify computed font families, not only CSS declarations.
+The repository is being migrated in stages so existing functional changes are not overwritten.
 
-## 4. Component styling
+- [x] Pin and vendor upstream specification, implementation evidence, licenses, and fonts.
+- [x] Make the upstream repository traceable from the project design entrypoint.
+- [x] Replace the runtime font and token foundation with the pinned upstream values.
+- [x] Complete the React Vibe module for surfaces, controls, dot glyphs, status, metrics, and segmented data instruments under `src/ui/vibe/`.
+- [x] Migrate owner login, Passkey setup, and TOTP recovery to the React Vibe module.
+- [x] Migrate the asset overview, source modules, holdings, and control deck.
+- [x] Migrate dialogs, command navigation, source onboarding, and layout-editing states.
+- [x] Remove legacy design aliases and the old `nothing-system.css` implementation.
+- [x] Complete desktop, tablet, phone, light, dark, keyboard, and reduced-motion browser acceptance.
 
-### Buttons
+Migration status must be reported honestly: vendoring the upstream files does not mean a page has been visually migrated.
 
-- Standard compact radius: 8px. Primary, secondary, and segmented buttons use an explicit pill shape.
-- Primary: display ink fill with canvas text.
-- Secondary: transparent with one strong hairline.
-- Hover: opacity `0.8`. Press: opacity `0.64` and translate `1px`.
-- Minimum target: 44px by 44px. Focus uses a 2px display-ink outline.
+## 5. Updating upstream
 
-### Cards and modules
+The exact update procedure, integrity hashes, license record, and pinned revision are documented in [`vendor/vibe-nothing-ui-design/UPSTREAM.md`](vendor/vibe-nothing-ui-design/UPSTREAM.md).
 
-- Radius: 12px. Padding: 20px to 24px. Gap: 12px.
-- Use stepped solid surfaces, not generic drop shadows.
-- Asset cards have no decorative corner brackets.
-- Each source card exposes provider code, live/stale signal, segmented valuation completeness, indexed holdings and a separate control deck.
-- The locked homepage uses an open, asymmetric two-column composition: owner access on the left and a non-sensitive mechanical lock instrument on the right. It does not imitate the asset grid.
-- Total overview is the dominant full-width module. Source cards remain compact and equal in density, not forced to equal height.
+Every update must include:
 
-### Inputs and selectors
-
-- Radius: 6px. Transparent or canvas background with a 1px strong line.
-- Focus changes only the outline color. No glow and no signal-red focus state.
-- Labels stay above fields and never become placeholders.
-
-### Tables and financial data
-
-- No zebra rows. Use 1px quiet separators.
-- Text columns align left. Numeric columns align right with at least 16px separation.
-- Missing price remains `未估值`; it is never replaced with zero.
-
-### Status
-
-- Fresh: neutral by default; optional success value only when useful.
-- Stale or incomplete: signal text plus a single round dot.
-- Failed: error value and concise source-specific explanation.
-- Status is never communicated through color alone.
-
-## 5. Layout principles
-
-- Desktop: three logical columns, 12px gaps, maximum content width 1280px.
-- Medium: two logical columns.
-- Phone: one column, 16px page inset.
-- Width resizing snaps to the one, two, or three-column grid and shows an independent red outline before committing; card height always follows content and is never stored as layout data. Reordering uses the same outline at the destination with the source card's complete span and current content height.
-- Starting a card on a new row changes only its grid start line; it must never reset or override the card's one, two, or three-column span.
-- Spacing scale: `4, 8, 16, 24, 32, 48, 64, 96`.
-- The first viewport prioritizes identity/freshness, total assets, then source state.
-- Dashboard surfaces stay utility-first. There is no marketing hero.
-
-## 6. Depth and elevation
-
-- Level 0: canvas.
-- Level 1: card surface, one lightness step above canvas.
-- Level 2: raised controls, selected rows, and nested summaries.
-- Level 3: dialog surface with an overlay; no large drop shadow.
-- Hairlines separate data. Background steps separate surfaces.
-
-## 7. Do and do not
-
-Do:
-
-- Use Doto where a number is the visual subject.
-- Keep Chinese reading text in Space Grotesk plus CJK fallback.
-- Reserve red for stale, failed, live, or needs-attention states.
-- Use full-circle dots for all dot-matrix glyphs.
-- Keep the locked login page visually distinct from the authenticated asset dashboard.
-
-Do not:
-
-- Apply a pixel font to paragraphs or long Chinese labels.
-- Use gradients, glow, glass blur, or generic card shadows.
-- Add proprietary NDot or NType assets.
-- Add trading, wallet connection, signing, or notification affordances.
-- Use dot density as decoration on every surface.
-
-## 8. Responsive behavior
-
-- Breakpoints: 1024px and 640px, preserving existing card order.
-- Desktop and medium layouts retain one, two, and three-column spans.
-- Phone controls wrap without reducing the 40px hit target.
-- Detail tables scroll horizontally rather than compressing numeric columns.
-- `prefers-reduced-motion` disables card movement and stepped refresh animation.
-- Visual acceptance covers 1280px, 800px, and 375px in light and dark themes.
-
-## 9. Agent prompt guide
-
-Quick tokens: canvas `#F5F5F5/#000000`, surface `#FFFFFF/#111111`, display `#000000/#FFFFFF`, primary `#1A1A1A/#E8E8E8`, signal `#D71921`, radius `8px/12px`, gap `12px`.
-
-- Create a total-asset hero without a surrounding card. Use a Space Mono uppercase label, a 54–84px Doto amount, a compact Space Mono currency unit, and one bottom rule before source cards.
-- Create a source card with a Space Mono provider label, an 18px Space Grotesk headline, a 34–48px Space Mono total, a 12-step valuation meter, indexed rows, quiet separators, and 44px controls.
-- Create a holdings table with left-aligned identity, right-aligned tabular numeric columns, 12px Space Mono data, uppercase headers, and quiet row separators. Do not use zebra rows.
-- Create a stale state using one 7px full-circle signal-red dot, a Space Mono label, the last-success timestamp, and visible text stating `过期数据`. Do not color the entire card.
-- Create a locked owner-login composition with no asset symbol, amount, source identity, timestamp, placeholder card, or simulated portfolio layout. The only expressive element is the Doto `LOCKED` instrument.
+1. the old and new upstream commit;
+2. reviewed upstream diffs;
+3. refreshed integrity hashes;
+4. React adapter changes when required;
+5. focused browser acceptance evidence;
+6. an explicit statement of pages that remain unmigrated.

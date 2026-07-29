@@ -6,6 +6,7 @@ import { OwnerDashboard } from "@/ui/owner-dashboard"
 import { OwnerLogin } from "@/ui/owner-login"
 import { SessionGuard } from "@/ui/session-guard"
 import { ShanghaiClock } from "@/ui/shanghai-clock"
+import { ThemeSwitcher } from "@/ui/theme-switcher"
 
 export const dynamic = "force-dynamic"
 
@@ -29,6 +30,7 @@ export default async function AssetDashboardPage() {
           </div>
           <div className="header-side">
             <ShanghaiClock initialTime={new Date().toISOString()} />
+            <ThemeSwitcher />
           </div>
         </header>
         <main id="main-content" className="login-main">
@@ -61,9 +63,9 @@ export default async function AssetDashboardPage() {
                 PERSONAL ASSET DASHBOARD
               </span>
             </p>
-            <p className="header-sub" data-testid="view-mode">
+            <span data-testid="view-mode" hidden>
               所有者视图 · 资产看板 · 已验证身份
-            </p>
+            </span>
           </div>
           <div className="header-side">
             <span className="header-system">EXTERNAL ACCESS / READ ONLY</span>
@@ -73,6 +75,7 @@ export default async function AssetDashboardPage() {
               refreshEnabled={assetSources.some((source) => source.lifecycle !== "disconnected")}
             />
             <LogoutButton />
+            <ThemeSwitcher />
           </div>
         </header>
         <main id="main-content">

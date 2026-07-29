@@ -3,6 +3,9 @@
 import { startRegistration } from "@simplewebauthn/browser";
 import { useState } from "react";
 
+import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
+import { VibeNotice } from "@/ui/vibe/vibe-notice";
+
 type SetupState = "idle" | "pending" | "done" | "failed" | "unsupported";
 
 export function SetupPasskey() {
@@ -38,14 +41,20 @@ export function SetupPasskey() {
 
   if (state === "done") {
     return (
-      <div className="setup-done" role="status">
-        <p>已完成预置。预置不会自动登录，请返回所有者登录页验证身份。</p>
-        <a className="login-primary provision-primary setup-home-link" href="/">
+      <div className="setup-done">
+        <VibeNotice role="status" tone="success">
+          已完成预置。预置不会自动登录，请返回所有者登录页验证身份。
+        </VibeNotice>
+        <VibeLink
+          className="provision-primary setup-home-link"
+          href="/"
+          variant="primary"
+        >
           <span>返回所有者登录</span>
           <span className="provision-primary-arrow" aria-hidden="true">
             →
           </span>
-        </a>
+        </VibeLink>
       </div>
     );
   }
@@ -53,36 +62,41 @@ export function SetupPasskey() {
   return (
     <div className="setup-actions">
       {state === "failed" ? (
-        <p className="login-error setup-feedback-message" role="alert">
-          <span className="setup-feedback-code">[ ERROR ]</span>
-          <span>
-            预置失败或已取消。请重试；如系统未弹出 Passkey
-            窗口，请改用支持 Passkey 的浏览器或设备。
-          </span>
-        </p>
+        <VibeNotice
+          className="login-error setup-feedback-message"
+          code="ERROR"
+          role="alert"
+          tone="error"
+        >
+          预置失败或已取消。请重试；如系统未弹出 Passkey
+          窗口，请改用支持 Passkey 的浏览器或设备。
+        </VibeNotice>
       ) : null}
       {state === "unsupported" ? (
         <>
-          <p className="login-error setup-feedback-message" role="alert">
-            <span className="setup-feedback-code">[ UNSUPPORTED ]</span>
-            <span>
-              当前浏览器或设备不支持 Passkey。请改用支持 WebAuthn
-              的浏览器或设备，然后返回首页重新开始。
-            </span>
-          </p>
+          <VibeNotice
+            className="login-error setup-feedback-message"
+            code="UNSUPPORTED"
+            role="alert"
+            tone="error"
+          >
+            当前浏览器或设备不支持 Passkey。请改用支持 WebAuthn
+            的浏览器或设备，然后返回首页重新开始。
+          </VibeNotice>
           <div className="setup-feedback-actions">
-            <a className="login-cancel setup-secondary-action" href="/">
+            <VibeLink className="setup-secondary-action" href="/" variant="text">
               返回首页
-            </a>
+            </VibeLink>
           </div>
         </>
       ) : (
         <div className={state === "failed" ? "setup-feedback-actions" : undefined}>
-          <button
+          <VibeButton
             type="button"
-            className="login-primary provision-primary"
+            className="provision-primary"
             disabled={state === "pending"}
             onClick={provision}
+            variant="primary"
           >
             <span>
               {state === "pending"
@@ -94,11 +108,11 @@ export function SetupPasskey() {
             <span className="provision-primary-arrow" aria-hidden="true">
               →
             </span>
-          </button>
+          </VibeButton>
           {state === "failed" ? (
-            <a className="login-cancel setup-secondary-action" href="/">
+            <VibeLink className="setup-secondary-action" href="/" variant="text">
               返回首页
-            </a>
+            </VibeLink>
           ) : null}
         </div>
       )}

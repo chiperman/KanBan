@@ -1,0 +1,790 @@
+/*
+ * React-safe component adapter for the pinned Vibe Nothing UI source.
+ * Canonical recipes: vendor/vibe-nothing-ui-design/css/nothing-ui.css
+ */
+
+.vibe-field {
+  display: block;
+  width: min(100%, 500px);
+  margin: 18px 0 0;
+}
+
+.vibe-field__label {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.vibe-field__input {
+  width: 100%;
+  min-height: 48px;
+  padding: 9px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  outline: 0;
+  background: transparent;
+  color: var(--primary);
+  font-family: var(--f-mono);
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.14em;
+  transition: border-color var(--dur, 0.2s) var(--ease);
+}
+
+.vibe-field__input::placeholder {
+  color: var(--muted);
+}
+
+.vibe-field__input:focus-visible {
+  border-color: var(--primary);
+}
+
+textarea.vibe-field__input {
+  min-height: 112px;
+  resize: vertical;
+  letter-spacing: 0.02em;
+  line-height: 1.55;
+}
+
+select.vibe-field__input {
+  min-height: 44px;
+  letter-spacing: 0.02em;
+}
+
+.vibe-button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--primary);
+  cursor: pointer;
+  font-family: var(--f-mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  transition: opacity var(--dur, 0.2s) var(--ease);
+}
+
+.vibe-button:hover {
+  opacity: 0.8;
+}
+
+.vibe-button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+
+.vibe-button:disabled {
+  cursor: default;
+  opacity: 0.3;
+}
+
+.vibe-button--primary {
+  background: var(--display);
+  color: var(--bg);
+}
+
+.vibe-button--outline {
+  border: 1px solid var(--line-2);
+}
+
+.vibe-button--text {
+  padding-inline: 4px;
+}
+
+.vibe-dot-icon {
+  --vibe-dot-gap: calc(var(--vibe-dot-icon-size) / 20);
+  display: grid;
+  width: var(--vibe-dot-icon-size);
+  height: var(--vibe-dot-icon-size);
+  grid-template-columns: repeat(9, 1fr);
+  grid-template-rows: repeat(9, 1fr);
+  flex: 0 0 auto;
+  gap: var(--vibe-dot-gap);
+}
+
+.vibe-dot-icon > span {
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.vibe-dot-icon > .is-lit {
+  background: currentColor;
+}
+
+.vibe-notice {
+  display: flex;
+  max-width: 42rem;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  border-left: 3px solid;
+  border-radius: var(--r-sm);
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.vibe-notice--error {
+  border-color: var(--error);
+  background: color-mix(in srgb, var(--error) 9%, transparent);
+}
+
+.vibe-notice--error > .vibe-dot-icon {
+  color: var(--error);
+}
+
+.vibe-notice--success {
+  border-color: var(--success);
+  background: color-mix(in srgb, var(--success) 9%, transparent);
+}
+
+.vibe-notice--success > .vibe-dot-icon {
+  color: var(--success);
+}
+
+.vibe-notice--info {
+  border-color: var(--line-2);
+  background: var(--raised);
+}
+
+.vibe-notice--info > .vibe-dot-icon {
+  color: var(--primary);
+}
+
+.vibe-notice__content {
+  min-width: 0;
+}
+
+.vibe-notice__code {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--display);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+
+.vibe-notice__message {
+  color: var(--secondary);
+}
+
+.vibe-notice--compact {
+  width: max-content;
+  max-width: min(360px, 100%);
+  margin: 0;
+  padding: 8px 10px;
+}
+
+.vibe-dialog-overlay {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overflow-y: auto;
+  background: var(--overlay);
+}
+
+.vibe-dialog {
+  width: min(100%, 560px);
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.vibe-dialog__header {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.vibe-dialog__eyebrow {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-family: var(--f-mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.vibe-dialog__header h2 {
+  margin: 0;
+  color: var(--display);
+  font-family: var(--f-head);
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.vibe-dialog__body {
+  padding: 16px;
+}
+
+.vibe-dialog__copy {
+  margin: 0;
+  color: var(--secondary);
+  font-family: var(--f-ui);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.vibe-dialog__footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+}
+
+.vibe-auth-surface {
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--glass);
+  box-shadow: none;
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+.page-setup,
+.page-locked {
+  position: relative;
+  isolation: isolate;
+}
+
+.page-setup::before,
+.page-locked::before {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle, #fff 0 1.3px, transparent 1.4px);
+  background-position: 28px 36px;
+  background-size: 120px 120px;
+  mix-blend-mode: difference;
+}
+
+.page-setup .setup-panel.vibe-auth-surface {
+  width: min(100%, 760px);
+  padding: 64px 48px 48px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--glass);
+}
+
+.page-setup .setup-panel.vibe-auth-surface::before {
+  top: 24px;
+  right: 48px;
+  font-size: 12px;
+}
+
+.page-locked .login-gate.vibe-auth-surface {
+  padding: 40px;
+  border-radius: var(--r-md);
+  background: var(--glass);
+}
+
+.recovery-secret-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.page-dashboard {
+  position: relative;
+  isolation: isolate;
+}
+
+.page-dashboard::before {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle, #fff 0 1.3px, transparent 1.4px);
+  background-position: 28px 36px;
+  background-size: 120px 120px;
+  mix-blend-mode: difference;
+}
+
+.card.vibe-data-card {
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--glass);
+  box-shadow: none;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.card-grid {
+  align-items: start;
+  grid-auto-rows: auto;
+}
+
+.card-drag-measurement,
+.card-drag-overlay {
+  display: flex;
+  flex-direction: column;
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--glass);
+}
+
+.card-drag-measurement > .card-actions,
+.card-drag-overlay > .card-actions {
+  margin-top: auto;
+}
+
+.card.vibe-data-card::after,
+.card.vibe-data-card .asset-source-card::after {
+  content: none;
+}
+
+.total-overview-card.vibe-data-card {
+  width: min(100%, 1280px);
+}
+
+.vibe-data-module {
+  color: var(--primary);
+}
+
+.vibe-metric {
+  margin: 12px 0 0;
+  color: var(--display);
+  font-family: var(--f-display);
+  font-variant-numeric: tabular-nums;
+  font-variation-settings: "ROND" 0;
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  line-height: 0.95;
+}
+
+.vibe-metric__unit {
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+}
+
+.vibe-segmented-bar {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 2px;
+  width: 100%;
+  min-height: 8px;
+}
+
+.vibe-segmented-bar > span {
+  display: block;
+  min-width: 0;
+  height: 8px;
+  border-radius: 0;
+  background: var(--line-2);
+  opacity: 0.38;
+}
+
+.vibe-segmented-bar > .is-filled {
+  background: var(--display);
+  opacity: 1;
+}
+
+.vibe-segmented-bar > .is-group-2 {
+  opacity: 0.72;
+}
+
+.vibe-segmented-bar > .is-group-3 {
+  opacity: 0.48;
+}
+
+.vibe-segmented-bar > .is-muted {
+  background: var(--line-2);
+  opacity: 1;
+}
+
+.vibe-segmented-bar > .is-signal {
+  background: var(--accent);
+  opacity: 1;
+}
+
+.vibe-status-tag {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  gap: 7px;
+  padding: 2px 9px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.vibe-status-tag > i {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.vibe-status-tag--live {
+  color: var(--primary);
+}
+
+.vibe-status-tag--live > i,
+.vibe-status-tag--signal > i {
+  background: var(--accent);
+}
+
+.vibe-status-tag--signal {
+  border-color: var(--accent-text);
+  color: var(--accent-text);
+}
+
+.vibe-status-tag--warning {
+  color: var(--warning);
+}
+
+.vibe-data-row {
+  border-bottom: 1px solid var(--line);
+}
+
+.vibe-data-row:last-child {
+  border-bottom: 0;
+}
+
+.vibe-data-table {
+  border-collapse: collapse;
+}
+
+.vibe-data-table th {
+  border-bottom: 1px solid var(--line-2);
+  color: var(--muted);
+  font-family: var(--f-mono);
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vibe-data-table td {
+  border-bottom: 1px solid var(--line);
+  color: var(--primary);
+  font-family: var(--f-mono);
+  font-size: 11px;
+}
+
+.dashboard-control-deck[data-vibe-module="control-deck"] {
+  gap: 12px;
+  padding: 40px 0 0;
+}
+
+.dashboard-control-deck[data-vibe-module="control-deck"]::before {
+  color: var(--muted);
+  font-family: var(--f-mono);
+  font-size: 9px;
+}
+
+.dashboard-control-deck .asset-refresh-controls {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.owner-toolbar .vibe-button,
+.asset-refresh-controls .vibe-button {
+  min-height: 44px;
+  padding: 9px 16px;
+  border-radius: var(--r-sm);
+  font-family: var(--f-mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+.owner-toolbar .vibe-button::after,
+.asset-refresh-controls .vibe-button::before {
+  content: none;
+}
+
+.owner-toolbar .vibe-button {
+  background: transparent;
+}
+
+.asset-refresh-controls .vibe-button {
+  border-color: transparent;
+  background: var(--display);
+  color: var(--bg);
+}
+
+.vibe-choice {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--secondary);
+  cursor: pointer;
+  font-family: var(--f-mono);
+  font-size: 11px;
+}
+
+.vibe-choice:has(input:checked) {
+  border-color: var(--display);
+  background: var(--raised);
+  color: var(--display);
+}
+
+.vibe-choice input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--display);
+}
+
+.vibe-dialog.source-dialog {
+  width: min(100%, 720px);
+}
+
+.source-dialog-back {
+  margin: 0 0 8px;
+}
+
+.source-provider-list,
+.source-credential-fields {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.source-field-help {
+  margin-top: 12px;
+}
+
+.vibe-preview-list {
+  margin: 16px 0 0;
+}
+
+.vibe-preview-list > div {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.45fr) minmax(0, 1fr);
+  gap: 16px;
+  padding: 12px 0;
+}
+
+.vibe-preview-list dt {
+  color: var(--muted);
+  font-family: var(--f-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vibe-preview-list dd {
+  margin: 0;
+  color: var(--primary);
+  font-family: var(--f-mono);
+  font-size: 11px;
+}
+
+.vibe-button.danger-button {
+  border-color: var(--accent);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--accent-text);
+}
+
+.command-menu-trigger.vibe-button,
+.command-menu-close.vibe-button {
+  min-height: 40px;
+  border-radius: var(--r-sm);
+  background: transparent;
+  font-family: var(--f-mono);
+  font-size: 11px;
+  text-transform: none;
+}
+
+.command-menu-trigger.vibe-button::after {
+  content: none;
+}
+
+.command-menu-trigger kbd {
+  color: var(--muted);
+  font-family: var(--f-mono);
+}
+
+.command-menu-overlay {
+  background: var(--overlay);
+}
+
+.command-menu-panel[data-vibe-surface="command-panel"] {
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.command-menu-panel[data-vibe-surface="command-panel"]::before {
+  content: none;
+}
+
+.command-menu-eyebrow,
+.command-menu-hint,
+.command-menu-empty {
+  font-family: var(--f-mono);
+}
+
+.command-menu-search .vibe-field {
+  width: 100%;
+  margin: 0;
+}
+
+.command-menu-search .vibe-field__input {
+  min-height: 44px;
+  background: transparent;
+}
+
+.command-menu-item.vibe-button {
+  width: 100%;
+  min-height: 46px;
+  justify-content: space-between;
+  padding: 9px 10px;
+  border-radius: var(--r-sm);
+  color: var(--primary);
+  font-family: var(--f-ui);
+  font-size: 12px;
+  letter-spacing: 0;
+  text-align: left;
+}
+
+.command-menu-item.vibe-button[data-active="true"] {
+  background: var(--raised);
+  outline: 1px solid var(--line);
+}
+
+.command-menu-item.vibe-button small {
+  color: var(--muted);
+  font-family: var(--f-mono);
+  font-size: 10px;
+}
+
+.layout-resize-preview,
+.card-drop-preview {
+  border-color: var(--display);
+  background: color-mix(in srgb, var(--display) 4%, transparent);
+  color: var(--display);
+  outline-color: var(--display);
+}
+
+.card-drop-candidate.is-active {
+  border-color: var(--display);
+  background: color-mix(in srgb, var(--display) 4%, transparent);
+  color: var(--display);
+}
+
+.card-drag-overlay {
+  outline-color: var(--display);
+}
+
+.layout-resize-handle:hover::before,
+.layout-resize-handle:focus-visible::before,
+.card-resizing .layout-resize-handle::before,
+.layout-resize-handle:hover::after,
+.layout-resize-handle:focus-visible::after,
+.card-resizing .layout-resize-handle::after,
+.layout-drag-handle:hover::before,
+.layout-drag-handle:focus-visible::before,
+.card-dragging .layout-drag-handle::before {
+  border-color: var(--display);
+  background: var(--display);
+}
+
+@media (max-width: 639px) {
+  .vibe-dialog-overlay {
+    align-items: end;
+    padding: 12px;
+  }
+
+  .vibe-dialog {
+    max-height: calc(100dvh - 24px);
+  }
+
+  .page-setup .setup-panel.vibe-auth-surface,
+  .page-locked .login-gate.vibe-auth-surface {
+    padding: 48px 22px 32px;
+  }
+
+  .page-setup .setup-panel.vibe-auth-surface::before {
+    top: 18px;
+    right: 22px;
+  }
+
+  .vibe-dialog-overlay:has(.source-dialog) {
+    align-items: stretch;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .vibe-dialog.source-dialog {
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .source-dialog .vibe-dialog__header,
+  .source-dialog .vibe-dialog__footer {
+    position: sticky;
+    z-index: 2;
+    background: var(--surface);
+  }
+
+  .source-dialog .vibe-dialog__header {
+    top: 0;
+  }
+
+  .source-dialog .vibe-dialog__footer {
+    bottom: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vibe-field__input,
+  .vibe-button {
+    transition: none;
+  }
+}
