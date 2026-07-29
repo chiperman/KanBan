@@ -1265,7 +1265,7 @@ body {
 
 .total-overview-card {
   margin-bottom: var(--vibe-space-3);
-  padding: var(--vibe-space-12) 0 var(--vibe-space-16);
+  padding: var(--vibe-space-12) var(--vibe-space-6) var(--vibe-space-8);
   border: 0;
   border-bottom: 1px solid var(--line-2);
   border-radius: 0;
@@ -2132,7 +2132,7 @@ body {
   position: absolute;
   z-index: 2;
   top: var(--vibe-space-3);
-  left: 0;
+  left: var(--vibe-space-6);
   color: var(--muted);
   font-family: var(--f-mono);
   font-size: var(--vibe-type-label);
@@ -2144,7 +2144,7 @@ body {
   content: "";
   position: absolute;
   top: var(--vibe-space-10);
-  right: 0;
+  right: var(--vibe-space-6);
   width: min(30vw, 360px);
   height: 96px;
   background-image: radial-gradient(circle, var(--line-2) 1px, transparent 1px);
@@ -2360,7 +2360,7 @@ body {
 }
 
 .crypto-small-holding-filter {
-  display: inline-flex;
+  display: none;
   align-items: center;
   gap: var(--vibe-space-2);
   margin-top: var(--vibe-space-3);
@@ -2368,6 +2368,10 @@ body {
   font-family: var(--f-mono);
   font-size: var(--vibe-type-label);
   cursor: pointer;
+}
+
+.span-3 .asset-source-card .crypto-small-holding-filter {
+  display: inline-flex;
 }
 
 .crypto-small-holding-filter input {
@@ -2623,13 +2627,13 @@ body {
 
 .theme-toggle {
   display: inline-grid;
-  width: 40px;
-  height: 40px;
-  flex: 0 0 40px;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
   place-items: center;
   padding: 0;
   border: 1px solid var(--line-2);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-pill);
   background: transparent;
   color: var(--primary);
   cursor: pointer;
@@ -2652,13 +2656,17 @@ body {
 
 @media (hover: hover) {
   .theme-toggle:hover {
-    opacity: 0.72;
+    opacity: 0.8;
   }
 }
 
 .theme-toggle:active {
-  opacity: 0.56;
-  transform: translateY(1px);
+  opacity: 0.6;
+}
+
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
 }
 
 .page-locked .login-main {
@@ -2936,7 +2944,7 @@ body {
     background: var(--surface);
   }
 
-  .header-utility-actions .logout-button,
+  .header-utility-actions .header-action-button,
   .header-utility-actions .command-menu-trigger,
   .header-settings-close {
     width: 100%;

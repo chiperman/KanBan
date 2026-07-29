@@ -371,8 +371,21 @@ test("Binance 默认隐藏低于 1 USDT 的持仓，并允许手动展示全部"
 
   const card = page.getByTestId("binance-card");
   const toggle = card.getByRole("checkbox", { name: /隐藏低于 1 USDT/ });
-  await expect(toggle).toBeChecked();
+  await expect(toggle).toBeHidden();
   await expect(card).not.toContainText("DUST");
+
+  const resizeHandle = page.getByRole("button", { name: /调整\s*Binance 资产宽度/ });
+  for (const _ of [0, 1]) {
+    const widened = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/asset-cards/layout") &&
+        response.request().method() === "PUT",
+    );
+    await resizeHandle.press("ArrowRight");
+    await widened;
+  }
+
+  await expect(toggle).toBeChecked();
   await toggle.uncheck();
   await expect(card).toContainText("DUST");
   await expect(card.getByTestId("asset-source-total")).toHaveText(

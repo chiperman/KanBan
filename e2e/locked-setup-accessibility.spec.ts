@@ -158,7 +158,7 @@ test("锁定页以可访问状态传达安全边界并保留清晰键盘焦点",
 
   for (const locator of [
     page.locator(".page-locked .header-wordmark"),
-    page.locator(".locked-clock > strong"),
+    page.locator(".header-time > strong"),
     page.locator(".login-eyebrow"),
     page.locator(".login-hint"),
     page.locator(".login-trust-line"),
@@ -169,7 +169,7 @@ test("锁定页以可访问状态传达安全边界并保留清晰键盘焦点",
   await expect(page.locator(".page-locked .header-system")).toHaveCount(0);
   await expect(page.locator(".locked-footer")).toHaveCount(0);
 
-  await expect(page.locator(".locked-clock > strong")).toHaveCSS(
+  await expect(page.locator(".header-time > strong")).toHaveCSS(
     "font-family",
     /Geist Mono/,
   );

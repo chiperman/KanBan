@@ -180,7 +180,7 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
       <VibeButton
         ref={triggerRef}
         type="button"
-        className="command-menu-trigger"
+        className="header-action-button command-menu-trigger"
         aria-label="打开快捷命令"
         onClick={show}
         variant="outline"

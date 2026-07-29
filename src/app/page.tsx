@@ -29,7 +29,7 @@ export default async function AssetDashboardPage() {
             </span>
           </div>
           <div className="header-side">
-            <ShanghaiClock initialTime={new Date().toISOString()} />
+            <ShanghaiClock initialTime={new Date().toISOString()} compact />
             <ThemeSwitcher />
           </div>
         </header>

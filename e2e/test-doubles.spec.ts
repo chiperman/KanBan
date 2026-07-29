@@ -36,7 +36,10 @@ test("资产看板登录页显示浏览器当前的上海时间", async ({ page,
 
   await page.goto("/");
 
-  await expect(page.locator(".locked-clock > strong")).toContainText("02:53");
+  const headerTime = page.locator(".header-time > strong");
+  await expect(headerTime).toContainText("02:53");
+  await expect(headerTime).toHaveCSS("font-size", "12px");
+  await expect(headerTime).toHaveCSS("font-weight", "400");
   await expect(page.getByTestId("server-time")).not.toContainText("UTC+08");
 });
 

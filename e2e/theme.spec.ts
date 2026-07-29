@@ -18,6 +18,35 @@ test("主题默认跟随系统", async ({ browser }) => {
   await lightContext.close();
 });
 
+test("点阵背景在浅色和深色模式下保持局部反相", async ({ browser }) => {
+  for (const colorScheme of ["light", "dark"] as const) {
+    const context = await browser.newContext({ colorScheme });
+    const page = await context.newPage();
+    await page.goto("/");
+
+    const dotField = await page.evaluate(() => {
+      const bodyStyle = getComputedStyle(document.body);
+      const dotStyle = getComputedStyle(document.body, "::before");
+
+      return {
+        isolation: bodyStyle.isolation,
+        backgroundImage: dotStyle.backgroundImage,
+        backgroundSize: dotStyle.backgroundSize,
+        backgroundAttachment: dotStyle.backgroundAttachment,
+        mixBlendMode: dotStyle.mixBlendMode,
+      };
+    });
+
+    expect(dotField.isolation).toBe("isolate");
+    expect(dotField.backgroundImage).toContain("rgba(255, 255, 255, 0.42)");
+    expect(dotField.backgroundSize).toBe("120px 120px");
+    expect(dotField.backgroundAttachment).toBe("fixed");
+    expect(dotField.mixBlendMode).toBe("difference");
+
+    await context.close();
+  }
+});
+
 test("所有者可以选择浅色或深色并记住选择", async ({ page }) => {
   await page.goto("/");
   const themeToggle = page.getByRole("button", { name: /^当前主题：/ });

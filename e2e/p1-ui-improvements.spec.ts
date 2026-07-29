@@ -38,6 +38,43 @@ test("看板时间、来源状态和普通卡片遵守 Vibe 视觉层级", async
     "muted",
   );
 
+  for (const action of [
+    page.getByRole("button", { name: "配置备用登录" }),
+    page.getByRole("button", { name: "打开快捷命令" }),
+    page.getByRole("button", { name: "立即锁定（退出登录）" }),
+  ]) {
+    await expect(action).toHaveAttribute("data-vibe-component", "button");
+    await expect(action).toHaveAttribute("data-vibe-variant", "outline");
+    await expect(action).toHaveCSS("height", "44px");
+    await expect(action).toHaveCSS("border-radius", "6px");
+    await expect(action).toHaveCSS("font-size", "11px");
+  }
+
+  const themeToggle = page.getByRole("button", { name: /^当前主题：/ });
+  await expect(themeToggle).toHaveCSS("width", "44px");
+  await expect(themeToggle).toHaveCSS("height", "44px");
+  await expect(themeToggle).toHaveCSS("border-radius", "999px");
+
+  const overviewCard = page.getByTestId("total-overview-card");
+  const overviewSpacing = await overviewCard.evaluate((element) => {
+    const computed = getComputedStyle(element);
+    return {
+      padding: [
+        computed.paddingTop,
+        computed.paddingRight,
+        computed.paddingBottom,
+        computed.paddingLeft,
+      ],
+      labelLeft: getComputedStyle(element, "::before").left,
+      fieldRight: getComputedStyle(element, "::after").right,
+    };
+  });
+  expect(overviewSpacing).toEqual({
+    padding: ["48px", "24px", "32px", "24px"],
+    labelLeft: "24px",
+    fieldRight: "24px",
+  });
+
   const sourceCard = page.getByTestId("longbridge-card");
   await expect(sourceCard.locator(".source-live-state")).toHaveCSS(
     "font-size",
