@@ -335,6 +335,13 @@ test("Binance 钱包残差会同时传播到来源卡、总资产和完整性状
 });
 
 test("正负对账差额与逐组舍入后的分布始终守恒", async ({ page, request }) => {
+  await page.route("**/api/asset-sources/refresh", async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({ successCount: 1, failureCount: 0 }),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
   await loginAsOwner(page);
   const overview = page.getByTestId("total-asset-overview");
 
