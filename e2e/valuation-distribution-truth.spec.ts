@@ -98,6 +98,60 @@ test("总资产使用来源原生价格与显式汇率，保留原值并正确�
       .getByTestId("holding-top-list")
       .getByRole("listitem"),
   ).toContainText(["Apple Cross-source", "Tether", "Mystery Token"]);
+  const betaSource = page.getByTestId("asset-source-card-source-beta");
+  const valuationSegments = betaSource
+    .getByRole("img", { name: "2 项已估值，1 项未估值" })
+    .locator(":scope > span");
+  await expect(valuationSegments).toHaveCount(3);
+  await expect(valuationSegments.nth(0)).toHaveClass(/is-primary/);
+  await expect(valuationSegments.nth(1)).toHaveClass(/is-primary/);
+  await expect(valuationSegments.nth(2)).toHaveClass(/is-error/);
+  expect(
+    await valuationSegments.evaluateAll((segments) =>
+      segments.map((segment) => segment.getAttribute("data-segment-key")),
+    ),
+  ).toEqual(
+    await betaSource
+      .getByTestId("holding-top-list")
+      .getByRole("listitem")
+      .evaluateAll((rows) =>
+        rows.map((row) => row.getAttribute("data-holding-key")),
+      ),
+  );
+
+  const unvaluedSummaryRow = betaSource
+    .getByTestId("holding-top-list")
+    .getByRole("listitem")
+    .filter({ hasText: "Mystery Token" });
+  await expect(unvaluedSummaryRow).toHaveClass(/is-unvalued/);
+  const unvaluedDetailRow = betaSource
+    .getByTestId("asset-holdings-detail")
+    .locator("tbody tr")
+    .filter({ hasText: "Mystery Token" });
+  await expect(unvaluedDetailRow).toHaveClass(/is-unvalued/);
+  const errorColor = await page.evaluate(() => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--error)";
+    document.body.append(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  });
+  const valuationStatus = overview.locator(".total-status");
+  await expect(valuationStatus).toHaveAttribute("data-vibe-tone", "error");
+  await expect(valuationStatus.locator("i")).toHaveCSS(
+    "background-color",
+    errorColor,
+  );
+  await expect(valuationSegments.nth(2)).toHaveCSS(
+    "background-color",
+    errorColor,
+  );
+  await expect(unvaluedSummaryRow).toHaveCSS("color", errorColor);
+  await expect(unvaluedDetailRow.locator("td").first()).toHaveCSS(
+    "color",
+    errorColor,
+  );
 
   await chooseOverviewOption(overview, "计价货币", "CNY");
   await expect(overview).toContainText("3,998.65 CNY");
@@ -228,9 +282,53 @@ test("Binance 钱包残差会同时传播到来源卡、总资产和完整性状
   await expect(page.getByTestId("total-asset-overview")).toContainText(
     "当前估值：不完整 · 0 项未估值",
   );
-  await expect(page.getByTestId("binance-product-coverage")).toContainText(
-    "Dual Investment · 明细 · 当前",
+  const binanceCard = page.getByTestId("binance-card");
+  const coverage = binanceCard.getByTestId("binance-product-coverage");
+  await expect(coverage).toBeVisible();
+  await expect(coverage.locator(".vibe-coverage-summary-count")).toHaveText(
+    "02 PRODUCTS",
   );
+  await expect(
+    coverage.locator(".vibe-coverage-summary-freshness"),
+  ).toHaveText("02 CURRENT");
+  await coverage.locator("summary").click();
+  await expect(coverage).toHaveAttribute("open", "");
+  await expect(coverage).toHaveCSS("border-bottom-width", "0px");
+  await expect(
+    coverage.locator('[data-capability="detailed"]'),
+  ).toContainText("Dual Investment");
+  await expect(
+    coverage.locator('[data-capability="indirect"]'),
+  ).toContainText(
+    "Smart Arbitrage公开 API 没有专用明细，监测钱包残差",
+  );
+  expect(
+    await coverage
+      .locator('[data-capability="detailed"] .vibe-coverage-products')
+      .evaluate((element) =>
+        getComputedStyle(element).gridTemplateColumns.split(" ").length
+      ),
+  ).toBe(3);
+
+  await page.setViewportSize({ width: 375, height: 900 });
+  await page
+    .locator("[data-layout-card-id]")
+    .filter({ has: binanceCard })
+    .getByRole("button", { name: /^展开/ })
+    .click();
+  expect(
+    await coverage.evaluate((element) => ({
+      fits: element.scrollWidth === element.clientWidth,
+      columns: Array.from(
+        element.querySelectorAll(".vibe-coverage-products"),
+      ).map((list) =>
+        getComputedStyle(list).gridTemplateColumns.split(" ").length
+      ),
+    })),
+  ).toEqual({
+    fits: true,
+    columns: [1, 1],
+  });
   await expect(page.getByTestId("binance-card")).toContainText(
     "USDT · 双币投资",
   );
@@ -255,6 +353,20 @@ test("正负对账差额与逐组舍入后的分布始终守恒", async ({ page,
   await request.post("/test-doubles/valuation?scenario=rounding");
   await page.reload();
   await expect(overview).toContainText("0.01 USD");
+  const valuationStatus = overview.locator(".total-status");
+  await expect(valuationStatus).toHaveAttribute("data-vibe-tone", "success");
+  const successColor = await page.evaluate(() => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--success)";
+    document.body.append(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  });
+  await expect(valuationStatus.locator("i")).toHaveCSS(
+    "background-color",
+    successColor,
+  );
   await expect(overview.getByLabel("资产分布")).toContainText("证券");
   await expect(overview.getByLabel("资产分布")).toContainText("加密资产");
   const displayed = await overview

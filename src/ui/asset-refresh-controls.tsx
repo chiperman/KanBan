@@ -24,7 +24,7 @@ export function AssetRefreshControls({ enabled }: { enabled: boolean }) {
     if (inFlight.current) return false;
     inFlight.current = true;
     setPending(true);
-    setShowStatus(false);
+    setShowStatus(true);
     setStatus(
       manual || mode !== "prices"
         ? "正在刷新余额与持仓…"
@@ -47,7 +47,7 @@ export function AssetRefreshControls({ enabled }: { enabled: boolean }) {
         throw new Error(result?.error ?? "资产同步失败");
       }
       const hasFailures = result.failureCount > 0;
-      setShowStatus(hasFailures);
+      setShowStatus(true);
       setStatus(hasFailures ? `同步完成 · ${result.failureCount} 个来源失败` : "同步完成");
       router.refresh();
       return true;
@@ -123,7 +123,7 @@ export function AssetRefreshControls({ enabled }: { enabled: boolean }) {
         className={`asset-refresh-status${showStatus ? " is-visible" : ""}`}
         data-testid="asset-refresh-status"
         role="status"
-        tone={pending ? "live" : status.includes("失败") ? "warning" : "muted"}
+        tone={pending ? "live" : status.includes("失败") ? "error" : "success"}
       >
         {status}
       </VibeStatusTag>

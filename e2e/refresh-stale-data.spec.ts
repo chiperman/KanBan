@@ -59,6 +59,17 @@ async function metrics(request: APIRequestContext) {
   };
 }
 
+async function tokenColor(page: Page, token: "--success" | "--error") {
+  return page.evaluate((name) => {
+    const probe = document.createElement("span");
+    probe.style.color = `var(${name})`;
+    document.body.append(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  }, token);
+}
+
 test.beforeEach(async ({ request }) => {
   await request.post("/test-doubles/reset");
 });
@@ -145,10 +156,18 @@ test("部分失败保留最后成功数据并标记过期，手动刷新可见�
 
   const alphaState = alpha.locator(".source-live-state");
   await expect(alphaState).toContainText("CURRENT");
-  await expect(alphaState).toHaveAttribute("data-vibe-tone", "muted");
+  await expect(alphaState).toHaveAttribute("data-vibe-tone", "success");
   const betaState = beta.locator(".source-live-state");
   await expect(betaState).toContainText("ERROR");
   await expect(betaState).toHaveAttribute("data-vibe-tone", "error");
+  await expect(alphaState.locator("i")).toHaveCSS(
+    "background-color",
+    await tokenColor(page, "--success"),
+  );
+  await expect(betaState.locator("i")).toHaveCSS(
+    "background-color",
+    await tokenColor(page, "--error"),
+  );
 
   await request.post("/test-doubles/refresh", {
     data: { action: "prepare-recovery", hold: true },
@@ -161,13 +180,34 @@ test("部分失败保留最后成功数据并标记过期，手动刷新可见�
   await expect(refreshStatus).toContainText(
     "正在刷新余额与持仓",
   );
-  await expect(refreshStatus).toHaveCSS("clip-path", "inset(50%)");
+  await expect(refreshStatus).toHaveCSS("clip-path", "none");
   await expect.poll(async () => (await metrics(request)).active).toBe(1);
   await request.post("/test-doubles/refresh", { data: { action: "release" } });
 
   await expect(refreshStatus).toContainText("同步完成");
-  await expect(refreshStatus).toHaveCSS("clip-path", "inset(50%)");
+  await expect(refreshStatus).toHaveCSS("clip-path", "none");
+  await expect(refreshStatus).toHaveAttribute("data-vibe-tone", "success");
   await expect(refresh).toContainText("立即刷新资产");
+  const refreshLayout = await page.locator(".asset-refresh-controls").evaluate(
+    (element) => {
+      const button = element.querySelector("button");
+      const status = element.querySelector('[data-testid="asset-refresh-status"]');
+      if (!button || !status) return null;
+      const buttonRect = button.getBoundingClientRect();
+      const statusRect = status.getBoundingClientRect();
+      const styles = getComputedStyle(element);
+      return {
+        borderTopWidth: styles.borderTopWidth,
+        buttonBottom: buttonRect.bottom,
+        statusTop: statusRect.top,
+      };
+    },
+  );
+  expect(refreshLayout).not.toBeNull();
+  expect(refreshLayout!.borderTopWidth).toBe("0px");
+  expect(refreshLayout!.statusTop).toBeGreaterThanOrEqual(
+    refreshLayout!.buttonBottom,
+  );
   await expect(overview.getByTestId("total-asset-amount")).toHaveText(
     "330.00 USD",
   );

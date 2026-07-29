@@ -38,6 +38,79 @@ function sourceName(source: AssetSourceView): string {
   return source.label;
 }
 
+function groupedAmount(value: string): string {
+  const [integer, fraction] = value.split(".");
+  const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return fraction ? `${grouped}.${fraction}` : grouped;
+}
+
+function CardCornerMarks() {
+  return (
+    <span className="card-corner-marks" aria-hidden="true">
+      <i className="card-corner-mark card-corner-mark-top-left" />
+      <i className="card-corner-mark card-corner-mark-bottom-left" />
+    </span>
+  );
+}
+
+function MobileCardIdentity({
+  card,
+  source,
+  cardIndex,
+  showSensitiveInfo,
+}: {
+  card: Card;
+  source?: AssetSourceView;
+  cardIndex: number;
+  showSensitiveInfo: boolean;
+}) {
+  return (
+    <>
+      <span className="mobile-card-summary-index">
+        {String(Math.max(0, cardIndex) + 1).padStart(2, "0")}
+      </span>
+      <span className="mobile-card-summary-copy">
+        <strong>{source ? sourceName(source) : cardName(card)}</strong>
+        {source ? (
+          <span>
+            {showSensitiveInfo
+              ? groupedAmount(source.snapshot.total.amount)
+              : "••••••"}{" "}
+            {source.snapshot.total.currency}
+          </span>
+        ) : null}
+      </span>
+    </>
+  );
+}
+
+function moveVisibleCard(
+  cards: Card[],
+  cardId: string,
+  offset: -1 | 1,
+): Card[] | null {
+  const visibleCards = cards.filter((card) => !card.hidden);
+  const currentIndex = visibleCards.findIndex(({ id }) => id === cardId);
+  const targetIndex = currentIndex + offset;
+  if (
+    currentIndex < 0 ||
+    targetIndex < 0 ||
+    targetIndex >= visibleCards.length
+  ) {
+    return null;
+  }
+
+  const reorderedVisibleCards = [...visibleCards];
+  [reorderedVisibleCards[currentIndex], reorderedVisibleCards[targetIndex]] = [
+    reorderedVisibleCards[targetIndex],
+    reorderedVisibleCards[currentIndex],
+  ];
+  let visibleIndex = 0;
+  return cards.map((card) =>
+    card.hidden ? card : reorderedVisibleCards[visibleIndex++],
+  );
+}
+
 async function cardRequest(url: string, method: string, body?: unknown) {
   const response = await fetch(url, {
     method,
@@ -66,6 +139,11 @@ export function OwnerDashboard({
   const [error, setError] = useState("");
   const [showSensitiveInfo, setShowSensitiveInfo] = useState(true);
   const [displayCards, setDisplayCards] = useState(cards);
+  const [expandedMobileCardIds, setExpandedMobileCardIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [mobileOverviewExpanded, setMobileOverviewExpanded] = useState(false);
+  const [mobileLayoutMode, setMobileLayoutMode] = useState(false);
   const [resizingId, setResizingId] = useState<string | null>(null);
   const [resizePreview, setResizePreview] = useState<{
     id: string;
@@ -102,6 +180,25 @@ export function OwnerDashboard({
   useEffect(() => {
     setDisplayCards(cards);
   }, [cards]);
+
+  useEffect(() => {
+    const availableIds = new Set(cards.map(({ id }) => id));
+    setExpandedMobileCardIds((current) => {
+      const next = new Set(
+        [...current].filter((cardId) => availableIds.has(cardId)),
+      );
+      return next.size === current.size ? current : next;
+    });
+  }, [cards]);
+
+  useEffect(() => {
+    const mobileQuery = window.matchMedia("(max-width: 639px)");
+    const leaveMobileLayoutMode = () => {
+      if (!mobileQuery.matches) setMobileLayoutMode(false);
+    };
+    mobileQuery.addEventListener("change", leaveMobileLayoutMode);
+    return () => mobileQuery.removeEventListener("change", leaveMobileLayoutMode);
+  }, []);
 
   async function persistLayout(nextCards: Card[], previousCards: Card[]) {
     setDisplayCards(nextCards);
@@ -295,6 +392,11 @@ export function OwnerDashboard({
   }
 
   const visibleCards = displayCards.filter((card) => !card.hidden);
+  const hasMobileOverview = assetSources.length > 0;
+  const allMobileSectionsExpanded =
+    (visibleCards.length > 0 || hasMobileOverview) &&
+    (!hasMobileOverview || mobileOverviewExpanded) &&
+    visibleCards.every(({ id }) => expandedMobileCardIds.has(id));
   const hiddenAssetCards = cards.flatMap((card) => {
     if (!card.hidden || !card.sourceId) return [];
     const source = assetSources.find((item) => item.id === card.sourceId);
@@ -305,6 +407,33 @@ export function OwnerDashboard({
     return card.sourceId
       ? assetSources.find((item) => item.id === card.sourceId)
       : undefined;
+  }
+
+  function toggleMobileCard(cardId: string) {
+    setExpandedMobileCardIds((current) => {
+      const next = new Set(current);
+      if (next.has(cardId)) {
+        next.delete(cardId);
+      } else {
+        next.add(cardId);
+      }
+      return next;
+    });
+  }
+
+  function toggleAllMobileCards() {
+    const expandAll = !allMobileSectionsExpanded;
+    setMobileOverviewExpanded(expandAll && hasMobileOverview);
+    setExpandedMobileCardIds(
+      expandAll ? new Set(visibleCards.map(({ id }) => id)) : new Set(),
+    );
+  }
+
+  function moveMobileCard(cardId: string, offset: -1 | 1) {
+    const previousCards = displayCards;
+    const nextCards = moveVisibleCard(previousCards, cardId, offset);
+    if (!nextCards) return;
+    void persistLayout(nextCards, previousCards);
   }
 
   function renderCardBody(card: Card) {
@@ -325,6 +454,8 @@ export function OwnerDashboard({
 
   function renderLayoutCard(card: Card, controls: CardDragControls) {
     const source = sourceForCard(card);
+    const mobileExpanded = expandedMobileCardIds.has(card.id);
+    const cardIndex = visibleCards.findIndex(({ id }) => id === card.id);
     return (
       <article
         ref={controls.cardRef}
@@ -333,10 +464,91 @@ export function OwnerDashboard({
         data-command-target={card.id}
         data-command-label={source ? sourceName(source) : cardName(card)}
         data-layout-card-id={card.id}
+        data-mobile-expanded={mobileExpanded ? "true" : "false"}
+        data-mobile-layout-mode={mobileLayoutMode ? "true" : "false"}
         data-vibe-surface="data-card"
         tabIndex={-1}
       >
-        <span className="card-corner-marks" aria-hidden="true" />
+        <CardCornerMarks />
+        {mobileLayoutMode ? (
+          <div className="mobile-card-sort-row">
+            <button
+              ref={controls.handleRef}
+              type="button"
+              className="mobile-card-sort-handle"
+              {...controls.handleAttributes}
+              {...controls.handleListeners}
+              aria-label={`拖动${cardName(card)}调整排序`}
+              disabled={controls.disabled}
+            >
+              <MobileCardIdentity
+                card={card}
+                source={source}
+                cardIndex={cardIndex}
+                showSensitiveInfo={showSensitiveInfo}
+              />
+              <span className="mobile-card-sort-grip" aria-hidden="true" />
+            </button>
+            <div className="mobile-card-sort-actions">
+              <button
+                type="button"
+                aria-label={`上移${cardName(card)}`}
+                disabled={controls.disabled || cardIndex <= 0}
+                onClick={() => moveMobileCard(card.id, -1)}
+              >
+                上移
+              </button>
+              <button
+                type="button"
+                aria-label={`下移${cardName(card)}`}
+                disabled={
+                  controls.disabled ||
+                  cardIndex < 0 ||
+                  cardIndex >= visibleCards.length - 1
+                }
+                onClick={() => moveMobileCard(card.id, 1)}
+              >
+                下移
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="mobile-card-summary"
+            aria-expanded={mobileExpanded}
+            aria-label={`${mobileExpanded ? "折叠" : "展开"}${cardName(card)}`}
+            onClick={() => toggleMobileCard(card.id)}
+          >
+            <MobileCardIdentity
+              card={card}
+              source={source}
+              cardIndex={cardIndex}
+              showSensitiveInfo={showSensitiveInfo}
+            />
+            {source ? (
+              <span
+                className="mobile-card-summary-status"
+                data-status={
+                  source.lifecycle === "disconnected"
+                    ? "offline"
+                    : source.sync.error
+                      ? "error"
+                      : source.sync.status
+                }
+              >
+                {source.lifecycle === "disconnected"
+                  ? "OFFLINE"
+                  : source.sync.error
+                    ? "ERROR"
+                    : source.sync.status === "expired"
+                      ? "STALE"
+                      : "CURRENT"}
+              </span>
+            ) : null}
+            <span className="mobile-card-summary-toggle" aria-hidden="true" />
+          </button>
+        )}
         {renderCardBody(card)}
         <div className="card-actions">
           <span className="source-status">SOURCE / CONTROL</span>
@@ -367,7 +579,7 @@ export function OwnerDashboard({
           onKeyDown={(event) => resizeFromKeyboard(event, card)}
         />
         <button
-          ref={controls.handleRef}
+          ref={mobileLayoutMode ? undefined : controls.handleRef}
           type="button"
           className="layout-drag-handle"
           data-vibe-component="layout-control"
@@ -382,6 +594,19 @@ export function OwnerDashboard({
 
   function renderCardPreview(card: Card) {
     const source = sourceForCard(card);
+    if (mobileLayoutMode) {
+      return (
+        <div className="mobile-card-sort-preview">
+          <MobileCardIdentity
+            card={card}
+            source={source}
+            cardIndex={visibleCards.findIndex(({ id }) => id === card.id)}
+            showSensitiveInfo={showSensitiveInfo}
+          />
+          <span className="mobile-card-sort-grip" aria-hidden="true" />
+        </div>
+      );
+    }
     return (
       <>
         {renderCardBody(card)}
@@ -407,18 +632,33 @@ export function OwnerDashboard({
       {assetSources.length > 0 ? (
         <article
           className="card vibe-data-card total-overview-card"
+          data-mobile-expanded={mobileOverviewExpanded ? "true" : "false"}
+          data-mobile-layout-mode={mobileLayoutMode ? "true" : "false"}
           data-testid="total-overview-card"
           data-command-target="total-overview"
           data-command-label="总资产概览"
           data-vibe-surface="data-card"
           tabIndex={-1}
         >
+          <CardCornerMarks />
           <TotalAssetOverview
             sources={assetSources}
             history={dailyAssetSnapshots}
             currentDay={currentDay}
             showSensitiveInfo={showSensitiveInfo}
           />
+          <button
+            type="button"
+            className="mobile-overview-toggle"
+            aria-expanded={mobileOverviewExpanded}
+            aria-label={`${mobileOverviewExpanded ? "折叠" : "展开"}总资产详情`}
+            onClick={() => setMobileOverviewExpanded((current) => !current)}
+          >
+            <span>
+              {mobileOverviewExpanded ? "收起资产详情" : "查看分布与趋势"}
+            </span>
+            <span className="mobile-card-summary-toggle" aria-hidden="true" />
+          </button>
         </article>
       ) : null}
       <div className="dashboard-control-deck" data-vibe-module="control-deck">
@@ -433,6 +673,32 @@ export function OwnerDashboard({
             {showSensitiveInfo ? "隐藏关键信息" : "显示关键信息"}
           </VibeButton>
           <AssetSourceFlow />
+          <VibeButton
+            type="button"
+            className="mobile-card-view-toggle"
+            hidden={mobileLayoutMode}
+            onClick={toggleAllMobileCards}
+            variant="outline"
+          >
+            {allMobileSectionsExpanded ? "全部折叠" : "全部展开"}
+          </VibeButton>
+          <VibeButton
+            type="button"
+            className="mobile-card-layout-toggle"
+            aria-pressed={mobileLayoutMode}
+            onPointerUp={(event) => {
+              event.preventDefault();
+              setMobileLayoutMode((current) => !current);
+            }}
+            onClick={(event) => {
+              if (event.detail === 0) {
+                setMobileLayoutMode((current) => !current);
+              }
+            }}
+            variant={mobileLayoutMode ? "primary" : "outline"}
+          >
+            {mobileLayoutMode ? "完成调整" : "调整卡片顺序"}
+          </VibeButton>
         </div>
         <AssetRefreshControls
           enabled={assetSources.some((source) => source.lifecycle !== "disconnected")}

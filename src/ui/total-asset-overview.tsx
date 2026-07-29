@@ -297,7 +297,7 @@ export function TotalAssetOverview({
           />
           <VibeStatusTag
             className={`total-status${valuation.incomplete ? " incomplete" : ""}${valuation.expiredCount > 0 ? " expired" : ""}`}
-            tone={valuation.incomplete || valuation.expiredCount > 0 ? "warning" : "muted"}
+            tone={valuation.incomplete || valuation.expiredCount > 0 ? "error" : "success"}
           >
             {valuationStatus}
           </VibeStatusTag>

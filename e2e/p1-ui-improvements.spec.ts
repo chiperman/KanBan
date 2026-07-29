@@ -35,7 +35,7 @@ test("看板时间、来源状态和普通卡片遵守 Vibe 视觉层级", async
   await expect(page.getByTestId("server-time")).toHaveCSS("font-size", "12px");
   await expect(page.getByTestId("asset-refresh-status")).toHaveAttribute(
     "data-vibe-tone",
-    "muted",
+    "success",
   );
 
   for (const action of [
@@ -74,6 +74,31 @@ test("看板时间、来源状态和普通卡片遵守 Vibe 视觉层级", async
     labelLeft: "24px",
     fieldRight: "24px",
   });
+  await expect(overviewCard.locator(".card-corner-mark")).toHaveCount(2);
+  await expect(
+    overviewCard.locator(
+      ".card-corner-mark-top-right, .card-corner-mark-bottom-right",
+    ),
+  ).toHaveCount(0);
+  expect(
+    await overviewCard.locator(".card-corner-marks").evaluate((element) => ({
+      before: getComputedStyle(element, "::before").content,
+      after: getComputedStyle(element, "::after").content,
+    })),
+  ).toEqual({ before: "none", after: "none" });
+
+  const overviewBox = await overviewCard.boundingBox();
+  const totalStatusBox = await overviewCard.locator(".total-status").boundingBox();
+  expect(overviewBox).not.toBeNull();
+  expect(totalStatusBox).not.toBeNull();
+  expect(
+    Math.abs(
+      overviewBox!.x +
+        overviewBox!.width -
+        Number.parseFloat(overviewSpacing.padding[1]) -
+        (totalStatusBox!.x + totalStatusBox!.width),
+    ),
+  ).toBeLessThanOrEqual(1);
 
   const sourceCard = page.getByTestId("longbridge-card");
   await expect(sourceCard.locator(".source-live-state")).toHaveCSS(
@@ -86,11 +111,20 @@ test("看板时间、来源状态和普通卡片遵守 Vibe 视觉层级", async
   );
   await expect(sourceCard.locator(".source-live-state")).toHaveAttribute(
     "data-vibe-tone",
-    "muted",
+    "success",
   );
   await expect(sourceCard.locator(".source-live-state")).toHaveText(
     "LB / CURRENT",
   );
+  const cardDecoration = await sourceCard.evaluate((element) => {
+    const decoration = getComputedStyle(element, "::after");
+    return {
+      backgroundImage: decoration.backgroundImage,
+      content: decoration.content,
+    };
+  });
+  expect(cardDecoration.content).not.toBe("none");
+  expect(cardDecoration.backgroundImage).toContain("radial-gradient");
   await expect(sourceCard.locator(".source-meter-caption")).toHaveCSS(
     "font-size",
     "12px",
@@ -104,6 +138,13 @@ test("看板时间、来源状态和普通卡片遵守 Vibe 视觉层级", async
     };
   });
   expect(cardBorders).toEqual({ top: "0px", right: "0px" });
+  const sourceCardShell = sourceCard.locator("..");
+  await expect(sourceCardShell.locator(".card-corner-mark")).toHaveCount(2);
+  await expect(
+    sourceCardShell.locator(
+      ".card-corner-mark-top-right, .card-corner-mark-bottom-right",
+    ),
+  ).toHaveCount(0);
   await expect(sourceCard.locator("..")).toHaveAttribute(
     "data-vibe-surface",
     "data-card",
@@ -127,6 +168,21 @@ test("看板时间、来源状态和普通卡片遵守 Vibe 视觉层级", async
     beforeBackground: "rgba(0, 0, 0, 0)",
     afterBackground: "rgba(0, 0, 0, 0)",
   });
+
+  const dragHandle = sourceCardShell.getByRole("button", {
+    name: /拖动.*调整排序/,
+  });
+  await dragHandle.hover();
+  const dragLines = await dragHandle.evaluate((element) => {
+    const handle = getComputedStyle(element, "::before");
+    return {
+      background: handle.backgroundColor,
+      shadows: handle.boxShadow,
+    };
+  });
+  expect(dragLines.background).not.toBe("rgba(0, 0, 0, 0)");
+  expect(dragLines.shadows).toContain("0px 4px");
+  expect(dragLines.shadows).toContain("0px 8px");
 
   await page.getByRole("button", { name: "计价货币" }).click();
   const currencyMenu = page.getByRole("listbox", { name: "计价货币" });

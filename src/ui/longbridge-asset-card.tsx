@@ -92,7 +92,10 @@ function HoldingDetailRow({
     ? `${holding.valuation.priceSource} · ${holding.valuation.pricedAt.slice(0, 16).replace("T", " ")} UTC`
     : holding.valuation.reason;
   return (
-    <tr>
+    <tr
+      className={holding.valuation.status === "unvalued" ? "is-unvalued" : undefined}
+      data-holding-key={assetHoldingKey(holding)}
+    >
       <td>
         <strong>{binanceHoldingDisplayName(holding)}</strong>
         <span className="holding-symbol">{holding.symbol}</span>
@@ -165,7 +168,14 @@ export function AssetSourceCard({
     ({ valuation }) => valuation.status === "unvalued",
   ).length;
   const valuedCount = visibleHoldings.length - unvaluedCount;
-  const meterSegments = 12;
+  const valuationSegments = visibleHoldings.map((holding) => ({
+    key: assetHoldingKey(holding),
+    tone:
+      holding.valuation.status === "unvalued"
+        ? "error" as const
+        : "primary" as const,
+    value: 1,
+  }));
   const heading = sourceHeading(source);
   const formatMoney = source.kind === "longbridge" ? amount : moneyAmount;
   const sourceState = source.lifecycle === "disconnected"
@@ -174,7 +184,7 @@ export function AssetSourceCard({
       ? { label: "ERROR", tone: "error" as const }
       : source.sync.status === "expired"
         ? { label: "STALE", tone: "warning" as const }
-        : { label: "CURRENT", tone: "muted" as const };
+        : { label: "CURRENT", tone: "success" as const };
   return (
     <>
       <div
@@ -221,16 +231,11 @@ export function AssetSourceCard({
         <div className="source-meter">
           <VibeSegmentedBar
             ariaLabel={`${valuedCount} 项已估值，${unvaluedCount} 项未估值`}
-            cells={meterSegments}
-            segments={[
-              { key: "valued", tone: "primary", value: valuedCount },
-              {
-                key: "unvalued",
-                tone: "muted",
-                value: unvaluedCount,
-              },
-            ]}
+            cells={visibleHoldings.length}
+            compact
+            segments={valuationSegments}
             total={visibleHoldings.length}
+            varySegmentOpacity={false}
           />
         </div>
         <p className="source-meter-caption">
@@ -256,7 +261,11 @@ export function AssetSourceCard({
         ) : null}
         <ol className="holding-top-list" data-testid="holding-top-list">
           {visibleHoldings.map((holding) => (
-            <li className="vibe-data-row" key={assetHoldingKey(holding)}>
+            <li
+              className={`vibe-data-row${holding.valuation.status === "unvalued" ? " is-unvalued" : ""}`}
+              data-holding-key={assetHoldingKey(holding)}
+              key={assetHoldingKey(holding)}
+            >
               <span>{binanceHoldingDisplayName(holding)}</span>
               <strong>
                 {holding.marketValue === null

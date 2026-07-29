@@ -282,6 +282,11 @@ function binancePartialSources(): AssetSourceSummary[] {
           capability: "detailed",
           freshness: "current",
           message: null,
+        }, {
+          product: "smart-arbitrage",
+          capability: "indirect",
+          freshness: "current",
+          message: "公开 API 没有专用明细，监测钱包残差",
         }],
         unexplainedValue: { amount: "600", currency: "USDT" },
         excludedPositiveAccounts: ["Trading Bots"],
@@ -318,7 +323,11 @@ export async function POST(request: Request) {
     title: source.label,
     body: "估值浏览器测试来源",
     sourceId: source.id,
-    span: index === 0 && sources.length > 1 ? 2 : 1,
+    span: scenario === "binance-coverage-partial"
+      ? 2
+      : index === 0 && sources.length > 1
+        ? 2
+        : 1,
   }));
   const services = getTestServices();
   await services.assetSources.replaceAll(sources);

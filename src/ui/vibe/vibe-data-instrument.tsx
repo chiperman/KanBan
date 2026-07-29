@@ -2,15 +2,17 @@ import type { HTMLAttributes, ReactNode } from "react";
 
 export interface VibeBarSegment {
   key: string;
-  tone?: "muted" | "primary" | "signal";
+  tone?: "error" | "muted" | "primary" | "signal";
   value: number;
 }
 
 interface VibeSegmentedBarProps {
   ariaLabel: string;
   cells?: number;
+  compact?: boolean;
   segments: readonly VibeBarSegment[];
   total?: number;
+  varySegmentOpacity?: boolean;
 }
 
 function segmentCells(
@@ -39,10 +41,17 @@ function segmentCells(
 export function VibeSegmentedBar({
   ariaLabel,
   cells = 12,
+  compact = false,
   segments,
   total = segments.reduce((sum, segment) => sum + segment.value, 0),
+  varySegmentOpacity = true,
 }: VibeSegmentedBarProps) {
   const renderedCells = segmentCells(segments, total, cells);
+  const renderedCellCount = Math.max(renderedCells.length, 1);
+  const compactWidth = Math.max(
+    renderedCells.length * 4 + Math.max(renderedCells.length - 1, 0) * 2,
+    4,
+  );
 
   return (
     <div
@@ -50,12 +59,24 @@ export function VibeSegmentedBar({
       className="vibe-segmented-bar"
       data-vibe-component="segmented-bar"
       role="img"
+      style={{
+        gridTemplateColumns: `repeat(${renderedCellCount}, minmax(0, 1fr))`,
+        width: compact ? `min(100%, ${compactWidth}px)` : undefined,
+      }}
     >
       {renderedCells.map((segment, index) => (
         <span
           className={
             segment
-              ? `is-filled is-${segment.tone ?? "primary"} is-group-${(segment.segmentIndex % 3) + 1}`
+              ? [
+                  "is-filled",
+                  `is-${segment.tone ?? "primary"}`,
+                  varySegmentOpacity
+                    ? `is-group-${(segment.segmentIndex % 3) + 1}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" ")
               : undefined
           }
           data-segment-key={segment?.key}
@@ -89,7 +110,13 @@ export function VibeMetric({
   );
 }
 
-type VibeStatusTone = "live" | "muted" | "signal" | "warning" | "error";
+type VibeStatusTone =
+  | "live"
+  | "muted"
+  | "signal"
+  | "success"
+  | "warning"
+  | "error";
 
 interface VibeStatusTagProps extends HTMLAttributes<HTMLSpanElement> {
   children: ReactNode;

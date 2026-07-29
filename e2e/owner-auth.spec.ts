@@ -250,7 +250,9 @@ test("所有者退出后立即返回登录入口且旧会话失效", async ({ pa
 
   await page.goto("/");
   await login(page);
-  await expect(page.getByText(SENSITIVE_TITLE)).toBeVisible();
+  await expect(
+    page.getByTestId("card").filter({ hasText: SENSITIVE_TITLE }),
+  ).toBeVisible();
 
   await page.getByRole("button", { name: "退出登录" }).click();
   await expect(page.getByTestId("login-gate")).toBeVisible();

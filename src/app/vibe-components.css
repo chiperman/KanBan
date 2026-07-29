@@ -423,8 +423,7 @@ body::before {
   margin-top: auto;
 }
 
-.card.vibe-data-card::after,
-.card.vibe-data-card .asset-source-card::after {
+.card.vibe-data-card::after {
   content: none;
 }
 
@@ -495,6 +494,15 @@ body::before {
   opacity: 1;
 }
 
+.source-meter .vibe-segmented-bar > .is-error {
+  background: var(--error);
+  opacity: 1;
+}
+
+.source-meter {
+  display: block;
+}
+
 .vibe-status-tag {
   display: inline-flex;
   min-height: 24px;
@@ -534,6 +542,14 @@ body::before {
   color: var(--accent-text);
 }
 
+.vibe-status-tag--success {
+  color: var(--secondary);
+}
+
+.vibe-status-tag--success > i {
+  background: var(--success);
+}
+
 .vibe-status-tag--warning {
   color: var(--warning);
 }
@@ -548,6 +564,17 @@ body::before {
 
 .vibe-data-row:last-child {
   border-bottom: 0;
+}
+
+.holding-top-list .vibe-data-row.is-unvalued {
+  border-color: color-mix(in srgb, var(--error) 42%, var(--line));
+  color: var(--error);
+}
+
+.holding-top-list .vibe-data-row.is-unvalued::before,
+.holding-top-list .vibe-data-row.is-unvalued > span,
+.holding-top-list .vibe-data-row.is-unvalued > strong {
+  color: var(--error);
 }
 
 .vibe-data-table {
@@ -571,6 +598,15 @@ body::before {
   font-size: 11px;
 }
 
+.asset-table tr.is-unvalued td {
+  border-color: color-mix(in srgb, var(--error) 42%, var(--line));
+  color: var(--error);
+}
+
+.asset-table tr.is-unvalued td * {
+  color: var(--error);
+}
+
 .dashboard-control-deck[data-vibe-module="control-deck"] {
   gap: 12px;
   padding: 40px 0 0;
@@ -583,11 +619,14 @@ body::before {
 }
 
 .dashboard-control-deck .asset-refresh-controls {
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  background: var(--glass);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 .owner-toolbar .vibe-button,
@@ -615,6 +654,32 @@ body::before {
   border-color: transparent;
   background: var(--display);
   color: var(--bg);
+}
+
+.asset-refresh-controls .asset-refresh-status {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.asset-refresh-controls .asset-refresh-status.vibe-status-tag--success {
+  color: var(--secondary);
+}
+
+.asset-refresh-controls .asset-refresh-status.vibe-status-tag--live {
+  color: var(--primary);
+}
+
+.asset-refresh-controls .asset-refresh-status.vibe-status-tag--error {
+  color: var(--error);
+}
+
+@media (max-width: 639px) {
+  .dashboard-control-deck .asset-refresh-controls {
+    justify-items: start;
+  }
 }
 
 .vibe-choice {

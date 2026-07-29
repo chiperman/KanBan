@@ -1,5 +1,9 @@
 import { decimalToFixed } from "@/domain/decimal";
-import type { AssetHolding, AssetSnapshotCoverage } from "@/server/ports";
+import type {
+  AssetHolding,
+  AssetProductCoverage,
+  AssetSnapshotCoverage,
+} from "@/server/ports";
 import { VibeStatusTag } from "@/ui/vibe/vibe-data-instrument";
 
 const PRODUCT_LABELS: Record<string, string> = {
@@ -46,6 +50,14 @@ const CAPABILITY_LABELS = {
   unknown: "未知",
 } as const;
 
+const CAPABILITY_ORDER: readonly AssetProductCoverage["capability"][] = [
+  "detailed",
+  "aggregate-only",
+  "indirect",
+  "unsupported",
+  "unknown",
+];
+
 function money(value: string): string {
   const [integer, fraction] = decimalToFixed(value, 2).split(".");
   const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -76,6 +88,18 @@ export function BinanceCoverage({
   const label = coverage?.status === "partial"
     ? "产品统计不完整"
     : "产品覆盖未验证";
+  const currentProductCount = coverage?.products.filter(
+    ({ freshness }) => freshness === "current",
+  ).length ?? 0;
+  const expiredProductCount = (coverage?.products.length ?? 0) - currentProductCount;
+  const capabilityGroups = coverage
+    ? CAPABILITY_ORDER.flatMap((capability) => {
+        const products = coverage.products.filter(
+          (product) => product.capability === capability,
+        );
+        return products.length > 0 ? [{ capability, products }] : [];
+      })
+    : [];
   return (
     <>
       {coverage?.status !== "complete" ? (
@@ -95,16 +119,61 @@ export function BinanceCoverage({
       ) : null}
       {coverage && coverage.products.length > 0 ? (
         <details className="vibe-coverage" data-testid="binance-product-coverage">
-          <summary>产品覆盖（{coverage.products.length}）</summary>
-          <ul>
-            {coverage.products.map((product) => (
-              <li className="vibe-data-row" key={product.product}>
-                <strong>{PRODUCT_LABELS[product.product] ?? product.product}</strong>
-                {` · ${CAPABILITY_LABELS[product.capability]} · ${product.freshness === "current" ? "当前" : "过期"}`}
-                {product.message ? ` · ${product.message}` : ""}
-              </li>
+          <summary>
+            <span className="vibe-coverage-summary-label">产品覆盖</span>
+            <strong className="vibe-coverage-summary-count">
+              {String(coverage.products.length).padStart(2, "0")} PRODUCTS
+            </strong>
+            <span
+              className="vibe-coverage-summary-freshness"
+              data-freshness={expiredProductCount > 0 ? "expired" : "current"}
+            >
+              {String(currentProductCount).padStart(2, "0")} CURRENT
+              {expiredProductCount > 0
+                ? ` / ${String(expiredProductCount).padStart(2, "0")} STALE`
+                : ""}
+            </span>
+            <span aria-hidden="true" className="vibe-coverage-summary-toggle" />
+          </summary>
+          <div className="vibe-coverage-panel">
+            {capabilityGroups.map(({ capability, products }, groupIndex) => (
+              <section
+                className="vibe-coverage-group"
+                data-capability={capability}
+                key={capability}
+              >
+                <header className="vibe-coverage-group-head">
+                  <span>{String(groupIndex + 1).padStart(2, "0")}</span>
+                  <strong>{CAPABILITY_LABELS[capability]}</strong>
+                  <span>
+                    {String(products.length).padStart(2, "0")} PRODUCTS
+                  </span>
+                </header>
+                <ul className="vibe-coverage-products">
+                  {products.map((product, productIndex) => (
+                    <li className="vibe-coverage-product" key={product.product}>
+                      <span className="vibe-coverage-product-index">
+                        {String(productIndex + 1).padStart(2, "0")}
+                      </span>
+                      <div className="vibe-coverage-product-copy">
+                        <div className="vibe-coverage-product-head">
+                          <strong>
+                            {PRODUCT_LABELS[product.product] ?? product.product}
+                          </strong>
+                          {product.freshness === "expired" ? (
+                            <span className="vibe-coverage-product-stale">
+                              STALE
+                            </span>
+                          ) : null}
+                        </div>
+                        {product.message ? <p>{product.message}</p> : null}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
             ))}
-          </ul>
+          </div>
         </details>
       ) : null}
     </>
