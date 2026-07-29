@@ -47,7 +47,12 @@ async function startBitgetFlow(page: Page, accountMode = "classic") {
   if (await provider.isVisible()) {
     await provider.click();
   }
-  await page.getByLabel("Bitget 账户类型").selectOption(accountMode);
+  const accountModeLabel =
+    accountMode === "uta"
+      ? "Unified Trading Account (UTA)"
+      : "Classic Account";
+  await dialog.getByRole("button", { name: "Bitget 账户类型" }).click();
+  await dialog.getByRole("option", { name: accountModeLabel }).click();
   await page.getByLabel("Bitget API Key").fill(API_KEY);
   await page.getByLabel("Bitget API Secret").fill(API_SECRET);
   await page.getByLabel("Bitget Passphrase").fill(PASSPHRASE);

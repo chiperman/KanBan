@@ -47,7 +47,11 @@ async function startOkxFlow(page: Page) {
   if (await provider.isVisible()) {
     await provider.click();
   }
-  await page.getByLabel("OKX 注册区域").selectOption("eea");
+  const regionTrigger = dialog.getByRole("button", { name: "OKX 注册区域" });
+  await expect(regionTrigger).toHaveClass(/vibe-select__trigger/);
+  await expect(regionTrigger).toHaveCSS("height", "44px");
+  await regionTrigger.click();
+  await dialog.getByRole("option", { name: "EEA" }).click();
   await page.getByLabel("OKX API Key").fill(API_KEY);
   await page.getByLabel("OKX API Secret").fill(API_SECRET);
   await page.getByLabel("OKX Passphrase").fill(PASSPHRASE);

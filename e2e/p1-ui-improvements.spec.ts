@@ -184,13 +184,24 @@ test("看板时间、来源状态和普通卡片遵守 Vibe 视觉层级", async
   expect(dragLines.shadows).toContain("0px 4px");
   expect(dragLines.shadows).toContain("0px 8px");
 
-  await page.getByRole("button", { name: "计价货币" }).click();
+  const currencyTrigger = page.getByRole("button", { name: "计价货币" });
+  await expect(currencyTrigger).toHaveClass(/vibe-select__trigger/);
+  await expect(currencyTrigger).toHaveCSS("height", "44px");
+  await currencyTrigger.click();
   const currencyMenu = page.getByRole("listbox", { name: "计价货币" });
+  await expect(currencyMenu.locator("..")).toHaveAttribute(
+    "data-vibe-variant",
+    "compact",
+  );
   await expect(currencyMenu).toHaveCSS("box-shadow", "none");
-  await expect(currencyMenu.getByRole("option").first()).toHaveCSS(
+  const selectedCurrency = currencyMenu.getByRole("option", { name: "USD" });
+  await expect(selectedCurrency).toHaveCSS(
     "border-radius",
     "6px",
   );
+  await expect(
+    selectedCurrency.locator(".vibe-select__selected-mark"),
+  ).toHaveCSS("width", "6px");
 });
 
 test("空状态说明在 Light 和 Dark 下保持正文级对比度", async ({

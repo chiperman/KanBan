@@ -329,15 +329,10 @@ export function AssetSourceFlow() {
                     fieldId={`asset-source-${field.id}`}
                     key={field.id}
                     label={field.label}
+                    options={field.options ?? []}
                     value={fields[field.id]}
-                    onChange={(event) => updateField(field.id, event.target.value)}
-                  >
-                    {field.options?.map((option) => (
-                      <option value={option.value} key={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </VibeSelectField>
+                    onValueChange={(value) => updateField(field.id, value)}
+                  />
                 ) : field.control === "textarea" ? (
                   <VibeTextAreaField
                     autoComplete="off"

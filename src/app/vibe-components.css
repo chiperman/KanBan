@@ -132,9 +132,139 @@ textarea.vibe-field__input {
   line-height: 1.55;
 }
 
-select.vibe-field__input {
+.vibe-select {
+  position: relative;
+  display: grid;
+}
+
+.vibe-select--compact {
+  min-width: 112px;
+}
+
+.vibe-select--wide {
+  min-width: 188px;
+}
+
+.vibe-select .vibe-select__trigger {
+  appearance: none;
+  display: grid;
+  width: 100%;
   min-height: 44px;
-  letter-spacing: 0.02em;
+  grid-template-columns: minmax(0, 1fr) 12px;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--primary);
+  cursor: pointer;
+  font-family: var(--f-mono);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  text-align: left;
+  transition:
+    border-color var(--dur, 0.2s) var(--ease),
+    background var(--dur, 0.2s) var(--ease);
+}
+
+.vibe-select .vibe-select__trigger::after,
+.vibe-select .vibe-select__option::after {
+  content: none;
+}
+
+.vibe-select .vibe-select__trigger:focus-visible,
+.vibe-select .vibe-select__trigger[aria-expanded="true"] {
+  border-color: var(--primary);
+  outline: 0;
+}
+
+.vibe-select .vibe-select__trigger[aria-expanded="true"] {
+  background: var(--raised);
+}
+
+.vibe-select .vibe-select__trigger:disabled {
+  cursor: default;
+  opacity: 0.3;
+}
+
+.vibe-select__chevron {
+  width: 7px;
+  height: 7px;
+  justify-self: end;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform var(--dur, 0.2s) var(--ease);
+}
+
+.vibe-select
+  .vibe-select__trigger[aria-expanded="true"]
+  .vibe-select__chevron {
+  transform: translateY(2px) rotate(225deg);
+}
+
+.vibe-select__options {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 4px);
+  left: 0;
+  display: grid;
+  width: 100%;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.vibe-select .vibe-select__option {
+  appearance: none;
+  display: flex;
+  width: 100%;
+  min-height: 40px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--secondary);
+  cursor: pointer;
+  font-family: var(--f-mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.vibe-select .vibe-select__option[aria-selected="true"] {
+  background: var(--raised);
+  color: var(--display);
+}
+
+.vibe-select .vibe-select__option:focus-visible {
+  outline: 1px solid var(--primary);
+  outline-offset: -1px;
+}
+
+.vibe-select__selected-mark {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  background: var(--accent);
+}
+
+@media (hover: hover) {
+  .vibe-select .vibe-select__trigger:hover,
+  .vibe-select .vibe-select__option:hover {
+    background: var(--raised);
+    color: var(--display);
+  }
 }
 
 .vibe-button {
@@ -935,6 +1065,8 @@ body::before {
 @media (prefers-reduced-motion: reduce) {
   .vibe-field__input,
   .vibe-verification-code__slot,
+  .vibe-select__chevron,
+  .vibe-select__trigger,
   .vibe-button {
     transition: none;
   }
