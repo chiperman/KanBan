@@ -52,6 +52,8 @@ export async function POST(request: Request) {
     body?.action !== "preview-unknown-product-state" &&
     body?.action !== "preview-wrapped-staking" &&
     body?.action !== "preview-product-failure" &&
+    body?.action !== "preview-native-usdt-usd" &&
+    body?.action !== "preview-usdt-usd-fallback" &&
     body?.action !== "refresh-prices"
   ) {
     return Response.json({ error: "Binance 生产测试场景无效" }, { status: 400 });
@@ -74,6 +76,16 @@ export async function POST(request: Request) {
     false,
     investmentScenario,
   );
+  if (body.action === "preview-native-usdt-usd") {
+    fixture.exchangeInfo.symbols.push({
+      symbol: "USDTUSD",
+      status: "TRADING",
+      baseAsset: "USDT",
+      quoteAsset: "USD",
+      isSpotTradingAllowed: true,
+    });
+    fixture.tickers.push({ symbol: "USDTUSD", price: "0.997" });
+  }
   const privateRequests: string[] = [];
   const publicRequests: string[] = [];
   const signedChecks: boolean[] = [];
@@ -192,8 +204,14 @@ export async function POST(request: Request) {
     }
     return Response.json(response);
   };
+  let referencePriceRequests = 0;
   const prices: Prices = {
     async quote(symbol) {
+      referencePriceRequests += 1;
+      if (body.action === "preview-native-usdt-usd") {
+        throw new Error("原生 USDT/USD 可用时不应请求参考价格");
+      }
+      if (body.action === "preview-usdt-usd-fallback") return null;
       return symbol === "USDT" ? BINANCE_USDT_USD_QUOTE : null;
     },
   };
@@ -247,6 +265,7 @@ export async function POST(request: Request) {
       permissions: result.permissions,
       account: result.account,
       snapshot: result.snapshot,
+      referencePriceRequests,
       privateRequests,
       allRequestsSigned: signedChecks.length > 0 && signedChecks.every(Boolean),
       allHostsPinned: hostChecks.length > 0 && hostChecks.every(Boolean),

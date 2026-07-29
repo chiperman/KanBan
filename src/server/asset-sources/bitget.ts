@@ -438,12 +438,53 @@ function compareHoldingValue(left: AssetHolding, right: AssetHolding): number {
   return decimalCompare(rightValue, leftValue);
 }
 
+function nativeUsdtUsdQuote(
+  instruments: unknown,
+  tickers: unknown,
+  observedAt: string,
+): PriceQuote | null {
+  const available = list(instruments, "Bitget instruments data").some((item) =>
+    item.status === "online" &&
+    item.symbol === "USDTUSD" &&
+    item.baseCoin === "USDT" &&
+    item.quoteCoin === "USD"
+  );
+  if (!available) return null;
+  const item = list(tickers, "Bitget tickers data").find(
+    (candidate) => candidate.symbol === "USDTUSD",
+  );
+  if (!item) return null;
+  const timestamp = text(item.ts, "ts");
+  if (!/^\d+$/.test(timestamp) || !Number.isSafeInteger(Number(timestamp))) return null;
+  const quotedAt = new Date(Number(timestamp));
+  const age = Math.abs(Date.parse(observedAt) - quotedAt.getTime());
+  const price = decimal(item.lastPr, "lastPr");
+  if (!Number.isFinite(age) || age > 5 * 60_000 || !positive(price)) return null;
+  return { symbol: "USDT", currency: "USD", price, quotedAt };
+}
+
+async function readUsdtUsdQuote(input: {
+  instruments: unknown;
+  tickers: unknown;
+  observedAt: string;
+  prices: Prices;
+}): Promise<{ quote: PriceQuote | null; source: string | null }> {
+  const native = nativeUsdtUsdQuote(
+    input.instruments,
+    input.tickers,
+    input.observedAt,
+  );
+  if (native) return { quote: native, source: "Bitget 现货 USDTUSD" };
+  return { quote: await input.prices.quote("USDT"), source: null };
+}
+
 function valuePositions(input: {
   positions: BitgetPosition[];
   instruments: unknown;
   tickers: unknown;
   observedAt: string;
   usdtUsdQuote: PriceQuote | null;
+  usdtUsdSource?: string | null;
   targetCurrency: "USDT" | "USD";
 }): AssetSnapshot {
   const livePairs = new Map<string, { asset: string; symbol: string }>();
@@ -486,7 +527,15 @@ function valuePositions(input: {
     Number.isFinite(quoteAge) &&
     quoteAge <= 5 * 60_000
       ? input.usdtUsdQuote
-      : null;
+      : {
+          symbol: "USDT",
+          currency: "USD",
+          price: "1",
+          quotedAt: new Date(input.observedAt),
+        };
+  const usdtUsdSource = input.usdtUsdQuote === usdtUsdQuote
+    ? input.usdtUsdSource ?? "CoinGecko Tether/USD 参考价格"
+    : "USDT/USD 固定兜底（1:1）";
   let total = "0";
   const holdings: AssetHolding[] = input.positions.map((position) => {
     const pair = livePairs.get(position.asset) ?? (() => {
@@ -521,27 +570,24 @@ function valuePositions(input: {
       priceSource = "Bitget 账户 USDT 计价单位";
     } else if (
       displayAsset === "USDT" &&
-      input.targetCurrency === "USD" &&
-      usdtUsdQuote
+      input.targetCurrency === "USD"
     ) {
       price = usdtUsdQuote.price;
       marketValue = decimalMultiply(position.quantity, price);
       pricedAt = usdtUsdQuote.quotedAt.toISOString();
-      priceSource = "CoinGecko Tether/USD 参考价格";
+      priceSource = usdtUsdSource;
     } else {
       const ticker = pair ? tickerByInstrument.get(pair.symbol) : undefined;
       if (ticker) {
         price = input.targetCurrency === "USDT"
           ? ticker.price
-          : usdtUsdQuote
-            ? decimalMultiply(ticker.price, usdtUsdQuote.price)
-            : null;
+          : decimalMultiply(ticker.price, usdtUsdQuote.price);
         if (price !== null) {
           marketValue = decimalMultiply(position.quantity, price);
           pricedAt = ticker.pricedAt;
           priceSource = input.targetCurrency === "USDT"
             ? `Bitget 现货 ${pair?.symbol}`
-            : `Bitget 现货 ${pair?.symbol} × USDT/USD`;
+            : `Bitget 现货 ${pair?.symbol} × ${usdtUsdSource}`;
         }
       }
     }
@@ -592,12 +638,12 @@ function valuePositions(input: {
   return {
     total: { amount: total, currency: input.targetCurrency },
     holdings,
-    exchangeRates: input.targetCurrency === "USDT" && usdtUsdQuote
+    exchangeRates: input.targetCurrency === "USDT"
       ? [{
           baseCurrency: "USDT",
           quoteCurrency: "USD",
           rate: usdtUsdQuote.price,
-          source: "CoinGecko Tether/USD 参考价格",
+          source: usdtUsdSource,
           observedAt: usdtUsdQuote.quotedAt.toISOString(),
         }]
       : [],
@@ -965,11 +1011,16 @@ async function readFullSnapshot(input: {
     identity.registeredAt,
     input.observedAt,
   );
-  const [instruments, tickers, usdtUsdQuote] = await Promise.all([
+  const [instruments, tickers] = await Promise.all([
     input.client.instruments(),
     input.client.tickers(),
-    input.prices.quote("USDT"),
   ]);
+  const usdtUsd = await readUsdtUsdQuote({
+    instruments,
+    tickers,
+    observedAt: input.observedAt,
+    prices: input.prices,
+  });
   return {
     identity,
     snapshot: valuePositions({
@@ -995,7 +1046,8 @@ async function readFullSnapshot(input: {
       instruments,
       tickers,
       observedAt: input.observedAt,
-      usdtUsdQuote,
+      usdtUsdQuote: usdtUsd.quote,
+      usdtUsdSource: usdtUsd.source,
       targetCurrency: input.accountMode === "uta" ? "USD" : "USDT",
     }),
   };
@@ -1086,11 +1138,16 @@ export class ProductionBitgetSourceRefresher implements AssetSourceRefresher {
     const stored = parseCredentials(credentials);
     const client = new BitgetClient(stored, this.request, signal, this.runtime);
     if (mode === "prices") {
-      const [instruments, tickers, usdtUsdQuote] = await Promise.all([
+      const [instruments, tickers] = await Promise.all([
         client.instruments(),
         client.tickers(),
-        this.prices.quote("USDT"),
       ]);
+      const usdtUsd = await readUsdtUsdQuote({
+        instruments,
+        tickers,
+        observedAt: attemptedAt,
+        prices: this.prices,
+      });
       const candidate = valuePositions({
           positions: source.snapshot.holdings.map((holding) => {
             if (!holding.sourceAsset || !holding.sourceAccount) {
@@ -1105,7 +1162,8 @@ export class ProductionBitgetSourceRefresher implements AssetSourceRefresher {
           instruments,
           tickers,
           observedAt: attemptedAt,
-          usdtUsdQuote,
+          usdtUsdQuote: usdtUsd.quote,
+          usdtUsdSource: usdtUsd.source,
           targetCurrency: source.snapshot.total.currency === "USD" ? "USD" : "USDT",
         });
       return {

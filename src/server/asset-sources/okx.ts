@@ -212,12 +212,54 @@ function compareHoldingValue(left: AssetHolding, right: AssetHolding): number {
   return decimalCompare(rightValue, leftValue);
 }
 
+function nativeUsdtUsdQuote(
+  instruments: unknown,
+  tickers: unknown,
+  observedAt: string,
+): PriceQuote | null {
+  const available = list(instruments, "OKX instruments data").some((item) =>
+    item.instType === "SPOT" &&
+    item.state === "live" &&
+    item.instId === "USDT-USD" &&
+    item.baseCcy === "USDT" &&
+    item.quoteCcy === "USD"
+  );
+  if (!available) return null;
+  const item = list(tickers, "OKX tickers data").find(
+    (candidate) => candidate.instId === "USDT-USD",
+  );
+  if (!item) return null;
+  const timestamp = text(item.ts, "ts");
+  if (!/^\d+$/.test(timestamp) || !Number.isSafeInteger(Number(timestamp))) return null;
+  const quotedAt = new Date(Number(timestamp));
+  const age = Math.abs(Date.parse(observedAt) - quotedAt.getTime());
+  const price = decimal(item.last, "last");
+  if (!Number.isFinite(age) || age > 5 * 60_000 || !positive(price)) return null;
+  return { symbol: "USDT", currency: "USD", price, quotedAt };
+}
+
+async function readUsdtUsdQuote(input: {
+  instruments: unknown;
+  tickers: unknown;
+  observedAt: string;
+  prices: Prices;
+}): Promise<{ quote: PriceQuote | null; source: string | null }> {
+  const native = nativeUsdtUsdQuote(
+    input.instruments,
+    input.tickers,
+    input.observedAt,
+  );
+  if (native) return { quote: native, source: "OKX 现货 USDT-USD" };
+  return { quote: await input.prices.quote("USDT"), source: null };
+}
+
 function valuePositions(input: {
   positions: OkxPosition[];
   instruments: unknown;
   tickers: unknown;
   observedAt: string;
   usdtUsdQuote: PriceQuote | null;
+  usdtUsdSource?: string | null;
 }): AssetSnapshot {
   const livePairs = new Map<string, string>();
   for (const item of list(input.instruments, "OKX instruments data")) {
@@ -256,7 +298,15 @@ function valuePositions(input: {
     Number.isFinite(quoteAge) &&
     quoteAge <= 5 * 60_000
       ? input.usdtUsdQuote
-      : null;
+      : {
+          symbol: "USDT",
+          currency: "USD",
+          price: "1",
+          quotedAt: new Date(input.observedAt),
+        };
+  const usdtUsdSource = input.usdtUsdQuote === usdtUsdQuote
+    ? input.usdtUsdSource ?? "CoinGecko Tether/USD 参考价格"
+    : "USDT/USD 固定兜底（1:1）";
   let total = "0";
   const holdings: AssetHolding[] = input.positions.map((position) => {
     if (position.asset === "USDT") {
@@ -332,15 +382,13 @@ function valuePositions(input: {
   return {
     total: { amount: total, currency: "USDT" },
     holdings,
-    exchangeRates: usdtUsdQuote
-      ? [{
-          baseCurrency: "USDT",
-          quoteCurrency: "USD",
-          rate: usdtUsdQuote.price,
-          source: "CoinGecko Tether/USD 参考价格",
-          observedAt: usdtUsdQuote.quotedAt.toISOString(),
-        }]
-      : [],
+    exchangeRates: [{
+      baseCurrency: "USDT",
+      quoteCurrency: "USD",
+      rate: usdtUsdQuote.price,
+      source: usdtUsdSource,
+      observedAt: usdtUsdQuote.quotedAt.toISOString(),
+    }],
     syncedAt: input.observedAt,
   };
 }
@@ -509,11 +557,16 @@ async function readFullSnapshot(input: {
   const trading = await input.client.trading();
   const funding = await input.client.funding();
   const savings = await input.client.savings();
-  const [instruments, tickers, usdtUsdQuote] = await Promise.all([
+  const [instruments, tickers] = await Promise.all([
     input.client.instruments(),
     input.client.tickers(),
-    input.prices.quote("USDT"),
   ]);
+  const usdtUsd = await readUsdtUsdQuote({
+    instruments,
+    tickers,
+    observedAt: input.observedAt,
+    prices: input.prices,
+  });
   return {
     identity,
     snapshot: valuePositions({
@@ -521,7 +574,8 @@ async function readFullSnapshot(input: {
       instruments,
       tickers,
       observedAt: input.observedAt,
-      usdtUsdQuote,
+      usdtUsdQuote: usdtUsd.quote,
+      usdtUsdSource: usdtUsd.source,
     }),
   };
 }
@@ -606,11 +660,16 @@ export class ProductionOkxSourceRefresher implements AssetSourceRefresher {
     const stored = parseCredentials(credentials);
     const client = new OkxClient(stored, this.request, signal);
     if (mode === "prices") {
-      const [instruments, tickers, usdtUsdQuote] = await Promise.all([
+      const [instruments, tickers] = await Promise.all([
         client.instruments(),
         client.tickers(),
-        this.prices.quote("USDT"),
       ]);
+      const usdtUsd = await readUsdtUsdQuote({
+        instruments,
+        tickers,
+        observedAt: attemptedAt,
+        prices: this.prices,
+      });
       const candidate = valuePositions({
           positions: source.snapshot.holdings.map((holding) => {
             if (!holding.sourceAsset || !holding.sourceAccount) {
@@ -625,7 +684,8 @@ export class ProductionOkxSourceRefresher implements AssetSourceRefresher {
           instruments,
           tickers,
           observedAt: attemptedAt,
-          usdtUsdQuote,
+          usdtUsdQuote: usdtUsd.quote,
+          usdtUsdSource: usdtUsd.source,
         });
       return {
         snapshot: preserveNewerPrices(source.snapshot, candidate),

@@ -34,6 +34,8 @@ export async function POST(request: Request) {
     "preview-unknown",
     "preview-missing-price",
     "preview-zero-price",
+    "preview-native-usdt-usd",
+    "preview-usdt-usd-fallback",
     "refresh-prices",
     "refresh-older-ticker",
     "refresh-all-older-ticker",
@@ -109,6 +111,19 @@ export async function POST(request: Request) {
       available: "8.123456789",
       frozen: "0",
       usdtValue: "0",
+    });
+  }
+  if (body.action === "preview-native-usdt-usd") {
+    fixture.instruments.data.push({
+      symbol: "USDTUSD",
+      baseCoin: "USDT",
+      quoteCoin: "USD",
+      status: "online",
+    });
+    fixture.tickers.data.push({
+      symbol: "USDTUSD",
+      lastPr: "0.997",
+      ts: String(Date.parse(BITGET_OBSERVED_AT)),
     });
   }
   if (body.action === "preview-earn-mismatch") {
@@ -344,8 +359,14 @@ export async function POST(request: Request) {
     return Response.json(response, { status: responseStatus });
   };
 
+  let referencePriceRequests = 0;
   const prices: Prices = {
     async quote(symbol) {
+      referencePriceRequests += 1;
+      if (body.action === "preview-native-usdt-usd") {
+        throw new Error("原生 USDT/USD 可用时不应请求参考价格");
+      }
+      if (body.action === "preview-usdt-usd-fallback") return null;
       return symbol === "USDT" ? BITGET_USDT_USD_QUOTE : null;
     },
   };
@@ -425,6 +446,7 @@ export async function POST(request: Request) {
       permissions: result.permissions,
       account: result.account,
       snapshot: result.snapshot,
+      referencePriceRequests,
       privateRequests,
       publicRequests,
       allRequestsGet: methods.every((method) => method === "GET"),

@@ -704,12 +704,52 @@ function tickerPrices(tickers: unknown): Map<string, string> {
   );
 }
 
+function nativeUsdtUsdQuote(
+  exchangeInfo: unknown,
+  tickers: unknown,
+  observedAt: string,
+): PriceQuote | null {
+  const root = record(exchangeInfo, "Binance exchangeInfo 响应");
+  const available = list(root.symbols, "Binance exchangeInfo symbols").some((item) =>
+    item.status === "TRADING" &&
+    item.isSpotTradingAllowed !== false &&
+    item.symbol === "USDTUSD" &&
+    item.baseAsset === "USDT" &&
+    item.quoteAsset === "USD"
+  );
+  if (!available) return null;
+  const price = tickerPrices(tickers).get("USDTUSD") ?? null;
+  if (price === null || !positive(price)) return null;
+  return {
+    symbol: "USDT",
+    currency: "USD",
+    price,
+    quotedAt: new Date(observedAt),
+  };
+}
+
+async function readUsdtUsdQuote(input: {
+  exchangeInfo: unknown;
+  tickers: unknown;
+  observedAt: string;
+  prices: Prices;
+}): Promise<{ quote: PriceQuote | null; source: string | null }> {
+  const native = nativeUsdtUsdQuote(
+    input.exchangeInfo,
+    input.tickers,
+    input.observedAt,
+  );
+  if (native) return { quote: native, source: "Binance 现货 USDTUSD" };
+  return { quote: await input.prices.quote("USDT"), source: null };
+}
+
 function valuePositions(input: {
   positions: BinancePosition[];
   exchangeInfo: unknown;
   tickers: unknown;
   observedAt: string;
   usdtUsdQuote: PriceQuote | null;
+  usdtUsdSource?: string | null;
   coverage?: AssetSnapshot["coverage"];
 }): AssetSnapshot {
   const eligible = eligibleUsdtSymbols(input.exchangeInfo);
@@ -727,7 +767,15 @@ function valuePositions(input: {
     Number.isFinite(quoteAge) &&
     quoteAge <= 5 * 60_000
       ? input.usdtUsdQuote
-      : null;
+      : {
+          symbol: "USDT",
+          currency: "USD",
+          price: "1",
+          quotedAt: new Date(input.observedAt),
+        };
+  const usdtUsdSource = input.usdtUsdQuote === usdtUsdQuote
+    ? input.usdtUsdSource ?? "CoinGecko Tether/USD 参考价格"
+    : "USDT/USD 固定兜底（1:1）";
   let total = "0";
   const holdings: AssetHolding[] = input.positions.map((position) => {
     if (position.asset === "USDT") {
@@ -839,15 +887,13 @@ function valuePositions(input: {
   return {
     total: { amount: total, currency: "USDT" },
     holdings,
-    exchangeRates: usdtUsdQuote
-      ? [{
-          baseCurrency: "USDT",
-          quoteCurrency: "USD",
-          rate: usdtUsdQuote.price,
-          source: "CoinGecko Tether/USD 参考价格",
-          observedAt: usdtUsdQuote.quotedAt.toISOString(),
-        }]
-      : [],
+    exchangeRates: [{
+      baseCurrency: "USDT",
+      quoteCurrency: "USD",
+      rate: usdtUsdQuote.price,
+      source: usdtUsdSource,
+      observedAt: usdtUsdQuote.quotedAt.toISOString(),
+    }],
     syncedAt: input.observedAt,
     ...(input.coverage === undefined ? {} : { coverage: input.coverage }),
   };
@@ -1287,11 +1333,16 @@ async function readFullSnapshot(input: {
   ] as const) {
     if (result.error) failures[product] = result.error;
   }
-  const [exchangeInfo, tickers, usdtUsdQuote] = await Promise.all([
+  const [exchangeInfo, tickers] = await Promise.all([
     input.client.exchangeInfo(),
     input.client.tickers(),
-    input.prices.quote("USDT"),
   ]);
+  const usdtUsd = await readUsdtUsdQuote({
+    exchangeInfo,
+    tickers,
+    observedAt: input.observedAt,
+    prices: input.prices,
+  });
   return {
     account: record(spotAccount, "Binance 现货账户响应"),
     snapshot: (() => {
@@ -1322,7 +1373,8 @@ async function readFullSnapshot(input: {
           exchangeInfo,
           tickers,
           observedAt: input.observedAt,
-          usdtUsdQuote,
+          usdtUsdQuote: usdtUsd.quote,
+          usdtUsdSource: usdtUsd.source,
         }),
         walletBalances,
         tickers,
@@ -1406,11 +1458,16 @@ export class ProductionBinanceSourceRefresher
     const stored = parseCredentials(credentials);
     const client = new BinanceClient(stored, this.request, signal);
     if (mode === "prices") {
-      const [exchangeInfo, tickers, usdtUsdQuote] = await Promise.all([
+      const [exchangeInfo, tickers] = await Promise.all([
         client.exchangeInfo(),
         client.tickers(),
-        this.prices.quote("USDT"),
       ]);
+      const usdtUsd = await readUsdtUsdQuote({
+        exchangeInfo,
+        tickers,
+        observedAt: attemptedAt,
+        prices: this.prices,
+      });
       return {
         snapshot: valuePositions({
           positions: source.snapshot.holdings.map((holding) => {
@@ -1433,7 +1490,8 @@ export class ProductionBinanceSourceRefresher
           exchangeInfo,
           tickers,
           observedAt: attemptedAt,
-          usdtUsdQuote,
+          usdtUsdQuote: usdtUsd.quote,
+          usdtUsdSource: usdtUsd.source,
           coverage: source.snapshot.coverage,
         }),
       };

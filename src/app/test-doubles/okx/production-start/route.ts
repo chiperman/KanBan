@@ -35,6 +35,8 @@ export async function POST(request: Request) {
     "preview-missing-liability-proof",
     "preview-missing-price",
     "preview-zero-price",
+    "preview-native-usdt-usd",
+    "preview-usdt-usd-fallback",
     "refresh-prices",
     "refresh-older-ticker",
     "refresh-all-older-ticker",
@@ -77,6 +79,21 @@ export async function POST(request: Request) {
   if (body.action === "preview-zero-price") {
     const btc = fixture.tickers.data.find(({ instId }) => instId === "BTC-USDT");
     if (btc) btc.last = "0";
+  }
+  if (body.action === "preview-native-usdt-usd") {
+    (fixture.instruments.data as Array<Record<string, unknown>>).push({
+      instType: "SPOT",
+      instId: "USDT-USD",
+      baseCcy: "USDT",
+      quoteCcy: "USD",
+      state: "live",
+    });
+    (fixture.tickers.data as Array<Record<string, unknown>>).push({
+      instType: "SPOT",
+      instId: "USDT-USD",
+      last: "0.997",
+      ts: String(Date.parse(OKX_OBSERVED_AT)),
+    });
   }
   const privatePaths = new Set([
     "/api/v5/account/config",
@@ -150,8 +167,14 @@ export async function POST(request: Request) {
     }
     return Response.json(response);
   };
+  let referencePriceRequests = 0;
   const prices: Prices = {
     async quote(symbol) {
+      referencePriceRequests += 1;
+      if (body.action === "preview-native-usdt-usd") {
+        throw new Error("原生 USDT/USD 可用时不应请求参考价格");
+      }
+      if (body.action === "preview-usdt-usd-fallback") return null;
       return symbol === "USDT" ? OKX_USDT_USD_QUOTE : null;
     },
   };
@@ -225,6 +248,7 @@ export async function POST(request: Request) {
       permissions: result.permissions,
       account: result.account,
       snapshot: result.snapshot,
+      referencePriceRequests,
       privateRequests,
       allRequestsGet: methods.every((method) => method === "GET"),
       allPrivateRequestsSigned:
