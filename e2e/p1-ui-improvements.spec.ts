@@ -88,6 +88,9 @@ test("看板时间、来源状态和普通卡片遵守 Vibe 视觉层级", async
     "data-vibe-tone",
     "muted",
   );
+  await expect(sourceCard.locator(".source-live-state")).toHaveText(
+    "LB / CURRENT",
+  );
   await expect(sourceCard.locator(".source-meter-caption")).toHaveCSS(
     "font-size",
     "12px",

@@ -43,6 +43,11 @@ const DIMENSION_OPTIONS: readonly InstrumentOption<DistributionDimension>[] = [
   { value: "currency", label: "原始币种" },
 ];
 
+function sourceGroupTitle(source: ValuationSource): string {
+  if (source.kind === "longbridge") return "长桥账户";
+  return source.label;
+}
+
 function InstrumentSelect<Value extends string>({
   label,
   value,
@@ -247,6 +252,9 @@ export function TotalAssetOverview({
   const allocationGroups = valuation.groups.filter(
     (group) => group.amount !== null && decimalCompare(group.amount, "0") > 0,
   );
+  const sourceTitleById = new Map(
+    sources.map((source) => [source.id, sourceGroupTitle(source)]),
+  );
   const valuationStatus = [
     valuation.incomplete
       ? `当前估值：不完整 · ${valuation.unvaluedCount} 项未估值`
@@ -354,7 +362,9 @@ export function TotalAssetOverview({
               <span className="distribution-index">
                 {String(index + 1).padStart(2, "0")}
               </span>
-              {group.label}
+              {dimension === "source"
+                ? (sourceTitleById.get(group.key) ?? group.label)
+                : group.label}
             </span>
             <strong>
               {group.amount === null

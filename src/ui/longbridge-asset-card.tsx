@@ -168,6 +168,13 @@ export function AssetSourceCard({
   const meterSegments = 12;
   const heading = sourceHeading(source);
   const formatMoney = source.kind === "longbridge" ? amount : moneyAmount;
+  const sourceState = source.lifecycle === "disconnected"
+    ? { label: "OFFLINE", tone: "muted" as const }
+    : source.sync.error
+      ? { label: "ERROR", tone: "error" as const }
+      : source.sync.status === "expired"
+        ? { label: "STALE", tone: "warning" as const }
+        : { label: "CURRENT", tone: "muted" as const };
   return (
     <>
       <div
@@ -193,9 +200,9 @@ export function AssetSourceCard({
           <p className="card-label">{providerCardLabel(source)}</p>
           <VibeStatusTag
             className={`source-live-state ${source.sync.status}`}
-            tone={source.sync.status === "expired" ? "warning" : "muted"}
+            tone={sourceState.tone}
           >
-            {providerCode(source)} / {source.sync.status === "expired" ? "STALE" : "LIVE"}
+            {providerCode(source)} / {sourceState.label}
           </VibeStatusTag>
         </header>
         <h2 className="asset-source-title">{heading.title}</h2>

@@ -143,6 +143,13 @@ test("部分失败保留最后成功数据并标记过期，手动刷新可见�
   await expect(beta).toContainText("最后成功：2026-04-01 08:00 UTC");
   await expect(beta).toContainText("Beta Crypto 同步失败：来源暂时不可用");
 
+  const alphaState = alpha.locator(".source-live-state");
+  await expect(alphaState).toContainText("CURRENT");
+  await expect(alphaState).toHaveAttribute("data-vibe-tone", "muted");
+  const betaState = beta.locator(".source-live-state");
+  await expect(betaState).toContainText("ERROR");
+  await expect(betaState).toHaveAttribute("data-vibe-tone", "error");
+
   await request.post("/test-doubles/refresh", {
     data: { action: "prepare-recovery", hold: true },
   });

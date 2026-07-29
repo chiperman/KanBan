@@ -89,7 +89,7 @@ export function VibeMetric({
   );
 }
 
-type VibeStatusTone = "live" | "muted" | "signal" | "warning";
+type VibeStatusTone = "live" | "muted" | "signal" | "warning" | "error";
 
 interface VibeStatusTagProps extends HTMLAttributes<HTMLSpanElement> {
   children: ReactNode;

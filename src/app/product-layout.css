@@ -2295,18 +2295,6 @@ body {
   align-items: center;
   gap: var(--vibe-space-2);
   margin: 0;
-  color: var(--success);
-}
-
-.source-live-state span {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-.source-live-state.expired {
-  color: var(--accent-text);
 }
 
 .asset-source-title {

@@ -102,6 +102,11 @@ test("断开删除凭证并停止同步，保留来源身份和已有快照", as
   page.once("dialog", (dialog) => dialog.accept());
   await management.getByRole("button", { name: "断开 Ethereum 观察钱包" }).click();
   await expect(page.getByText("已断开 · 历史数据保留")).toBeVisible();
+  const sourceState = page
+    .getByTestId("ethereum-watch-card")
+    .locator(".source-live-state");
+  await expect(sourceState).toHaveText("ETH / OFFLINE");
+  await expect(sourceState).toHaveAttribute("data-vibe-tone", "muted");
 
   const disconnected = await lifecycleState(page);
   expect(disconnected.sources).toHaveLength(1);

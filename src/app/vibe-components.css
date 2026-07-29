@@ -538,6 +538,10 @@ body::before {
   color: var(--warning);
 }
 
+.vibe-status-tag--error {
+  color: var(--error);
+}
+
 .vibe-data-row {
   border-bottom: 1px solid var(--line);
 }
