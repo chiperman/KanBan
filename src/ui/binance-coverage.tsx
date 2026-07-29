@@ -1,5 +1,6 @@
 import { decimalToFixed } from "@/domain/decimal";
 import type { AssetHolding, AssetSnapshotCoverage } from "@/server/ports";
+import { VibeStatusTag } from "@/ui/vibe/vibe-data-instrument";
 
 const PRODUCT_LABELS: Record<string, string> = {
   spot: "Spot",
@@ -72,31 +73,32 @@ export function BinanceCoverage({
 }: {
   coverage: AssetSnapshotCoverage | undefined;
 }) {
-  const label = coverage?.status === "complete"
-    ? "产品覆盖完整"
-    : coverage?.status === "partial"
-      ? "产品统计不完整"
-      : "产品覆盖未验证";
+  const label = coverage?.status === "partial"
+    ? "产品统计不完整"
+    : "产品覆盖未验证";
   return (
     <>
-      <p
-        className={`asset-sync-status${coverage?.status === "complete" ? "" : " is-incomplete"}`}
-        data-testid="binance-coverage-status"
-      >
-        {label}
-        {coverage?.unexplainedValue
-          ? ` · 未解释 ${money(coverage.unexplainedValue.amount)} ${coverage.unexplainedValue.currency}`
-          : ""}
-        {coverage && coverage.excludedPositiveAccounts.length > 0
-          ? ` · 未纳入 ${coverage.excludedPositiveAccounts.join("、")}`
-          : ""}
-      </p>
+      {coverage?.status !== "complete" ? (
+        <VibeStatusTag
+          className="asset-sync-status is-incomplete"
+          data-testid="binance-coverage-status"
+          tone="warning"
+        >
+          {label}
+          {coverage?.unexplainedValue
+            ? ` · 未解释 ${money(coverage.unexplainedValue.amount)} ${coverage.unexplainedValue.currency}`
+            : ""}
+          {coverage && coverage.excludedPositiveAccounts.length > 0
+            ? ` · 未纳入 ${coverage.excludedPositiveAccounts.join("、")}`
+            : ""}
+        </VibeStatusTag>
+      ) : null}
       {coverage && coverage.products.length > 0 ? (
-        <details data-testid="binance-product-coverage">
+        <details className="vibe-coverage" data-testid="binance-product-coverage">
           <summary>产品覆盖（{coverage.products.length}）</summary>
           <ul>
             {coverage.products.map((product) => (
-              <li key={product.product}>
+              <li className="vibe-data-row" key={product.product}>
                 <strong>{PRODUCT_LABELS[product.product] ?? product.product}</strong>
                 {` · ${CAPABILITY_LABELS[product.capability]} · ${product.freshness === "current" ? "当前" : "过期"}`}
                 {product.message ? ` · ${product.message}` : ""}

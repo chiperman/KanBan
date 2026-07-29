@@ -28,7 +28,7 @@ test.beforeEach(async ({ request }) => {
   expect(seeded.ok()).toBeTruthy();
 });
 
-test("看板时间、来源状态和普通卡片遵守首批视觉层级", async ({ page }) => {
+test("看板时间、来源状态和普通卡片遵守 Vibe 视觉层级", async ({ page }) => {
   await loginAsOwner(page);
 
   await expect(page.getByTestId("server-time")).toContainText("SHANGHAI");
@@ -37,7 +37,11 @@ test("看板时间、来源状态和普通卡片遵守首批视觉层级", async
   const sourceCard = page.getByTestId("longbridge-card");
   await expect(sourceCard.locator(".source-live-state")).toHaveCSS(
     "font-size",
-    "12px",
+    "10px",
+  );
+  await expect(sourceCard.locator(".source-live-state")).toHaveAttribute(
+    "data-vibe-component",
+    "status-tag",
   );
   await expect(sourceCard.locator(".source-meter-caption")).toHaveCSS(
     "font-size",
@@ -51,5 +55,9 @@ test("看板时间、来源状态和普通卡片遵守首批视觉层级", async
       right: computed.borderRightWidth,
     };
   });
-  expect(cardBorders).toEqual({ top: "1px", right: "1px" });
+  expect(cardBorders).toEqual({ top: "0px", right: "0px" });
+  await expect(sourceCard.locator("..")).toHaveAttribute(
+    "data-vibe-surface",
+    "data-card",
+  );
 });

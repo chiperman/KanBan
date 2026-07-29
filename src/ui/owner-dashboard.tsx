@@ -20,6 +20,9 @@ import {
   type AssetSourceView,
 } from "@/ui/longbridge-asset-card";
 import { TotalAssetOverview } from "@/ui/total-asset-overview";
+import { VibeButton } from "@/ui/vibe/vibe-button";
+import { VibeDialog } from "@/ui/vibe/vibe-dialog";
+import { VibeNotice } from "@/ui/vibe/vibe-notice";
 
 function cardName(card: Card): string {
   return card.title;
@@ -325,13 +328,15 @@ export function OwnerDashboard({
     return (
       <article
         ref={controls.cardRef}
-        className={`card span-${card.span}${card.startsNewRow ? " starts-new-row" : ""}${controls.isDragging ? " card-dragging" : ""}${resizingId === card.id ? " card-resizing" : ""}`}
+        className={`card vibe-data-card span-${card.span}${card.startsNewRow ? " starts-new-row" : ""}${controls.isDragging ? " card-dragging" : ""}${resizingId === card.id ? " card-resizing" : ""}`}
         data-testid="card"
         data-command-target={card.id}
         data-command-label={source ? sourceName(source) : cardName(card)}
         data-layout-card-id={card.id}
+        data-vibe-surface="data-card"
         tabIndex={-1}
       >
+        <span className="card-corner-marks" aria-hidden="true" />
         {renderCardBody(card)}
         <div className="card-actions">
           <span className="source-status">SOURCE / CONTROL</span>
@@ -349,6 +354,7 @@ export function OwnerDashboard({
         <button
           type="button"
           className="layout-resize-handle"
+          data-vibe-component="layout-control"
           aria-label={`调整${cardName(card)}宽度，当前宽度 ${card.span} 格；可拖动或使用左右方向键`}
           disabled={controls.disabled}
           draggable={false}
@@ -364,6 +370,7 @@ export function OwnerDashboard({
           ref={controls.handleRef}
           type="button"
           className="layout-drag-handle"
+          data-vibe-component="layout-control"
           {...controls.handleAttributes}
           {...controls.handleListeners}
           aria-label={`拖动${cardName(card)}调整排序`}
@@ -399,10 +406,11 @@ export function OwnerDashboard({
     <>
       {assetSources.length > 0 ? (
         <article
-          className="card total-overview-card"
+          className="card vibe-data-card total-overview-card"
           data-testid="total-overview-card"
           data-command-target="total-overview"
           data-command-label="总资产概览"
+          data-vibe-surface="data-card"
           tabIndex={-1}
         >
           <TotalAssetOverview
@@ -413,24 +421,28 @@ export function OwnerDashboard({
           />
         </article>
       ) : null}
-      <div className="dashboard-control-deck">
+      <div className="dashboard-control-deck" data-vibe-module="control-deck">
         <div className="owner-toolbar" aria-label="资产管理">
-          <button
+          <VibeButton
             type="button"
             aria-pressed={showSensitiveInfo}
             data-testid="sensitive-info-toggle"
             onClick={() => setShowSensitiveInfo((current) => !current)}
+            variant="outline"
           >
             {showSensitiveInfo ? "隐藏关键信息" : "显示关键信息"}
-          </button>
+          </VibeButton>
           <AssetSourceFlow />
-          <p className="layout-resize-guide">右上角排序 · 右下角调整宽度</p>
         </div>
         <AssetRefreshControls
           enabled={assetSources.some((source) => source.lifecycle !== "disconnected")}
         />
       </div>
-      {error ? <p className="content-error" role="alert">{error}</p> : null}
+      {error ? (
+        <VibeNotice className="content-error" role="alert" tone="error">
+          {error}
+        </VibeNotice>
+      ) : null}
       <CardLayoutEditor
         cards={displayCards}
         renderCard={renderLayoutCard}
@@ -441,6 +453,7 @@ export function OwnerDashboard({
               <div
                 className={`layout-resize-preview span-${resizePreview.span}`}
                 data-testid="layout-resize-preview"
+                data-vibe-state="resize-preview"
                 aria-hidden="true"
                 style={{
                   left: resizePreview.left,
@@ -480,75 +493,87 @@ export function OwnerDashboard({
         </section>
       ) : null}
       {managementTarget ? (
-        <div
-          className="editor-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-label={`管理 ${sourceName(managementTarget)}`}
-        >
-          <div className="editor-dialog source-management-dialog">
-            <p className="card-label">来源管理</p>
-            <h2>{sourceName(managementTarget)}</h2>
-            <p className="login-copy">
-              断开会移除只读凭证并停止同步，但保留已有数据；永久删除会清除全部历史。
-            </p>
-            <div className="editor-actions">
-              {managementTarget.lifecycle !== "disconnected" ? (
-                <button
-                  type="button"
-                  className="danger-button"
-                  onClick={() => void disconnectSource(managementTarget)}
-                >
-                  断开 {sourceName(managementTarget)}
-                </button>
-              ) : null}
-              <button
+        <VibeDialog
+          actions={
+            <>
+              <VibeButton type="button" onClick={() => setManagementTarget(null)} variant="text">
+                关闭
+              </VibeButton>
+              <VibeButton
                 type="button"
                 className="danger-button"
                 onClick={() => {
                   setDeleteTarget({ source: managementTarget, stage: 1 });
                   setManagementTarget(null);
                 }}
+                variant="outline"
               >
                 永久删除 {sourceName(managementTarget)}数据
-              </button>
-              <button
-                type="button"
-                className="login-cancel"
-                onClick={() => setManagementTarget(null)}
-              >
-                关闭
-              </button>
-            </div>
-          </div>
-        </div>
+              </VibeButton>
+              {managementTarget.lifecycle !== "disconnected" ? (
+                <VibeButton
+                  type="button"
+                  className="danger-button"
+                  onClick={() => void disconnectSource(managementTarget)}
+                  variant="outline"
+                >
+                  断开 {sourceName(managementTarget)}
+                </VibeButton>
+              ) : null}
+            </>
+          }
+          aria-label={`管理 ${sourceName(managementTarget)}`}
+          className="source-management-dialog"
+          description="断开会移除只读凭证并停止同步，但保留已有数据；永久删除会清除全部历史。"
+          eyebrow="SOURCE / CONTROL"
+          title={sourceName(managementTarget)}
+          titleId="source-management-title"
+        />
       ) : null}
       {deleteTarget ? (
-        <div className="editor-overlay" role="dialog" aria-modal="true" aria-label={deleteTarget.stage === 1 ? "永久删除来源数据" : "第二次确认永久删除"}>
-          <div className="editor-dialog">
-            <p className="card-label">{deleteTarget.stage === 1 ? "永久删除来源数据" : "第二次确认"}</p>
-            <h2>{sourceName(deleteTarget.source)}</h2>
-            <p>
-              {deleteTarget.stage === 1
-                ? "这会永久删除该来源、持仓记录、同步记录和全部资产快照，且无法恢复。"
-                : "最后确认：删除后无法找回任何该来源历史。"}
-            </p>
-            <div className="editor-actions">
-              {deleteTarget.stage === 1 ? (
-                <button type="button" className="danger-button" onClick={() => setDeleteTarget({ ...deleteTarget, stage: 2 })}>
-                  继续删除
-                </button>
-              ) : (
-                <button type="button" className="danger-button" disabled={lifecyclePending} onClick={() => void permanentlyDeleteSource()}>
-                  确认永久删除
-                </button>
-              )}
-              <button type="button" className="login-cancel" disabled={lifecyclePending} onClick={() => setDeleteTarget(null)}>
+        <VibeDialog
+          actions={
+            <>
+              <VibeButton
+                type="button"
+                disabled={lifecyclePending}
+                onClick={() => setDeleteTarget(null)}
+                variant="text"
+              >
                 取消
-              </button>
-            </div>
-          </div>
-        </div>
+              </VibeButton>
+              {deleteTarget.stage === 1 ? (
+                <VibeButton
+                  type="button"
+                  className="danger-button"
+                  onClick={() => setDeleteTarget({ ...deleteTarget, stage: 2 })}
+                  variant="outline"
+                >
+                  继续删除
+                </VibeButton>
+              ) : (
+                <VibeButton
+                  type="button"
+                  className="danger-button"
+                  disabled={lifecyclePending}
+                  onClick={() => void permanentlyDeleteSource()}
+                  variant="outline"
+                >
+                  确认永久删除
+                </VibeButton>
+              )}
+            </>
+          }
+          aria-label={deleteTarget.stage === 1 ? "永久删除来源数据" : "第二次确认永久删除"}
+          description={
+            deleteTarget.stage === 1
+              ? "这会永久删除该来源、持仓记录、同步记录和全部资产快照，且无法恢复。"
+              : "最后确认：删除后无法找回任何该来源历史。"
+          }
+          eyebrow={deleteTarget.stage === 1 ? "PERMANENT DELETE / 01" : "PERMANENT DELETE / 02"}
+          title={sourceName(deleteTarget.source)}
+          titleId="source-delete-title"
+        />
       ) : null}
     </>
   );

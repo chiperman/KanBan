@@ -6,6 +6,8 @@ import {
   type Page,
 } from "@playwright/test";
 
+import { chooseOverviewOption } from "./overview-control-helpers";
+
 async function attachPasskey(page: Page): Promise<CDPSession> {
   const client = await page.context().newCDPSession(page);
   await client.send("WebAuthn.enable");
@@ -115,7 +117,7 @@ test("北京时间日界线建立唯一基准，同日幂等且跨日不回填",
   await expect(todayChange).toHaveCSS("font-family", /Doto/);
   await expect(todayChange.locator(".amount-unit")).toHaveCSS(
     "font-family",
-    /Space Mono/,
+    /Geist Mono/,
   );
   await expect(page.getByTestId("total-asset-trend")).toContainText(
     "04月01日",
@@ -127,11 +129,11 @@ test("北京时间日界线建立唯一基准，同日幂等且跨日不回填",
     "2026-04-01",
   ]);
   expect((await history(request)).days[0].total.CNY).toBe("2174.4");
-  await page.getByLabel("计价货币").selectOption("CNY");
+  await chooseOverviewOption(page, "计价货币", "CNY");
   await expect(page.getByTestId("today-asset-change")).toContainText(
     "+0.00 CNY",
   );
-  await page.getByLabel("计价货币").selectOption("USD");
+  await chooseOverviewOption(page, "计价货币", "USD");
   const persistence = await request.post("/test-doubles/daily-snapshots", {
     data: { action: "production-persistence" },
   });

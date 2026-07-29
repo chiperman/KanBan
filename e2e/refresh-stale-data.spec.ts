@@ -138,7 +138,7 @@ test("部分失败保留最后成功数据并标记过期，手动刷新可见�
   const beta = page.getByTestId("asset-source-card-source-beta");
   await expect(alpha).toContainText("110 USD");
   await expect(alpha).toContainText("数据当前");
-  await expect(beta.getByTestId("asset-source-total")).toHaveText("200 USD");
+  await expect(beta.getByTestId("asset-source-total")).toHaveText("200.00 USD");
   await expect(beta).toContainText("过期数据");
   await expect(beta).toContainText("最后成功：2026-04-01 08:00 UTC");
   await expect(beta).toContainText("Beta Crypto 同步失败：来源暂时不可用");
@@ -147,20 +147,25 @@ test("部分失败保留最后成功数据并标记过期，手动刷新可见�
     data: { action: "prepare-recovery", hold: true },
   });
   const refresh = page.getByRole("button", { name: "立即刷新资产" });
+  const refreshStatus = page.getByTestId("asset-refresh-status");
   await refresh.click();
   await expect(refresh).toBeDisabled();
-  await expect(page.getByTestId("asset-refresh-status")).toContainText(
+  await expect(refresh).toContainText("正在刷新资产");
+  await expect(refreshStatus).toContainText(
     "正在刷新余额与持仓",
   );
+  await expect(refreshStatus).toHaveCSS("clip-path", "inset(50%)");
   await expect.poll(async () => (await metrics(request)).active).toBe(1);
   await request.post("/test-doubles/refresh", { data: { action: "release" } });
 
-  await expect(page.getByTestId("asset-refresh-status")).toContainText("同步完成");
+  await expect(refreshStatus).toContainText("同步完成");
+  await expect(refreshStatus).toHaveCSS("clip-path", "inset(50%)");
+  await expect(refresh).toContainText("立即刷新资产");
   await expect(overview.getByTestId("total-asset-amount")).toHaveText(
     "330.00 USD",
   );
   await expect(overview).not.toContainText("过期来源");
-  await expect(beta.getByTestId("asset-source-total")).toHaveText("210 USD");
+  await expect(beta.getByTestId("asset-source-total")).toHaveText("210.00 USD");
   await expect(beta).toContainText("数据当前");
   await expect(beta).not.toContainText("来源暂时不可用");
 });
@@ -184,9 +189,12 @@ test("挂起来源超时不阻塞成功提交，刷新期间新增来源也不�
     data: { action: "connect-during-refresh" },
   });
 
-  await expect(page.getByTestId("asset-refresh-status")).toContainText(
+  const failedStatus = page.getByTestId("asset-refresh-status");
+  await expect(failedStatus).toContainText(
     "同步完成 · 1 个来源失败",
   );
+  await expect(failedStatus).toHaveClass(/is-visible/);
+  await expect(failedStatus).toHaveCSS("clip-path", "none");
   await expect(page.getByTestId("total-asset-amount")).toHaveText(
     "361.00 USD",
   );

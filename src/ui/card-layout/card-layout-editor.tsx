@@ -415,6 +415,7 @@ export function CardLayoutEditor({
           <div
             className={`card card-drag-overlay span-${activeCandidate?.span ?? overlayCard.span}`}
             data-testid="card-drag-overlay"
+            data-vibe-state="drag-overlay"
             aria-hidden="true"
             style={overlayWidth === null ? undefined : { width: overlayWidth }}
           >

@@ -51,6 +51,7 @@ function CandidateDropZone({
         ref={setNodeRef}
         className={`card-drop-candidate${active ? " is-active" : ""}`}
         data-testid="card-drop-candidate"
+        data-vibe-state="drop-candidate"
         data-candidate-id={candidate.id}
         data-candidate-kind={candidate.kind}
         data-candidate-span={candidate.span}
@@ -65,6 +66,7 @@ function CandidateDropZone({
         <div
           className={`card-drop-preview card-drop-slot span-${candidate.span}`}
           data-testid="layout-drop-slot"
+          data-vibe-state="drop-preview"
           data-candidate-kind={candidate.kind}
           data-candidate-span={candidate.span}
           aria-hidden="true"

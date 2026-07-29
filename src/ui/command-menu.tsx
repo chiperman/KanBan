@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 
 import { ASSET_MANUAL_REFRESH_EVENT } from "@/shared/command-events";
 import { OWNER_LOCK_EVENT } from "@/shared/session-policy";
+import { VibeButton } from "@/ui/vibe/vibe-button";
+import { VibeField } from "@/ui/vibe/vibe-field";
 
 interface NavigationTarget {
   id: string;
@@ -175,40 +177,48 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
 
   return (
     <>
-      <button
+      <VibeButton
         ref={triggerRef}
         type="button"
         className="command-menu-trigger"
         aria-label="打开快捷命令"
         onClick={show}
+        variant="outline"
       >
         快捷命令 <kbd>⌘K</kbd>
-      </button>
+      </VibeButton>
       {open ? (
         <div
           className="command-menu-overlay"
           role="dialog"
           aria-modal="true"
           aria-label="快捷命令"
+          data-vibe-component="command-menu"
           onKeyDown={keyboard}
           onMouseDown={(event) => {
             if (event.currentTarget === event.target) close();
           }}
         >
-          <div className="command-menu-panel">
+          <div className="command-menu-panel" data-vibe-surface="command-panel">
             <header className="command-menu-head">
               <div>
                 <p className="command-menu-eyebrow">COMMAND PALETTE · 快捷命令</p>
                 <p className="command-menu-hint">⌘K · Ctrl K · Esc 关闭</p>
               </div>
-              <button type="button" className="command-menu-close" onClick={() => close()}>
+              <VibeButton
+                type="button"
+                className="command-menu-close"
+                onClick={() => close()}
+                variant="text"
+              >
                 关闭
-              </button>
+              </VibeButton>
             </header>
-            <label className="command-menu-search">
-              <span>搜索命令</span>
-              <input
+            <div className="command-menu-search">
+              <VibeField
                 ref={searchRef}
+                fieldId="command-menu-search"
+                label="搜索命令"
                 type="search"
                 role="searchbox"
                 aria-label="搜索命令"
@@ -217,13 +227,13 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="搜索卡片、刷新或锁定"
               />
-            </label>
+            </div>
             <div className="command-menu-results" aria-live="polite">
               {filtered.length === 0 ? (
                 <p className="command-menu-empty">没有匹配的命令</p>
               ) : (
                 filtered.map((command, index) => (
-                  <button
+                  <VibeButton
                     key={command.id}
                     type="button"
                     className="command-menu-item"
@@ -231,10 +241,11 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
                     aria-label={command.label}
                     onMouseMove={() => setActiveIndex(index)}
                     onClick={command.action}
+                    variant="text"
                   >
                     <span>{command.label}</span>
                     <small>{command.detail}</small>
-                  </button>
+                  </VibeButton>
                 ))
               )}
             </div>

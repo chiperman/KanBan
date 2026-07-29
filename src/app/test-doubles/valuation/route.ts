@@ -136,7 +136,8 @@ function standardSources(input: {
     permissions: ["market-data", "account", "positions"],
     credentialReference: "test-secret-beta",
     snapshot: buildSnapshotFromPositions({
-      positions: betaPositions(),
+      // 故意返回乱序持仓，确保页面统一按来源内可比较市值排序。
+      positions: betaPositions().reverse(),
       sourceCurrency: "USD",
       exchangeRates: rates,
       syncedAt: SYNCED_AT,

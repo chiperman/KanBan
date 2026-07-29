@@ -1,5 +1,7 @@
 import { expect, test, type CDPSession, type Page } from "@playwright/test";
 
+import { chooseOverviewOption } from "./overview-control-helpers";
+
 const FORBIDDEN_SECRETS = [
   "release-longbridge-token",
   "release-binance-secret",
@@ -75,7 +77,7 @@ test("六类来源形成正确总额、分布、真实稳定币价格与失败�
   await expect(overview.getByLabel("资产分布")).toContainText("加密资产");
   await expect(overview.getByLabel("资产分布")).toContainText("42,548.00 USD");
 
-  await overview.getByLabel("分布维度").selectOption("source");
+  await chooseOverviewOption(overview, "分布维度", "资产来源");
   for (const source of [
     "长桥只读账户",
     "Binance 只读账户",
@@ -86,12 +88,12 @@ test("六类来源形成正确总额、分布、真实稳定币价格与失败�
   ]) {
     await expect(overview.getByLabel("资产分布")).toContainText(source);
   }
-  await overview.getByLabel("计价货币").selectOption("CNY");
+  await chooseOverviewOption(overview, "计价货币", "CNY");
   await expect(overview.getByTestId("total-asset-amount")).toHaveText(
     "1,026,345.60 CNY",
   );
   await expect(overview).toContainText("USD/CNY 7.2000 · 发布验收汇率");
-  await overview.getByLabel("计价货币").selectOption("USD");
+  await chooseOverviewOption(overview, "计价货币", "USD");
 
   await expect(page.getByTestId("asset-refresh-status")).toContainText("同步完成");
   await page.request.post("/test-doubles/clock", {

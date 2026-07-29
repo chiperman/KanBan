@@ -31,6 +31,7 @@ test("添加来源先选择类型再配置，返回保留草稿而取消会清�
   await page.getByRole("button", { name: "添加资产来源" }).click();
 
   const dialog = page.getByRole("dialog", { name: "添加资产来源" });
+  await expect(dialog).toHaveAttribute("data-vibe-component", "modal");
   await expect(dialog.getByRole("heading", { name: "选择来源类型" })).toBeVisible();
   await expect(dialog.getByLabel("Ethereum 公开地址（每行一个）")).toHaveCount(0);
 
@@ -73,8 +74,8 @@ test("移动端来源配置采用全屏 sheet，页头次要操作收进本机�
   const sheet = dialog.locator(".source-dialog");
   const box = await sheet.boundingBox();
   expect(box).toMatchObject({ x: 0, y: 0, width: 390, height: 844 });
-  await expect(dialog.locator(".source-dialog-heading")).toHaveCSS("position", "sticky");
-  await expect(dialog.locator(".source-dialog-actions")).toHaveCSS("position", "sticky");
+  await expect(dialog.locator(".vibe-dialog__header")).toHaveCSS("position", "sticky");
+  await expect(dialog.locator(".vibe-dialog__footer")).toHaveCSS("position", "sticky");
 });
 
 test("宽屏扩展来源工作区但约束总览阅读宽度", async ({ page }) => {

@@ -16,6 +16,14 @@ import type {
   AssetPermission,
   BitgetAccountMode,
 } from "@/server/ports";
+import { VibeButton } from "@/ui/vibe/vibe-button";
+import { VibeDialog } from "@/ui/vibe/vibe-dialog";
+import {
+  VibeField,
+  VibeSelectField,
+  VibeTextAreaField,
+} from "@/ui/vibe/vibe-field";
+import { VibeNotice } from "@/ui/vibe/vibe-notice";
 
 interface Preview {
   id: string;
@@ -216,7 +224,7 @@ export function AssetSourceFlow() {
 
   return (
     <>
-      <button
+      <VibeButton
         type="button"
         onClick={() => {
           setError("");
@@ -224,200 +232,186 @@ export function AssetSourceFlow() {
           setStep("choose");
           setChoosing(true);
         }}
+        variant="outline"
       >
         添加资产来源
-      </button>
+      </VibeButton>
       {error && !choosing && !preview ? (
-        <p className="content-error" role="alert">
+        <VibeNotice className="content-error" role="alert" tone="error">
           {error}
-        </p>
+        </VibeNotice>
       ) : null}
       {choosing ? (
-        <div
-          className="editor-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-label="添加资产来源"
-        >
-          <div className="editor-dialog source-dialog">
-            <div className="source-dialog-heading">
-              <p className="card-label">添加资产来源</p>
-              {step === "choose" ? (
-                <h2>选择来源类型</h2>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    className="text-button source-dialog-back"
-                    disabled={pending}
-                    onClick={() => {
-                      setError("");
-                      setStep("choose");
-                    }}
-                  >
-                    返回来源列表
-                  </button>
-                  <h2>{provider?.label}</h2>
-                </>
-              )}
-            </div>
-            <p className="login-copy">
-              {step === "choose"
-                ? "先选择只读账户或观察钱包，再填写对应的连接信息。"
-                : "连接成功前不会保存凭证或来源。"}
-            </p>
-            {error ? (
-              <p className="login-error" role="alert">
-                {error}
-              </p>
-            ) : null}
-            {step === "choose" ? (
-              <div className="source-provider-list">
-                {ASSET_SOURCE_PROVIDERS.map((description) => (
-                  <label className="source-option" key={description.id}>
-                    <input
-                      type="radio"
-                      name="asset-provider"
-                      value={description.id}
-                      checked={providerId === description.id}
-                      onClick={() => {
-                        if (providerId === description.id) {
-                          chooseProvider(description.id);
-                        }
-                      }}
-                      onChange={(event) =>
-                        chooseProvider(event.target.value as AssetSourceProviderId)
-                      }
-                    />
-                    {description.label}
-                  </label>
-                ))}
-              </div>
-            ) : null}
-            {step === "configure" && provider?.fields.length ? (
-              <div className="source-credential-fields">
-                {provider.fields.map((field) => (
-                  <label className="field-label" key={field.id}>
-                    {field.label}
-                    {field.control === "select" ? (
-                      <select
-                        value={fields[field.id]}
-                        onChange={(event) =>
-                          updateField(field.id, event.target.value)
-                        }
-                      >
-                        {field.options?.map((option) => (
-                          <option value={option.value} key={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    ) : field.control === "textarea" ? (
-                      <textarea
-                        rows={4}
-                        value={fields[field.id]}
-                        autoComplete="off"
-                        onChange={(event) =>
-                          updateField(field.id, event.target.value)
-                        }
-                      />
-                    ) : (
-                      <input
-                        type={field.control}
-                        value={fields[field.id]}
-                        autoComplete={
-                          field.control === "password" ? "new-password" : "off"
-                        }
-                        onChange={(event) =>
-                          updateField(field.id, event.target.value)
-                        }
-                      />
-                    )}
-                  </label>
-                ))}
-                {provider.fieldHelp ? (
-                  <p className="login-copy">{provider.fieldHelp}</p>
-                ) : null}
-              </div>
-            ) : null}
-            <div className="editor-actions source-dialog-actions">
-              {step === "configure" ? (
-                <button
-                  type="button"
-                  className="login-primary"
-                  disabled={pending || !ready}
-                  onClick={() => void start()}
-                >
-                  {provider?.startLabel ?? "开始 OAuth 授权"}
-                </button>
-              ) : null}
-              <button
+        <VibeDialog
+          actions={
+            <>
+              <VibeButton
                 type="button"
-                className="login-cancel"
                 disabled={pending}
                 onClick={cancelChoosing}
+                variant="text"
               >
                 取消
-              </button>
+              </VibeButton>
+              {step === "configure" ? (
+                <VibeButton
+                  type="button"
+                  disabled={pending || !ready}
+                  onClick={() => void start()}
+                  variant="primary"
+                >
+                  {provider?.startLabel ?? "开始 OAuth 授权"}
+                </VibeButton>
+              ) : null}
+            </>
+          }
+          aria-label="添加资产来源"
+          className="source-dialog"
+          description={
+            step === "choose"
+              ? "先选择只读账户或观察钱包，再填写对应的连接信息。"
+              : "连接成功前不会保存凭证或来源。"
+          }
+          eyebrow="ASSET SOURCE / READ ONLY"
+          title={step === "choose" ? "选择来源类型" : provider?.label ?? "配置来源"}
+          titleId="asset-source-dialog-title"
+        >
+          {step === "configure" ? (
+            <VibeButton
+              type="button"
+              className="source-dialog-back"
+              disabled={pending}
+              onClick={() => {
+                setError("");
+                setStep("choose");
+              }}
+              variant="text"
+            >
+              返回来源列表
+            </VibeButton>
+          ) : null}
+          {error ? (
+            <VibeNotice className="login-error" role="alert" tone="error">
+              {error}
+            </VibeNotice>
+          ) : null}
+          {step === "choose" ? (
+            <div className="source-provider-list">
+              {ASSET_SOURCE_PROVIDERS.map((description) => (
+                <label
+                  className="source-option vibe-choice"
+                  data-vibe-component="choice"
+                  key={description.id}
+                >
+                  <input
+                    type="radio"
+                    name="asset-provider"
+                    value={description.id}
+                    checked={providerId === description.id}
+                    onClick={() => {
+                      if (providerId === description.id) chooseProvider(description.id);
+                    }}
+                    onChange={(event) =>
+                      chooseProvider(event.target.value as AssetSourceProviderId)
+                    }
+                  />
+                  <span>{description.label}</span>
+                </label>
+              ))}
             </div>
-          </div>
-        </div>
+          ) : null}
+          {step === "configure" && provider?.fields.length ? (
+            <div className="source-credential-fields">
+              {provider.fields.map((field) =>
+                field.control === "select" ? (
+                  <VibeSelectField
+                    fieldId={`asset-source-${field.id}`}
+                    key={field.id}
+                    label={field.label}
+                    value={fields[field.id]}
+                    onChange={(event) => updateField(field.id, event.target.value)}
+                  >
+                    {field.options?.map((option) => (
+                      <option value={option.value} key={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </VibeSelectField>
+                ) : field.control === "textarea" ? (
+                  <VibeTextAreaField
+                    autoComplete="off"
+                    fieldId={`asset-source-${field.id}`}
+                    key={field.id}
+                    label={field.label}
+                    rows={4}
+                    value={fields[field.id]}
+                    onChange={(event) => updateField(field.id, event.target.value)}
+                  />
+                ) : (
+                  <VibeField
+                    autoComplete={field.control === "password" ? "new-password" : "off"}
+                    fieldId={`asset-source-${field.id}`}
+                    key={field.id}
+                    label={field.label}
+                    type={field.control}
+                    value={fields[field.id]}
+                    onChange={(event) => updateField(field.id, event.target.value)}
+                  />
+                ),
+              )}
+              {provider.fieldHelp ? (
+                <p className="vibe-dialog__copy source-field-help">{provider.fieldHelp}</p>
+              ) : null}
+            </div>
+          ) : null}
+        </VibeDialog>
       ) : null}
       {preview && previewDescription ? (
-        <div
-          className="editor-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-label={previewDescription.dialogLabel}
-        >
-          <div className="editor-dialog">
-            <p className="card-label">{previewDescription.previewTitle}</p>
-            <h2 className="source-preview-title">{preview.account.label}</h2>
-            <dl className="source-preview-list">
-              <div>
-                <dt>可读取范围</dt>
-                <dd>
-                  {previewDescription.previewScope(preview.accountMode)}
-                </dd>
-              </div>
-              <div>
-                <dt>账户总额</dt>
-                <dd>
-                  {formatAmount(
-                    preview.total.amount,
-                    preview.provider !== "longbridge",
-                  )} {preview.total.currency}
-                </dd>
-              </div>
-            </dl>
-            <p className="login-copy">
-              确认后才会把{previewDescription.savedMaterial}写入服务端存储。
-            </p>
-            {error ? (
-              <p className="login-error" role="alert">
-                {error}
-              </p>
-            ) : null}
-            <div className="editor-actions">
-              <button
+        <VibeDialog
+          actions={
+            <>
+              <VibeButton
                 type="button"
-                className="login-primary"
-                disabled={pending}
-                onClick={() => void confirm()}
-              >
-                确认并保存
-              </button>
-              <button
-                type="button"
-                className="login-cancel"
                 disabled={pending}
                 onClick={() => void cancelPreview()}
+                variant="text"
               >
                 取消
-              </button>
+              </VibeButton>
+              <VibeButton
+                type="button"
+                disabled={pending}
+                onClick={() => void confirm()}
+                variant="primary"
+              >
+                确认并保存
+              </VibeButton>
+            </>
+          }
+          aria-label={previewDescription.dialogLabel}
+          description={`确认后才会把${previewDescription.savedMaterial}写入服务端存储。`}
+          eyebrow={previewDescription.previewTitle}
+          title={preview.account.label}
+          titleId="asset-source-preview-title"
+        >
+          <dl className="source-preview-list vibe-preview-list">
+            <div className="vibe-data-row">
+              <dt>可读取范围</dt>
+              <dd>{previewDescription.previewScope(preview.accountMode)}</dd>
             </div>
-          </div>
-        </div>
+            <div className="vibe-data-row">
+              <dt>账户总额</dt>
+              <dd>
+                {formatAmount(preview.total.amount, preview.provider !== "longbridge")} {preview.total.currency}
+              </dd>
+            </div>
+          </dl>
+          {error ? (
+            <VibeNotice className="login-error" role="alert" tone="error">
+              {error}
+            </VibeNotice>
+          ) : null}
+        </VibeDialog>
       ) : null}
     </>
   );

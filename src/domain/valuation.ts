@@ -54,6 +54,15 @@ export interface RawAssetPosition {
   changePercent: string | null;
 }
 
+export function compareNullableDecimalDescending(
+  left: string | null,
+  right: string | null,
+): number {
+  if (left === null) return right === null ? 0 : 1;
+  if (right === null) return -1;
+  return decimalCompare(right, left);
+}
+
 function rateFor(
   rates: AssetExchangeRate[],
   from: string,
@@ -337,6 +346,9 @@ export function buildTotalValuation(
       amount: allocations[index].amount,
     }));
   }
+  groups = groups.toSorted((left, right) =>
+    compareNullableDecimalDescending(left.amount, right.amount),
+  );
   return {
     amount: displayAmount,
     currency,

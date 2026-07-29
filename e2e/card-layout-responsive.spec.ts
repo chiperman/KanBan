@@ -528,7 +528,7 @@ test("所有者通过卡片手柄排序并调整宽度后刷新仍保留布局",
   await expect(page.getByTestId("card")).toHaveCount(0);
 });
 
-test("资产卡片调整为三格并移动时红色预览框覆盖完整占用范围", async ({
+test("资产卡片调整为三格并移动时激活预览框覆盖完整占用范围", async ({
   page,
   request,
 }) => {
@@ -585,7 +585,8 @@ test("资产卡片调整为三格并移动时红色预览框覆盖完整占用�
     const resizePreviewBox = await resizePreview.boundingBox();
     expect(resizePreviewBox).not.toBeNull();
     expect(Math.abs(resizePreviewBox!.width - expectedWidth)).toBeLessThanOrEqual(2);
-    await expect(resizePreview).toHaveCSS("outline-color", "rgb(215, 25, 33)");
+    await expect(resizePreview).toHaveCSS("outline-color", "rgb(0, 0, 0)");
+    await expect(resizePreview).toHaveAttribute("data-vibe-state", "resize-preview");
     await page.mouse.up();
     await savedResize;
 
@@ -630,7 +631,8 @@ test("资产卡片调整为三格并移动时红色预览框覆盖完整占用�
     const currentBox = await dropSlot.boundingBox();
     return Math.abs(currentBox!.height - resizedCardBox!.height);
   }).toBeLessThanOrEqual(2);
-  await expect(dropSlot).toHaveCSS("outline-color", "rgb(215, 25, 33)");
+  await expect(dropSlot).toHaveCSS("outline-color", "rgb(0, 0, 0)");
+  await expect(dropSlot).toHaveAttribute("data-vibe-state", "drop-preview");
   await page.mouse.up();
 });
 

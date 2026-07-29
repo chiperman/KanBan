@@ -86,23 +86,29 @@ test("已登录看板遵守 Nothing 字体层级、操作语义和点击区域",
   expect(overviewBox!.y).toBeLessThan(controlsBox!.y);
 
   const label = page.getByTestId("total-asset-overview").locator(".card-label").first();
-  await expect(label).toHaveCSS("font-family", /Space Mono/);
+  await expect(label).toHaveCSS("font-family", /Geist Mono/);
   expect(
     await label.evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
   ).toBeGreaterThanOrEqual(11);
 
   const standardButton = page.getByTestId("sensitive-info-toggle");
-  await expect(standardButton).toHaveCSS("font-family", /Space Mono/);
-  await expect(standardButton).toHaveCSS("font-size", "13px");
+  await expect(standardButton).toHaveCSS("font-family", /Geist Mono/);
+  await expect(standardButton).toHaveCSS("font-size", "11px");
+  await expect(standardButton).toHaveCSS("border-radius", "6px");
+  await expect(standardButton).toHaveAttribute("data-vibe-variant", "outline");
 
   const sourceCard = page.getByTestId("ethereum-watch-card");
   await expect(sourceCard.locator(".source-live-state")).toHaveCSS(
     "font-size",
-    "12px",
+    "10px",
+  );
+  await expect(sourceCard.locator(".source-live-state")).toHaveAttribute(
+    "data-vibe-component",
+    "status-tag",
   );
   await expect(sourceCard.locator(".source-meter-caption")).toHaveCSS(
     "font-family",
-    /Space Mono/,
+    /Geist Mono/,
   );
   await expect(sourceCard.locator(".source-meter-caption")).toHaveCSS(
     "font-size",
@@ -117,7 +123,11 @@ test("已登录看板遵守 Nothing 字体层级、操作语义和点击区域",
       right: computed.borderRightWidth,
     };
   });
-  expect(cardBorders).toEqual({ top: "1px", right: "1px" });
+  expect(cardBorders).toEqual({ top: "0px", right: "0px" });
+  await expect(card).toHaveAttribute("data-vibe-surface", "data-card");
+  await expect(
+    sourceCard.getByRole("img", { name: /项已估值/ }),
+  ).toHaveAttribute("data-vibe-component", "segmented-bar");
   for (const control of [
     card.getByRole("button", { name: /调整.*宽度/ }),
     card.getByRole("button", { name: /拖动.*调整排序/ }),
@@ -132,7 +142,7 @@ test("已登录看板遵守 Nothing 字体层级、操作语义和点击区域",
   const danger = page
     .getByRole("dialog", { name: "管理 Ethereum 观察钱包" })
     .getByRole("button", { name: "永久删除 Ethereum 观察钱包数据" });
-  await expect(danger).toHaveCSS("color", "rgb(215, 25, 33)");
+  await expect(danger).toHaveCSS("color", "rgb(194, 20, 28)");
   await expect(danger).toHaveCSS("border-color", "rgb(215, 25, 33)");
 });
 
@@ -147,6 +157,11 @@ test("未认证状态无命令菜单，所有者可用 Command-K 与 Ctrl-K 搜�
   await page.keyboard.press("Meta+K");
   const menu = page.getByRole("dialog", { name: "快捷命令" });
   await expect(menu).toBeVisible();
+  await expect(menu).toHaveAttribute("data-vibe-component", "command-menu");
+  await expect(menu.locator(".command-menu-panel")).toHaveAttribute(
+    "data-vibe-surface",
+    "command-panel",
+  );
   await expect(menu).toContainText("⌘K");
   await expect(menu).toContainText("Ctrl K");
   await page.keyboard.press("Escape");

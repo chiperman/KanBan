@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { decimalCompare, decimalToFixed } from "@/domain/decimal";
+import { compareNullableDecimalDescending } from "@/domain/valuation";
 import type {
   AssetHolding,
   AssetSnapshot,
@@ -14,6 +15,12 @@ import {
   binanceHoldingDisplayName,
   BinanceCoverage,
 } from "@/ui/binance-coverage";
+import {
+  VibeMetric,
+  VibeSegmentedBar,
+  VibeStatusTag,
+} from "@/ui/vibe/vibe-data-instrument";
+import { VibeNotice } from "@/ui/vibe/vibe-notice";
 
 export interface AssetSourceView {
   id: string;
@@ -124,20 +131,29 @@ export function AssetSourceCard({
 }) {
   const [hideSmallCryptoHoldings, setHideSmallCryptoHoldings] = useState(true);
   const supportsSmallHoldingFilter = source.kind !== "longbridge";
+  const orderedHoldings = useMemo(
+    () => source.snapshot.holdings.toSorted((left, right) =>
+      compareNullableDecimalDescending(
+        left.sourceMarketValue?.amount ?? null,
+        right.sourceMarketValue?.amount ?? null,
+      ),
+    ),
+    [source.snapshot.holdings],
+  );
   const hiddenSmallHoldingCount = supportsSmallHoldingFilter
-    ? source.snapshot.holdings.filter(
+    ? orderedHoldings.filter(
         (holding) =>
           holding.marketValue !== null &&
           decimalCompare(holding.marketValue, "1") < 0,
       ).length
     : 0;
   const visibleHoldings = supportsSmallHoldingFilter && hideSmallCryptoHoldings
-    ? source.snapshot.holdings.filter(
+    ? orderedHoldings.filter(
         (holding) =>
           holding.marketValue === null ||
           decimalCompare(holding.marketValue, "1") >= 0,
       )
-    : source.snapshot.holdings;
+    : orderedHoldings;
   const showPlatformProfit = visibleHoldings.some(
     (holding) => holding.platformProfit !== null,
   );
@@ -150,19 +166,13 @@ export function AssetSourceCard({
   ).length;
   const valuedCount = visibleHoldings.length - unvaluedCount;
   const meterSegments = 12;
-  const filledSegments =
-    visibleHoldings.length === 0
-      ? 0
-      : Math.max(
-          1,
-          Math.round((valuedCount / visibleHoldings.length) * meterSegments),
-        );
   const heading = sourceHeading(source);
   const formatMoney = source.kind === "longbridge" ? amount : moneyAmount;
   return (
     <>
       <div
-        className="asset-source-card"
+        className="asset-source-card vibe-data-module"
+        data-vibe-module="asset-source"
         data-testid={
           source.kind === "longbridge"
             ? "longbridge-card"
@@ -181,23 +191,40 @@ export function AssetSourceCard({
       >
         <header className="asset-source-head">
           <p className="card-label">{providerCardLabel(source)}</p>
-          <p className={`source-live-state ${source.sync.status}`}>
-            <span />
+          <VibeStatusTag
+            className={`source-live-state ${source.sync.status}`}
+            tone={source.sync.status === "expired" ? "warning" : "live"}
+          >
             {providerCode(source)} / {source.sync.status === "expired" ? "STALE" : "LIVE"}
-          </p>
+          </VibeStatusTag>
         </header>
         <h2 className="asset-source-title">{heading.title}</h2>
         {heading.metadata ? (
           <p className="asset-source-meta">{heading.metadata}</p>
         ) : null}
-        <p className="asset-total" data-testid="asset-source-total">{showSensitiveInfo ? formatMoney(source.snapshot.total.amount) : "••••••"} <span>{source.snapshot.total.currency}</span></p>
+        <VibeMetric
+          className="asset-total"
+          data-testid="asset-source-total"
+          unit={source.snapshot.total.currency}
+          value={showSensitiveInfo ? formatMoney(source.snapshot.total.amount) : "••••••"}
+        />
         {source.kind === "binance" ? (
           <BinanceCoverage coverage={source.snapshot.coverage} />
         ) : null}
-        <div className="source-meter" aria-hidden="true">
-          {Array.from({ length: meterSegments }, (_, index) => (
-            <span key={index} className={index < filledSegments ? "is-filled" : ""} />
-          ))}
+        <div className="source-meter">
+          <VibeSegmentedBar
+            ariaLabel={`${valuedCount} 项已估值，${unvaluedCount} 项未估值`}
+            cells={meterSegments}
+            segments={[
+              { key: "valued", tone: "primary", value: valuedCount },
+              {
+                key: "unvalued",
+                tone: "muted",
+                value: unvaluedCount,
+              },
+            ]}
+            total={visibleHoldings.length}
+          />
         </div>
         <p className="source-meter-caption">
           <span>{String(visibleHoldings.length).padStart(2, "0")} POSITIONS</span>
@@ -222,7 +249,7 @@ export function AssetSourceCard({
         ) : null}
         <ol className="holding-top-list" data-testid="holding-top-list">
           {visibleHoldings.map((holding) => (
-            <li key={assetHoldingKey(holding)}>
+            <li className="vibe-data-row" key={assetHoldingKey(holding)}>
               <span>{binanceHoldingDisplayName(holding)}</span>
               <strong>
                 {holding.marketValue === null
@@ -239,7 +266,7 @@ export function AssetSourceCard({
         >
           <p className="card-label">持仓明细</p>
           <div className="asset-table-wrap">
-            <table className="asset-table">
+            <table className="asset-table vibe-data-table" data-vibe-component="data-table">
               <thead>
                 <tr>
                   <th>名称</th>
@@ -266,7 +293,9 @@ export function AssetSourceCard({
           </div>
         </section>
         {unvaluedCount > 0 ? (
-          <p className="asset-sync-status">含 {unvaluedCount} 项未估值资产</p>
+          <VibeStatusTag className="asset-sync-status" tone="warning">
+            含 {unvaluedCount} 项未估值资产
+          </VibeStatusTag>
         ) : null}
         <section
           className="asset-trend source-trend"
@@ -293,18 +322,23 @@ export function AssetSourceCard({
         </section>
         <p className="asset-updated">最后更新：{source.snapshot.syncedAt.slice(0, 16).replace("T", " ")} UTC</p>
         {source.lifecycle === "disconnected" ? (
-          <p className="asset-sync-status expired">已断开 · 历史数据保留</p>
+          <VibeStatusTag className="asset-sync-status expired" tone="muted">
+            已断开 · 历史数据保留
+          </VibeStatusTag>
         ) : (
-          <p className={`asset-sync-status ${source.sync.status}`}>
+          <VibeStatusTag
+            className={`asset-sync-status ${source.sync.status}`}
+            tone={source.sync.status === "expired" ? "warning" : "live"}
+          >
             {source.sync.status === "expired" ? "过期数据" : "数据当前"}
             {" · 最后成功："}
             {source.sync.lastSuccessfulAt.slice(0, 16).replace("T", " ")} UTC
-          </p>
+          </VibeStatusTag>
         )}
         {source.sync.error ? (
-          <p className="asset-sync-error" role="alert">
+          <VibeNotice className="asset-sync-error" role="alert" tone="error">
             {source.label} 同步失败：{source.sync.error}
-          </p>
+          </VibeNotice>
         ) : null}
       </div>
     </>

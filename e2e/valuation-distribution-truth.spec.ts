@@ -1,5 +1,7 @@
 import { expect, test, type CDPSession, type Page } from "@playwright/test";
 
+import { chooseOverviewOption } from "./overview-control-helpers";
+
 async function attachPasskey(page: Page): Promise<CDPSession> {
   const client = await page.context().newCDPSession(page);
   await client.send("WebAuthn.enable");
@@ -38,14 +40,22 @@ test("总资产使用来源原生价格与显式汇率，保留原值并正确�
   await loginAsOwner(page);
 
   const overview = page.getByTestId("total-asset-overview");
+  await expect(overview).toHaveAttribute("data-vibe-module", "asset-overview");
+  await expect(overview.getByTestId("total-asset-amount")).toHaveAttribute(
+    "data-vibe-component",
+    "metric",
+  );
+  await expect(
+    overview.getByRole("img", { name: /维度资产分配/ }),
+  ).toHaveAttribute("data-vibe-component", "segmented-bar");
   await expect(overview).toBeVisible();
   const sourceTotal = page
     .getByTestId("asset-source-card-source-alpha")
     .getByTestId("asset-source-total");
   await expect(sourceTotal).toHaveCSS("font-family", /Doto/);
-  await expect(sourceTotal.locator("span")).toHaveCSS(
+  await expect(sourceTotal.locator(".vibe-metric__unit")).toHaveCSS(
     "font-family",
-    /Space Mono/,
+    /Geist Mono/,
   );
   await expect(overview).toContainText("561.34 USD");
   await expect(overview).toContainText("当前估值：不完整 · 1 项未估值");
@@ -53,8 +63,14 @@ test("总资产使用来源原生价格与显式汇率，保留原值并正确�
   await expect(overview).toContainText("464.04 USD");
   await expect(overview).toContainText("加密资产");
   await expect(overview).toContainText("97.30 USD");
+  await expect(
+    page
+      .getByTestId("asset-source-card-source-beta")
+      .getByTestId("holding-top-list")
+      .getByRole("listitem"),
+  ).toContainText(["Apple Cross-source", "Tether", "Mystery Token"]);
 
-  await overview.getByLabel("计价货币").selectOption("CNY");
+  await chooseOverviewOption(overview, "计价货币", "CNY");
   await expect(overview).toContainText("3,998.65 CNY");
   await expect(overview).toContainText("USD/CNY 7.1234");
   await expect(overview).toContainText("Longbridge 账户汇率");
@@ -64,13 +80,16 @@ test("总资产使用来源原生价格与显式汇率，保留原值并正确�
     "3,998.65 CNY",
   );
 
-  await overview.getByLabel("计价货币").selectOption("USD");
-  await overview.getByLabel("分布维度").selectOption("source");
+  await chooseOverviewOption(overview, "计价货币", "USD");
+  await chooseOverviewOption(overview, "分布维度", "资产来源");
   await expect(overview).toContainText("Alpha Securities");
   await expect(overview).toContainText("264.01 USD");
   await expect(overview).toContainText("Beta Crypto");
   await expect(overview).toContainText("297.33 USD");
-  await overview.getByLabel("分布维度").selectOption("currency");
+  await expect(
+    overview.getByLabel("资产分布").locator(".distribution-item"),
+  ).toContainText(["Beta Crypto", "Alpha Securities"]);
+  await chooseOverviewOption(overview, "分布维度", "原始币种");
   await expect(overview).toContainText("HKD");
   await expect(overview).toContainText("64.00 USD");
   await expect(overview).toContainText("USD");
@@ -134,7 +153,7 @@ test("反向汇率观察按正确方向折算总额与每个分组", async ({ pa
   await loginAsOwner(page);
 
   const overview = page.getByTestId("total-asset-overview");
-  await overview.getByLabel("计价货币").selectOption("CNY");
+  await chooseOverviewOption(overview, "计价货币", "CNY");
   await expect(overview).toContainText("4,009.57 CNY");
   await expect(overview).toContainText("USD/CNY 7.1429");
   await expect(overview).toContainText("证券");
@@ -165,6 +184,13 @@ test("Binance 钱包残差会同时传播到来源卡、总资产和完整性状
     "/test-doubles/valuation?scenario=binance-coverage-partial",
   );
   expect(configured.ok()).toBeTruthy();
+  await page.route("**/api/asset-sources/refresh", async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({ successCount: 1, failureCount: 0 }),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
   await loginAsOwner(page);
 
   await expect(page.getByTestId("binance-coverage-status")).toContainText(
@@ -205,20 +231,20 @@ test("正负对账差额与逐组舍入后的分布始终守恒", async ({ page,
   const displayed = await overview
     .locator(".distribution-item strong")
     .allTextContents();
-  expect(displayed.sort()).toEqual(["0.00 USD", "0.01 USD"]);
+  expect(displayed).toEqual(["0.01 USD", "0.00 USD"]);
 
   await request.post("/test-doubles/valuation?scenario=rounding-many");
   await page.reload();
-  await overview.getByLabel("分布维度").selectOption("source");
+  await chooseOverviewOption(overview, "分布维度", "资产来源");
   await expect(overview).toContainText("0.02 USD");
   const manyGroups = await overview
     .locator(".distribution-item strong")
     .allTextContents();
-  expect(manyGroups.sort()).toEqual([
-    "0.00 USD",
-    "0.00 USD",
+  expect(manyGroups).toEqual([
     "0.01 USD",
     "0.01 USD",
+    "0.00 USD",
+    "0.00 USD",
   ]);
 });
 

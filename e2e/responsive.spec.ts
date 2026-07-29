@@ -73,6 +73,6 @@ for (const viewport of VIEWPORTS) {
 
     await expect(page.getByTestId("card-grid")).toBeVisible();
     await expect(page.getByTestId("card").first()).toBeVisible();
-    await expect(page.getByRole("group", { name: "主题" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^当前主题：/ })).toBeVisible();
   });
 }
