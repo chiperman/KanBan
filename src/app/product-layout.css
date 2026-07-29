@@ -2716,6 +2716,10 @@ body {
     grid-template-columns: 1fr;
   }
 
+  .page-dashboard .card-grid {
+    align-items: start;
+  }
+
   .total-overview-card::after {
     width: 240px;
   }
