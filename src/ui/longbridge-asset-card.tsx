@@ -193,7 +193,7 @@ export function AssetSourceCard({
           <p className="card-label">{providerCardLabel(source)}</p>
           <VibeStatusTag
             className={`source-live-state ${source.sync.status}`}
-            tone={source.sync.status === "expired" ? "warning" : "live"}
+            tone={source.sync.status === "expired" ? "warning" : "muted"}
           >
             {providerCode(source)} / {source.sync.status === "expired" ? "STALE" : "LIVE"}
           </VibeStatusTag>
@@ -328,7 +328,7 @@ export function AssetSourceCard({
         ) : (
           <VibeStatusTag
             className={`asset-sync-status ${source.sync.status}`}
-            tone={source.sync.status === "expired" ? "warning" : "live"}
+            tone={source.sync.status === "expired" ? "warning" : "muted"}
           >
             {source.sync.status === "expired" ? "过期数据" : "数据当前"}
             {" · 最后成功："}

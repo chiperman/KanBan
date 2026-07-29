@@ -123,7 +123,7 @@ export function AssetRefreshControls({ enabled }: { enabled: boolean }) {
         className={`asset-refresh-status${showStatus ? " is-visible" : ""}`}
         data-testid="asset-refresh-status"
         role="status"
-        tone={status.includes("失败") ? "warning" : "live"}
+        tone={pending ? "live" : status.includes("失败") ? "warning" : "muted"}
       >
         {status}
       </VibeStatusTag>

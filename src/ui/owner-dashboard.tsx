@@ -526,6 +526,7 @@ export function OwnerDashboard({
           className="source-management-dialog"
           description="断开会移除只读凭证并停止同步，但保留已有数据；永久删除会清除全部历史。"
           eyebrow="SOURCE / CONTROL"
+          onClose={() => setManagementTarget(null)}
           title={sourceName(managementTarget)}
           titleId="source-management-title"
         />
@@ -571,6 +572,7 @@ export function OwnerDashboard({
               : "最后确认：删除后无法找回任何该来源历史。"
           }
           eyebrow={deleteTarget.stage === 1 ? "PERMANENT DELETE / 01" : "PERMANENT DELETE / 02"}
+          onClose={() => setDeleteTarget(null)}
           title={sourceName(deleteTarget.source)}
           titleId="source-delete-title"
         />

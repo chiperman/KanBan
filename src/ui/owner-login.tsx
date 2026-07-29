@@ -1,7 +1,7 @@
 "use client";
 
 import { startAuthentication } from "@simplewebauthn/browser";
-import { useState, type CSSProperties, type FormEvent } from "react";
+import { useRef, useState, type CSSProperties, type FormEvent } from "react";
 
 import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
 import { VibeField } from "@/ui/vibe/vibe-field";
@@ -96,6 +96,22 @@ export function OwnerLogin({
   const [state, setState] = useState<LoginState>("idle");
   const [mode, setMode] = useState<LoginMode>("choice");
   const [recoveryError, setRecoveryError] = useState("");
+  const [recoveryPending, setRecoveryPending] = useState(false);
+  const [recoveryRateLimited, setRecoveryRateLimited] = useState(false);
+  const recoveryCodeRef = useRef<HTMLInputElement>(null);
+
+  function showRecoveryTotp() {
+    setRecoveryError("");
+    setRecoveryRateLimited(false);
+    setMode("recovery-totp");
+  }
+
+  function returnToLoginChoice() {
+    setRecoveryError("");
+    setRecoveryPending(false);
+    setRecoveryRateLimited(false);
+    setMode("choice");
+  }
 
   async function login() {
     setState("pending");
@@ -127,21 +143,35 @@ export function OwnerLogin({
 
   async function verifyRecoveryTotp(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setRecoveryPending(true);
     setRecoveryError("");
-    const data = new FormData(event.currentTarget);
-    const response = await fetch("/api/auth/recovery/totp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: data.get("code") }),
-    });
-    if (!response.ok) {
-      const result = (await response.json().catch(() => null)) as
-        | { error?: string }
-        | null;
-      setRecoveryError(result?.error ?? "TOTP 验证失败");
-      return;
+    try {
+      const data = new FormData(event.currentTarget);
+      const response = await fetch("/api/auth/recovery/totp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: data.get("code") }),
+      });
+      if (!response.ok) {
+        const result = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        const rateLimited = response.status === 429;
+        setRecoveryRateLimited(rateLimited);
+        setRecoveryError(result?.error ?? "TOTP 验证失败");
+        setRecoveryPending(false);
+        if (!rateLimited) {
+          window.requestAnimationFrame(() => recoveryCodeRef.current?.focus());
+        }
+        return;
+      }
+      window.location.reload();
+    } catch {
+      setRecoveryRateLimited(false);
+      setRecoveryError("TOTP 验证失败，请检查连接后重试");
+      setRecoveryPending(false);
+      window.requestAnimationFrame(() => recoveryCodeRef.current?.focus());
     }
-    window.location.reload();
   }
 
   return (
@@ -214,7 +244,7 @@ export function OwnerLogin({
               <VibeButton
                 type="button"
                 disabled={state === "pending"}
-                onClick={() => setMode("recovery-totp")}
+                onClick={showRecoveryTotp}
                 variant="outline"
               >
                 使用备用方式登录
@@ -234,7 +264,10 @@ export function OwnerLogin({
           >
             <p className="login-copy">输入验证器当前显示的 6 位动态验证码。</p>
             <VibeField
+              aria-describedby={recoveryError ? "recovery-totp-error" : undefined}
+              aria-invalid={recoveryError ? true : undefined}
               autoComplete="one-time-code"
+              disabled={recoveryPending || recoveryRateLimited}
               fieldId="recovery-totp-code"
               inputMode="numeric"
               label="TOTP 验证码"
@@ -242,21 +275,33 @@ export function OwnerLogin({
               name="code"
               pattern="[0-9]{6}"
               placeholder="000000"
+              ref={recoveryCodeRef}
               required
               spellCheck={false}
             />
             {recoveryError ? (
-              <VibeNotice className="login-error" code="ERROR" role="alert" tone="error">
+              <VibeNotice
+                className="login-error"
+                code="ERROR"
+                id="recovery-totp-error"
+                role="alert"
+                tone="error"
+              >
                 {recoveryError}
               </VibeNotice>
             ) : null}
             <div className="login-actions">
-              <VibeButton type="submit" variant="primary">
+              <VibeButton
+                type="submit"
+                disabled={recoveryPending || recoveryRateLimited}
+                variant="primary"
+              >
                 完成备用登录
               </VibeButton>
               <VibeButton
                 type="button"
-                onClick={() => setMode("choice")}
+                disabled={recoveryPending}
+                onClick={returnToLoginChoice}
                 variant="text"
               >
                 返回

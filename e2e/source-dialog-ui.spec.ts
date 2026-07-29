@@ -54,6 +54,31 @@ test("添加来源先选择类型再配置，返回保留草稿而取消会清�
   await expect(dialog.getByLabel("Ethereum 公开地址（每行一个）")).toHaveValue("");
 });
 
+test("来源 Dialog 打开后捕获焦点，Escape 关闭并恢复触发按钮", async ({ page }) => {
+  await loginAsOwner(page);
+  const trigger = page.getByRole("button", { name: "添加资产来源" });
+  await trigger.click();
+
+  const dialog = page.getByRole("dialog", { name: "添加资产来源" });
+  const firstProvider = dialog.getByRole("radio").first();
+  const cancel = dialog.getByRole("button", { name: "取消" });
+  await expect(firstProvider).toBeFocused();
+
+  await page.keyboard.press("Shift+Tab");
+  await expect(cancel).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(firstProvider).toBeFocused();
+
+  await dialog.getByRole("radio", { name: "Ethereum 观察钱包" }).click();
+  await expect(
+    dialog.getByRole("button", { name: "返回来源列表" }),
+  ).toBeFocused();
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+});
+
 test("移动端来源配置采用全屏 sheet，页头次要操作收进本机设置", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await loginAsOwner(page);

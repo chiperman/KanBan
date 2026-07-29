@@ -355,7 +355,7 @@ a {
   height: 44px;
   padding: 0;
   border: 0;
-  border-radius: var(--vibe-radius-xs);
+  border-radius: var(--r-sm);
   background: transparent;
   cursor: ew-resize;
   opacity: 0.72;
@@ -1382,7 +1382,7 @@ body {
   border: 1px solid var(--line-2);
   border-radius: var(--r-sm);
   background: var(--surface);
-  box-shadow: 0 16px 40px color-mix(in srgb, #000000 22%, transparent);
+  box-shadow: none;
 }
 
 .instrument-select-option {
@@ -1394,7 +1394,7 @@ body {
   gap: var(--vibe-space-5);
   padding: 0 var(--vibe-space-3);
   border: 0;
-  border-radius: var(--vibe-radius-xs);
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--secondary);
   font-family: var(--f-mono);
@@ -1555,7 +1555,7 @@ body {
   min-height: 44px;
   padding: 0 var(--vibe-space-2);
   border: 0;
-  border-radius: var(--vibe-radius-xs);
+  border-radius: var(--r-sm);
   color: var(--secondary);
 }
 
@@ -1597,7 +1597,7 @@ body {
 }
 
 .empty-hint {
-  color: var(--muted);
+  color: var(--secondary);
 }
 
 .hidden-source-management {

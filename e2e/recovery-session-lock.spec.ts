@@ -161,6 +161,29 @@ test("所有者配置备用登录时只需要 TOTP", async ({ page }) => {
   );
 });
 
+test("备用登录配置错误与验证码字段关联并返回输入焦点", async ({ page }) => {
+  await provisionAndLogin(page);
+  await page.getByRole("button", { name: "配置备用登录" }).click();
+  await page.getByRole("button", { name: "开始配置" }).click();
+  const secret = await page.getByLabel("TOTP 密钥").inputValue();
+  const correctCode = totpCode(secret, new Date(FIXED_NOW));
+  const wrongCode = correctCode === "000000" ? "000001" : "000000";
+  const codeField = page.getByLabel("当前 TOTP 验证码");
+
+  await codeField.fill(wrongCode);
+  await page.getByRole("button", { name: "保存备用登录" }).click();
+
+  await expect(codeField).toHaveAttribute("aria-invalid", "true");
+  await expect(codeField).toHaveAttribute(
+    "aria-describedby",
+    "recovery-setup-code-error",
+  );
+  await expect(page.locator("#recovery-setup-code-error")).toContainText(
+    "当前 TOTP 验证码无效",
+  );
+  await expect(codeField).toBeFocused();
+});
+
 test("配置时使用的 TOTP 验证码不能再次登录", async ({ page }) => {
   await provisionAndLogin(page);
   await page.getByRole("button", { name: "配置备用登录" }).click();
@@ -180,6 +203,16 @@ test("配置时使用的 TOTP 验证码不能再次登录", async ({ page }) => 
       hasText: "该验证码已用于配置或登录，请等待下一组验证码",
     }),
   ).toBeVisible();
+  const failedTotp = page.getByLabel("TOTP 验证码");
+  await expect(failedTotp).toHaveAttribute("aria-invalid", "true");
+  await expect(failedTotp).toHaveAttribute(
+    "aria-describedby",
+    "recovery-totp-error",
+  );
+  await expect(page.locator("#recovery-totp-error")).toContainText(
+    "该验证码已用于配置或登录",
+  );
+  await expect(failedTotp).toBeFocused();
   await expect(
     page.getByRole("heading", { name: "个人资产看板已锁定" }),
   ).toBeVisible();
@@ -332,16 +365,22 @@ test("TOTP 连续五次失败后限流五分钟", async ({
   await expect(
     page.getByRole("heading", { name: "个人资产看板已锁定" }),
   ).toBeVisible();
+  const rateLimitedInput = page.getByLabel("TOTP 验证码");
+  const rateLimitedSubmit = page.getByRole("button", { name: "完成备用登录" });
+  await expect(rateLimitedInput).toBeDisabled();
+  await expect(rateLimitedSubmit).toBeDisabled();
+  await expect(rateLimitedInput).toHaveAttribute("aria-invalid", "true");
+  await expect(rateLimitedInput).toHaveAttribute(
+    "aria-describedby",
+    "recovery-totp-error",
+  );
 
-  await page.getByLabel("TOTP 验证码").fill(correctCode);
-  await page.getByRole("button", { name: "完成备用登录" }).click();
-  await expect(
-    page.getByRole("alert").filter({ hasText: "TOTP 尝试过多" }),
-  ).toBeVisible();
+  await page.getByRole("button", { name: "返回" }).click();
 
   await request.post("/test-doubles/clock", {
     data: { now: "2026-01-01T00:05:00.000Z" },
   });
+  await page.getByRole("button", { name: "使用备用方式登录" }).click();
   await page
     .getByLabel("TOTP 验证码")
     .fill(totpCode(recoverySecret, new Date("2026-01-01T00:05:00.000Z")));

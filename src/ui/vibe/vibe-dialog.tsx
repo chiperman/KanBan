@@ -1,8 +1,25 @@
+"use client";
+
 import type {
   FormEventHandler,
   HTMLAttributes,
   ReactNode,
 } from "react";
+import { useEffect, useRef } from "react";
+
+const FOCUSABLE_SELECTOR = [
+  "button:not([disabled])",
+  "[href]",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  '[tabindex]:not([tabindex="-1"])',
+].join(",");
+
+function dialogControls(overlay: HTMLElement | null): HTMLElement[] {
+  return [...(overlay?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? [])]
+    .filter((element) => element.getClientRects().length > 0);
+}
 
 interface VibeDialogProps
   extends Omit<HTMLAttributes<HTMLDivElement>, "onSubmit" | "title"> {
@@ -10,6 +27,7 @@ interface VibeDialogProps
   children?: ReactNode;
   description: ReactNode;
   eyebrow: string;
+  onClose: () => void;
   onSubmit?: FormEventHandler<HTMLFormElement>;
   title: string;
   titleId: string;
@@ -21,11 +39,71 @@ export function VibeDialog({
   className,
   description,
   eyebrow,
+  onClose,
   onSubmit,
   title,
   titleId,
   ...overlayProps
 }: VibeDialogProps) {
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function keyboard(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const controls = dialogControls(overlayRef.current);
+      if (controls.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      } else if (!overlayRef.current?.contains(document.activeElement)) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", keyboard);
+    return () => {
+      document.removeEventListener("keydown", keyboard);
+      document.body.style.overflow = previousOverflow;
+      window.requestAnimationFrame(() => {
+        if (previouslyFocused?.isConnected) previouslyFocused.focus();
+      });
+    };
+  }, []);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const overlay = overlayRef.current;
+      if (!overlay || overlay.contains(document.activeElement)) return;
+      dialogControls(overlay)[0]?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  });
+
   const panelContent = (
     <>
       <header className="vibe-dialog__header">
@@ -44,6 +122,7 @@ export function VibeDialog({
 
   return (
     <div
+      ref={overlayRef}
       aria-labelledby={hasExplicitLabel ? undefined : titleId}
       aria-modal="true"
       className="vibe-dialog-overlay"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeDialog } from "@/ui/vibe/vibe-dialog";
@@ -24,6 +24,7 @@ export function RecoverySetup({ configured }: RecoverySetupProps) {
   const [saved, setSaved] = useState(false);
   const [showSecret, setShowSecret] = useState(false);
   const [secretStatus, setSecretStatus] = useState("");
+  const codeRef = useRef<HTMLInputElement>(null);
   const recoveryConfigured = configured || saved;
 
   function openDialog() {
@@ -82,6 +83,7 @@ export function RecoverySetup({ configured }: RecoverySetupProps) {
     if (!response.ok) {
       setError(result?.error ?? "备用登录配置失败");
       setPending(false);
+      window.requestAnimationFrame(() => codeRef.current?.focus());
       return;
     }
     setOpen(false);
@@ -133,6 +135,7 @@ export function RecoverySetup({ configured }: RecoverySetupProps) {
             </>
           }
           eyebrow="LOCAL RECOVERY / TOTP"
+          onClose={closeDialog}
           onSubmit={save}
           title="配置备用登录"
           titleId="recovery-setup-title"
@@ -166,6 +169,8 @@ export function RecoverySetup({ configured }: RecoverySetupProps) {
             ) : null}
           </div>
           <VibeField
+            aria-describedby={error ? "recovery-setup-code-error" : undefined}
+            aria-invalid={error ? true : undefined}
             autoComplete="one-time-code"
             fieldId="recovery-setup-code"
             inputMode="numeric"
@@ -174,11 +179,17 @@ export function RecoverySetup({ configured }: RecoverySetupProps) {
             name="code"
             pattern="[0-9]{6}"
             placeholder="000000"
+            ref={codeRef}
             required
             spellCheck={false}
           />
           {error ? (
-            <VibeNotice className="login-error" role="alert" tone="error">
+            <VibeNotice
+              className="login-error"
+              id="recovery-setup-code-error"
+              role="alert"
+              tone="error"
+            >
               {error}
             </VibeNotice>
           ) : null}
@@ -208,6 +219,7 @@ export function RecoverySetup({ configured }: RecoverySetupProps) {
             </>
           }
           eyebrow="LOCAL RECOVERY / TOTP"
+          onClose={closeDialog}
           title="配置备用登录"
           titleId="recovery-setup-title"
         >

@@ -273,6 +273,7 @@ export function AssetSourceFlow() {
               : "连接成功前不会保存凭证或来源。"
           }
           eyebrow="ASSET SOURCE / READ ONLY"
+          onClose={cancelChoosing}
           title={step === "choose" ? "选择来源类型" : provider?.label ?? "配置来源"}
           titleId="asset-source-dialog-title"
         >
@@ -391,6 +392,7 @@ export function AssetSourceFlow() {
           aria-label={previewDescription.dialogLabel}
           description={`确认后才会把${previewDescription.savedMaterial}写入服务端存储。`}
           eyebrow={previewDescription.previewTitle}
+          onClose={() => void cancelPreview()}
           title={preview.account.label}
           titleId="asset-source-preview-title"
         >
