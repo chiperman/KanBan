@@ -1,29 +1,26 @@
 # Personal Asset Dashboard design system
 
-Status: pinned Vibe-Nothing-UI baseline integrated
+Status: project-native implementation referencing a pinned Vibe-Nothing-UI revision
 
-## 1. Canonical source and traceability
+## 1. External design reference
 
-KanBan uses [wangbh030722/vibe-nothing-ui-design](https://github.com/wangbh030722/vibe-nothing-ui-design) as its only visual design system.
+KanBan uses [wangbh030722/vibe-nothing-ui-design](https://github.com/wangbh030722/vibe-nothing-ui-design) as an external visual reference, not as a vendored runtime dependency.
 
-The project pins upstream commit [`46661e55ae04537215a229be49f2ac1bd37a4255`](https://github.com/wangbh030722/vibe-nothing-ui-design/commit/46661e55ae04537215a229be49f2ac1bd37a4255). The complete local snapshot and its license record live at [`vendor/vibe-nothing-ui-design/`](vendor/vibe-nothing-ui-design/UPSTREAM.md).
+The reviewed reference revision is [`46661e55ae04537215a229be49f2ac1bd37a4255`](https://github.com/wangbh030722/vibe-nothing-ui-design/commit/46661e55ae04537215a229be49f2ac1bd37a4255). Before every UI, interaction, or visual-design task, read the pinned GitHub files in this order:
 
-Design truth is resolved in this order:
+1. [`SPEC.md`](https://github.com/wangbh030722/vibe-nothing-ui-design/blob/46661e55ae04537215a229be49f2ac1bd37a4255/SPEC.md) — normative visual rules.
+2. [`index.html`](https://github.com/wangbh030722/vibe-nothing-ui-design/blob/46661e55ae04537215a229be49f2ac1bd37a4255/index.html) — rendered component and composition evidence.
+3. [`DESIGN.md`](https://github.com/wangbh030722/vibe-nothing-ui-design/blob/46661e55ae04537215a229be49f2ac1bd37a4255/DESIGN.md) — rationale, tokens, and design decisions.
+4. [`css/tokens.css`](https://github.com/wangbh030722/vibe-nothing-ui-design/blob/46661e55ae04537215a229be49f2ac1bd37a4255/css/tokens.css) and [`css/nothing-ui.css`](https://github.com/wangbh030722/vibe-nothing-ui-design/blob/46661e55ae04537215a229be49f2ac1bd37a4255/css/nothing-ui.css) — implementation evidence.
 
-1. [`vendor/vibe-nothing-ui-design/SPEC.md`](vendor/vibe-nothing-ui-design/SPEC.md) — normative implementation contract.
-2. [`vendor/vibe-nothing-ui-design/index.html`](vendor/vibe-nothing-ui-design/index.html) — visual source of truth.
-3. [`vendor/vibe-nothing-ui-design/DESIGN.md`](vendor/vibe-nothing-ui-design/DESIGN.md) — rationale and design decisions.
-4. [`vendor/vibe-nothing-ui-design/css/tokens.css`](vendor/vibe-nothing-ui-design/css/tokens.css) and [`css/nothing-ui.css`](vendor/vibe-nothing-ui-design/css/nothing-ui.css) — implementation evidence.
-5. This file — KanBan integration rules only.
-
-If this file conflicts with the pinned upstream specification on a visual decision, upstream wins. Product security, privacy, accessibility, and read-only-domain constraints remain mandatory and must be adapted without inventing a second visual language.
+This file is KanBan's adopted design contract. Upstream changes do not apply automatically. Product security, privacy, accessibility, financial truth, and read-only constraints take precedence and must be adapted without creating a second visual language.
 
 ## 2. Runtime integration
 
 - Fonts are self-hosted from `public/fonts/nothing-open/`: Doto, Geist, Geist Mono, and Newsreader Italic.
 - Runtime tokens use upstream names and values: `--bg`, `--surface`, `--raised`, `--line`, `--line-2`, `--muted`, `--secondary`, `--primary`, `--display`, `--accent`, status colors, glass colors, font roles, and radii.
 - Visual semantics use upstream token names directly. KanBan-only `--vibe-*` tokens are limited to the documented 4px layout/type scale and must not redefine color, font-role, radius, or state semantics.
-- Upstream `js/nothing-ui.js` is not executed. It is a vanilla-JavaScript showcase implementation; KanBan implements the same observable behavior in React.
+- Upstream JavaScript is reference evidence only and is not copied or executed. KanBan implements the adopted behavior in React.
 - Business pages consume the React design module under `src/ui/vibe/` instead of duplicating upstream class recipes in each page.
 - `src/app/product-layout.css` is the product layout/interaction adapter. It consumes the upstream contract and is not a second design system.
 
@@ -39,31 +36,26 @@ These rules adapt the upstream system without changing its visual contract:
 - Interactive controls retain accessible names, keyboard operation, visible focus, and at least a 40px hit target even when the visible control uses the upstream 6px technical radius.
 - Reduced-motion preferences disable nonessential motion while preserving state communication.
 
-## 4. Migration status
+## 4. Project implementation seam
 
-The repository is being migrated in stages so existing functional changes are not overwritten.
+- `DESIGN.md` defines the adopted project contract and upstream reference revision.
+- `src/app/design-tokens.css` owns runtime tokens and font loading.
+- `src/app/vibe-components.css` owns shared visual recipes.
+- `src/app/product-layout.css` owns KanBan-specific layout and interaction adaptation.
+- `src/ui/vibe/` is the React interface consumed by product pages.
+- `public/fonts/nothing-open/` contains required runtime fonts and their OFL licenses.
 
-- [x] Pin and vendor upstream specification, implementation evidence, licenses, and fonts.
-- [x] Make the upstream repository traceable from the project design entrypoint.
-- [x] Replace the runtime font and token foundation with the pinned upstream values.
-- [x] Complete the React Vibe module for surfaces, controls, dot glyphs, status, metrics, and segmented data instruments under `src/ui/vibe/`.
-- [x] Migrate owner login, Passkey setup, and TOTP recovery to the React Vibe module.
-- [x] Migrate the asset overview, source modules, holdings, and control deck.
-- [x] Migrate dialogs, command navigation, source onboarding, and layout-editing states.
-- [x] Remove legacy design aliases and the old `nothing-system.css` implementation.
-- [x] Complete desktop, tablet, phone, light, dark, keyboard, and reduced-motion browser acceptance.
+The upstream repository must not be copied wholesale into this project. The local React module and styles are the maintained implementation.
 
-Migration status must be reported honestly: vendoring the upstream files does not mean a page has been visually migrated.
+## 5. Reference update procedure
 
-## 5. Updating upstream
+Changing the pinned reference revision requires an explicit design task:
 
-The exact update procedure, integrity hashes, license record, and pinned revision are documented in [`vendor/vibe-nothing-ui-design/UPSTREAM.md`](vendor/vibe-nothing-ui-design/UPSTREAM.md).
+1. compare the current and proposed upstream commits on GitHub;
+2. review changes to the specification, visual example, tokens, recipes, and licenses;
+3. update the pinned links in this file and `AGENTS.md` when necessary;
+4. adapt the local React module and runtime styles deliberately;
+5. run focused browser acceptance and the full relevant regression suite;
+6. record the old and new reference commits in the resulting commit message.
 
-Every update must include:
-
-1. the old and new upstream commit;
-2. reviewed upstream diffs;
-3. refreshed integrity hashes;
-4. React adapter changes when required;
-5. focused browser acceptance evidence;
-6. an explicit statement of pages that remain unmigrated.
+Third-party attribution is retained in [`docs/third-party-notices.md`](docs/third-party-notices.md). The current upstream `main` branch is never treated as an implicit update.

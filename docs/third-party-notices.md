@@ -1,3 +1,13 @@
+# Third-party notices
+
+## Vibe-Nothing-UI-Design
+
+- Source: <https://github.com/wangbh030722/vibe-nothing-ui-design>
+- Reviewed revision: `46661e55ae04537215a229be49f2ac1bd37a4255`
+- License: MIT
+- Usage: external design reference; selected visual rules and recipes are adapted in KanBan's project-native React and CSS implementation.
+
+```text
 MIT License
 
 Copyright (c) 2026 nothing-ui contributors
@@ -23,3 +33,7 @@ SOFTWARE.
 This license covers the CSS, JavaScript, HTML, and documentation authored for
 nothing-ui. It does not grant rights to third-party trademarks, brand assets,
 or proprietary typefaces.
+```
+
+The runtime font licenses remain beside the font files under
+`public/fonts/nothing-open/OFL-*.txt`.
