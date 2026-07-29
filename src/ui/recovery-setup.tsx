@@ -6,6 +6,7 @@ import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeDialog } from "@/ui/vibe/vibe-dialog";
 import { VibeField } from "@/ui/vibe/vibe-field";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
+import { VibeVerificationCode } from "@/ui/vibe/vibe-verification-code";
 
 interface SetupOptions {
   secret: string;
@@ -168,17 +169,12 @@ export function RecoverySetup({ configured }: RecoverySetupProps) {
               </VibeNotice>
             ) : null}
           </div>
-          <VibeField
+          <VibeVerificationCode
             aria-describedby={error ? "recovery-setup-code-error" : undefined}
             aria-invalid={error ? true : undefined}
-            autoComplete="one-time-code"
             fieldId="recovery-setup-code"
-            inputMode="numeric"
             label="当前 TOTP 验证码"
-            maxLength={6}
             name="code"
-            pattern="[0-9]{6}"
-            placeholder="000000"
             ref={codeRef}
             required
             spellCheck={false}

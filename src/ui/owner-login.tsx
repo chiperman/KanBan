@@ -4,8 +4,8 @@ import { startAuthentication } from "@simplewebauthn/browser";
 import { useRef, useState, type CSSProperties, type FormEvent } from "react";
 
 import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
-import { VibeField } from "@/ui/vibe/vibe-field";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
+import { VibeVerificationCode } from "@/ui/vibe/vibe-verification-code";
 
 type LoginState = "idle" | "pending" | "failed" | "unavailable";
 type LoginMode = "choice" | "recovery-totp";
@@ -263,18 +263,13 @@ export function OwnerLogin({
             onSubmit={verifyRecoveryTotp}
           >
             <p className="login-copy">输入验证器当前显示的 6 位动态验证码。</p>
-            <VibeField
+            <VibeVerificationCode
               aria-describedby={recoveryError ? "recovery-totp-error" : undefined}
               aria-invalid={recoveryError ? true : undefined}
-              autoComplete="one-time-code"
               disabled={recoveryPending || recoveryRateLimited}
               fieldId="recovery-totp-code"
-              inputMode="numeric"
               label="TOTP 验证码"
-              maxLength={6}
               name="code"
-              pattern="[0-9]{6}"
-              placeholder="000000"
               ref={recoveryCodeRef}
               required
               spellCheck={false}

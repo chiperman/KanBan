@@ -45,6 +45,86 @@
   border-color: var(--primary);
 }
 
+.vibe-verification-code {
+  width: fit-content;
+  max-width: 100%;
+  margin: 18px 0 0;
+}
+
+.vibe-verification-code__control {
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.vibe-verification-code__slots {
+  display: flex;
+  gap: 8px;
+}
+
+.vibe-verification-code__slot {
+  display: inline-flex;
+  width: 40px;
+  height: 50px;
+  flex: 0 0 40px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--display);
+  font-family: var(--f-display);
+  font-size: 22px;
+  font-variation-settings: "ROND" 100;
+  font-weight: 500;
+  line-height: 1;
+  transition: border-color var(--dur, 0.2s) var(--ease);
+}
+
+.vibe-verification-code__slot.is-active {
+  border-color: var(--primary);
+}
+
+.vibe-verification-code__control.is-invalid
+  .vibe-verification-code__slot {
+  border-color: var(--error);
+}
+
+.vibe-verification-code__input {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  outline: 0;
+  background: transparent;
+  caret-color: transparent;
+  color: transparent;
+  cursor: text;
+  opacity: 0;
+  -webkit-text-fill-color: transparent;
+}
+
+.vibe-verification-code__input:focus-visible {
+  outline: 0;
+}
+
+.vibe-verification-code__control:has(
+    .vibe-verification-code__input:disabled
+  ) {
+  opacity: 0.3;
+}
+
+.vibe-verification-code__control:has(
+    .vibe-verification-code__input:disabled
+  )
+  .vibe-verification-code__input {
+  cursor: default;
+}
+
 textarea.vibe-field__input {
   min-height: 112px;
   resize: vertical;
@@ -783,8 +863,20 @@ select.vibe-field__input {
   }
 }
 
+@media (max-width: 359px) {
+  .vibe-verification-code__slots {
+    gap: 4px;
+  }
+
+  .vibe-verification-code__slot {
+    width: 36px;
+    flex-basis: 36px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .vibe-field__input,
+  .vibe-verification-code__slot,
   .vibe-button {
     transition: none;
   }

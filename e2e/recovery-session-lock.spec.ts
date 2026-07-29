@@ -240,16 +240,38 @@ test("所有者可仅凭 TOTP 备用登录", async ({ page, request }) => {
   await expect(page.getByLabel("备用登录密码")).toHaveCount(0);
   const totpField = page.getByTestId("vibe-field-recovery-totp-code");
   const totpInput = page.getByLabel("TOTP 验证码");
+  const totpSlots = totpField.locator(".vibe-verification-code__slot");
   const submitButton = page.getByRole("button", { name: "完成备用登录" });
-  await expect(totpField).toHaveAttribute("data-vibe-component", "field");
-  await expect(totpInput).toHaveCSS("border-radius", "6px");
+  await expect(totpField).toHaveAttribute(
+    "data-vibe-component",
+    "verification-code",
+  );
+  await expect(totpSlots).toHaveCount(6);
+  await expect(totpSlots.first()).toHaveCSS("width", "40px");
+  await expect(totpSlots.first()).toHaveCSS("height", "50px");
+  await expect(totpSlots.first()).toHaveCSS("border-radius", "6px");
   expect(
-    await totpInput.evaluate((element) => getComputedStyle(element).fontFamily),
-  ).toContain("Geist Mono");
+    await totpSlots
+      .first()
+      .evaluate((element) => getComputedStyle(element).fontFamily),
+  ).toContain("Doto");
+  await expect(totpInput).toHaveAttribute("autocomplete", "one-time-code");
+  await expect(totpInput).toHaveCSS("opacity", "0");
   await expect(submitButton).toHaveAttribute("data-vibe-variant", "primary");
   await expect(submitButton).toHaveCSS("border-radius", "6px");
 
-  await totpInput.fill(totpCode(secret, new Date(loginNow)));
+  await page.setViewportSize({ width: 320, height: 720 });
+  await expect(totpSlots.first()).toHaveCSS("width", "36px");
+  const mobileViewport = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(mobileViewport.scrollWidth).toBe(mobileViewport.clientWidth);
+
+  const loginCode = totpCode(secret, new Date(loginNow));
+  await totpInput.fill(loginCode);
+  await expect(totpInput).toHaveValue(loginCode);
+  await expect(totpSlots).toHaveText([...loginCode]);
   await submitButton.click();
 
   await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
