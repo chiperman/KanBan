@@ -74,7 +74,7 @@ Status: ready-for-human
 
 36. As an 所有者, I want the locked homepage to show only an authentication entry.
 37. As an 所有者, I want Passkey as the primary login method.
-38. As an 所有者, I want email, a strong password, and TOTP as recovery authentication.
+38. As an 所有者, I want TOTP-only as the backup login method when Passkey is unavailable.
 39. As an 所有者, I want public registration, social login, SMS login, and additional owners disabled.
 40. As an 所有者, I want all asset authorization enforced by the server and data layer.
 41. As an 所有者, I want no asset values, holdings, sources, addresses, snapshots, or credentials in unauthenticated HTML, page state, APIs, or network traffic.
@@ -98,7 +98,7 @@ Status: ready-for-human
 - Remove identity, Now, links, Markdown, ordinary content cards, access levels, publish/unpublish actions, restricted placeholders, and content-card CRUD routes.
 - The runtime card model contains asset cards only. Persist the field as `assetCards`; when reading legacy data, retain valid asset cards, migrate old restricted asset records, and discard legacy ordinary/public content.
 - Keep asset-card ordering, width, row breaks, hidden state, and source identity; card height always follows content.
-- Use Passkey as primary authentication and email + strong password + TOTP for recovery. Sessions are server-validated, `HttpOnly`, browser-session scoped, and automatically locked after 30 minutes of inactivity.
+- Use Passkey as primary authentication and TOTP-only as backup login. Encrypt the TOTP secret at rest, rate-limit failed attempts, and reject reuse of an accepted counter. Sessions are server-validated, `HttpOnly`, browser-session scoped, and automatically locked after 30 minutes of inactivity.
 - Put all external sources behind a common read-only adapter interface that returns source identity, holdings, valuation, timestamps, permission status, and platform profit when available.
 - Implement Longbridge with the registered web OAuth callback, a private official Rust SDK extension, and macOS Keychain token storage. PKCE verifier and Token remain inside the native module/Keychain. Request and accept only exact `account.read`; reject missing, unknown, additional, or transaction scopes before any asset read or credential persistence.
 - Limit Longbridge access to account, stock/fund positions, and pull quotes through the approved read-only SDK surface. Do not expose trade, order, transfer, withdrawal, MCP, or unapproved SDK interfaces.

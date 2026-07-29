@@ -376,18 +376,18 @@ export interface OwnerCredentialStore {
 }
 
 export interface OwnerRecoveryCredential {
-  email: string;
-  passwordSalt: string;
-  passwordHash: string;
+  version: 2;
   encryptedTotpSecret: string;
   totpIv: string;
   totpAuthTag: string;
+  lastUsedTotpCounter: string | null;
 }
 
-/** 恢复认证元数据；TOTP 密钥仅以恢复密码派生密钥加密后持久化。 */
+/** 备用登录元数据；TOTP 密钥仅以服务端密钥加密后持久化。 */
 export interface OwnerRecoveryCredentialStore {
   get(): Promise<OwnerRecoveryCredential | null>;
   save(credential: OwnerRecoveryCredential): Promise<void>;
+  claimTotpCounter(counter: string): Promise<boolean>;
 }
 
 /** 安全存储：只读凭证等服务端秘密的写入与读取，浏览器不可达。 */

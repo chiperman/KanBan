@@ -10,8 +10,6 @@ import {
 import { TEST_BASE_URL } from "../playwright.config";
 
 const FIXED_NOW = "2026-01-01T00:00:00.000Z";
-const RECOVERY_EMAIL = "owner@example.com";
-const STRONG_PASSWORD = "Terminal!Owner2026";
 const SENSITIVE_TITLE = "SENSITIVE-TITLE-总资产";
 const SENSITIVE_BODY = "SENSITIVE-BODY-1234567.89";
 
@@ -58,7 +56,6 @@ async function provisionAndLogin(page: Page): Promise<void> {
 }
 
 async function unlockWithPasskey(page: Page): Promise<void> {
-
   await page.getByRole("button", { name: "使用 Passkey 登录" }).click();
   await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
 }
@@ -99,21 +96,14 @@ function totpCode(secret: string, now: Date): string {
 async function configureRecovery(page: Page): Promise<string> {
   await page.getByRole("button", { name: "配置备用登录" }).click();
   await page.getByRole("button", { name: "开始配置" }).click();
-  await expect(page.getByText("邮箱仅作为本机登录标识，不发送验证邮件。")).toBeVisible();
   const secret = await page.getByLabel("TOTP 密钥").inputValue();
   const code = totpCode(secret, new Date(FIXED_NOW));
 
-  await page.getByLabel("备用登录邮箱").fill(RECOVERY_EMAIL);
-  await page.getByLabel("备用登录密码").fill("weak-password");
   await page.getByLabel("当前 TOTP 验证码").fill(code);
   await page.getByRole("button", { name: "保存备用登录" }).click();
-  await expect(
-    page.getByRole("alert").filter({ hasText: "强密码" }),
-  ).toContainText("强密码");
-
-  await page.getByLabel("备用登录密码").fill(STRONG_PASSWORD);
-  await page.getByRole("button", { name: "保存备用登录" }).click();
-  await expect(page.locator(".recovery-status")).toContainText("备用登录已配置");
+  await expect(page.locator(".recovery-status")).toHaveText(
+    "备用登录已配置，请等待验证器显示下一组验证码后再登录",
+  );
   return secret;
 }
 
@@ -138,17 +128,136 @@ test("打开备用登录说明时不会立即生成或展示 TOTP 密钥", async
 
   await page.getByRole("button", { name: "配置备用登录" }).click();
 
-  await expect(
-    page.getByRole("dialog", { name: "配置备用登录" }),
-  ).toBeVisible();
+  const recoveryDialog = page.getByRole("dialog", { name: "配置备用登录" });
+  await expect(recoveryDialog).toBeVisible();
+  await expect(recoveryDialog).toHaveAttribute("data-vibe-component", "modal");
   await expect(page.getByLabel("TOTP 密钥")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "开始配置" })).toBeVisible();
   expect(setupRequests).toBe(0);
 
   await page.getByRole("button", { name: "开始配置" }).click();
   await expect(page.getByLabel("TOTP 密钥")).toHaveAttribute("type", "password");
+  await expect(page.getByLabel("TOTP 密钥")).toHaveCSS("border-radius", "6px");
   await expect(page.getByRole("button", { name: "显示密钥" })).toBeVisible();
   expect(setupRequests).toBe(1);
+});
+
+test("所有者配置备用登录时只需要 TOTP", async ({ page }) => {
+  await provisionAndLogin(page);
+  await page.getByRole("button", { name: "配置备用登录" }).click();
+  await page.getByRole("button", { name: "开始配置" }).click();
+
+  await expect(page.getByLabel("备用登录邮箱")).toHaveCount(0);
+  await expect(page.getByLabel("备用登录密码")).toHaveCount(0);
+
+  const secret = await page.getByLabel("TOTP 密钥").inputValue();
+  await page
+    .getByLabel("当前 TOTP 验证码")
+    .fill(totpCode(secret, new Date(FIXED_NOW)));
+  await page.getByRole("button", { name: "保存备用登录" }).click();
+
+  await expect(page.locator(".recovery-status")).toHaveText(
+    "备用登录已配置，请等待验证器显示下一组验证码后再登录",
+  );
+});
+
+test("配置时使用的 TOTP 验证码不能再次登录", async ({ page }) => {
+  await provisionAndLogin(page);
+  await page.getByRole("button", { name: "配置备用登录" }).click();
+  await page.getByRole("button", { name: "开始配置" }).click();
+  const secret = await page.getByLabel("TOTP 密钥").inputValue();
+  const setupCode = totpCode(secret, new Date(FIXED_NOW));
+  await page.getByLabel("当前 TOTP 验证码").fill(setupCode);
+  await page.getByRole("button", { name: "保存备用登录" }).click();
+
+  await page.getByRole("button", { name: "立即锁定" }).click();
+  await page.getByRole("button", { name: "使用备用方式登录" }).click();
+  await page.getByLabel("TOTP 验证码").fill(setupCode);
+  await page.getByRole("button", { name: "完成备用登录" }).click();
+
+  await expect(
+    page.getByRole("alert").filter({
+      hasText: "该验证码已用于配置或登录，请等待下一组验证码",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "个人资产看板已锁定" }),
+  ).toBeVisible();
+});
+
+test("所有者可仅凭 TOTP 备用登录", async ({ page, request }) => {
+  await provisionAndLogin(page);
+  await page.getByRole("button", { name: "配置备用登录" }).click();
+  await page.getByRole("button", { name: "开始配置" }).click();
+  const secret = await page.getByLabel("TOTP 密钥").inputValue();
+  const code = totpCode(secret, new Date(FIXED_NOW));
+  await page.getByLabel("当前 TOTP 验证码").fill(code);
+  await page.getByRole("button", { name: "保存备用登录" }).click();
+
+  const loginNow = "2026-01-01T00:00:30.000Z";
+  await request.post("/test-doubles/clock", { data: { now: loginNow } });
+
+  await page.getByRole("button", { name: "立即锁定" }).click();
+  await expect(
+    page.getByRole("heading", { name: "个人资产看板已锁定" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "使用备用方式登录" }).click();
+
+  await expect(page.getByLabel("备用登录邮箱")).toHaveCount(0);
+  await expect(page.getByLabel("备用登录密码")).toHaveCount(0);
+  const totpField = page.getByTestId("vibe-field-recovery-totp-code");
+  const totpInput = page.getByLabel("TOTP 验证码");
+  const submitButton = page.getByRole("button", { name: "完成备用登录" });
+  await expect(totpField).toHaveAttribute("data-vibe-component", "field");
+  await expect(totpInput).toHaveCSS("border-radius", "6px");
+  expect(
+    await totpInput.evaluate((element) => getComputedStyle(element).fontFamily),
+  ).toContain("Geist Mono");
+  await expect(submitButton).toHaveAttribute("data-vibe-variant", "primary");
+  await expect(submitButton).toHaveCSS("border-radius", "6px");
+
+  await totpInput.fill(totpCode(secret, new Date(loginNow)));
+  await submitButton.click();
+
+  await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
+  await expect(page.getByText(SENSITIVE_BODY)).toBeVisible();
+});
+
+test("同一个 TOTP 验证码不能重复登录", async ({ page, request }) => {
+  await provisionAndLogin(page);
+  await page.getByRole("button", { name: "配置备用登录" }).click();
+  await page.getByRole("button", { name: "开始配置" }).click();
+  const secret = await page.getByLabel("TOTP 密钥").inputValue();
+  await page
+    .getByLabel("当前 TOTP 验证码")
+    .fill(totpCode(secret, new Date(FIXED_NOW)));
+  await page.getByRole("button", { name: "保存备用登录" }).click();
+
+  const loginNow = "2026-01-01T00:00:30.000Z";
+  await request.post("/test-doubles/clock", { data: { now: loginNow } });
+  const code = totpCode(secret, new Date(loginNow));
+
+  for (let login = 0; login < 2; login += 1) {
+    await page.getByRole("button", { name: "立即锁定" }).click();
+    await expect(
+      page.getByRole("heading", { name: "个人资产看板已锁定" }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "使用备用方式登录" }).click();
+    await page.getByLabel("TOTP 验证码").fill(code);
+    await page.getByRole("button", { name: "完成备用登录" }).click();
+    if (login === 0) {
+      await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
+    }
+  }
+
+  await expect(
+    page.getByRole("alert").filter({
+      hasText: "该验证码已用于配置或登录，请等待下一组验证码",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "个人资产看板已锁定" }),
+  ).toBeVisible();
 });
 
 test("未配置备用登录时锁定页只提供 Passkey 登录", async ({ page }) => {
@@ -167,7 +276,7 @@ test("未配置备用登录时锁定页只提供 Passkey 登录", async ({ page 
   ).toHaveCount(0);
 });
 
-test("所有者可配置邮箱、强密码和 TOTP，并以两阶段恢复认证解锁", async ({
+test("TOTP 连续五次失败后限流五分钟", async ({
   page,
   request,
 }) => {
@@ -190,10 +299,6 @@ test("所有者可配置邮箱、强密码和 TOTP，并以两阶段恢复认证
   await expect(
     page.getByRole("button", { name: /社交|短信|注册/ }),
   ).toHaveCount(0);
-
-  await page.getByLabel("备用登录邮箱").fill(RECOVERY_EMAIL);
-  await page.getByLabel("备用登录密码").fill(STRONG_PASSWORD);
-  await page.getByRole("button", { name: "继续验证 TOTP" }).click();
   await expect(page.getByLabel("TOTP 验证码")).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "个人资产看板已锁定" }),
@@ -219,8 +324,10 @@ test("所有者可配置邮箱、强密码和 TOTP，并以两阶段恢复认证
     await page.getByLabel("TOTP 验证码").fill(wrongCode);
     await page.getByRole("button", { name: "完成备用登录" }).click();
     await expect(
-      page.getByRole("alert").filter({ hasText: "TOTP 验证失败" }),
-    ).toContainText("TOTP 验证失败");
+      page.getByRole("alert").filter({
+        hasText: attempt < 4 ? "TOTP 验证失败" : "TOTP 尝试过多",
+      }),
+    ).toBeVisible();
   }
   await expect(
     page.getByRole("heading", { name: "个人资产看板已锁定" }),
@@ -229,20 +336,12 @@ test("所有者可配置邮箱、强密码和 TOTP，并以两阶段恢复认证
   await page.getByLabel("TOTP 验证码").fill(correctCode);
   await page.getByRole("button", { name: "完成备用登录" }).click();
   await expect(
-    page.getByRole("alert").filter({ hasText: "TOTP 验证失败" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "返回" }).click();
-  await page.getByLabel("备用登录邮箱").fill(RECOVERY_EMAIL);
-  await page.getByLabel("备用登录密码").fill(STRONG_PASSWORD);
-  await page.getByRole("button", { name: "继续验证 TOTP" }).click();
-  await expect(
     page.getByRole("alert").filter({ hasText: "TOTP 尝试过多" }),
-  ).toContainText("TOTP 尝试过多");
+  ).toBeVisible();
 
   await request.post("/test-doubles/clock", {
     data: { now: "2026-01-01T00:05:00.000Z" },
   });
-  await page.getByRole("button", { name: "继续验证 TOTP" }).click();
   await page
     .getByLabel("TOTP 验证码")
     .fill(totpCode(recoverySecret, new Date("2026-01-01T00:05:00.000Z")));
@@ -250,6 +349,54 @@ test("所有者可配置邮箱、强密码和 TOTP，并以两阶段恢复认证
 
   await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
   await expect(page.getByText(SENSITIVE_BODY)).toBeVisible();
+});
+
+test("TOTP 从第五次失败起锁定五分钟", async ({ page, request }) => {
+  await provisionAndLogin(page);
+  const recoverySecret = await configureRecovery(page);
+  await page.getByRole("button", { name: "立即锁定" }).click();
+  await page.getByRole("button", { name: "使用备用方式登录" }).click();
+
+  const firstCorrect = totpCode(recoverySecret, new Date(FIXED_NOW));
+  const firstWrong = firstCorrect === "000000" ? "000001" : "000000";
+  await page.getByLabel("TOTP 验证码").fill(firstWrong);
+  await page.getByRole("button", { name: "完成备用登录" }).click();
+
+  const fifthFailureAt = "2026-01-01T00:04:59.000Z";
+  await request.post("/test-doubles/clock", { data: { now: fifthFailureAt } });
+  const lateCorrect = totpCode(recoverySecret, new Date(fifthFailureAt));
+  const lateWrong = lateCorrect === "000000" ? "000001" : "000000";
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    await page.getByLabel("TOTP 验证码").fill(lateWrong);
+    await page.getByRole("button", { name: "完成备用登录" }).click();
+  }
+
+  await request.post("/test-doubles/clock", {
+    data: { now: "2026-01-01T00:05:00.000Z" },
+  });
+  const stillLocked = await page.evaluate(
+    async ({ code }) => fetch("/api/auth/recovery/totp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+    }).then((response) => response.status),
+    { code: totpCode(recoverySecret, new Date("2026-01-01T00:05:00.000Z")) },
+  );
+  expect(stillLocked).toBe(429);
+
+  const unlockedAt = "2026-01-01T00:09:59.000Z";
+  await request.post("/test-doubles/clock", { data: { now: unlockedAt } });
+  const recovered = await page.evaluate(
+    async ({ code }) => fetch("/api/auth/recovery/totp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+    }).then((response) => response.status),
+    { code: totpCode(recoverySecret, new Date(unlockedAt)) },
+  );
+  expect(recovered).toBe(200);
+  await page.reload();
+  await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
 });
 
 test("连续三十分钟无操作后自动锁定，随后仍可使用 Passkey 快速解锁", async ({
@@ -279,38 +426,39 @@ test("连续三十分钟无操作后自动锁定，随后仍可使用 Passkey �
   await expect(page.getByText(SENSITIVE_BODY)).toBeVisible();
 });
 
-test("并发恢复密码请求共享五次尝试上限", async ({ page, request }) => {
+test("并发 TOTP 请求共享五次尝试上限", async ({ page, request }) => {
   await provisionAndLogin(page);
-  await configureRecovery(page);
+  const recoverySecret = await configureRecovery(page);
   await page.getByRole("button", { name: "立即锁定" }).click();
   await expect(
     page.getByRole("heading", { name: "个人资产看板已锁定" }),
   ).toBeVisible();
 
+  const correctCode = totpCode(recoverySecret, new Date(FIXED_NOW));
+  const wrongCode = correctCode === "000000" ? "000001" : "000000";
   const statuses = await page.evaluate(
-    async ({ email }) =>
-      Promise.all(
-        Array.from({ length: 6 }, () =>
-          fetch("/api/auth/recovery/password", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email, password: "Wrong!Password2026" }),
-          }).then((response) => response.status),
-        ),
+    async ({ code }) => Promise.all(
+      Array.from({ length: 6 }, () =>
+        fetch("/api/auth/recovery/totp", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code }),
+        }).then((response) => response.status),
       ),
-    { email: RECOVERY_EMAIL },
+    ),
+    { code: wrongCode },
   );
-  expect(statuses.filter((status) => status === 401)).toHaveLength(5);
-  expect(statuses.filter((status) => status === 429)).toHaveLength(1);
+  expect(statuses.filter((status) => status === 401)).toHaveLength(4);
+  expect(statuses.filter((status) => status === 429)).toHaveLength(2);
 
   const limitedCorrectAttempt = await page.evaluate(
-    async ({ email, password }) =>
-      fetch("/api/auth/recovery/password", {
+    async ({ code }) =>
+      fetch("/api/auth/recovery/totp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ code }),
       }).then((response) => response.status),
-    { email: RECOVERY_EMAIL, password: STRONG_PASSWORD },
+    { code: correctCode },
   );
   expect(limitedCorrectAttempt).toBe(429);
 
@@ -318,18 +466,17 @@ test("并发恢复密码请求共享五次尝试上限", async ({ page, request 
     data: { now: "2026-01-01T00:05:00.000Z" },
   });
   const recoveredAttempt = await page.evaluate(
-    async ({ email, password }) =>
-      fetch("/api/auth/recovery/password", {
+    async ({ code }) =>
+      fetch("/api/auth/recovery/totp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ code }),
       }).then((response) => response.status),
-    { email: RECOVERY_EMAIL, password: STRONG_PASSWORD },
+    { code: totpCode(recoverySecret, new Date("2026-01-01T00:05:00.000Z")) },
   );
   expect(recoveredAttempt).toBe(200);
-  await expect(
-    page.getByRole("heading", { name: "个人资产看板已锁定" }),
-  ).toBeVisible();
+  await page.reload();
+  await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
 });
 
 test("关闭浏览器上下文后敏感会话不会在新上下文恢复", async ({

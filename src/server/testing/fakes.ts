@@ -727,6 +727,14 @@ export class InMemoryOwnerRecoveryCredentialStore
   async save(credential: OwnerRecoveryCredential): Promise<void> {
     this.credential = credential;
   }
+
+  async claimTotpCounter(counter: string): Promise<boolean> {
+    if (!this.credential) return false;
+    const previous = this.credential.lastUsedTotpCounter;
+    if (previous !== null && BigInt(counter) <= BigInt(previous)) return false;
+    this.credential = { ...this.credential, lastUsedTotpCounter: counter };
+    return true;
+  }
 }
 
 export class InMemorySecretStore implements SecretStore {

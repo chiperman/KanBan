@@ -10,17 +10,10 @@ import { SESSION_IDLE_TIMEOUT_MS } from "@/shared/session-policy";
 
 export const SESSION_COOKIE = "pad_session";
 export const CHALLENGE_COOKIE = "pad_webauthn_challenge";
-export const RECOVERY_PENDING_COOKIE = "pad_recovery_pending";
-const RECOVERY_PENDING_TIMEOUT_MS = 5 * 60 * 1000;
+const RECOVERY_FAILURE_WINDOW_MS = 5 * 60 * 1000;
 const RECOVERY_MAX_ATTEMPTS = 5;
 
 const GLOBAL_KEY = "__personal_asset_dashboard_sessions__";
-
-interface PendingRecovery {
-  ownerId: string;
-  totpSecret: string;
-  expiresAt: Date;
-}
 
 interface FailureWindow {
   failedAttempts: number;
@@ -29,8 +22,6 @@ interface FailureWindow {
 
 type SessionSlot = {
   sessions: Map<string, OwnerSession>;
-  pendingRecoveries: Map<string, PendingRecovery>;
-  recoveryPasswordFailures: FailureWindow | null;
   recoveryTotpFailures: FailureWindow | null;
 };
 
@@ -41,8 +32,6 @@ function slot(): SessionSlot {
   >;
   globalScope[GLOBAL_KEY] ??= {
     sessions: new Map(),
-    pendingRecoveries: new Map(),
-    recoveryPasswordFailures: null,
     recoveryTotpFailures: null,
   };
   return globalScope[GLOBAL_KEY];
@@ -82,20 +71,6 @@ export function destroySession(token: string): void {
   slot().sessions.delete(token);
 }
 
-export function createPendingRecovery(
-  ownerId: string,
-  totpSecret: string,
-  now: Date,
-): string {
-  const token = randomUUID();
-  slot().pendingRecoveries.set(token, {
-    ownerId,
-    totpSecret,
-    expiresAt: new Date(now.getTime() + RECOVERY_PENDING_TIMEOUT_MS),
-  });
-  return token;
-}
-
 function canAttemptWithinWindow(
   failures: FailureWindow | null,
   now: Date,
@@ -117,85 +92,34 @@ export function canAttemptRecoveryTotp(now: Date): boolean {
 }
 
 export function completeRecoveryTotpAttempt(
-  token: string,
   successful: boolean,
   now: Date,
-): PendingRecovery | null {
-  if (!canAttemptRecoveryTotp(now)) return null;
-  const pending = lookupPendingRecovery(token, now);
-  if (!pending) return null;
+): boolean {
+  if (!canAttemptRecoveryTotp(now)) return false;
   if (successful) {
-    slot().pendingRecoveries.delete(token);
     slot().recoveryTotpFailures = null;
-    return pending;
+    return true;
   }
 
   const failures = slot().recoveryTotpFailures;
   if (!failures) {
     slot().recoveryTotpFailures = {
       failedAttempts: 1,
-      expiresAt: new Date(now.getTime() + RECOVERY_PENDING_TIMEOUT_MS),
+      expiresAt: new Date(now.getTime() + RECOVERY_FAILURE_WINDOW_MS),
     };
   } else {
     failures.failedAttempts += 1;
+    if (failures.failedAttempts >= RECOVERY_MAX_ATTEMPTS) {
+      failures.expiresAt = new Date(
+        now.getTime() + RECOVERY_FAILURE_WINDOW_MS,
+      );
+    }
   }
-  if (!canAttemptRecoveryTotp(now)) {
-    slot().pendingRecoveries.clear();
-  }
-  return null;
-}
-
-export type RecoveryPasswordAttempt =
-  | "allowed"
-  | "password-limited"
-  | "totp-limited";
-
-export function claimRecoveryPasswordAttempt(
-  now: Date,
-): RecoveryPasswordAttempt {
-  if (!canAttemptRecoveryTotp(now)) return "totp-limited";
-  const failures = slot().recoveryPasswordFailures;
-  if (!canAttemptWithinWindow(failures, now)) return "password-limited";
-  if (failures && now.getTime() >= failures.expiresAt.getTime()) {
-    slot().recoveryPasswordFailures = null;
-  }
-  const current = slot().recoveryPasswordFailures;
-  if (!current) {
-    slot().recoveryPasswordFailures = {
-      failedAttempts: 1,
-      expiresAt: new Date(now.getTime() + RECOVERY_PENDING_TIMEOUT_MS),
-    };
-  } else {
-    current.failedAttempts += 1;
-  }
-  return "allowed";
-}
-
-export function clearRecoveryPasswordFailures(): void {
-  slot().recoveryPasswordFailures = null;
-}
-
-export function lookupPendingRecovery(
-  token: string,
-  now: Date,
-): PendingRecovery | null {
-  const pending = slot().pendingRecoveries.get(token);
-  if (!pending) return null;
-  if (now.getTime() >= pending.expiresAt.getTime()) {
-    slot().pendingRecoveries.delete(token);
-    return null;
-  }
-  return pending;
-}
-
-export function destroyPendingRecovery(token: string): void {
-  slot().pendingRecoveries.delete(token);
+  return false;
 }
 
 /** 测试重置时清空全部会话，保证每条浏览器测试从锁定状态开始。 */
 export function clearAllSessions(): void {
   slot().sessions.clear();
-  slot().pendingRecoveries.clear();
-  slot().recoveryPasswordFailures = null;
   slot().recoveryTotpFailures = null;
 }

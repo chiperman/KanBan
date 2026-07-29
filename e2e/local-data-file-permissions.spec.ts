@@ -59,3 +59,26 @@ test("启动无法修正权限时明确报错且保留原数据", async ({ reque
     ),
   });
 });
+
+test("旧邮箱密码备用凭证会失效并清除", async ({ request }) => {
+  const response = await request.post(
+    "/test-doubles/local-data-file-permissions?action=legacy-recovery-cleanup",
+  );
+
+  expect(response.ok()).toBeTruthy();
+  await expect(response.json()).resolves.toEqual({
+    configured: false,
+    legacyFileExists: false,
+  });
+});
+
+test("旧凭证清理不会删除并发保存的新 TOTP", async ({ request }) => {
+  const response = await request.post(
+    "/test-doubles/local-data-file-permissions?action=legacy-recovery-save-race",
+  );
+
+  expect(response.ok()).toBeTruthy();
+  await expect(response.json()).resolves.toEqual({
+    newCredentialPreserved: true,
+  });
+});

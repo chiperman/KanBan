@@ -2,6 +2,11 @@
 
 import { useState, type FormEvent } from "react";
 
+import { VibeButton } from "@/ui/vibe/vibe-button";
+import { VibeDialog } from "@/ui/vibe/vibe-dialog";
+import { VibeField } from "@/ui/vibe/vibe-field";
+import { VibeNotice } from "@/ui/vibe/vibe-notice";
+
 interface SetupOptions {
   secret: string;
   provisioningUri: string;
@@ -67,8 +72,6 @@ export function RecoverySetup({ configured }: RecoverySetupProps) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        email: data.get("email"),
-        password: data.get("password"),
         code: data.get("code"),
         secret: options.secret,
       }),
@@ -89,108 +92,131 @@ export function RecoverySetup({ configured }: RecoverySetupProps) {
 
   return (
     <>
-      <button type="button" className="logout-button" onClick={openDialog}>
+      <VibeButton
+        className="logout-button"
+        type="button"
+        onClick={openDialog}
+        variant="outline"
+      >
         {recoveryConfigured ? "更新备用登录" : "配置备用登录"}
-      </button>
-      {saved ? <span role="status" className="recovery-status">备用登录已配置</span> : null}
-      {!open && error ? <span role="alert" className="login-error">{error}</span> : null}
-      {open ? (
-        <div
-          className="editor-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="recovery-setup-title"
+      </VibeButton>
+      {saved ? (
+        <VibeNotice
+          className="recovery-status vibe-notice--compact"
+          role="status"
+          tone="success"
         >
-          {options ? (
-            <form className="editor-dialog" onSubmit={save}>
-              <p className="card-label">备用登录配置</p>
-              <h2 id="recovery-setup-title">配置备用登录</h2>
-              <p className="login-copy">
-                邮箱仅作为本机登录标识，不发送验证邮件。请把下方 TOTP
-                密钥添加到验证器，再输入当前验证码确认；密钥只在本次配置中显示。
-              </p>
-              <label className="field-label">
-                备用登录邮箱
-                <input name="email" type="email" autoComplete="email" required />
-              </label>
-              <label className="field-label">
-                备用登录密码
-                <input name="password" type="password" autoComplete="new-password" required />
-              </label>
-              <label className="field-label">
-                TOTP 密钥
-                <input
-                  readOnly
-                  type={showSecret ? "text" : "password"}
-                  value={options.secret}
-                />
-              </label>
-              <div className="recovery-secret-actions">
-                <button
-                  type="button"
-                  className="login-cancel"
-                  onClick={() => setShowSecret((visible) => !visible)}
-                >
-                  {showSecret ? "隐藏密钥" : "显示密钥"}
-                </button>
-                <button
-                  type="button"
-                  className="login-cancel"
-                  onClick={() => void copySecret()}
-                >
-                  复制密钥
-                </button>
-                {secretStatus ? <span role="status">{secretStatus}</span> : null}
-              </div>
-              <label className="field-label">
-                当前 TOTP 验证码
-                <input name="code" inputMode="numeric" pattern="[0-9]{6}" required />
-              </label>
-              {error ? <p className="login-error" role="alert">{error}</p> : null}
-              <div className="editor-actions">
-                <button type="submit" className="login-primary" disabled={pending}>
-                  保存备用登录
-                </button>
-                <button
-                  type="button"
-                  className="login-cancel"
-                  disabled={pending}
-                  onClick={closeDialog}
-                >
-                  取消
-                </button>
-              </div>
-            </form>
-          ) : (
-            <section className="editor-dialog">
-              <p className="card-label">备用登录配置</p>
-              <h2 id="recovery-setup-title">配置备用登录</h2>
-              <p className="login-copy">
-                备用登录会生成一份新的 TOTP 密钥。请确认当前环境没有录屏、投屏或旁观者，
-                并准备好验证器后再继续。
-              </p>
-              {error ? <p className="login-error" role="alert">{error}</p> : null}
-              <div className="editor-actions">
-                <button
-                  type="button"
-                  className="login-primary"
-                  disabled={pending}
-                  onClick={() => void begin()}
-                >
-                  {pending ? "正在生成…" : "开始配置"}
-                </button>
-                <button
-                  type="button"
-                  className="login-cancel"
-                  disabled={pending}
-                  onClick={closeDialog}
-                >
-                  取消
-                </button>
-              </div>
-            </section>
-          )}
-        </div>
+          备用登录已配置，请等待验证器显示下一组验证码后再登录
+        </VibeNotice>
+      ) : null}
+      {!open && error ? (
+        <VibeNotice className="login-error" role="alert" tone="error">
+          {error}
+        </VibeNotice>
+      ) : null}
+      {open && options ? (
+        <VibeDialog
+          actions={
+            <>
+              <VibeButton type="button" disabled={pending} onClick={closeDialog} variant="text">
+                取消
+              </VibeButton>
+              <VibeButton type="submit" disabled={pending} variant="primary">
+                保存备用登录
+              </VibeButton>
+            </>
+          }
+          description={
+            <>
+              请把下方 TOTP 密钥添加到验证器，再输入当前验证码确认；
+              密钥只在本次配置中显示。
+            </>
+          }
+          eyebrow="LOCAL RECOVERY / TOTP"
+          onSubmit={save}
+          title="配置备用登录"
+          titleId="recovery-setup-title"
+        >
+          <VibeField
+            fieldId="recovery-setup-secret"
+            label="TOTP 密钥"
+            readOnly
+            type={showSecret ? "text" : "password"}
+            value={options.secret}
+          />
+          <div className="recovery-secret-actions">
+            <VibeButton
+              type="button"
+              onClick={() => setShowSecret((visible) => !visible)}
+              variant="text"
+            >
+              {showSecret ? "隐藏密钥" : "显示密钥"}
+            </VibeButton>
+            <VibeButton type="button" onClick={() => void copySecret()} variant="text">
+              复制密钥
+            </VibeButton>
+            {secretStatus ? (
+              <VibeNotice
+                className="vibe-notice--compact"
+                role="status"
+                tone="success"
+              >
+                {secretStatus}
+              </VibeNotice>
+            ) : null}
+          </div>
+          <VibeField
+            autoComplete="one-time-code"
+            fieldId="recovery-setup-code"
+            inputMode="numeric"
+            label="当前 TOTP 验证码"
+            maxLength={6}
+            name="code"
+            pattern="[0-9]{6}"
+            placeholder="000000"
+            required
+            spellCheck={false}
+          />
+          {error ? (
+            <VibeNotice className="login-error" role="alert" tone="error">
+              {error}
+            </VibeNotice>
+          ) : null}
+        </VibeDialog>
+      ) : null}
+      {open && !options ? (
+        <VibeDialog
+          actions={
+            <>
+              <VibeButton type="button" disabled={pending} onClick={closeDialog} variant="text">
+                取消
+              </VibeButton>
+              <VibeButton
+                type="button"
+                disabled={pending}
+                onClick={() => void begin()}
+                variant="primary"
+              >
+                {pending ? "正在生成…" : "开始配置"}
+              </VibeButton>
+            </>
+          }
+          description={
+            <>
+              备用登录会生成一份新的 TOTP 密钥。请确认当前环境没有录屏、投屏或旁观者，
+              并准备好验证器后再继续。
+            </>
+          }
+          eyebrow="LOCAL RECOVERY / TOTP"
+          title="配置备用登录"
+          titleId="recovery-setup-title"
+        >
+          {error ? (
+            <VibeNotice className="login-error" role="alert" tone="error">
+              {error}
+            </VibeNotice>
+          ) : null}
+        </VibeDialog>
       ) : null}
     </>
   );

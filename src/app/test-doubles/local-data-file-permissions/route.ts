@@ -76,7 +76,9 @@ export async function POST(request: Request) {
     action !== "first-create" &&
     action !== "harden-existing" &&
     action !== "atomic-write" &&
-    action !== "harden-failure"
+    action !== "harden-failure" &&
+    action !== "legacy-recovery-cleanup" &&
+    action !== "legacy-recovery-save-race"
   ) {
     return Response.json({ error: "unknown action" }, { status: 400 });
   }
@@ -86,6 +88,57 @@ export async function POST(request: Request) {
   const previousKey = process.env.PAD_SECRET_ENCRYPTION_KEY;
   process.env.PAD_SECRET_ENCRYPTION_KEY = Buffer.alloc(32, 11).toString("base64");
   try {
+    if (action === "legacy-recovery-save-race") {
+      const ownerRecoveryPath = path.join(dataDirectory, "owner-recovery.json");
+      await atomicWritePrivateFile(ownerRecoveryPath, JSON.stringify({
+        email: "legacy@example.com",
+        passwordSalt: "legacy-salt",
+        passwordHash: "legacy-hash",
+        encryptedTotpSecret: "legacy-encrypted",
+        totpIv: "legacy-iv",
+        totpAuthTag: "legacy-tag",
+        padding: "x".repeat(16 * 1024 * 1024),
+      }));
+      const store = new FileOwnerRecoveryCredentialStore(ownerRecoveryPath);
+      await Promise.all([
+        store.get(),
+        store.save({
+          version: 2,
+          encryptedTotpSecret: "new-encrypted",
+          totpIv: "new-iv",
+          totpAuthTag: "new-tag",
+          lastUsedTotpCounter: null,
+        }),
+      ]);
+      const persisted = await store.get();
+      return Response.json({
+        newCredentialPreserved:
+          persisted?.version === 2 &&
+          persisted.encryptedTotpSecret === "new-encrypted",
+      });
+    }
+
+    if (action === "legacy-recovery-cleanup") {
+      const ownerRecoveryPath = path.join(dataDirectory, "owner-recovery.json");
+      await atomicWritePrivateFile(ownerRecoveryPath, JSON.stringify({
+        email: "legacy@example.com",
+        passwordSalt: "legacy-salt",
+        passwordHash: "legacy-hash",
+        encryptedTotpSecret: "legacy-encrypted",
+        totpIv: "legacy-iv",
+        totpAuthTag: "legacy-tag",
+      }));
+      const configured = await new FileOwnerRecoveryCredentialStore(
+        ownerRecoveryPath,
+      ).get();
+      return Response.json({
+        configured: configured !== null,
+        legacyFileExists: (await readdir(dataDirectory)).includes(
+          "owner-recovery.json",
+        ),
+      });
+    }
+
     if (action === "harden-failure") {
       const contents = "existing-private-data";
       await mkdir(dataDirectory);
@@ -190,12 +243,11 @@ export async function POST(request: Request) {
       counter: 0,
     });
     await new FileOwnerRecoveryCredentialStore(ownerRecoveryPath).save({
-      email: "owner@example.com",
-      passwordSalt: "salt",
-      passwordHash: "hash",
+      version: 2,
       encryptedTotpSecret: "encrypted",
       totpIv: "iv",
       totpAuthTag: "tag",
+      lastUsedTotpCounter: null,
     });
 
     return Response.json({

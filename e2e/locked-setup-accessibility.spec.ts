@@ -79,7 +79,7 @@ async function provisionOwner(page: Page): Promise<void> {
   await expect(page.getByRole("status")).toContainText("已完成预置");
 }
 
-test("锁定页以可读中文状态传达安全边界并保留清晰键盘焦点", async ({
+test("锁定页以可访问状态传达安全边界并保留清晰键盘焦点", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -87,15 +87,79 @@ test("锁定页以可读中文状态传达安全边界并保留清晰键盘焦�
   await provisionOwner(page);
   await page.goto("/");
 
-  await expect(
-    page.getByRole("heading", { name: "个人资产看板已锁定" }),
-  ).toBeVisible();
+  const lockedHeading = page.getByRole("heading", {
+    name: "个人资产看板已锁定",
+  });
+  await expect(lockedHeading).toBeVisible();
+  const hiddenHeadingStyles = await lockedHeading.evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    return {
+      width: bounds.width,
+      height: bounds.height,
+      clip: getComputedStyle(element).clip,
+    };
+  });
+  expect(hiddenHeadingStyles).toEqual({
+    width: 1,
+    height: 1,
+    clip: "rect(0px, 0px, 0px, 0px)",
+  });
+  await expect(page.locator(".page-locked .login-copy")).toHaveCount(0);
+
+  const lockedPixels = page
+    .getByTestId("locked-pixel-display")
+    .locator(".login-pixel.is-filled");
+  await expect(lockedPixels).toHaveCount(90);
+  const pixelAnimation = await lockedPixels.evaluateAll((pixels) => {
+    const first = getComputedStyle(pixels[0]);
+    const maximumDelay = Math.max(
+      ...pixels.map((pixel) =>
+        Number.parseFloat(getComputedStyle(pixel).animationDelay),
+      ),
+    );
+    return {
+      name: first.animationName,
+      duration: first.animationDuration,
+      firstDelay: first.animationDelay,
+      maximumDelay: `${maximumDelay}s`,
+    };
+  });
+  expect(pixelAnimation).toEqual({
+    name: "locked-pixel-cycle",
+    duration: "9s",
+    firstDelay: "0s",
+    maximumDelay: "4.005s",
+  });
+  const oPixelDelays = await page
+    .locator(".login-pixel-letter")
+    .nth(1)
+    .locator(".login-pixel.is-filled")
+    .evaluateAll((pixels) =>
+      pixels.map((pixel) => getComputedStyle(pixel).animationDelay),
+    );
+  expect(oPixelDelays).toEqual([
+    "0.495s",
+    "0.54s",
+    "0.585s",
+    "1.17s",
+    "0.63s",
+    "1.125s",
+    "0.675s",
+    "1.08s",
+    "0.72s",
+    "1.035s",
+    "0.765s",
+    "0.99s",
+    "0.81s",
+    "0.945s",
+    "0.9s",
+    "0.855s",
+  ]);
 
   for (const locator of [
     page.locator(".page-locked .header-wordmark"),
     page.locator(".locked-clock > strong"),
     page.locator(".login-eyebrow"),
-    page.locator(".page-locked .login-copy"),
     page.locator(".login-hint"),
     page.locator(".login-trust-line"),
   ]) {
@@ -107,15 +171,24 @@ test("锁定页以可读中文状态传达安全边界并保留清晰键盘焦�
 
   await expect(page.locator(".locked-clock > strong")).toHaveCSS(
     "font-family",
-    /Space Mono/,
+    /Geist Mono/,
+  );
+  await expect(page.getByTestId("login-gate")).toHaveAttribute(
+    "data-vibe-surface",
+    "auth-panel",
   );
 
   await page.keyboard.press("Tab");
   await expect(page.getByRole("link", { name: "跳到主要内容" })).toBeFocused();
   await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: /当前主题/ })).toBeFocused();
+  await page.keyboard.press("Tab");
 
   const primaryAction = page.getByRole("button", { name: "使用 Passkey 登录" });
   await expect(primaryAction).toBeFocused();
+  await expect(primaryAction).toHaveAttribute("data-vibe-variant", "primary");
+  await expect(primaryAction).toHaveCSS("border-radius", "6px");
+  await expect(primaryAction).toHaveCSS("font-family", /Geist Mono/);
   const actionStyles = await primaryAction.evaluate((element) => {
     const computed = getComputedStyle(element);
     const bounds = element.getBoundingClientRect();
@@ -129,15 +202,15 @@ test("锁定页以可读中文状态传达安全边界并保留清晰键盘焦�
   expect(actionStyles.outlineStyle).not.toBe("none");
   expect(actionStyles.outlineWidth).toBeGreaterThanOrEqual(2);
 
-  const copyBounds = await page
-    .locator(".page-locked .login-copy")
+  const pixelBounds = await page
+    .getByTestId("locked-pixel-display")
     .boundingBox();
   const actionBounds = await primaryAction.boundingBox();
-  expect(copyBounds).not.toBeNull();
+  expect(pixelBounds).not.toBeNull();
   expect(actionBounds).not.toBeNull();
   expect(
-    actionBounds!.y - (copyBounds!.y + copyBounds!.height),
-  ).toBeLessThanOrEqual(64);
+    actionBounds!.y - (pixelBounds!.y + pixelBounds!.height),
+  ).toBeLessThanOrEqual(96);
 });
 
 test("所有者预置页在桌面提供合理正文宽度和可读反馈", async ({ page }) => {
@@ -152,6 +225,8 @@ test("所有者预置页在桌面提供合理正文宽度和可读反馈", async
   await page.goto("/setup");
 
   const panel = page.locator(".setup-panel");
+  await expect(panel).toHaveAttribute("data-vibe-surface", "auth-panel");
+  await expect(panel).toHaveCSS("border-radius", "8px");
   const title = page.getByRole("heading", {
     name: "预置唯一所有者的 Passkey",
   });
@@ -187,6 +262,8 @@ test("所有者预置页在桌面提供合理正文宽度和可读反馈", async
   const primaryAction = page.getByRole("button", {
     name: "创建所有者 Passkey",
   });
+  await expect(primaryAction).toHaveAttribute("data-vibe-variant", "primary");
+  await expect(primaryAction).toHaveCSS("border-radius", "6px");
   await primaryAction.focus();
   const actionStyles = await primaryAction.evaluate((element) => {
     const computed = getComputedStyle(element);
@@ -200,6 +277,11 @@ test("所有者预置页在桌面提供合理正文宽度和可读反馈", async
 
   await primaryAction.click();
   await expectReadableText(page.locator(".login-error[role=alert]"));
+  const errorNotice = page.locator(".login-error[role=alert]");
+  await expect(errorNotice).toHaveAttribute("data-vibe-tone", "error");
+  await expect(
+    errorNotice.locator(".vibe-dot-icon > .is-lit").first(),
+  ).toHaveCSS("border-radius", "50%");
   await expect(page.getByRole("link", { name: "返回首页" })).toBeVisible();
 });
 

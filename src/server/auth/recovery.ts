@@ -3,7 +3,6 @@ import {
   createDecipheriv,
   createHmac,
   randomBytes,
-  scryptSync,
   timingSafeEqual,
 } from "node:crypto";
 
@@ -11,88 +10,44 @@ import type { OwnerRecoveryCredential } from "@/server/ports";
 
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
-export function normalizeRecoveryEmail(value: unknown): string {
-  if (typeof value !== "string") throw new Error("备用登录邮箱格式无效");
-  const email = value.trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email)) {
-    throw new Error("备用登录邮箱格式无效");
+function recoveryEncryptionKey(): Buffer {
+  const encoded = process.env.PAD_SECRET_ENCRYPTION_KEY;
+  const key = encoded ? Buffer.from(encoded, "base64") : Buffer.alloc(0);
+  if (key.length !== 32) {
+    throw new Error(
+      "PAD_SECRET_ENCRYPTION_KEY 必须配置为 32 字节 Base64 服务端密钥",
+    );
   }
-  return email;
+  return key;
 }
 
-export function validateStrongPassword(value: unknown): string {
-  if (typeof value !== "string") throw new Error("强密码格式无效");
-  if (
-    value.length < 12 ||
-    !/[a-z]/u.test(value) ||
-    !/[A-Z]/u.test(value) ||
-    !/[0-9]/u.test(value) ||
-    !/[^A-Za-z0-9]/u.test(value)
-  ) {
-    throw new Error("强密码至少 12 位，并包含大小写字母、数字和符号");
-  }
-  return value;
-}
-
-function deriveRecoveryKeys(password: string, salt: Buffer): Buffer {
-  return scryptSync(password, salt, 64);
-}
-
-export function protectRecoverySecret(password: string, secret: string): {
-  passwordSalt: string;
-  passwordHash: string;
-  encryptedTotpSecret: string;
-  totpIv: string;
-  totpAuthTag: string;
-} {
-  const salt = randomBytes(16);
-  const derived = deriveRecoveryKeys(password, salt);
+export function protectRecoverySecret(
+  secret: string,
+  lastUsedTotpCounter: string | null = null,
+): OwnerRecoveryCredential {
+  const key = recoveryEncryptionKey();
   const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", derived.subarray(32), iv);
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
   const encrypted = Buffer.concat([
     cipher.update(secret, "utf8"),
     cipher.final(),
   ]);
   return {
-    passwordSalt: salt.toString("base64url"),
-    passwordHash: derived.subarray(0, 32).toString("base64url"),
+    version: 2,
     encryptedTotpSecret: encrypted.toString("base64url"),
     totpIv: iv.toString("base64url"),
     totpAuthTag: cipher.getAuthTag().toString("base64url"),
+    lastUsedTotpCounter,
   };
 }
 
-export function verifyRecoveryPassword(
-  password: string,
-  saltValue: string,
-  hashValue: string,
-): boolean {
-  try {
-    const expected = Buffer.from(hashValue, "base64url");
-    const actual = deriveRecoveryKeys(
-      password,
-      Buffer.from(saltValue, "base64url"),
-    ).subarray(0, 32);
-    return (
-      expected.length === actual.length && timingSafeEqual(expected, actual)
-    );
-  } catch {
-    return false;
-  }
-}
-
 export function decryptRecoverySecret(
-  password: string,
   credential: OwnerRecoveryCredential,
 ): string | null {
   try {
-    const derived = deriveRecoveryKeys(
-      password,
-      Buffer.from(credential.passwordSalt, "base64url"),
-    );
     const decipher = createDecipheriv(
       "aes-256-gcm",
-      derived.subarray(32),
+      recoveryEncryptionKey(),
       Buffer.from(credential.totpIv, "base64url"),
     );
     decipher.setAuthTag(Buffer.from(credential.totpAuthTag, "base64url"));
@@ -154,14 +109,24 @@ function totpCode(secret: string, counter: bigint): string {
 }
 
 export function verifyTotp(secret: string, code: unknown, now: Date): boolean {
-  if (typeof code !== "string" || !/^\d{6}$/u.test(code)) return false;
+  return matchingTotpCounter(secret, code, now) !== null;
+}
+
+export function matchingTotpCounter(
+  secret: string,
+  code: unknown,
+  now: Date,
+): string | null {
+  if (typeof code !== "string" || !/^\d{6}$/u.test(code)) return null;
   const counter = BigInt(Math.floor(now.getTime() / 30_000));
   for (const offset of [-1n, 0n, 1n]) {
-    const expected = Buffer.from(totpCode(secret, counter + offset));
+    const candidate = counter + offset;
+    if (candidate < 0n) continue;
+    const expected = Buffer.from(totpCode(secret, candidate));
     const actual = Buffer.from(code);
-    if (timingSafeEqual(expected, actual)) return true;
+    if (timingSafeEqual(expected, actual)) return candidate.toString();
   }
-  return false;
+  return null;
 }
 
 export function validateTotpSecret(value: unknown): string {

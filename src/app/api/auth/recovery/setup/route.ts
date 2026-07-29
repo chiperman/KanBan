@@ -1,10 +1,8 @@
 import {
   createTotpSecret,
-  normalizeRecoveryEmail,
+  matchingTotpCounter,
   protectRecoverySecret,
-  validateStrongPassword,
   validateTotpSecret,
-  verifyTotp,
 } from "@/server/auth/recovery";
 import { getServices } from "@/server/composition";
 
@@ -34,17 +32,16 @@ export async function POST(request: Request) {
     return Response.json({ error: "需要所有者身份" }, { status: 401 });
   }
 
-  let email: string;
-  let password: string;
   let secret: string;
+  let counter: string;
   try {
     const body = (await request.json()) as Record<string, unknown>;
-    email = normalizeRecoveryEmail(body.email);
-    password = validateStrongPassword(body.password);
     secret = validateTotpSecret(body.secret);
-    if (!verifyTotp(secret, body.code, services.clock.now())) {
+    const matched = matchingTotpCounter(secret, body.code, services.clock.now());
+    if (matched === null) {
       throw new Error("当前 TOTP 验证码无效");
     }
+    counter = matched;
   } catch (error) {
     return Response.json(
       { error: error instanceof Error ? error.message : "备用登录配置无效" },
@@ -52,9 +49,8 @@ export async function POST(request: Request) {
     );
   }
 
-  await services.ownerRecoveryCredentials.save({
-    email,
-    ...protectRecoverySecret(password, secret),
-  });
+  await services.ownerRecoveryCredentials.save(
+    protectRecoverySecret(secret, counter),
+  );
   return Response.json({ ok: true });
 }
