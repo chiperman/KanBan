@@ -52,11 +52,40 @@ test("总资产使用来源原生价格与显式汇率，保留原值并正确�
   const sourceTotal = page
     .getByTestId("asset-source-card-source-alpha")
     .getByTestId("asset-source-total");
+  const overviewTotal = overview.getByTestId("total-asset-amount");
   await expect(sourceTotal).toHaveCSS("font-family", /Doto/);
+  await expect(sourceTotal.locator(".vibe-metric__value")).toHaveCSS(
+    "font-family",
+    /Doto/,
+  );
   await expect(sourceTotal.locator(".vibe-metric__unit")).toHaveCSS(
     "font-family",
     /Geist Mono/,
   );
+  expect(
+    await sourceTotal.evaluate((element) => {
+      const value = element.querySelector(".vibe-metric__value");
+      return value
+        ? getComputedStyle(value).fontSize === getComputedStyle(element).fontSize
+        : false;
+    }),
+  ).toBe(true);
+  await expect(overviewTotal.locator(".vibe-metric__value")).toHaveCSS(
+    "font-family",
+    /Doto/,
+  );
+  await expect(overviewTotal.locator(".vibe-metric__unit")).toHaveCSS(
+    "font-family",
+    /Geist Mono/,
+  );
+  expect(
+    await overviewTotal.evaluate((element) => {
+      const value = element.querySelector(".vibe-metric__value");
+      return value
+        ? getComputedStyle(value).fontSize === getComputedStyle(element).fontSize
+        : false;
+    }),
+  ).toBe(true);
   await expect(overview).toContainText("561.34 USD");
   await expect(overview).toContainText("当前估值：不完整 · 1 项未估值");
   await expect(overview).toContainText("证券");

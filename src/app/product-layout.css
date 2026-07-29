@@ -579,8 +579,8 @@ a {
   letter-spacing: -0.02em;
 }
 
-.asset-total span,
-.total-overview-amount span,
+.asset-total > .vibe-metric__unit,
+.total-overview-amount > .vibe-metric__unit,
 .today-change-amount span {
   color: var(--secondary);
   font-family: var(--f-mono);
@@ -1296,7 +1296,7 @@ body {
   font-size: clamp(54px, 7vw, 84px);
 }
 
-.total-overview-amount span {
+.total-overview-amount > .vibe-metric__unit {
   position: relative;
   top: -0.8em;
   margin-left: var(--vibe-space-2);
@@ -1953,7 +1953,7 @@ body {
     font-size: 48px;
   }
 
-  .total-overview-amount span {
+  .total-overview-amount > .vibe-metric__unit {
     top: -0.45em;
   }
 
@@ -1989,7 +1989,7 @@ body {
 
 .login-instrument-state,
 .total-overview-amount {
-  font-variation-settings: "ROND" 0;
+  font-variation-settings: "ROND" 100;
 }
 
 .login-primary::before,

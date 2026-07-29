@@ -113,6 +113,20 @@ test("看板时间、来源状态和普通卡片遵守 Vibe 视觉层级", async
     .locator("..")
     .getByRole("button", { name: /调整.*宽度/ });
   await expect(resizeHandle).toHaveCSS("border-radius", "6px");
+  await resizeHandle.hover();
+  expect(
+    await resizeHandle.evaluate((element) => {
+      const before = getComputedStyle(element, "::before");
+      const after = getComputedStyle(element, "::after");
+      return {
+        beforeBackground: before.backgroundColor,
+        afterBackground: after.backgroundColor,
+      };
+    }),
+  ).toEqual({
+    beforeBackground: "rgba(0, 0, 0, 0)",
+    afterBackground: "rgba(0, 0, 0, 0)",
+  });
 
   await page.getByRole("button", { name: "计价货币" }).click();
   const currencyMenu = page.getByRole("listbox", { name: "计价货币" });
