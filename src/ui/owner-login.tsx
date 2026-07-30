@@ -85,7 +85,7 @@ const LOCKED_FLOW_SOURCES = [
   {
     id: "source-1",
     label: "Longbridge",
-    tone: "success",
+    tone: "signal",
     y: 72,
     route: "M148 88H160C184 88 184 212 212 212",
     start: LOCKED_FLOW_SOURCE_ACTIVE,
@@ -94,7 +94,7 @@ const LOCKED_FLOW_SOURCES = [
   {
     id: "source-2",
     label: "Binance",
-    tone: "success",
+    tone: "signal",
     y: 134,
     route: "M148 150H170C190 150 190 212 212 212",
     start: LOCKED_FLOW_SOURCE_ACTIVE,
@@ -103,7 +103,7 @@ const LOCKED_FLOW_SOURCES = [
   {
     id: "source-3",
     label: "OKX",
-    tone: "success",
+    tone: "signal",
     y: 196,
     route: "M148 212H212",
     start: LOCKED_FLOW_SOURCE_ACTIVE,
@@ -112,7 +112,7 @@ const LOCKED_FLOW_SOURCES = [
   {
     id: "source-4",
     label: "Bitget",
-    tone: "success",
+    tone: "signal",
     y: 258,
     route: "M148 274H170C190 274 190 212 212 212",
     start: LOCKED_FLOW_SOURCE_ACTIVE,
@@ -121,7 +121,7 @@ const LOCKED_FLOW_SOURCES = [
   {
     id: "source-5",
     label: "Web3",
-    tone: "success",
+    tone: "signal",
     y: 320,
     route: "M148 336H160C184 336 184 212 212 212",
     start: LOCKED_FLOW_SOURCE_ACTIVE,
@@ -132,14 +132,14 @@ const LOCKED_FLOW_SOURCES = [
 const LOCKED_FLOW_CONTINUATION = [
   {
     id: "sync-value",
-    tone: "success",
+    tone: "signal",
     route: "M276 212H328",
     start: 0.4,
     end: LOCKED_FLOW_VALUE_ACTIVE,
   },
   {
     id: "value-dashboard",
-    tone: "success",
+    tone: "signal",
     route: "M392 212H436",
     start: 0.64,
     end: LOCKED_FLOW_DASHBOARD_ACTIVE,
@@ -314,8 +314,8 @@ const LOCKED_KEYBOARD_KEYS: LockedKeyboardKey[] = [
 
 function getLockedKeyboardPoint(x: number, y: number) {
   const rowProgress = y / 48;
-  const left = 63.5 + (38.5 - 63.5) * rowProgress;
-  const right = 608 + (633 - 608) * rowProgress;
+  const left = 53.5 + (38.5 - 53.5) * rowProgress;
+  const right = 618 + (633 - 618) * rowProgress;
 
   return {
     x: left + (x / 544) * (right - left),
@@ -606,44 +606,48 @@ function LockedProductFlow() {
             </g>
           </g>
 
-          <path
-            className="locked-flow-device-chassis"
-            d="M50 424H630L660 440V518H20V440L50 424Z"
-          />
-          <path className="locked-flow-device-chassis-line" d="M20 440H660M20 496H660" />
-          <rect
-            className="locked-flow-device-drive"
-            height="20"
-            rx="1"
-            width="160"
-            x="52"
-            y="452"
-          />
-          <circle className="locked-flow-device-power" cx="230" cy="462" r="5" />
-          <g className="locked-flow-device-vent" aria-hidden="true">
-            {Array.from({ length: 8 }, (_, column) =>
-              Array.from({ length: 3 }, (_, row) => (
-                <circle
-                  cx={516 + column * 10}
-                  cy={454 + row * 9}
-                  key={`${column}-${row}`}
-                  r="1.2"
-                />
-              )),
-            )}
-          </g>
-          <circle className="locked-flow-device-status" cx="612" cy="462" r="3" />
-
           <path className="locked-flow-device-neck" d="M58 392V418H622V392" />
           <path
             className="locked-flow-device-neck-base"
             d="M58 418H622L646 432H34L58 418Z"
           />
 
-          <g transform="translate(0 8)">
+          <rect
+            className="locked-flow-device-chassis"
+            height="94"
+            rx="6"
+            width="640"
+            x="20"
+            y="424"
+          />
+          <path className="locked-flow-device-chassis-line" d="M20 488H660" />
+          <rect
+            className="locked-flow-device-drive"
+            height="20"
+            rx="1"
+            width="156"
+            x="57"
+            y="447"
+          />
+          <circle className="locked-flow-device-power" cx="238" cy="457" r="5" />
+          <g className="locked-flow-device-vent" aria-hidden="true">
+            {Array.from({ length: 8 }, (_, column) =>
+              Array.from({ length: 3 }, (_, row) => (
+                <circle
+                  cx={521 + column * 10}
+                  cy={449 + row * 9}
+                  key={`${column}-${row}`}
+                  r="1.2"
+                />
+              )),
+            )}
+          </g>
+          <circle className="locked-flow-device-status" cx="622" cy="457" r="3" />
+
+          <g>
             <path
               className="locked-flow-keyboard-shell"
-              d="M64 496H616Q620 496 621 501L650 553Q651 558 646 558H34Q29 558 30 553L59 501Q60 496 64 496Z"
+              d="M54 496H626Q630 496 631 501L650 553Q651 558 646 558H34Q29 558 30 553L49 501Q50 496 54 496Z"
             />
             <path
               className="locked-flow-keyboard-front"
