@@ -6,6 +6,7 @@ import {
   decimalAdd,
   decimalCompare,
   decimalMultiply,
+  decimalSubtract,
 } from "@/domain/decimal";
 import type {
   AssetHolding,
@@ -44,6 +45,7 @@ const OKX_ORIGINS: Record<OkxRegion, string> = {
   us: "https://us.okx.com",
   eea: "https://eea.okx.com",
 };
+const OKX_EQUITY_ROUNDING_TOLERANCE = "0.000000000001";
 
 function record(value: unknown, context: string): JsonRecord {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -166,17 +168,37 @@ function extractPositions(input: {
   const positions = new Map<string, OkxPosition>();
   const trading = first(input.trading, "OKX account/balance data");
   for (const item of list(trading.details, "OKX account/balance details")) {
+    const asset = text(item.ccy, "ccy");
     for (const field of ["liab", "crossLiab", "borrowFroz", "interest"] as const) {
       if (!zeroOrEmpty(item[field], field)) {
         throw new Error(`OKX Trading 出现非零 ${field}，已拒绝借贷资产`);
       }
     }
+    const cashBalance = decimal(item.cashBal, "cashBal");
+    const strategyEquity = decimal(item.stgyEq, "stgyEq");
+    const equity = decimal(item.eq, "eq");
+    const expectedEquity = decimalAdd(cashBalance, strategyEquity);
+    const equityDifference = decimalSubtract(equity, expectedEquity);
+    const absoluteDifference = decimalCompare(equityDifference, "0") < 0
+      ? decimalSubtract("0", equityDifference)
+      : equityDifference;
+    if (
+      decimalCompare(
+        absoluteDifference,
+        OKX_EQUITY_ROUNDING_TOLERANCE,
+      ) > 0
+    ) {
+      throw new Error(
+        `OKX Trading ${asset} 权益无法守恒（eq 与 cashBal + stgyEq 差异超过舍入容差）`,
+      );
+    }
     addPosition(
       positions,
-      text(item.ccy, "ccy"),
-      decimal(item.cashBal, "cashBal"),
+      asset,
+      cashBalance,
       "spot",
     );
+    addPosition(positions, asset, strategyEquity, "trading-bot");
   }
   for (const item of list(input.funding, "OKX asset/balances data")) {
     addPosition(
@@ -199,6 +221,7 @@ function extractPositions(input: {
 
 function scopeLabel(scope: AssetHolding["sourceAccount"]): string {
   if (scope === "spot") return "现货";
+  if (scope === "trading-bot") return "交易机器人";
   if (scope === "funding") return "资金";
   if (scope === "earn-flexible") return "活期 Earn";
   return "OKX";

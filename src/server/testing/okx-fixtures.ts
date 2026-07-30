@@ -58,6 +58,8 @@ export function okxApiFixture() {
           {
             ccy: "BTC",
             cashBal: "0.1",
+            stgyEq: "0",
+            eq: "0.1",
             availBal: "0.08",
             frozenBal: "0.02",
             liab: "",
@@ -68,6 +70,8 @@ export function okxApiFixture() {
           {
             ccy: "USDT",
             cashBal: "1000",
+            stgyEq: "0",
+            eq: "1000",
             availBal: "900",
             frozenBal: "100",
             liab: "0",
@@ -78,6 +82,8 @@ export function okxApiFixture() {
           {
             ccy: "XRP",
             cashBal: "15.468642",
+            stgyEq: "0",
+            eq: "15.468642",
             availBal: "15.468642",
             frozenBal: "0",
             liab: "0",

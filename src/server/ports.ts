@@ -170,6 +170,7 @@ export interface AssetHolding {
   sourceAsset?: string;
   sourceAccount?:
     | "spot"
+    | "trading-bot"
     | "funding"
     | "earn-flexible"
     | "earn-locked"

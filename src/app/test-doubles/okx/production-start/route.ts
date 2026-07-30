@@ -33,6 +33,8 @@ export async function POST(request: Request) {
     "preview-option",
     "preview-liability",
     "preview-missing-liability-proof",
+    "preview-strategy-equity",
+    "preview-unreconciled-equity",
     "preview-missing-price",
     "preview-zero-price",
     "preview-native-usdt-usd",
@@ -67,6 +69,18 @@ export async function POST(request: Request) {
   }
   if (body.action === "preview-missing-liability-proof") {
     delete (fixture.trading.data[0].details[0] as { liab?: string }).liab;
+  }
+  if (
+    body.action === "preview-strategy-equity" ||
+    body.action === "preview-unreconciled-equity"
+  ) {
+    const btc = fixture.trading.data[0].details.find(({ ccy }) => ccy === "BTC");
+    if (btc) {
+      btc.stgyEq = "0.05";
+      btc.eq = body.action === "preview-strategy-equity"
+        ? "0.150000000000001"
+        : "0.14";
+    }
   }
   if (body.action === "preview-missing-price") {
     fixture.funding.data.push({

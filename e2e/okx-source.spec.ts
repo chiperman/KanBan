@@ -222,6 +222,48 @@ test("生产 OKX 适配器只读取 Spot、Funding 与 Flexible，并验证签�
   });
 });
 
+test("生产 OKX 适配器把 Trading 机器人权益独立展示且只计入一次", async ({
+  request,
+}) => {
+  const response = await request.post("/test-doubles/okx/production-start", {
+    data: { action: "preview-strategy-equity" },
+  });
+  expect(response.ok()).toBeTruthy();
+  const body = await response.json();
+  expect(body.snapshot.total).toEqual({
+    amount: "13987.654321",
+    currency: "USDT",
+  });
+  expect(body.snapshot.holdings).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      name: "BTC · 交易机器人",
+      sourceAccount: "trading-bot",
+      sourceAsset: "BTC",
+      quantity: "0.05",
+      sourceMarketValue: { amount: "3000", currency: "USDT" },
+    }),
+    expect.objectContaining({
+      name: "BTC · 现货",
+      sourceAccount: "spot",
+      sourceAsset: "BTC",
+      quantity: "0.1",
+      sourceMarketValue: { amount: "6000", currency: "USDT" },
+    }),
+  ]));
+});
+
+test("生产 OKX 适配器拒绝 Trading 权益不守恒的快照", async ({
+  request,
+}) => {
+  const response = await request.post("/test-doubles/okx/production-start", {
+    data: { action: "preview-unreconciled-equity" },
+  });
+  expect(response.status()).toBe(400);
+  await expect(response.json()).resolves.toMatchObject({
+    error: expect.stringContaining("BTC 权益无法守恒"),
+  });
+});
+
 test("OKX 确认前账户身份或范围漂移时拒绝保存", async ({ page }) => {
   await configure(page);
   await loginAsOwner(page);
