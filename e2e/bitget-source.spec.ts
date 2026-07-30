@@ -274,9 +274,36 @@ test("Bitget Savings 成功跨窗口翻页、保留旧持仓并去重，后页�
   });
 });
 
-test("Bitget Earn 对账、分页和缺价失败均不伪造完整资产", async ({ request }) => {
+test("Bitget Earn 总览与明细口径不一致时保留总览资产且不重复计算", async ({
+  request,
+}) => {
+  const mismatch = await request.post("/test-doubles/bitget/production-start", {
+    data: { action: "preview-earn-mismatch" },
+  });
+  expect(mismatch.ok()).toBeTruthy();
+  const mismatchBody = await mismatch.json();
+  expect(mismatchBody.snapshot.holdings).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      sourceAccount: "funding",
+      sourceAsset: "ETH",
+      quantity: "1",
+    }),
+    expect.objectContaining({
+      sourceAccount: "earn",
+      sourceAsset: "ETH",
+      quantity: "2",
+    }),
+  ]));
+  expect(mismatchBody.snapshot.holdings).not.toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      sourceAccount: "earn-flexible",
+      sourceAsset: "ETH",
+    }),
+  ]));
+});
+
+test("Bitget Earn 分页和缺价失败均不伪造完整资产", async ({ request }) => {
   for (const [action, message] of [
-    ["preview-earn-mismatch", "明细与总览不一致"],
     ["preview-earn-cursor-repeat", "游标重复"],
     ["preview-empty-funding", "frozen"],
     ["preview-earn-missing-end-id", "endId"],

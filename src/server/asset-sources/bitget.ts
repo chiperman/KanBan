@@ -340,13 +340,17 @@ function extractClassicPositions(input: {
     if (overview.has(coin)) throw new Error("Bitget Earn 总览出现重复币种");
     overview.set(coin, decimal(item.amount, "amount"));
   }
-  const coins = new Set([...overview.keys(), ...savingsTotals.keys()]);
-  for (const coin of coins) {
+  for (const [coin, overviewAmount] of overview) {
+    const detailedAmount = savingsTotals.get(coin);
     if (
-      decimalCompare(overview.get(coin) ?? "0", savingsTotals.get(coin) ?? "0") !== 0
+      detailedAmount !== undefined &&
+      decimalCompare(overviewAmount, detailedAmount) === 0
     ) {
-      throw new Error(`Bitget Earn ${coin} 明细与总览不一致`);
+      continue;
     }
+    positions.delete(`earn-flexible:${coin}`);
+    positions.delete(`earn-locked:${coin}`);
+    addPosition(positions, coin, overviewAmount, "earn");
   }
   return [...positions.values()];
 }
@@ -427,6 +431,7 @@ function scopeLabel(scope: AssetHolding["sourceAccount"]): string {
   if (scope === "funding") return "资金";
   if (scope === "earn-flexible") return "活期 Earn";
   if (scope === "earn-locked") return "定期 Earn";
+  if (scope === "earn") return "Earn";
   return "Bitget";
 }
 

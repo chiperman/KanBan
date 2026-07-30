@@ -127,7 +127,18 @@ export async function POST(request: Request) {
     });
   }
   if (body.action === "preview-earn-mismatch") {
-    fixture.earnOverview.data[0].amount = "6";
+    fixture.earnOverview.data.push({ coin: "ETH", amount: "2" });
+    fixture.flexible.data.resultList.push({
+      productId: "flex-eth",
+      productCoin: "ETH",
+      interestCoin: "ETH",
+      periodType: "flexible",
+      holdAmount: "1",
+      lastProfit: "0.001",
+      totalProfit: "0.01",
+      status: "in_holding",
+      productLevel: "normal",
+    });
   }
   if (body.action === "preview-earn-cursor-repeat") {
     fixture.flexible.data.endId = "same-cursor";
