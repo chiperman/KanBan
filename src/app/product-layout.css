@@ -624,17 +624,6 @@ a {
   color: var(--accent-text);
 }
 
-.asset-sync-status.expired::before,
-.asset-sync-error::before {
-  content: "";
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  margin-right: var(--vibe-space-2);
-  border-radius: 50%;
-  background: var(--accent);
-}
-
 .total-status.vibe-status-tag--error {
   color: var(--secondary);
 }

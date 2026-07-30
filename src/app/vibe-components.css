@@ -353,8 +353,8 @@ textarea.vibe-field__input {
 }
 
 .vibe-notice--error {
+  border-color: var(--error);
   background: color-mix(in srgb, var(--error) 9%, transparent);
-  border-left: 0;
 }
 
 .vibe-notice--error > .vibe-dot-icon {

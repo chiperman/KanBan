@@ -153,6 +153,33 @@ test("部分失败保留最后成功数据并标记过期，手动刷新可见�
   await expect(beta).toContainText("过期数据");
   await expect(beta).toContainText("最后成功：2026-04-01 08:00 UTC");
   await expect(beta).toContainText("Beta Crypto 同步失败：来源暂时不可用");
+  const expiredStatus = beta.locator(".asset-sync-status");
+  await expect(expiredStatus.locator(":scope > i")).toHaveCount(1);
+  expect(
+    await expiredStatus.evaluate((element) => ({
+      pseudoContent: getComputedStyle(element, "::before").content,
+      renderedDotWidth: element
+        .querySelector(":scope > i")
+        ?.getBoundingClientRect().width,
+    })),
+  ).toEqual({
+    pseudoContent: "none",
+    renderedDotWidth: 6,
+  });
+  const syncError = beta.locator(".asset-sync-error");
+  await expect(syncError.locator(".vibe-dot-icon")).toHaveCount(1);
+  expect(
+    await syncError.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        borderLeftWidth: style.borderLeftWidth,
+        pseudoContent: getComputedStyle(element, "::before").content,
+      };
+    }),
+  ).toEqual({
+    borderLeftWidth: "3px",
+    pseudoContent: "none",
+  });
 
   const alphaState = alpha.locator(".source-live-state");
   await expect(alphaState).toContainText("CURRENT");
