@@ -465,8 +465,8 @@ a {
 .layout-drag-handle:hover::before,
 .layout-drag-handle:focus-visible::before,
 .card-dragging .layout-drag-handle::before {
-  background: var(--accent);
-  box-shadow: 0 4px var(--accent), 0 8px var(--accent);
+  background: var(--display);
+  box-shadow: 0 4px var(--display), 0 8px var(--display);
 }
 
 .card-dragging {

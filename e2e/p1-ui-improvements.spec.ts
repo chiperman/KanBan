@@ -195,6 +195,17 @@ test("看板时间、来源状态和普通卡片遵守 Vibe 视觉层级", async
     "data-vibe-surface",
     "data-card",
   );
+  const binanceCardShell = page.getByTestId("binance-card").locator("..");
+  const [sourceCardBox, binanceCardBox] = await Promise.all([
+    sourceCardShell.boundingBox(),
+    binanceCardShell.boundingBox(),
+  ]);
+  expect(sourceCardBox).not.toBeNull();
+  expect(binanceCardBox).not.toBeNull();
+  expect(Math.abs(sourceCardBox!.y - binanceCardBox!.y)).toBeLessThanOrEqual(1);
+  expect(
+    Math.abs(sourceCardBox!.height - binanceCardBox!.height),
+  ).toBeLessThanOrEqual(1);
 
   const resizeHandle = sourceCard
     .locator("..")
@@ -221,12 +232,19 @@ test("看板时间、来源状态和普通卡片遵守 Vibe 视觉层级", async
   await dragHandle.hover();
   const dragLines = await dragHandle.evaluate((element) => {
     const handle = getComputedStyle(element, "::before");
+    const displayProbe = document.createElement("span");
+    displayProbe.style.color = "var(--display)";
+    document.body.append(displayProbe);
+    const display = getComputedStyle(displayProbe).color;
+    displayProbe.remove();
     return {
       background: handle.backgroundColor,
+      display,
       shadows: handle.boxShadow,
     };
   });
-  expect(dragLines.background).not.toBe("rgba(0, 0, 0, 0)");
+  expect(dragLines.background).toBe(dragLines.display);
+  expect(dragLines.shadows).toContain(dragLines.display);
   expect(dragLines.shadows).toContain("0px 4px");
   expect(dragLines.shadows).toContain("0px 8px");
 

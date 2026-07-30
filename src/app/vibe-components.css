@@ -610,7 +610,7 @@ body::before {
 }
 
 .card-grid {
-  align-items: start;
+  align-items: stretch;
   grid-auto-rows: auto;
 }
 
@@ -1067,13 +1067,6 @@ body::before {
 .card-resizing .layout-resize-handle::after {
   border-color: var(--display);
   background: transparent;
-}
-
-.layout-drag-handle:hover::before,
-.layout-drag-handle:focus-visible::before,
-.card-dragging .layout-drag-handle::before {
-  border-color: var(--display);
-  background: var(--display);
 }
 
 @media (max-width: 639px) {
