@@ -22,7 +22,7 @@
 - 身份、Now、链接、Markdown、普通内容卡片、公开/私密访问级别、发布/撤回、公开分享和受限卡片功能已经删除。
 - 已支持的资产来源：长桥、Binance、OKX、Bitget、Ethereum 观察钱包和 BNB Smart Chain 观察钱包。
 - Base、Arbitrum 与 Solana 不在首版范围；对应 Ticket 已标记为 `wontfix`，未来有真实使用需求时重新定义。
-- 不实现交易、划转、提现、签名、钱包连接、私钥或助记词收集、合约、杠杆、DeFi、NFT、多用户或公开注册。
+- 不实现交易、划转、提现、签名、钱包连接、私钥或助记词收集、普通合约仓位、杠杆、DeFi、NFT、多用户或公开注册；Bitget 仅额外读取平台聚合的合约交易机器人账户权益，不读取订单或执行交易。
 
 ## 当前界面与数据模型
 
@@ -57,7 +57,7 @@
 | 09 每日快照 | `resolved` | 上海日期边界、同日幂等、趋势和不完整数据 | 无 |
 | 10 Binance | `ready-for-human` | 只读权限、现货/资金/Earn、分页和过期数据 | 经确认的真实只读凭证 |
 | 11 OKX | `ready-for-human` | Read 权限、账户范围、原生价格和过期数据 | 经确认的真实只读凭证 |
-| 12 Bitget | `ready-for-human` | 纯现金范围、分页、Earn 对账和过期数据 | 经确认的真实只读凭证 |
+| 12 Bitget | `ready-for-human` | 现货、资金、Earn、合约交易机器人聚合权益、分页和过期数据 | 经确认的真实只读凭证与机器人账户对账 |
 | 13 EVM 观察钱包 | `ready-for-human` | ETH/ERC-20、BNB/BEP-20、链/合约隔离和参考价格 | 真实公开地址及服务端配置 |
 | 14、15 | `wontfix` | Base、Arbitrum 与 Solana 已移出首版 | 出现真实使用需求后重新立项 |
 | 16 来源生命周期 | `resolved` | 隐藏、断开、二次确认删除和历史清理 | 无 |

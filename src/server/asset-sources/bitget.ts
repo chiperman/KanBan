@@ -258,11 +258,13 @@ function addPosition(
 function extractClassicPositions(input: {
   spot: unknown;
   funding: unknown;
+  botFutures: unknown;
   savingsOverview: unknown;
   flexiblePages: unknown[];
   fixedPages: unknown[];
   observedAt: string;
   fundingObservedAt?: string;
+  botObservedAt?: string;
 }): BitgetPosition[] {
   const positions = new Map<string, BitgetPosition>();
   for (const item of list(input.spot, "Bitget spot/account/assets data")) {
@@ -292,6 +294,20 @@ function extractClassicPositions(input: {
         currency: "USDT",
         pricedAt: input.fundingObservedAt ?? input.observedAt,
         source: "Bitget Funding usdtValue",
+      },
+    );
+  }
+  for (const item of list(input.botFutures, "Bitget bot account data")) {
+    addPosition(
+      positions,
+      text(item.coin, "coin"),
+      decimal(item.equity, "equity"),
+      "trading-bot",
+      {
+        amount: decimal(item.usdtValue, "usdtValue"),
+        currency: "USDT",
+        pricedAt: input.botObservedAt ?? input.observedAt,
+        source: "Bitget 合约交易机器人 usdtValue",
       },
     );
   }
@@ -401,6 +417,7 @@ function extractUtaPositions(input: {
       frozen: "0",
       usdtValue: "0",
     })),
+    botFutures: [],
     savingsOverview: input.savingsOverview,
     flexiblePages: input.flexiblePages,
     fixedPages: input.fixedPages,
@@ -429,6 +446,7 @@ function extractUtaPositions(input: {
 function scopeLabel(scope: AssetHolding["sourceAccount"]): string {
   if (scope === "spot") return "现货";
   if (scope === "funding") return "资金";
+  if (scope === "trading-bot") return "合约交易机器人";
   if (scope === "earn-flexible") return "活期 Earn";
   if (scope === "earn-locked") return "定期 Earn";
   if (scope === "earn") return "Earn";
@@ -851,6 +869,12 @@ class BitgetClient {
         : "/api/v3/account/funding-assets",
     );
   }
+  botAssets() {
+    return this.envelope(
+      "/api/v2/account/bot-assets",
+      { accountType: "futures" },
+    );
+  }
   private async waitForEarnSlot(): Promise<void> {
     const wait = this.lastEarnRequestAt + this.runtime.earnRequestIntervalMs -
       this.runtime.now();
@@ -1001,6 +1025,9 @@ async function readFullSnapshot(input: {
   if (input.accountMode === "uta") await validateUtaCashOnly(input.client);
   const accountAssetsObservation = await input.client.accountAssets(input.accountMode);
   const fundingObservation = await input.client.funding(input.accountMode);
+  const botObservation = input.accountMode === "classic"
+    ? await input.client.botAssets()
+    : null;
   const accountAssets = accountAssetsObservation.data;
   const funding = fundingObservation.data;
   const savingsOverview = await input.client.earnOverview();
@@ -1033,11 +1060,13 @@ async function readFullSnapshot(input: {
         ? extractClassicPositions({
             spot: accountAssets,
             funding,
+            botFutures: botObservation?.data ?? [],
             savingsOverview,
             flexiblePages,
             fixedPages,
             observedAt: input.observedAt,
             fundingObservedAt: fundingObservation.requestTime,
+            botObservedAt: botObservation?.requestTime,
           })
         : extractUtaPositions({
             assets: accountAssets,

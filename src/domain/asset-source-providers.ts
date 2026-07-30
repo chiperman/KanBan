@@ -148,7 +148,9 @@ export const ASSET_SOURCE_PROVIDERS: AssetSourceProviderDescription[] = [
     dialogLabel: "确认 Bitget 资产来源",
     previewTitle: "Bitget 凭证预览",
     previewScope: (accountMode) =>
-      `${accountMode === "uta" ? "UTA 纯现金" : "Classic Account"} · 现货、资金、Earn（只读）`,
+      accountMode === "uta"
+        ? "UTA 纯现金 · 现货、资金、Earn（只读）"
+        : "Classic Account · 现货、资金、Earn、合约交易机器人（只读）",
     savedMaterial: "只读 API 凭证",
   },
   {

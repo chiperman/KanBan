@@ -40,7 +40,7 @@ Status: ready-for-human
 10. As an 所有者, I want Longbridge securities and funds read through exact `account.read` OAuth scope and a private read-only official SDK extension.
 11. As an 所有者, I want Binance spot, funding, and Earn assets included.
 12. As an 所有者, I want OKX spot, funding, and Earn assets included.
-13. As an 所有者, I want Bitget spot, funding, and Earn assets included.
+13. As an 所有者, I want Bitget spot, funding, Earn, and futures-bot aggregate equity included.
 14. As an 所有者, I want margin, futures, leverage, borrowing, and other write-capable or liability scopes rejected.
 15. As an 所有者, I want Ethereum and BNB Smart Chain observation wallets added through public addresses only.
 16. As an 所有者, I want observation wallets to remain independent of wallet brand and incapable of signing.
@@ -102,7 +102,7 @@ Status: ready-for-human
 - Put all external sources behind a common read-only adapter interface that returns source identity, holdings, valuation, timestamps, permission status, and platform profit when available.
 - Implement Longbridge with the registered web OAuth callback, a private official Rust SDK extension, and macOS Keychain token storage. PKCE verifier and Token remain inside the native module/Keychain. Request and accept only exact `account.read`; reject missing, unknown, additional, or transaction scopes before any asset read or credential persistence.
 - Limit Longbridge access to account, stock/fund positions, and pull quotes through the approved read-only SDK surface. Do not expose trade, order, transfer, withdrawal, MCP, or unapproved SDK interfaces.
-- Implement Binance, OKX, and Bitget with proven read-only keys. Reject trade, transfer, withdrawal, margin, leverage, borrowing, and unknown permissions.
+- Implement Binance, OKX, and Bitget with proven read-only keys. Reject trade, transfer, withdrawal, margin, borrowing, and unknown permissions. Bitget may read the provider-aggregated futures-bot account equity through its dedicated read-only asset endpoint, without reading orders or ordinary futures positions.
 - Model observation wallets as public addresses only. Never receive or store seed phrases, private keys, MPC recovery material, signatures, or wallet-connect authority.
 - Support Ethereum mainnet and BNB Smart Chain mainnet through one chain-configured EVM adapter. Defer Base, Arbitrum, Solana, Bitcoin, NFTs, staking, LP, lending, and other DeFi positions.
 - Use source-native valuation for platform assets and an identified independent price source for observation wallets or missing native prices.

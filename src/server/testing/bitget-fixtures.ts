@@ -121,6 +121,19 @@ export function bitgetApiFixture() {
         { coin: "USDC", available: "70", frozen: "10", usdtValue: "79.92" },
       ],
     },
+    botFutures: {
+      code: "00000",
+      msg: "success",
+      requestTime: Number(BITGET_OBSERVED_MS) - 1_000,
+      data: [{
+        coin: "USDT",
+        available: "84.61136285",
+        equity: "154.33255128",
+        bonus: "0",
+        frozen: "",
+        usdtValue: "154.33255128",
+      }],
+    },
     earnOverview: {
       code: "00000",
       msg: "success",

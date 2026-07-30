@@ -70,7 +70,7 @@ test.beforeEach(async ({ request }) => {
   await request.post("/test-doubles/reset");
 });
 
-test("Bitget 只读凭证先预览后原子保存，并展示现货、资金与 Earn 持仓", async ({
+test("Bitget 只读凭证先预览后原子保存，并展示现货、资金、Earn 与合约交易机器人持仓", async ({
   page,
 }) => {
   await configure(page);
@@ -87,7 +87,7 @@ test("Bitget 只读凭证先预览后原子保存，并展示现货、资金与 
     name: "确认 Bitget 资产来源",
   });
   await expect(preview).toContainText("Bitget 账户 · UID 770001");
-  await expect(preview).toContainText("现货、资金、Earn（只读）");
+  await expect(preview).toContainText("现货、资金、Earn、合约交易机器人（只读）");
   await expect(preview).toContainText("Classic Account");
   await expect(preview).toContainText("10,987.65 USDT");
   await expect(page.getByText(API_SECRET)).toHaveCount(0);
@@ -152,7 +152,7 @@ test("Bitget 写权限、确认前范围变化和保存失败均不留下来源�
   expect(await state(page)).toEqual({ savedSources: 0, savedSecrets: 0 });
 });
 
-test("生产 Bitget Classic 适配器只读取 Spot、Funding 与 Savings，并验证签名和分页", async ({
+test("生产 Bitget Classic 适配器读取 Spot、Funding、Savings 与合约交易机器人，并验证签名和分页", async ({
   request,
 }) => {
   const response = await request.post("/test-doubles/bitget/production-start", {
@@ -165,7 +165,7 @@ test("生产 Bitget Classic 适配器只读取 Spot、Funding 与 Savings，并�
     id: "bitget:770001",
     label: "Bitget 账户 · UID 770001",
   });
-  expect(body.snapshot.total).toEqual({ amount: "10987.654321", currency: "USDT" });
+  expect(body.snapshot.total).toEqual({ amount: "11141.98687228", currency: "USDT" });
   expect(body.snapshot.holdings).toEqual(expect.arrayContaining([
     expect.objectContaining({ sourceAccount: "spot", sourceAsset: "BTC", quantity: "0.1" }),
     expect.objectContaining({
@@ -176,11 +176,23 @@ test("生产 Bitget Classic 适配器只读取 Spot、Funding 与 Savings，并�
     }),
     expect.objectContaining({ sourceAccount: "earn-flexible", sourceAsset: "SOL", quantity: "5" }),
     expect.objectContaining({ sourceAccount: "earn-locked", sourceAsset: "BNB", quantity: "0.8" }),
+    expect.objectContaining({
+      name: "USDT · 合约交易机器人",
+      sourceAccount: "trading-bot",
+      sourceAsset: "USDT",
+      quantity: "154.33255128",
+      sourceMarketValue: { amount: "154.33255128", currency: "USDT" },
+      valuation: expect.objectContaining({
+        priceSource: "Bitget 合约交易机器人 usdtValue",
+        pricedAt: "2025-12-31T23:59:59.000Z",
+      }),
+    }),
   ]));
   expect(body.privateRequests).toEqual([
     "GET /api/v2/spot/account/info",
     "GET /api/v2/spot/account/assets?assetType=hold_only",
     "GET /api/v2/account/funding-assets",
+    "GET /api/v2/account/bot-assets?accountType=futures",
     "GET /api/v2/earn/account/assets",
     "GET /api/v2/earn/savings/assets?periodType=flexible&limit=100&startTime=1764547200000&endTime=1767225600000",
     "GET /api/v2/earn/savings/assets?periodType=fixed&limit=100&startTime=1764547200000&endTime=1767225600000",
@@ -249,7 +261,7 @@ test("Bitget Savings 成功跨窗口翻页、保留旧持仓并去重，后页�
   });
   expect(success.ok()).toBeTruthy();
   const body = await success.json();
-  expect(body.snapshot.total).toEqual({ amount: "10997.654321", currency: "USDT" });
+  expect(body.snapshot.total).toEqual({ amount: "11151.98687228", currency: "USDT" });
   expect(body.snapshot.holdings).toEqual(expect.arrayContaining([
     expect.objectContaining({ sourceAsset: "ADA", quantity: "10" }),
     expect.objectContaining({ sourceAsset: "SOL", quantity: "5" }),
@@ -329,14 +341,14 @@ test("Bitget Earn 分页和缺价失败均不伪造完整资产", async ({ reque
       valuation: expect.objectContaining({ status: "unvalued" }),
     }),
   ]));
-  expect(missingBody.snapshot.total).toEqual({ amount: "10987.654321", currency: "USDT" });
+  expect(missingBody.snapshot.total).toEqual({ amount: "11141.98687228", currency: "USDT" });
 
   const zero = await request.post("/test-doubles/bitget/production-start", {
     data: { action: "preview-zero-price" },
   });
   expect(zero.ok()).toBeTruthy();
   await expect(zero.json()).resolves.toMatchObject({
-    snapshot: { total: { amount: "4987.654321", currency: "USDT" } },
+    snapshot: { total: { amount: "5141.98687228", currency: "USDT" } },
   });
 });
 
@@ -372,7 +384,7 @@ test("Bitget 价格刷新保持公开边界并规范化时间与认证错误", a
       "GET /api/v2/spot/public/symbols",
       "GET /api/v2/spot/market/tickers",
     ],
-    total: { amount: "10987.654321", currency: "USDT" },
+    total: { amount: "11141.98687228", currency: "USDT" },
   });
 
   for (const action of ["refresh-older-ticker", "refresh-all-older-ticker"]) {

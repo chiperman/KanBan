@@ -164,6 +164,7 @@ export async function POST(request: Request) {
     "/api/v2/spot/account/info",
     "/api/v2/spot/account/assets",
     "/api/v2/account/funding-assets",
+    "/api/v2/account/bot-assets",
     "/api/v2/earn/account/assets",
     "/api/v2/earn/savings/assets",
     "/api/v3/account/info",
@@ -262,6 +263,10 @@ export async function POST(request: Request) {
       response = utaFixture.assets;
     } else if (url.pathname === "/api/v2/account/funding-assets") {
       response = fixture.funding;
+    } else if (url.pathname === "/api/v2/account/bot-assets") {
+      response = url.searchParams.get("accountType") === "futures"
+        ? fixture.botFutures
+        : { code: "40034", msg: "unexpected bot account type", data: {} };
     } else if (url.pathname === "/api/v3/account/funding-assets") {
       response = utaFixture.funding;
     } else if (url.pathname === "/api/v2/earn/account/assets") {
