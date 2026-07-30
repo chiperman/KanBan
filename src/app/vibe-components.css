@@ -1041,18 +1041,24 @@ body::before {
   font-size: 10px;
 }
 
-.layout-resize-preview,
-.card-drop-preview {
+.layout-resize-preview {
   border-color: var(--display);
   background: color-mix(in srgb, var(--display) 4%, transparent);
   color: var(--display);
   outline-color: var(--display);
 }
 
-.card-drop-candidate.is-active {
+.card-drop-preview {
   border-color: var(--display);
-  background: color-mix(in srgb, var(--display) 4%, transparent);
+  background: transparent;
   color: var(--display);
+  outline-color: var(--display);
+}
+
+.card-drop-candidate.is-active {
+  border-color: transparent;
+  background: transparent;
+  color: transparent;
 }
 
 .card-drag-overlay {

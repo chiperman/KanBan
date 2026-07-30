@@ -342,6 +342,96 @@ test("同一行候选使用互不重叠的固定命中区域", async ({ page, re
   await page.keyboard.press("Escape");
 });
 
+test("拖动经过插入位置时兄弟资产卡片会在松手前实时让位", async ({
+  page,
+  request,
+}) => {
+  const fixture = await request.post("/test-doubles/asset-cards", {
+    data: {
+      assetCards: [
+        { id: "first", kind: "asset", title: "第一张卡片", body: "一格", span: 1 },
+        { id: "second", kind: "asset", title: "第二张卡片", body: "两格", span: 2 },
+        { id: "third", kind: "asset", title: "第三张卡片", body: "一格", span: 1 },
+        { id: "fourth", kind: "asset", title: "第四张卡片", body: "一格", span: 1 },
+        { id: "fifth", kind: "asset", title: "第五张卡片", body: "一格", span: 1 },
+      ],
+    },
+  });
+  expect(fixture.ok()).toBeTruthy();
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await loginAsOwner(page);
+
+  const source = page.locator('[data-layout-card-id="first"]');
+  const second = page.locator('[data-layout-card-id="second"]');
+  const fourth = page.locator('[data-layout-card-id="fourth"]');
+  const handle = source.getByRole("button", {
+    name: "拖动第一张卡片调整排序",
+  });
+  const handleBox = await handle.boundingBox();
+  const secondBefore = await second.boundingBox();
+  const fourthBox = await fourth.boundingBox();
+  expect(handleBox).not.toBeNull();
+  expect(secondBefore).not.toBeNull();
+  expect(fourthBox).not.toBeNull();
+
+  let saveCount = 0;
+  page.on("request", (layoutRequest) => {
+    if (
+      layoutRequest.url().endsWith("/api/asset-cards/layout") &&
+      layoutRequest.method() === "PUT"
+    ) {
+      saveCount += 1;
+    }
+  });
+
+  await page.mouse.move(
+    handleBox!.x + handleBox!.width / 2,
+    handleBox!.y + handleBox!.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    handleBox!.x + handleBox!.width / 2 + 8,
+    handleBox!.y + handleBox!.height / 2,
+  );
+  await expect(source).toHaveClass(/card-dragging/);
+  await page.mouse.move(
+    fourthBox!.x + fourthBox!.width / 2,
+    fourthBox!.y + fourthBox!.height / 2,
+    { steps: 8 },
+  );
+  const dropSlot = page.getByTestId("layout-drop-slot");
+  const activeCandidate = page.locator(".card-drop-candidate.is-active");
+  const dragOverlay = page.getByTestId("card-drag-overlay");
+  await expect(dropSlot).toBeVisible();
+  await expect(activeCandidate).toHaveCSS(
+    "background-color",
+    "rgba(0, 0, 0, 0)",
+  );
+  await expect(activeCandidate).toHaveCSS(
+    "border-top-color",
+    "rgba(0, 0, 0, 0)",
+  );
+  await expect(dropSlot).toHaveCSS(
+    "background-color",
+    "rgba(0, 0, 0, 0)",
+  );
+  await expect(dragOverlay).toHaveCSS("opacity", "1");
+
+  await expect.poll(async () => (await second.boundingBox())!.x).toBeLessThan(
+    secondBefore!.x - 100,
+  );
+  expect(saveCount).toBe(0);
+
+  const saved = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/asset-cards/layout") &&
+      response.request().method() === "PUT",
+  );
+  await page.mouse.up();
+  await saved;
+  expect(saveCount).toBe(1);
+});
+
 test("Escape 取消网格放置且不保存布局", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 1000 });
   await loginAsOwner(page);
@@ -754,11 +844,17 @@ test("卡片较多时可从视口顶部拖到页面底部新行", async ({ page,
     await page.waitForTimeout(40);
   }
   expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(startScrollY);
-  const newRow = page.locator('[data-candidate-kind="new-row"]').last();
+  const newRow = page
+    .locator('.card-drop-candidate[data-candidate-kind="new-row"]')
+    .last();
   await expect(newRow).toHaveCount(1);
   const newRowBox = await newRow.boundingBox();
   expect(newRowBox).not.toBeNull();
   expect(newRowBox!.y).toBeLessThan(900);
+  const newRowDocumentY = await newRow.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    return box.y + window.scrollY;
+  });
   await page.mouse.move(
     newRowBox!.x + newRowBox!.width / 2,
     newRowBox!.y + newRowBox!.height / 2,
@@ -770,7 +866,13 @@ test("卡片较多时可从视口顶部拖到页面底部新行", async ({ page,
   await page.waitForTimeout(100);
   const activeNewRowBox = await newRow.boundingBox();
   expect(activeNewRowBox).not.toBeNull();
-  expect(Math.abs(activeNewRowBox!.y - newRowBox!.y)).toBeLessThanOrEqual(2);
+  const activeNewRowDocumentY = await newRow.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    return box.y + window.scrollY;
+  });
+  expect(
+    Math.abs(activeNewRowDocumentY - newRowDocumentY),
+  ).toBeLessThanOrEqual(2);
   const saved = page.waitForResponse(
     (response) => response.url().endsWith("/api/asset-cards/layout") && response.request().method() === "PUT",
   );

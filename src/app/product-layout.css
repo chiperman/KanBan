@@ -483,14 +483,18 @@ a {
   pointer-events: none;
 }
 
+.card-grid[data-drag-active="true"] {
+  overflow-anchor: none;
+}
+
 .card-drop-candidate {
   position: absolute;
   z-index: 1;
   box-sizing: border-box;
-  border: 1px dashed var(--line-2);
+  border: 1px solid transparent;
   border-radius: var(--r-md);
-  background: color-mix(in srgb, var(--muted) 3%, transparent);
-  color: var(--muted);
+  background: transparent;
+  color: transparent;
   pointer-events: none;
 }
 
@@ -507,21 +511,19 @@ a {
   line-height: 1.4;
 }
 
-.card-drop-candidate.is-active {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 4%, transparent);
-  color: var(--accent);
-}
-
 .card-drop-preview {
   position: absolute;
   z-index: 2;
   box-sizing: border-box;
-  border: 2px solid var(--accent);
+  border: 1px dashed var(--display);
   border-radius: var(--r-md);
-  background: color-mix(in srgb, var(--accent) 4%, transparent);
-  color: var(--accent);
+  background: transparent;
+  color: var(--secondary);
   pointer-events: none;
+}
+
+.card-drop-candidate > span {
+  display: none;
 }
 
 .card-drag-overlay {
@@ -529,8 +531,8 @@ a {
   width: 100%;
   max-height: min(78vh, 760px);
   overflow: hidden;
-  opacity: 0.88;
-  outline: 2px solid var(--accent);
+  opacity: 1;
+  outline: 2px solid var(--display);
   outline-offset: -2px;
   pointer-events: none;
 }

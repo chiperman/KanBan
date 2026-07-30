@@ -17,6 +17,7 @@ import {
   type Modifier,
 } from "@dnd-kit/core";
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -151,12 +152,20 @@ const candidateKeyboardCoordinates: KeyboardCoordinateGetter = (
 function DraggableCard({
   card,
   disabled,
+  animateLayout,
   renderCard,
 }: {
   card: Card;
   disabled: boolean;
+  animateLayout: boolean;
   renderCard(card: Card, controls: CardDragControls): ReactNode;
 }) {
+  const elementRef = useRef<HTMLElement | null>(null);
+  const previousPositionRef = useRef<{
+    left: number;
+    top: number;
+  } | null>(null);
+  const layoutAnimationRef = useRef<Animation | null>(null);
   const {
     attributes,
     listeners,
@@ -164,8 +173,54 @@ function DraggableCard({
     setNodeRef,
     isDragging,
   } = useDraggable({ id: card.id, disabled });
+  const setCardRef = useCallback(
+    (element: HTMLElement | null) => {
+      elementRef.current = element;
+      setNodeRef(element);
+    },
+    [setNodeRef],
+  );
+
+  useLayoutEffect(() => {
+    const element = elementRef.current;
+    if (!element) return;
+    const nextPosition = {
+      left: element.offsetLeft,
+      top: element.offsetTop,
+    };
+    const previousPosition = previousPositionRef.current;
+    previousPositionRef.current = nextPosition;
+    if (
+      !animateLayout ||
+      !previousPosition ||
+      isDragging ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return;
+    }
+    const deltaX = previousPosition.left - nextPosition.left;
+    const deltaY = previousPosition.top - nextPosition.top;
+    if (Math.abs(deltaX) < 1 && Math.abs(deltaY) < 1) return;
+    layoutAnimationRef.current?.cancel();
+    layoutAnimationRef.current = element.animate(
+      [
+        { transform: `translate(${deltaX}px, ${deltaY}px)` },
+        { transform: "translate(0, 0)" },
+      ],
+      {
+        duration: 200,
+        easing: "ease-in-out",
+      },
+    );
+  });
+
+  useEffect(
+    () => () => layoutAnimationRef.current?.cancel(),
+    [],
+  );
+
   return renderCard(card, {
-    cardRef: setNodeRef,
+    cardRef: setCardRef,
     handleRef: setActivatorNodeRef,
     handleAttributes: attributes,
     handleListeners: listeners,
@@ -195,6 +250,9 @@ export function CardLayoutEditor({
   const [saving, setSaving] = useState(false);
   const [overlayWidth, setOverlayWidth] = useState<number | null>(null);
   const [overlayHeight, setOverlayHeight] = useState<number | null>(null);
+  const [dragGridMinHeight, setDragGridMinHeight] = useState<number | null>(
+    null,
+  );
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: candidateKeyboardCoordinates }),
@@ -202,7 +260,11 @@ export function CardLayoutEditor({
   const activeCandidate = session?.plan.candidates.find(
     ({ id }) => id === session.activeCandidateId,
   ) ?? null;
-  const visibleCards = cards.filter((card) => !card.hidden);
+  const previewCards =
+    session && activeCandidate
+      ? applyDropCandidate(session.originalCards, activeCandidate)
+      : cards;
+  const visibleCards = previewCards.filter((card) => !card.hidden);
   const draggedCard = session
     ? session.originalCards.find(({ id }) => id === session.draggedId) ?? null
     : null;
@@ -226,6 +288,7 @@ export function CardLayoutEditor({
   useEffect(() => {
     if (!session || sameCardIds(cards, session.originalCards)) return;
     setSession(null);
+    setDragGridMinHeight(null);
     onCardsChangedDuringDrag();
   }, [cards, onCardsChangedDuringDrag, session]);
 
@@ -309,6 +372,7 @@ export function CardLayoutEditor({
     <DndContext
       id="asset-card-layout-dnd"
       sensors={sensors}
+      autoScroll={activeCandidate?.kind !== "new-row"}
       collisionDetection={candidateCollisionDetection}
       accessibility={{
         announcements: {
@@ -332,6 +396,14 @@ export function CardLayoutEditor({
       }}
       onDragStart={({ active }) => {
         const draggedId = String(active.id);
+        const grid = gridRef.current;
+        const draggedRect = active.rect.current.initial;
+        if (grid && draggedRect) {
+          const gap = Number.parseFloat(window.getComputedStyle(grid).rowGap) || 0;
+          setDragGridMinHeight(
+            grid.getBoundingClientRect().height + gap + draggedRect.height,
+          );
+        }
         setSession({
           draggedId,
           originalCards: cards,
@@ -349,27 +421,39 @@ export function CardLayoutEditor({
         });
       }}
       onDragOver={({ over }) => {
-        setSession((current) =>
-          current
-            ? {
-                ...current,
-                activeCandidateId: over && current.plan.candidates.some(({ id }) => id === over.id)
-                  ? String(over.id)
-                  : null,
-              }
-            : null,
-        );
+        setSession((current) => {
+          if (!current) return null;
+          return {
+            ...current,
+            activeCandidateId:
+              over &&
+              current.plan.candidates.some(({ id }) => id === over.id)
+                ? String(over.id)
+                : null,
+          };
+        });
       }}
-      onDragCancel={() => setSession(null)}
+      onDragCancel={() => {
+        setSession(null);
+        setDragGridMinHeight(null);
+      }}
       onDragEnd={({ over }) => {
-        if (!session || !over || !sameCardIds(cards, session.originalCards)) {
-          if (session && !sameCardIds(cards, session.originalCards)) onCardsChangedDuringDrag();
+        setDragGridMinHeight(null);
+        if (!session || !sameCardIds(cards, session.originalCards)) {
+          if (
+            session &&
+            !sameCardIds(cards, session.originalCards)
+          ) {
+            onCardsChangedDuringDrag();
+          }
           setSession(null);
           return;
         }
         const candidate = session.plan.candidates.find(
           ({ id }) => id === session.activeCandidateId,
-        ) ?? session.plan.candidates.find(({ id }) => id === over.id);
+        ) ?? (over
+          ? session.plan.candidates.find(({ id }) => id === over.id)
+          : null);
         if (!candidate) {
           setSession(null);
           return;
@@ -381,13 +465,24 @@ export function CardLayoutEditor({
         void onCommit(nextCards, previousCards).finally(() => setSaving(false));
       }}
     >
-      <section className="card-grid" data-testid="card-grid" ref={gridRef}>
+      <section
+        className="card-grid"
+        data-testid="card-grid"
+        data-drag-active={session ? "true" : undefined}
+        style={
+          dragGridMinHeight === null
+            ? undefined
+            : { minHeight: dragGridMinHeight }
+        }
+        ref={gridRef}
+      >
         {gridOverlay}
         {visibleCards.map((card) => (
           <DraggableCard
             key={card.id}
             card={card}
             disabled={saving}
+            animateLayout={session !== null}
             renderCard={renderCard}
           />
         ))}

@@ -4,6 +4,7 @@ import { useDroppable } from "@dnd-kit/core";
 import {
   useCallback,
   useLayoutEffect,
+  useRef,
   useState,
   type RefObject,
 } from "react";
@@ -96,11 +97,13 @@ export function CardDropZoneLayer({
   const [geometries, setGeometries] = useState(
     new Map<string, CandidateGeometry>(),
   );
+  const measuredWidthRef = useRef<number | null>(null);
 
   const measure = useCallback(() => {
     const grid = gridRef.current;
     if (!grid) return;
     const gridBox = grid.getBoundingClientRect();
+    measuredWidthRef.current = gridBox.width;
     const style = window.getComputedStyle(grid);
     const columns = style.gridTemplateColumns.trim().split(/\s+/).length;
     const gap = Number.parseFloat(style.columnGap) || 0;
@@ -153,19 +156,30 @@ export function CardDropZoneLayer({
     setGeometries(next);
   }, [candidates, gridRef]);
 
+  const measureIfWidthChanged = useCallback(() => {
+    const grid = gridRef.current;
+    if (!grid) return;
+    const width = grid.getBoundingClientRect().width;
+    if (
+      measuredWidthRef.current !== null &&
+      Math.abs(measuredWidthRef.current - width) < 1
+    ) {
+      return;
+    }
+    measure();
+  }, [gridRef, measure]);
+
   useLayoutEffect(() => {
     measure();
-    const frame = requestAnimationFrame(measure);
     const grid = gridRef.current;
-    const observer = grid ? new ResizeObserver(measure) : null;
+    const observer = grid ? new ResizeObserver(measureIfWidthChanged) : null;
     if (grid) observer?.observe(grid);
-    window.addEventListener("resize", measure);
+    window.addEventListener("resize", measureIfWidthChanged);
     return () => {
-      cancelAnimationFrame(frame);
       observer?.disconnect();
-      window.removeEventListener("resize", measure);
+      window.removeEventListener("resize", measureIfWidthChanged);
     };
-  }, [gridRef, measure]);
+  }, [gridRef, measure, measureIfWidthChanged]);
 
   return (
     <div className="card-drop-zone-layer" aria-hidden="true">
