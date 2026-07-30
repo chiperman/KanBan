@@ -157,7 +157,8 @@ test("总资产使用来源原生价格与显式汇率，保留原值并正确�
   await expect(overview).toContainText("3,998.65 CNY");
   await expect(overview).toContainText("USD/CNY 7.1234");
   await expect(overview).toContainText("Longbridge 账户汇率");
-  await expect(overview).toContainText("2026-04-01 08:00 UTC");
+  await expect(overview).toContainText("2026-04-01 16:00");
+  await expect(overview).not.toContainText("UTC");
   await page.reload();
   await expect(page.getByTestId("total-asset-overview")).toContainText(
     "3,998.65 CNY",

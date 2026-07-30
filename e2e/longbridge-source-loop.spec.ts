@@ -204,7 +204,8 @@ test("长桥 OAuth 先预览后原子保存，并展示总额与紧凑持仓", a
 
   const card = page.getByTestId("longbridge-card");
   await expect(card).toContainText("123,456.7891 USD");
-  await expect(card).toContainText("最后更新：2026-01-01 00:00 UTC");
+  await expect(card).toContainText("最后更新：2026-01-01 08:00");
+  await expect(card).not.toContainText("UTC");
   const topHoldings = card.getByTestId("holding-top-list").getByRole("listitem");
   const holdingDetails = card.getByTestId("asset-holdings-detail");
   await expect(topHoldings).toHaveCount(3);
@@ -229,7 +230,7 @@ test("长桥 OAuth 先预览后原子保存，并展示总额与紧凑持仓", a
   await expect(topHoldings).toHaveCount(0);
   await expect(holdingDetails).toBeVisible();
   await expect(holdingDetails.getByRole("row")).toHaveCount(8);
-  await expect(holdingDetails).toContainText("Longbridge 基金净值 · 2022-04-13 16:00 UTC");
+  await expect(holdingDetails).toContainText("Longbridge 基金净值 · 2022-04-14 00:00");
 
   const state = await page.request.get("/test-doubles/longbridge");
   await expect(state.json()).resolves.toMatchObject({

@@ -151,7 +151,8 @@ test("部分失败保留最后成功数据并标记过期，手动刷新可见�
   await expect(alpha).toContainText("数据当前");
   await expect(beta.getByTestId("asset-source-total")).toHaveText("200.00 USD");
   await expect(beta).toContainText("过期数据");
-  await expect(beta).toContainText("最后成功：2026-04-01 08:00 UTC");
+  await expect(beta).toContainText("最后成功：2026-04-01 16:00");
+  await expect(beta).not.toContainText("UTC");
   await expect(beta).toContainText("Beta Crypto 同步失败：来源暂时不可用");
   const expiredStatus = beta.locator(".asset-sync-status");
   await expect(expiredStatus.locator(":scope > i")).toHaveCount(1);

@@ -28,6 +28,10 @@ import {
   VibeSelect,
   type VibeSelectOption,
 } from "@/ui/vibe/vibe-field";
+import {
+  formatShanghaiDateTime,
+  formatShanghaiDayLabel,
+} from "@/ui/shanghai-date-time";
 
 const CURRENCY_OPTIONS: readonly VibeSelectOption<ReportingCurrency>[] = [
   { value: "USD", label: "USD" },
@@ -48,10 +52,6 @@ function amount(value: string): string {
   const [integer, fraction] = decimalToFixed(value, 2).split(".");
   const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   return `${grouped}.${fraction}`;
-}
-
-function dayLabel(day: string): string {
-  return `${day.slice(5, 7)}月${day.slice(8, 10)}日`;
 }
 
 function signedAmount(value: string): string {
@@ -197,7 +197,7 @@ export function TotalAssetOverview({
       {valuation.conversion ? (
         <p className="conversion-observation">
           汇率观察：{valuation.conversion.baseCurrency}/{valuation.conversion.quoteCurrency}{" "}
-          {decimalToFixed(valuation.conversion.rate, 4)} · {valuation.conversion.source} · {valuation.conversion.observedAt.slice(0, 16).replace("T", " ")} UTC
+          {decimalToFixed(valuation.conversion.rate, 4)} · {valuation.conversion.source} · {formatShanghaiDateTime(valuation.conversion.observedAt)}
         </p>
       ) : null}
       <section className="today-asset-change" data-testid="today-asset-change">
@@ -248,7 +248,7 @@ export function TotalAssetOverview({
           <ol className="trend-list">
             {history.map((snapshot) => (
               <li key={snapshot.day}>
-                <time dateTime={snapshot.day}>{dayLabel(snapshot.day)}</time>
+                <time dateTime={snapshot.day}>{formatShanghaiDayLabel(snapshot.day)}</time>
                 <strong>
                   {snapshot.total[currency] === null
                     ? "未估值"

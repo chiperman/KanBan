@@ -111,8 +111,8 @@ test("六类来源形成正确总额、分布、真实稳定币价格与失败�
   await expect(page.getByTestId("ethereum-watch-card")).toContainText("过期数据");
   await expect(page.getByTestId("binance-card")).toContainText("数据当前");
   await expect(page.getByTestId("bsc-watch-card")).toContainText("数据当前");
-  await expect(page.getByTestId("longbridge-card")).toContainText("最后成功：2026-01-01 00:00 UTC");
-  await expect(page.getByTestId("binance-card")).toContainText("最后成功：2026-01-01 00:10 UTC");
+  await expect(page.getByTestId("longbridge-card")).toContainText("最后成功：2026-01-01 08:00");
+  await expect(page.getByTestId("binance-card")).toContainText("最后成功：2026-01-01 08:10");
   await expect(overview).toContainText("包含 2 个过期来源");
   await expect(overview.getByTestId("total-asset-amount")).toHaveText("142,548.00 USD");
   await expect(page.getByTestId("longbridge-card").getByTestId("asset-source-total")).toHaveText(

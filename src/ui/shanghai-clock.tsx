@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { formatShanghaiTime } from "@/ui/shanghai-date-time";
+
 interface ShanghaiClockProps {
   initialTime: string;
   compact?: boolean;
@@ -17,16 +19,6 @@ export function ShanghaiClock({ initialTime, compact = false }: ShanghaiClockPro
     return () => window.clearInterval(timer);
   }, []);
 
-  const timeParts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Shanghai",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  })
-    .format(now)
-    .split(":");
-
   return (
     <time
       className={compact ? "header-time" : "locked-clock"}
@@ -35,9 +27,7 @@ export function ShanghaiClock({ initialTime, compact = false }: ShanghaiClockPro
       aria-label="上海当前时间"
     >
       <span>SHANGHAI /</span>
-      <strong>
-        {timeParts[0]}:{timeParts[1]}:{timeParts[2]}
-      </strong>
+      <strong>{formatShanghaiTime(now)}</strong>
     </time>
   );
 }

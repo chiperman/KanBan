@@ -22,6 +22,10 @@ import {
   VibeStatusTag,
 } from "@/ui/vibe/vibe-data-instrument";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
+import {
+  formatShanghaiDateTime,
+  formatShanghaiDayLabel,
+} from "@/ui/shanghai-date-time";
 
 export interface AssetSourceView {
   id: string;
@@ -71,10 +75,6 @@ function moneyAmount(value: string): string {
   return amount(decimalToFixed(value, 2));
 }
 
-function dayLabel(day: string): string {
-  return `${day.slice(5, 7)}月${day.slice(8, 10)}日`;
-}
-
 function HoldingDetailRow({
   holding,
   showPlatformProfit,
@@ -88,7 +88,7 @@ function HoldingDetailRow({
 }) {
   const masked = "••••••";
   const valuationDetail = holding.valuation.status === "valued"
-    ? `${holding.valuation.priceSource} · ${holding.valuation.pricedAt.slice(0, 16).replace("T", " ")} UTC`
+    ? `${holding.valuation.priceSource} · ${formatShanghaiDateTime(holding.valuation.pricedAt)}`
     : holding.valuation.reason;
   return (
     <tr
@@ -323,7 +323,7 @@ export function AssetSourceCard({
             <ol className="trend-list">
               {sourceHistory.map((snapshot) => (
                 <li key={snapshot.day}>
-                  <time dateTime={snapshot.day}>{dayLabel(snapshot.day)}</time>
+                  <time dateTime={snapshot.day}>{formatShanghaiDayLabel(snapshot.day)}</time>
                   <strong>
                     {snapshot.total.USD === null
                       ? "未估值"
@@ -335,7 +335,7 @@ export function AssetSourceCard({
             </ol>
           )}
         </section>
-        <p className="asset-updated">最后更新：{source.snapshot.syncedAt.slice(0, 16).replace("T", " ")} UTC</p>
+        <p className="asset-updated">最后更新：{formatShanghaiDateTime(source.snapshot.syncedAt)}</p>
         {source.lifecycle === "disconnected" ? (
           <VibeStatusTag className="asset-sync-status expired" tone="muted">
             已断开 · 历史数据保留
@@ -347,7 +347,7 @@ export function AssetSourceCard({
           >
             {source.sync.status === "expired" ? "过期数据" : "数据当前"}
             {" · 最后成功："}
-            {source.sync.lastSuccessfulAt.slice(0, 16).replace("T", " ")} UTC
+            {formatShanghaiDateTime(source.sync.lastSuccessfulAt)}
           </VibeStatusTag>
         )}
         {source.sync.error ? (
