@@ -617,7 +617,7 @@ function LockedProductFlow() {
           <path className="locked-flow-device-neck" d="M58 392V418H622V392" />
           <path
             className="locked-flow-device-neck-base"
-            d="M58 418H622L646 432H34L58 418Z"
+            d="M58 418H622L656 424H24L58 418Z"
           />
           <path className="locked-flow-device-chassis-line" d="M20 488H660" />
           <rect
