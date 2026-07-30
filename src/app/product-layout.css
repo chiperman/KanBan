@@ -3067,6 +3067,23 @@ body {
   background: transparent;
 }
 
+.page-locked .login-gate--owner {
+  grid-template-areas:
+    "intro visual"
+    "flow visual";
+  grid-template-columns: minmax(0, 0.92fr) minmax(520px, 1.08fr);
+  grid-template-rows: auto auto;
+  column-gap: clamp(var(--vibe-space-8), 4vw, var(--vibe-space-16));
+  row-gap: var(--vibe-space-8);
+}
+
+.page-locked .login-gate--owner.login-gate--owner-choice {
+  grid-template-rows:
+    calc(var(--vibe-space-24) + var(--vibe-space-16) + var(--vibe-space-6))
+    calc(var(--vibe-space-16) + var(--vibe-space-6) + var(--vibe-space-3));
+  row-gap: var(--vibe-space-10);
+}
+
 .login-eyebrow,
 .login-trust-line {
   color: var(--secondary);
@@ -3083,6 +3100,38 @@ body {
   margin: 0;
 }
 
+.page-locked .login-gate--owner .login-intro {
+  grid-area: intro;
+}
+
+.page-locked .login-gate--owner-choice .login-intro {
+  align-self: start;
+  padding-top: var(--vibe-space-2);
+}
+
+.page-locked .login-gate--owner .login-flow {
+  grid-area: flow;
+}
+
+.page-locked .login-lock-progress {
+  display: block;
+  width: min(100%, 520px);
+  height: 1px;
+  margin-top: var(--vibe-space-4);
+  overflow: hidden;
+  background: var(--display);
+}
+
+.page-locked .login-lock-progress > span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: locked-progress-cycle 9s linear infinite;
+}
+
 .login-display-state {
   max-width: 8em;
   margin: 18px 0 0;
@@ -3097,12 +3146,16 @@ body {
 
 .login-display-pixels {
   --lock-dot-size: clamp(5px, 0.56vw, 8px);
-  --lock-dot-gap: clamp(3px, 0.28vw, 4px);
+  --lock-dot-gap: clamp(3px, 0.48vw, 7px);
   display: flex;
   width: max-content;
   max-width: none;
   align-items: center;
-  gap: calc(var(--lock-dot-size) + var(--lock-dot-gap));
+  gap: calc(var(--lock-dot-size) * 1.75 + var(--lock-dot-gap));
+}
+
+.page-locked .login-gate--owner-choice .login-display-pixels {
+  margin-top: var(--vibe-space-10);
 }
 
 .login-pixel-letter {
@@ -3139,8 +3192,33 @@ body {
   }
 }
 
+@keyframes locked-progress-cycle {
+  0% {
+    transform: scaleX(0);
+    transform-origin: left;
+  }
+
+  44.5%,
+  49.99% {
+    transform: scaleX(1);
+    transform-origin: left;
+  }
+
+  50% {
+    transform: scaleX(1);
+    transform-origin: right;
+  }
+
+  94.5%,
+  100% {
+    transform: scaleX(0);
+    transform-origin: right;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .login-pixel.is-filled {
+  .login-pixel.is-filled,
+  .page-locked .login-lock-progress > span {
     animation: none !important;
   }
 }
@@ -3185,6 +3263,19 @@ body {
   margin-top: 0;
 }
 
+.page-locked .login-actions--choice {
+  display: grid;
+  width: min(100%, 520px);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--vibe-space-5);
+}
+
+.page-locked .login-actions--choice .vibe-button {
+  width: 100%;
+  min-height: calc(var(--vibe-space-12) + var(--vibe-space-3));
+  font-size: 13px;
+}
+
 .page-locked .login-hint {
   color: var(--secondary);
   font-size: var(--vibe-type-caption);
@@ -3203,6 +3294,248 @@ body {
   flex-wrap: wrap;
   gap: var(--vibe-space-6);
   margin-top: var(--vibe-space-5);
+}
+
+.login-product-visual {
+  grid-area: visual;
+  width: min(calc(100% + 55px), 670px);
+  align-self: center;
+  justify-self: start;
+}
+
+.locked-product-flow {
+  display: block;
+  width: 100%;
+  height: auto;
+  color: var(--secondary);
+  overflow: visible;
+}
+
+.locked-flow-device-back,
+.locked-flow-device-front,
+.locked-flow-device-chassis,
+.locked-flow-device-drive,
+.locked-flow-keyboard-shell,
+.locked-flow-keyboard-front,
+.locked-flow-screen rect,
+.locked-flow-device-neck,
+.locked-flow-device-neck-base {
+  fill: var(--bg);
+  stroke: var(--line-2);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.locked-flow-device-back,
+.locked-flow-device-chassis,
+.locked-flow-keyboard-shell,
+.locked-flow-device-neck-base {
+  stroke: var(--secondary);
+}
+
+.locked-flow-device-chassis-line,
+.locked-flow-device-power,
+.locked-flow-screen path,
+.locked-flow-screen circle,
+.locked-flow-device-keys path {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: miter;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.locked-flow-screen .locked-flow-dashboard-point {
+  fill: var(--success);
+  opacity: 0;
+  stroke: none !important;
+}
+
+.locked-flow-screen .locked-flow-dashboard-point-base {
+  fill: currentColor;
+  stroke: none !important;
+}
+
+.locked-flow-route-runner {
+  fill: currentColor !important;
+  stroke: none !important;
+}
+
+.locked-flow-device-status {
+  fill: var(--accent);
+  stroke: none !important;
+  animation: locked-flow-device-status 1.2s steps(1, end) infinite;
+}
+
+.locked-flow-device-power {
+  opacity: 0.7;
+}
+
+.locked-flow-device-chassis-line {
+  opacity: 0.5;
+}
+
+.locked-flow-device-vent circle {
+  fill: currentColor;
+  opacity: 0.48;
+}
+
+.locked-flow-device-keys path {
+  opacity: 0.72;
+  stroke-linejoin: round;
+}
+
+.locked-flow-screen text {
+  fill: currentColor;
+  font-family: var(--f-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+}
+
+.locked-flow-source {
+  color: var(--display);
+  opacity: 0.54;
+}
+
+.locked-flow-source rect {
+  fill: var(--bg);
+  stroke: currentColor;
+}
+
+.locked-flow-route--success {
+  color: var(--success);
+}
+
+.locked-flow-route--error {
+  color: var(--error);
+}
+
+.locked-flow-route--neutral {
+  color: var(--display);
+}
+
+.locked-flow-route-base,
+.locked-flow-route-active {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.locked-flow-route-base {
+  stroke: var(--secondary) !important;
+  opacity: 0.48;
+}
+
+.locked-flow-route-active {
+  stroke: currentColor !important;
+  opacity: 0.92;
+}
+
+.locked-flow-route-reveal {
+  fill: none;
+  stroke: #fff;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  stroke-linecap: round;
+  stroke-width: 6;
+}
+
+.locked-flow-stage {
+  color: var(--display);
+}
+
+.locked-flow-stage rect {
+  fill: var(--bg);
+  stroke: currentColor;
+}
+
+.locked-flow-stage--sync {
+  opacity: 0.5;
+}
+
+.locked-flow-stage--value {
+  opacity: 0.5;
+}
+
+.locked-flow-stage--dashboard {
+  opacity: 0.5;
+}
+
+.locked-flow-dashboard-label {
+  font-size: 8px !important;
+  letter-spacing: 0.12em !important;
+}
+
+.locked-flow-dashboard-chart {
+  stroke: currentColor !important;
+}
+
+@keyframes locked-flow-device-status {
+  0%,
+  49.99% {
+    fill: var(--accent);
+  }
+
+  50%,
+  100% {
+    fill: var(--success);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .locked-flow-source,
+  .locked-flow-stage {
+    color: var(--secondary);
+    opacity: 1;
+  }
+
+  .locked-flow-screen .locked-flow-dashboard-point {
+    fill: var(--success);
+    opacity: 1;
+  }
+
+  .locked-flow-route-base {
+    stroke: currentColor;
+    opacity: 0.82;
+  }
+
+  .locked-flow-route-active,
+  .locked-flow-route-runner {
+    display: none;
+  }
+}
+
+@media (max-width: 1359px) {
+  .page-locked .login-gate--owner {
+    grid-template-areas:
+      "intro"
+      "flow"
+      "visual";
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    row-gap: var(--vibe-space-8);
+  }
+
+  .page-locked .login-gate--owner.login-gate--owner-choice {
+    grid-template-rows: auto auto auto;
+    row-gap: var(--vibe-space-8);
+  }
+
+  .login-product-visual {
+    width: min(100%, 680px);
+    justify-self: start;
+  }
+}
+
+@media (min-width: 1360px) {
+  .page-locked .login-gate--owner .login-intro,
+  .page-locked .login-gate--owner .login-flow {
+    margin-left: calc(var(--vibe-space-10) * -1);
+  }
 }
 
 @media (max-width: 639px) {
@@ -3241,12 +3574,28 @@ body {
     padding: 36px 22px;
   }
 
+  .page-locked .login-gate--owner {
+    grid-template-areas:
+      "intro"
+      "flow";
+    grid-template-rows: auto auto;
+  }
+
+  .login-product-visual {
+    display: none;
+  }
+
   .login-display-state {
     font-size: 68px;
   }
 
   .page-locked .login-actions {
     align-items: flex-start;
+  }
+
+  .page-locked .login-actions--choice {
+    grid-template-columns: 1fr;
+    gap: var(--vibe-space-3);
   }
 
   .page-locked .login-primary,

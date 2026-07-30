@@ -588,8 +588,10 @@ body::before {
 
 .page-locked .login-gate.vibe-auth-surface {
   padding: 40px;
-  border-radius: var(--r-md);
-  background: var(--glass);
+  border-radius: 0;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 .recovery-secret-actions {
@@ -1088,6 +1090,10 @@ body::before {
   .page-setup .setup-panel.vibe-auth-surface,
   .page-locked .login-gate.vibe-auth-surface {
     padding: 48px 22px 32px;
+  }
+
+  .page-locked .login-gate.vibe-auth-surface {
+    padding: 36px 22px;
   }
 
   .page-setup .setup-panel.vibe-auth-surface::before {
