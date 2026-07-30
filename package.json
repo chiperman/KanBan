@@ -7,9 +7,9 @@
     "predev": "pnpm native:longbridge:build",
     "prebuild": "pnpm native:longbridge:build",
     "prestart": "pnpm native:longbridge:build",
-    "dev": "next dev --hostname 127.0.0.1",
+    "dev": "node scripts/run-local-next.mjs dev",
     "build": "next build",
-    "start": "next start --hostname 127.0.0.1",
+    "start": "node scripts/run-local-next.mjs start",
     "typecheck": "tsc --noEmit",
     "test": "next build && playwright test"
   },

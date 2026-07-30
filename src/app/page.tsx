@@ -1,4 +1,8 @@
 import { shanghaiDay } from "@/domain/daily-asset-snapshots"
+import {
+  redirectLoopbackIpToLocalhost,
+  type PageSearchParams,
+} from "@/server/auth/canonical-origin"
 import { getServices } from "@/server/composition"
 import { HeaderUtilities } from "@/ui/header-utilities"
 import { LogoutButton } from "@/ui/logout-button"
@@ -10,7 +14,13 @@ import { ThemeSwitcher } from "@/ui/theme-switcher"
 
 export const dynamic = "force-dynamic"
 
-export default async function AssetDashboardPage() {
+export default async function AssetDashboardPage({
+  searchParams,
+}: {
+  searchParams: PageSearchParams
+}) {
+  await redirectLoopbackIpToLocalhost("/", searchParams)
+
   const services = getServices()
   const session = await services.auth.currentSession()
   const ownerProvisioned = (await services.ownerCredentials.get()) !== null
