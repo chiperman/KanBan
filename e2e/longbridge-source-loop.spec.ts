@@ -370,6 +370,33 @@ test("Keychain 长桥快照使用 USD 总额并按官方汇率估值跨币种持
   });
 });
 
+test("Keychain 瞬时认证失败只重试一次并给出统一修复命令", async ({
+  request,
+}) => {
+  const recovered = await request.post(
+    "/test-doubles/longbridge/production-start",
+    { data: { action: "keychain-refresh-retry" } },
+  );
+  expect(recovered.ok()).toBeTruthy();
+  await expect(recovered.json()).resolves.toMatchObject({
+    readAssetsCalls: 2,
+    snapshot: {
+      total: { amount: "74442.43", currency: "USD" },
+    },
+  });
+
+  const exhausted = await request.post(
+    "/test-doubles/longbridge/production-start",
+    { data: { action: "keychain-refresh-retry-exhausted" } },
+  );
+  expect(exhausted.status()).toBe(400);
+  const exhaustedBody = await exhausted.json();
+  expect(exhaustedBody.error).toContain("pnpm longbridge:keychain:repair");
+  expect(exhaustedBody.error).not.toContain(
+    "The user name or passphrase you entered is not correct",
+  );
+});
+
 test("生产 OAuth 只申请并接受 account.read，交易、缺失或未知 scope 均在读取前拒绝", async ({
   request,
 }) => {

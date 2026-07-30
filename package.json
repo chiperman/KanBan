@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "native:longbridge:build": "node scripts/build-longbridge-keychain-sdk.mjs",
+    "longbridge:keychain:repair": "node scripts/longbridge-keychain.mjs repair",
     "predev": "pnpm native:longbridge:build",
     "prebuild": "pnpm native:longbridge:build",
     "prestart": "pnpm native:longbridge:build",

@@ -4,12 +4,49 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import process from "node:process";
 
+import {
+  checkLongbridgeKeychain,
+  LONGBRIDGE_KEYCHAIN_REPAIR_COMMAND,
+  repairLongbridgeKeychain,
+} from "./longbridge-keychain.mjs";
+
 const [, , mode, ...nextArgs] = process.argv;
 if (mode !== "dev" && mode !== "start") {
   throw new Error("本地 Next 启动模式必须是 dev 或 start");
 }
 
 const require = createRequire(import.meta.url);
+try {
+  process.loadEnvFile(path.join(process.cwd(), ".env.local"));
+} catch (error) {
+  if (
+    !(error instanceof Error) ||
+    !("code" in error) ||
+    error.code !== "ENOENT"
+  ) {
+    throw error;
+  }
+}
+
+if (
+  process.platform === "darwin" &&
+  process.env.LONGBRIDGE_OAUTH_CLIENT_ID &&
+  !checkLongbridgeKeychain()
+) {
+  if (process.stdin.isTTY && process.stdout.isTTY) {
+    console.log("检测到 macOS 登录钥匙串不可用，正在请求交互式解锁…");
+    if (!repairLongbridgeKeychain()) {
+      throw new Error(
+        `macOS 登录钥匙串修复失败，请运行 ${LONGBRIDGE_KEYCHAIN_REPAIR_COMMAND}`,
+      );
+    }
+    console.log("macOS 登录钥匙串已恢复");
+  } else {
+    throw new Error(
+      `macOS 登录钥匙串不可用，请先运行 ${LONGBRIDGE_KEYCHAIN_REPAIR_COMMAND}`,
+    );
+  }
+}
 
 function readPort(args) {
   let port = process.env.PORT ?? "3000";

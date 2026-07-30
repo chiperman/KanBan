@@ -707,6 +707,44 @@ type LongbridgeKeychainReadSdk = Pick<
   | "readQuotes"
 >;
 
+const LONGBRIDGE_KEYCHAIN_REPAIR_COMMAND =
+  "pnpm longbridge:keychain:repair";
+
+function isKeychainAuthenticationFailure(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return (
+    error.message.includes("Platform secure storage failure") ||
+    error.message.includes(
+      "The user name or passphrase you entered is not correct",
+    )
+  );
+}
+
+function keychainRepairError(): Error {
+  return new Error(
+    `macOS 登录钥匙串暂时无法读取长桥凭证，请运行 ${LONGBRIDGE_KEYCHAIN_REPAIR_COMMAND} 后重试同步`,
+  );
+}
+
+async function withKeychainAuthenticationRetry<T>(
+  operation: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (!isKeychainAuthenticationFailure(error)) throw error;
+  }
+
+  try {
+    return await operation();
+  } catch (error) {
+    if (isKeychainAuthenticationFailure(error)) {
+      throw keychainRepairError();
+    }
+    throw error;
+  }
+}
+
 function stockSymbols(page: unknown): string[] {
   return [...new Set(listFromPage(page).map((item) => text(item.symbol, "symbol")))];
 }
@@ -715,14 +753,16 @@ async function keychainSnapshot(
   sdk: LongbridgeKeychainReadSdk,
   syncedAt: string,
 ): Promise<AssetSnapshot> {
-  const assets = await sdk.readAssets("USD");
-  const quotes = await sdk.readQuotes(stockSymbols(assets.stockPage));
-  return mapLongbridgeSnapshot({
-    accountPages: [assets.accountPage],
-    positionPages: [assets.stockPage, assets.fundPage],
-    quotes,
-    exchangeRates: assets.exchangeRates,
-    syncedAt,
+  return withKeychainAuthenticationRetry(async () => {
+    const assets = await sdk.readAssets("USD");
+    const quotes = await sdk.readQuotes(stockSymbols(assets.stockPage));
+    return mapLongbridgeSnapshot({
+      accountPages: [assets.accountPage],
+      positionPages: [assets.stockPage, assets.fundPage],
+      quotes,
+      exchangeRates: assets.exchangeRates,
+      syncedAt,
+    });
   });
 }
 
@@ -862,8 +902,10 @@ export class KeychainLongbridgeSourceRefresher implements AssetSourceRefresher {
       throw new Error("长桥来源不是 macOS Keychain 凭证，请重新连接");
     }
     if (mode === "prices") {
-      const quotes = await this.sdk.readQuotes(
-        source.snapshot.holdings.map((holding) => holding.symbol),
+      const quotes = await withKeychainAuthenticationRetry(() =>
+        this.sdk.readQuotes(
+          source.snapshot.holdings.map((holding) => holding.symbol),
+        ),
       );
       return { snapshot: snapshotWithQuotes(source.snapshot, quotes, attemptedAt) };
     }

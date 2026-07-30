@@ -3,6 +3,7 @@ import path from "node:path";
 
 import {
   KeychainLongbridgeOAuth,
+  KeychainLongbridgeSourceRefresher,
   ProductionLongbridgeOAuth,
   ProductionLongbridgeSourceRefresher,
 } from "@/server/asset-sources/longbridge";
@@ -25,6 +26,8 @@ export async function POST(request: Request) {
       | "refresh-expired-trade"
       | "refresh-expired-malformed-scope"
       | "keychain-snapshot"
+      | "keychain-refresh-retry"
+      | "keychain-refresh-retry-exhausted"
       | "rest-source-audit";
     scenario?: "readonly" | "trade" | "missing" | "unknown" | "extra";
   };
@@ -122,6 +125,81 @@ export async function POST(request: Request) {
     return Response.json({ error: "unexpected request" }, { status: 500 });
   };
   try {
+    if (
+      body.action === "keychain-refresh-retry" ||
+      body.action === "keychain-refresh-retry-exhausted"
+    ) {
+      let readAssetsCalls = 0;
+      const credentialReference = "macos-keychain:browser-test-client";
+      const refresher = new KeychainLongbridgeSourceRefresher({
+        beginAuthorization: () => ({
+          status: "authorized" as const,
+          authorizationUrl: null,
+        }),
+        beginBrowserAuthorization: () => ({
+          authorizationUrl: "https://openapi.longbridge.com/oauth2/authorize",
+          state: "test-state",
+        }),
+        completeBrowserAuthorization: async () => undefined,
+        authorizationStatus: () => ({
+          status: "authorized" as const,
+          authorizationUrl: null,
+        }),
+        credentialReference: () => credentialReference,
+        readAssets: async () => {
+          readAssetsCalls += 1;
+          if (
+            readAssetsCalls === 1 ||
+            body.action === "keychain-refresh-retry-exhausted"
+          ) {
+            throw new Error(
+              "无法读取 macOS Keychain 中的长桥凭证：Platform secure storage failure: The user name or passphrase you entered is not correct.",
+            );
+          }
+          return {
+            accountPage: {
+              data: { list: [{ currency: "USD", net_assets: "74442.43" }] },
+            },
+            stockPage: { data: { list: [] } },
+            fundPage: { data: { list: [] } },
+            exchangeRates: [],
+          };
+        },
+        readQuotes: async () => [],
+      });
+      const source: AssetSourceSummary = {
+        id: "keychain-retry-source",
+        kind: "longbridge",
+        label: "长桥 Keychain 重试测试",
+        accountId: "longbridge:keychain-retry",
+        permissions: ["account", "positions", "market-data"],
+        credentialReference,
+        snapshot: {
+          total: { amount: "70000", currency: "USD" },
+          holdings: [],
+          exchangeRates: [],
+          syncedAt: "2026-05-28T00:00:00.000Z",
+        },
+        sync: {
+          status: "current",
+          lastSuccessfulAt: "2026-05-28T00:00:00.000Z",
+          lastAttemptAt: "2026-05-28T00:00:00.000Z",
+          error: null,
+        },
+      };
+      const result = await refresher.refresh({
+        source,
+        credentials: credentialReference,
+        mode: "holdings",
+        attemptedAt: "2026-05-29T00:00:00.000Z",
+        signal: new AbortController().signal,
+        persistCredentials: async () => undefined,
+      });
+      return Response.json({
+        readAssetsCalls,
+        snapshot: result.snapshot,
+      });
+    }
     if (body.action === "keychain-snapshot") {
       const oauth = new KeychainLongbridgeOAuth({
         beginAuthorization: () => ({
