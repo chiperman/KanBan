@@ -2043,7 +2043,10 @@ body {
   position: absolute;
   z-index: 2;
   top: var(--vibe-space-3);
-  left: var(--vibe-space-6);
+  left: var(--vibe-space-10);
+  width: auto;
+  height: auto;
+  border: 0;
   color: var(--muted);
   font-family: var(--f-mono);
   font-size: var(--vibe-type-label);
@@ -2190,6 +2193,52 @@ body {
 .card-corner-mark-bottom-left {
   bottom: 10px;
   left: 10px;
+}
+
+.total-overview-card .card-corner-mark {
+  width: 12px;
+  height: 12px;
+  box-sizing: border-box;
+  border: 0 solid var(--muted);
+}
+
+.total-overview-card .card-corner-mark::before,
+.total-overview-card .card-corner-mark::after {
+  content: none;
+}
+
+.total-overview-card .card-corner-mark-top-left {
+  border-top-width: 1px;
+  border-left-width: 1px;
+}
+
+.total-overview-card .card-corner-mark-bottom-left {
+  border-bottom-width: 1px;
+  border-left-width: 1px;
+}
+
+.total-overview-card .card-corner-marks::before,
+.total-overview-card .card-corner-marks::after {
+  content: "";
+  position: absolute;
+  right: 10px;
+  width: 12px;
+  height: 12px;
+  box-sizing: border-box;
+  border: 0 solid var(--muted);
+  opacity: 0.72;
+}
+
+.total-overview-card .card-corner-marks::before {
+  top: 10px;
+  border-top-width: 1px;
+  border-right-width: 1px;
+}
+
+.total-overview-card .card-corner-marks::after {
+  bottom: 10px;
+  border-right-width: 1px;
+  border-bottom-width: 1px;
 }
 
 .asset-source-card {

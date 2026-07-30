@@ -65,13 +65,22 @@ test("看板时间、来源状态和普通卡片遵守 Vibe 视觉层级", async
         computed.paddingBottom,
         computed.paddingLeft,
       ],
+      labelBorders: [
+        getComputedStyle(element, "::before").borderTopWidth,
+        getComputedStyle(element, "::before").borderRightWidth,
+        getComputedStyle(element, "::before").borderBottomWidth,
+        getComputedStyle(element, "::before").borderLeftWidth,
+      ],
+      labelContent: getComputedStyle(element, "::before").content,
       labelLeft: getComputedStyle(element, "::before").left,
       fieldRight: getComputedStyle(element, "::after").right,
     };
   });
   expect(overviewSpacing).toEqual({
     padding: ["48px", "24px", "32px", "24px"],
-    labelLeft: "24px",
+    labelBorders: ["0px", "0px", "0px", "0px"],
+    labelContent: '"01 / NET ASSET // CONSOLIDATED VIEW"',
+    labelLeft: "40px",
     fieldRight: "24px",
   });
   await expect(overviewCard.locator(".card-corner-mark")).toHaveCount(2);
@@ -80,12 +89,49 @@ test("看板时间、来源状态和普通卡片遵守 Vibe 视觉层级", async
       ".card-corner-mark-top-right, .card-corner-mark-bottom-right",
     ),
   ).toHaveCount(0);
-  expect(
-    await overviewCard.locator(".card-corner-marks").evaluate((element) => ({
-      before: getComputedStyle(element, "::before").content,
-      after: getComputedStyle(element, "::after").content,
-    })),
-  ).toEqual({ before: "none", after: "none" });
+  const overviewCornerStyles = await overviewCard
+    .locator(".card-corner-marks")
+    .evaluate((element) => {
+      const topLeft = getComputedStyle(
+        element.querySelector(".card-corner-mark-top-left")!,
+      );
+      const bottomLeft = getComputedStyle(
+        element.querySelector(".card-corner-mark-bottom-left")!,
+      );
+      const topRight = getComputedStyle(element, "::before");
+      const bottomRight = getComputedStyle(element, "::after");
+      const borderWidths = (style: CSSStyleDeclaration) => [
+        style.borderTopWidth,
+        style.borderRightWidth,
+        style.borderBottomWidth,
+        style.borderLeftWidth,
+      ];
+
+      return {
+        topLeft: borderWidths(topLeft),
+        topRight: {
+          content: topRight.content,
+          borders: borderWidths(topRight),
+        },
+        bottomRight: {
+          content: bottomRight.content,
+          borders: borderWidths(bottomRight),
+        },
+        bottomLeft: borderWidths(bottomLeft),
+      };
+    });
+  expect(overviewCornerStyles).toEqual({
+    topLeft: ["1px", "0px", "0px", "1px"],
+    topRight: {
+      content: '""',
+      borders: ["1px", "1px", "0px", "0px"],
+    },
+    bottomRight: {
+      content: '""',
+      borders: ["0px", "1px", "1px", "0px"],
+    },
+    bottomLeft: ["0px", "0px", "1px", "1px"],
+  });
 
   const overviewBox = await overviewCard.boundingBox();
   const totalStatusBox = await overviewCard.locator(".total-status").boundingBox();
