@@ -314,7 +314,8 @@ export async function POST(request: Request) {
     action !== "source-lifecycle" &&
     action !== "delete-middle-source" &&
     action !== "startup-failures" &&
-    action !== "schema-v2-migration"
+    action !== "schema-v2-migration" &&
+    action !== "display-name-persistence"
   ) {
     return Response.json({ error: "unknown action" }, { status: 400 });
   }
@@ -335,6 +336,7 @@ export async function POST(request: Request) {
       const downgrade = new DatabaseSync(databasePath);
       downgrade.exec(`
         ALTER TABLE asset_source_snapshots DROP COLUMN coverage_json;
+        ALTER TABLE asset_sources DROP COLUMN display_name;
         UPDATE schema_metadata SET value = '2' WHERE key = 'schema_version';
       `);
       downgrade.close();
@@ -364,12 +366,55 @@ export async function POST(request: Request) {
       const columns = inspection
         .prepare("PRAGMA table_info(asset_source_snapshots)")
         .all() as Array<{ name: string }>;
+      const sourceColumns = inspection
+        .prepare("PRAGMA table_info(asset_sources)")
+        .all() as Array<{ name: string }>;
       inspection.close();
       return Response.json({
         schemaVersion: schemaVersion.value,
         coverageColumn: columns.some(({ name }) => name === "coverage_json"),
+        displayNameColumn: sourceColumns.some(
+          ({ name }) => name === "display_name",
+        ),
         coverageStatus: source.snapshot.coverage?.status,
         unexplainedValue: source.snapshot.coverage?.unexplainedValue,
+      });
+    }
+
+    if (action === "display-name-persistence") {
+      const first = createProductionServices(dataDirectory);
+      await first.secrets.get("startup-ready");
+      await first.assetSourceConnections.connectBinance(
+        authorization("persistence", "display-name-secret"),
+      );
+      const [connected] = await first.assetSources.list();
+      await first.assetSourceLifecycle.setDisplayName(
+        connected.id,
+        "  长期账户  ",
+      );
+
+      const restarted = createProductionServices(dataDirectory);
+      await restarted.secrets.get("startup-ready");
+      const [renamedSource] = await restarted.assetSources.list();
+      await restarted.assetSourceLifecycle.setDisplayName(
+        renamedSource.id,
+        "",
+      );
+
+      const restartedAfterClear = createProductionServices(dataDirectory);
+      await restartedAfterClear.secrets.get("startup-ready");
+      const [clearedSource] = await restartedAfterClear.assetSources.list();
+      return Response.json({
+        renamed: {
+          displayName: renamedSource.displayName ?? null,
+          label: renamedSource.label,
+          accountId: renamedSource.accountId,
+        },
+        cleared: {
+          displayName: clearedSource.displayName ?? null,
+          label: clearedSource.label,
+          accountId: clearedSource.accountId,
+        },
       });
     }
 

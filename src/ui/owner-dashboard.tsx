@@ -8,6 +8,7 @@ import {
   type PointerEvent,
 } from "react";
 
+import { assetSourceDefaultDisplayName } from "@/domain/asset-source-display-name";
 import type { Card, CardSpan, DailyAssetSnapshot } from "@/server/ports";
 import { AssetSourceFlow } from "@/ui/asset-source-flow";
 import { AssetRefreshControls } from "@/ui/asset-refresh-controls";
@@ -22,6 +23,8 @@ import {
 import { TotalAssetOverview } from "@/ui/total-asset-overview";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeDialog } from "@/ui/vibe/vibe-dialog";
+import { VibeField } from "@/ui/vibe/vibe-field";
+import { VibeMenu } from "@/ui/vibe/vibe-menu";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
 
 function cardName(card: Card): string {
@@ -29,6 +32,7 @@ function cardName(card: Card): string {
 }
 
 function sourceName(source: AssetSourceView): string {
+  if (source.displayName) return source.displayName;
   if (source.kind === "longbridge") return "长桥资产";
   if (source.kind === "binance") return "Binance 资产";
   if (source.kind === "okx") return "OKX 资产";
@@ -175,7 +179,12 @@ export function OwnerDashboard({
   } | null>(null);
   const [managementTarget, setManagementTarget] =
     useState<AssetSourceView | null>(null);
+  const [displayNameDraft, setDisplayNameDraft] = useState("");
+  const [displayNamePending, setDisplayNamePending] = useState(false);
   const [lifecyclePending, setLifecyclePending] = useState(false);
+  const displayNameChanged =
+    managementTarget !== null &&
+    displayNameDraft.trim() !== (managementTarget.displayName ?? "");
 
   useEffect(() => {
     setDisplayCards(cards);
@@ -357,6 +366,32 @@ export function OwnerDashboard({
       window.location.reload();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "来源操作失败");
+    }
+  }
+
+  function openSourceManagement(source: AssetSourceView) {
+    setDisplayNameDraft(source.displayName ?? "");
+    setDisplayNamePending(false);
+    setManagementTarget(source);
+  }
+
+  function closeSourceManagement() {
+    setManagementTarget(null);
+    setDisplayNameDraft("");
+  }
+
+  async function saveSourceDisplayName(source: AssetSourceView) {
+    setDisplayNamePending(true);
+    setError("");
+    try {
+      await cardRequest(`/api/asset-sources/${encodeURIComponent(source.id)}`, "PATCH", {
+        action: "rename",
+        displayName: displayNameDraft,
+      });
+      window.location.reload();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "名称保存失败，请重试");
+      setDisplayNamePending(false);
     }
   }
 
@@ -557,7 +592,7 @@ export function OwnerDashboard({
               <button type="button" className="text-button" onClick={() => void setSourceHidden(source, true)}>
                 隐藏 {sourceName(source)}
               </button>
-              <button type="button" className="text-button" onClick={() => setManagementTarget(source)}>
+              <button type="button" className="text-button" onClick={() => openSourceManagement(source)}>
                 管理 {sourceName(source)}
               </button>
             </>
@@ -751,7 +786,7 @@ export function OwnerDashboard({
               <button type="button" className="text-button" onClick={() => void setSourceHidden(source, false)}>
                 重新显示 {sourceName(source)}
               </button>
-              <button type="button" className="text-button" onClick={() => setManagementTarget(source)}>
+              <button type="button" className="text-button" onClick={() => openSourceManagement(source)}>
                 管理 {sourceName(source)}
               </button>
             </div>
@@ -762,40 +797,65 @@ export function OwnerDashboard({
         <VibeDialog
           actions={
             <>
-              <VibeButton type="button" onClick={() => setManagementTarget(null)} variant="text">
+              <VibeButton type="button" onClick={closeSourceManagement} variant="text">
                 关闭
               </VibeButton>
               <VibeButton
-                type="button"
-                className="danger-button"
-                onClick={() => {
-                  setDeleteTarget({ source: managementTarget, stage: 1 });
-                  setManagementTarget(null);
-                }}
-                variant="outline"
+                type="submit"
+                disabled={displayNamePending || !displayNameChanged}
+                variant="primary"
               >
-                永久删除 {sourceName(managementTarget)}数据
+                保存名称
               </VibeButton>
-              {managementTarget.lifecycle !== "disconnected" ? (
-                <VibeButton
-                  type="button"
-                  className="danger-button"
-                  onClick={() => void disconnectSource(managementTarget)}
-                  variant="outline"
-                >
-                  断开 {sourceName(managementTarget)}
-                </VibeButton>
-              ) : null}
             </>
           }
           aria-label={`管理 ${sourceName(managementTarget)}`}
           className="source-management-dialog"
-          description="断开会移除只读凭证并停止同步，但保留已有数据；永久删除会清除全部历史。"
+          description="仅修改本看板中的显示名称。清空后恢复默认名称。"
           eyebrow="SOURCE / CONTROL"
-          onClose={() => setManagementTarget(null)}
+          headerActions={
+            <VibeMenu
+              items={[
+                ...(managementTarget.lifecycle !== "disconnected"
+                  ? [{
+                      key: "disconnect",
+                      label: "断开来源",
+                      onSelect: () => void disconnectSource(managementTarget),
+                    }]
+                  : []),
+                {
+                  key: "delete",
+                  label: "永久删除数据",
+                  tone: "danger" as const,
+                  onSelect: () => {
+                    setDeleteTarget({ source: managementTarget, stage: 1 });
+                    closeSourceManagement();
+                  },
+                },
+              ]}
+              label="更多来源操作"
+            />
+          }
+          onClose={closeSourceManagement}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void saveSourceDisplayName(managementTarget);
+          }}
           title={sourceName(managementTarget)}
           titleId="source-management-title"
-        />
+        >
+          <VibeField
+            autoComplete="off"
+            autoFocus
+            disabled={displayNamePending}
+            fieldId="asset-source-display-name"
+            label="自定义名称"
+            maxLength={40}
+            onChange={(event) => setDisplayNameDraft(event.currentTarget.value)}
+            placeholder={assetSourceDefaultDisplayName(managementTarget)}
+            value={displayNameDraft}
+          />
+        </VibeDialog>
       ) : null}
       {deleteTarget ? (
         <VibeDialog

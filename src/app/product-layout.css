@@ -2530,10 +2530,14 @@ body {
   text-align: left;
 }
 
-.source-management-dialog .danger-button {
-  border: 1px solid var(--accent);
-  border-radius: var(--r-pill);
-  color: var(--accent-text);
+.source-management-dialog .vibe-field {
+  margin-top: var(--vibe-space-4);
+}
+
+.source-management-dialog .vibe-field__input {
+  min-height: 44px;
+  font-size: var(--vibe-type-body);
+  letter-spacing: 0.08em;
 }
 
 .page-setup::before {
@@ -2596,9 +2600,6 @@ body {
     border-color: var(--muted);
   }
 
-  .source-management-dialog .danger-button:hover {
-    color: var(--accent-text);
-  }
 }
 
 @media (max-width: 1023px) {

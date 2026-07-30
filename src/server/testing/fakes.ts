@@ -43,6 +43,7 @@ import {
 import { SourceIsolatedAssetSynchronization } from "@/server/asset-synchronization";
 import { buildDailyAssetSnapshot } from "@/domain/daily-asset-snapshots";
 import { decimalAdd } from "@/domain/decimal";
+import { normalizeAssetSourceDisplayName } from "@/domain/asset-source-display-name";
 import {
   mapBinanceSnapshot,
   validateBinanceReadOnlyPermissions,
@@ -895,6 +896,22 @@ export class InMemoryAssetSourceLifecycle implements AssetSourceLifecycle {
     await this.cards.replaceAll(
       cards.map((item) => item.id === card.id ? { ...item, hidden } : item),
     );
+  }
+
+  async setDisplayName(
+    sourceId: string,
+    displayName: string,
+  ): Promise<void> {
+    const sources = await this.sources.list();
+    const source = sources.find((item) => item.id === sourceId);
+    if (!source) throw new Error("资产来源不存在");
+    const normalized = normalizeAssetSourceDisplayName(displayName);
+    if (normalized === null) {
+      const { displayName: _displayName, ...rest } = source;
+      await this.sources.update(rest);
+      return;
+    }
+    await this.sources.update({ ...source, displayName: normalized });
   }
 
   async disconnect(sourceId: string): Promise<void> {

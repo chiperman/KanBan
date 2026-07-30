@@ -1,4 +1,5 @@
 import { getServices } from "@/server/composition";
+import { InvalidAssetSourceDisplayNameError } from "@/domain/asset-source-display-name";
 
 export const dynamic = "force-dynamic";
 
@@ -24,12 +25,21 @@ export async function PATCH(
   if ("response" in context) return context.response;
   const body = (await request.json().catch(() => null)) as {
     action?: unknown;
+    displayName?: unknown;
     hidden?: unknown;
   } | null;
 
   try {
     if (body?.action === "visibility" && typeof body.hidden === "boolean") {
       await context.services.assetSourceLifecycle.setHidden(id, body.hidden);
+    } else if (
+      body?.action === "rename" &&
+      typeof body.displayName === "string"
+    ) {
+      await context.services.assetSourceLifecycle.setDisplayName(
+        id,
+        body.displayName,
+      );
     } else if (body?.action === "disconnect") {
       await context.services.assetSourceLifecycle.disconnect(id);
     } else {
@@ -38,7 +48,10 @@ export async function PATCH(
   } catch (error) {
     return Response.json(
       { error: error instanceof Error ? error.message : "来源操作失败" },
-      { status: 500 },
+      {
+        status:
+          error instanceof InvalidAssetSourceDisplayNameError ? 400 : 500,
+      },
     );
   }
   return Response.json({ ok: true });

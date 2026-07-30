@@ -16,6 +16,7 @@ import { DatabaseSync } from "node:sqlite";
 
 import { decimalAdd, decimalCompare, decimalDivide } from "@/domain/decimal";
 import { buildDailyAssetSnapshot } from "@/domain/daily-asset-snapshots";
+import { normalizeAssetSourceDisplayName } from "@/domain/asset-source-display-name";
 import type {
   AppServices,
   Card,
@@ -94,7 +95,7 @@ interface DashboardState {
 }
 
 const DASHBOARD_SCHEMA_VERSION = 5 as const;
-const SQLITE_SCHEMA_VERSION = 3;
+const SQLITE_SCHEMA_VERSION = 4;
 
 type SourceConnectionKind = "longbridge" | "binance" | "okx" | "bitget" | "evm";
 type SourceAuthorizationResult =
@@ -187,6 +188,10 @@ interface DashboardDatabase {
     snapshot: DailyAssetSnapshot,
   ): Promise<boolean>;
   setAssetCardHidden(sourceId: string, hidden: boolean): Promise<void>;
+  setAssetSourceDisplayName(
+    sourceId: string,
+    displayName: string | null,
+  ): Promise<void>;
   disconnectAssetSource(sourceId: string): Promise<string | null>;
   deleteAssetSourceData(sourceId: string): Promise<string | null>;
   connectLongbridge(
@@ -516,6 +521,18 @@ export class FileDashboardDatabase {
     });
   }
 
+  async setAssetSourceDisplayName(
+    sourceId: string,
+    displayName: string | null,
+  ): Promise<void> {
+    await this.mutate((state) => {
+      const source = state.assetSources.find((item) => item.id === sourceId);
+      if (!source) throw new Error("资产来源不存在");
+      if (displayName === null) delete source.displayName;
+      else source.displayName = displayName;
+    });
+  }
+
   async disconnectAssetSource(sourceId: string): Promise<string | null> {
     return this.mutate((state) => {
       const source = state.assetSources.find((item) => item.id === sourceId);
@@ -709,6 +726,7 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
         position INTEGER NOT NULL UNIQUE,
         kind TEXT NOT NULL,
         label TEXT NOT NULL,
+        display_name TEXT,
         account_id TEXT NOT NULL,
         permissions_json TEXT NOT NULL CHECK (json_valid(permissions_json)),
         credential_reference TEXT,
@@ -775,6 +793,10 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
       this.migrateSchemaVersionTwo();
       schemaVersion = "3";
     }
+    if (schemaVersion === "3") {
+      this.migrateSchemaVersionThree();
+      schemaVersion = "4";
+    }
     if (schemaVersion !== String(SQLITE_SCHEMA_VERSION)) {
       throw new Error(`不支持的 SQLite schema 版本: ${schemaVersion}`);
     }
@@ -811,6 +833,18 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
       this.database
         .prepare("UPDATE schema_metadata SET value = ? WHERE key = ?")
         .run("3", "schema_version");
+    });
+  }
+
+  private migrateSchemaVersionThree(): void {
+    this.transaction(() => {
+      this.database.exec(`
+        ALTER TABLE asset_sources
+        ADD COLUMN display_name TEXT;
+      `);
+      this.database
+        .prepare("UPDATE schema_metadata SET value = ? WHERE key = ?")
+        .run("4", "schema_version");
     });
   }
 
@@ -918,15 +952,16 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
     this.database
       .prepare(`
         INSERT INTO asset_sources (
-          id, position, kind, label, account_id, permissions_json,
+          id, position, kind, label, display_name, account_id, permissions_json,
           credential_reference, lifecycle
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
       .run(
         source.id,
         position,
         source.kind,
         source.label,
+        source.displayName ?? null,
         source.accountId,
         JSON.stringify(source.permissions),
         source.credentialReference,
@@ -1094,6 +1129,9 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
         id: row.id as string,
         kind: row.kind as string,
         label: row.label as string,
+        ...(typeof row.display_name === "string"
+          ? { displayName: row.display_name }
+          : {}),
         accountId: row.account_id as string,
         permissions: JSON.parse(row.permissions_json as string),
         credentialReference:
@@ -1205,13 +1243,14 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
       this.database
         .prepare(`
           UPDATE asset_sources
-          SET kind = ?, label = ?, account_id = ?, permissions_json = ?,
-              credential_reference = ?, lifecycle = ?
+          SET kind = ?, label = ?, display_name = ?, account_id = ?,
+              permissions_json = ?, credential_reference = ?, lifecycle = ?
           WHERE id = ?
         `)
         .run(
           source.kind,
           source.label,
+          source.displayName ?? null,
           source.accountId,
           JSON.stringify(source.permissions),
           source.credentialReference,
@@ -1268,6 +1307,18 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
         .prepare("UPDATE asset_cards SET hidden = ? WHERE source_id = ?")
         .run(Number(hidden), sourceId);
       if (result.changes === 0) throw new Error("资产卡片不存在");
+    });
+  }
+
+  async setAssetSourceDisplayName(
+    sourceId: string,
+    displayName: string | null,
+  ): Promise<void> {
+    this.transaction(() => {
+      const result = this.database
+        .prepare("UPDATE asset_sources SET display_name = ? WHERE id = ?")
+        .run(displayName, sourceId);
+      if (result.changes === 0) throw new Error("资产来源不存在");
     });
   }
 
@@ -1548,6 +1599,13 @@ class DatabaseAssetSourceLifecycle implements AssetSourceLifecycle {
 
   setHidden(sourceId: string, hidden: boolean): Promise<void> {
     return this.database.setAssetCardHidden(sourceId, hidden);
+  }
+
+  setDisplayName(sourceId: string, displayName: string): Promise<void> {
+    return this.database.setAssetSourceDisplayName(
+      sourceId,
+      normalizeAssetSourceDisplayName(displayName),
+    );
   }
 
   async disconnect(sourceId: string): Promise<void> {

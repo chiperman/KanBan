@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 
+import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
 import { decimalCompare, decimalToFixed } from "@/domain/decimal";
 import { compareNullableDecimalDescending } from "@/domain/valuation";
 import type {
@@ -26,6 +27,7 @@ export interface AssetSourceView {
   id: string;
   kind: string;
   label: string;
+  displayName?: string;
   accountId: string;
   snapshot: AssetSnapshot;
   sync: AssetSourceSyncState;
@@ -56,10 +58,7 @@ function sourceHeading(source: AssetSourceView): {
   title: string;
   metadata: string | null;
 } {
-  if (source.kind === "longbridge") {
-    return { title: "长桥账户", metadata: null };
-  }
-  return { title: source.label, metadata: null };
+  return { title: assetSourceDisplayName(source), metadata: null };
 }
 
 function amount(value: string): string {

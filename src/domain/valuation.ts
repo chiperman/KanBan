@@ -7,6 +7,7 @@ import {
   decimalToFixed,
   decimalTruncateToFixed,
 } from "@/domain/decimal";
+import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
 import type {
   AssetExchangeRate,
   AssetHolding,
@@ -17,7 +18,7 @@ import type {
 
 export type ValuationSource = Pick<
   AssetSourceSummary,
-  "id" | "kind" | "label" | "snapshot" | "sync"
+  "id" | "kind" | "label" | "displayName" | "snapshot" | "sync"
 >;
 
 export type ReportingCurrency = "USD" | "CNY";
@@ -234,7 +235,14 @@ export function buildTotalValuation(
   if (dimension === "source") {
     for (const source of sources) {
       const amount = sourceTotals.get(source.id);
-      if (amount) addGroup(groupsUsd, source.id, source.label, amount);
+      if (amount) {
+        addGroup(
+          groupsUsd,
+          source.id,
+          assetSourceDisplayName(source),
+          amount,
+        );
+      }
     }
   } else {
     for (const source of sources) {

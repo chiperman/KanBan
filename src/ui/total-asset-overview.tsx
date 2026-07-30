@@ -11,6 +11,7 @@ import {
   decimalSubtract,
   decimalToFixed,
 } from "@/domain/decimal";
+import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
 import {
   buildTotalValuation,
   type DistributionDimension,
@@ -40,8 +41,7 @@ const DIMENSION_OPTIONS: readonly VibeSelectOption<DistributionDimension>[] = [
 ];
 
 function sourceGroupTitle(source: ValuationSource): string {
-  if (source.kind === "longbridge") return "长桥账户";
-  return source.label;
+  return assetSourceDisplayName(source);
 }
 
 function amount(value: string): string {

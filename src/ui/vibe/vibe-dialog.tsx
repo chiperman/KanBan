@@ -27,6 +27,7 @@ interface VibeDialogProps
   children?: ReactNode;
   description: ReactNode;
   eyebrow: string;
+  headerActions?: ReactNode;
   onClose: () => void;
   onSubmit?: FormEventHandler<HTMLFormElement>;
   title: string;
@@ -39,6 +40,7 @@ export function VibeDialog({
   className,
   description,
   eyebrow,
+  headerActions,
   onClose,
   onSubmit,
   title,
@@ -60,6 +62,7 @@ export function VibeDialog({
     document.body.style.overflow = "hidden";
 
     function keyboard(event: KeyboardEvent) {
+      if (event.defaultPrevented) return;
       if (event.key === "Escape") {
         event.preventDefault();
         onCloseRef.current();
@@ -107,8 +110,13 @@ export function VibeDialog({
   const panelContent = (
     <>
       <header className="vibe-dialog__header">
-        <p className="vibe-dialog__eyebrow">{eyebrow}</p>
-        <h2 id={titleId}>{title}</h2>
+        <div className="vibe-dialog__heading">
+          <p className="vibe-dialog__eyebrow">{eyebrow}</p>
+          <h2 id={titleId}>{title}</h2>
+        </div>
+        {headerActions ? (
+          <div className="vibe-dialog__header-actions">{headerActions}</div>
+        ) : null}
       </header>
       <div className="vibe-dialog__body">
         <p className="vibe-dialog__copy">{description}</p>

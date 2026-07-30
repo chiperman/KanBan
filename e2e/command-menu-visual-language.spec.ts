@@ -139,11 +139,13 @@ test("已登录看板遵守 Nothing 字体层级、操作语义和点击区域",
   }
 
   await card.getByRole("button", { name: "管理 Ethereum 观察钱包" }).click();
-  const danger = page
-    .getByRole("dialog", { name: "管理 Ethereum 观察钱包" })
-    .getByRole("button", { name: "永久删除 Ethereum 观察钱包数据" });
+  const management = page.getByRole("dialog", {
+    name: "管理 Ethereum 观察钱包",
+  });
+  await management.getByRole("button", { name: "更多来源操作" }).click();
+  const danger = management.getByRole("menuitem", { name: "永久删除数据" });
   await expect(danger).toHaveCSS("color", "rgb(194, 20, 28)");
-  await expect(danger).toHaveCSS("border-color", "rgb(215, 25, 33)");
+  await expect(danger).toHaveCSS("min-height", "40px");
 });
 
 test("未认证状态无命令菜单，所有者可用 Command-K 与 Ctrl-K 搜索并跳转资产卡片", async ({

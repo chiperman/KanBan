@@ -32,6 +32,8 @@ export interface AssetSourceSummary {
   id: string;
   kind: string;
   label: string;
+  /** 所有者设置的可选展示名；缺省时使用平台默认名称。 */
+  displayName?: string;
   accountId: string;
   permissions: AssetPermission[];
   /** 断开来源可不再持有任何凭证引用；连接来源必须为非空引用。 */
@@ -335,6 +337,7 @@ export interface AssetSources {
 
 export interface AssetSourceLifecycle {
   setHidden(sourceId: string, hidden: boolean): Promise<void>;
+  setDisplayName(sourceId: string, displayName: string): Promise<void>;
   disconnect(sourceId: string): Promise<void>;
   deleteData(sourceId: string): Promise<void>;
 }

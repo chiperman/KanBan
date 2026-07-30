@@ -79,7 +79,7 @@ test("六类来源形成正确总额、分布、真实稳定币价格与失败�
 
   await chooseOverviewOption(overview, "分布维度", "资产来源");
   for (const source of [
-    "长桥只读账户",
+    "长桥账户",
     "Binance 只读账户",
     "OKX 只读账户",
     "Bitget 只读账户",

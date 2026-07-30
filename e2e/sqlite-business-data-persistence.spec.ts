@@ -69,10 +69,33 @@ test("SQLite schema v2 自动迁移并持久化 Binance 覆盖证据", async ({ 
 
   expect(response.ok()).toBeTruthy();
   await expect(response.json()).resolves.toEqual({
-    schemaVersion: "3",
+    schemaVersion: "4",
     coverageColumn: true,
+    displayNameColumn: true,
     coverageStatus: "partial",
     unexplainedValue: { amount: "3", currency: "USD" },
+  });
+});
+
+test("资产来源自定义名称跨 SQLite 重启保留，清空后恢复默认", async ({
+  request,
+}) => {
+  const response = await request.post(
+    "/test-doubles/sqlite-business-data-persistence?action=display-name-persistence",
+  );
+
+  expect(response.ok()).toBeTruthy();
+  await expect(response.json()).resolves.toEqual({
+    renamed: {
+      displayName: "长期账户",
+      label: "Binance persistence",
+      accountId: "persistence",
+    },
+    cleared: {
+      displayName: null,
+      label: "Binance persistence",
+      accountId: "persistence",
+    },
   });
 });
 
