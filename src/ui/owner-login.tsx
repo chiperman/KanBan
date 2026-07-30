@@ -314,8 +314,8 @@ const LOCKED_KEYBOARD_KEYS: LockedKeyboardKey[] = [
 
 function getLockedKeyboardPoint(x: number, y: number) {
   const rowProgress = y / 48;
-  const left = 53.5 + (38.5 - 53.5) * rowProgress;
-  const right = 618 + (633 - 618) * rowProgress;
+  const left = 63.5 + (38.5 - 63.5) * rowProgress;
+  const right = 608 + (633 - 608) * rowProgress;
 
   return {
     x: left + (x / 544) * (right - left),
@@ -606,12 +606,6 @@ function LockedProductFlow() {
             </g>
           </g>
 
-          <path className="locked-flow-device-neck" d="M58 392V418H622V392" />
-          <path
-            className="locked-flow-device-neck-base"
-            d="M58 418H622L646 432H34L58 418Z"
-          />
-
           <rect
             className="locked-flow-device-chassis"
             height="94"
@@ -619,6 +613,11 @@ function LockedProductFlow() {
             width="640"
             x="20"
             y="424"
+          />
+          <path className="locked-flow-device-neck" d="M58 392V418H622V392" />
+          <path
+            className="locked-flow-device-neck-base"
+            d="M58 418H622L646 432H34L58 418Z"
           />
           <path className="locked-flow-device-chassis-line" d="M20 488H660" />
           <rect
@@ -631,10 +630,10 @@ function LockedProductFlow() {
           />
           <circle className="locked-flow-device-power" cx="238" cy="457" r="5" />
           <g className="locked-flow-device-vent" aria-hidden="true">
-            {Array.from({ length: 8 }, (_, column) =>
-              Array.from({ length: 3 }, (_, row) => (
+            {Array.from({ length: 9 }, (_, column) =>
+              Array.from({ length: 4 }, (_, row) => (
                 <circle
-                  cx={521 + column * 10}
+                  cx={516 + column * 10}
                   cy={449 + row * 9}
                   key={`${column}-${row}`}
                   r="1.2"
@@ -642,12 +641,12 @@ function LockedProductFlow() {
               )),
             )}
           </g>
-          <circle className="locked-flow-device-status" cx="622" cy="457" r="3" />
+          <circle className="locked-flow-device-status" cx="622" cy="462.5" r="3" />
 
           <g>
             <path
               className="locked-flow-keyboard-shell"
-              d="M54 496H626Q630 496 631 501L650 553Q651 558 646 558H34Q29 558 30 553L49 501Q50 496 54 496Z"
+              d="M64 496H616Q620 496 621 501L650 553Q651 558 646 558H34Q29 558 30 553L59 501Q60 496 64 496Z"
             />
             <path
               className="locked-flow-keyboard-front"
