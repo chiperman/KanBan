@@ -2641,7 +2641,8 @@ body {
 
 @media (max-width: 1023px) {
   .dashboard-control-deck {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
   }
 
   .page-dashboard .card-grid {
@@ -2678,6 +2679,7 @@ body {
   }
 
   .dashboard-control-deck {
+    grid-template-columns: 1fr;
     padding-top: var(--vibe-space-10);
   }
 

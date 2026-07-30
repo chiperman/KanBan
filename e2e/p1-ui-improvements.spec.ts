@@ -268,6 +268,53 @@ test("看板时间、来源状态和普通卡片遵守 Vibe 视觉层级", async
   ).toHaveCSS("width", "6px");
 });
 
+test("中等宽度控制区保持横排，手机端才改为纵向堆叠", async ({ page }) => {
+  await page.setViewportSize({ width: 848, height: 1036 });
+  await loginAsOwner(page);
+
+  const controlDeck = page.locator(".dashboard-control-deck");
+  const mediumLayout = await controlDeck.evaluate((element) => {
+    const toolbar = element.querySelector(".owner-toolbar")?.getBoundingClientRect();
+    const refresh = element
+      .querySelector(".asset-refresh-controls")
+      ?.getBoundingClientRect();
+    const deck = element.getBoundingClientRect();
+    return toolbar && refresh
+      ? {
+          deckHeight: deck.height,
+          refreshLeft: refresh.left,
+          refreshTop: refresh.top,
+          toolbarLeft: toolbar.left,
+          toolbarTop: toolbar.top,
+        }
+      : null;
+  });
+  expect(mediumLayout).not.toBeNull();
+  expect(
+    Math.abs(mediumLayout!.toolbarTop - mediumLayout!.refreshTop),
+  ).toBeLessThanOrEqual(1);
+  expect(mediumLayout!.refreshLeft).toBeGreaterThan(mediumLayout!.toolbarLeft);
+  expect(mediumLayout!.deckHeight).toBeLessThanOrEqual(110);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileLayout = await controlDeck.evaluate((element) => {
+    const toolbar = element.querySelector(".owner-toolbar")?.getBoundingClientRect();
+    const refresh = element
+      .querySelector(".asset-refresh-controls")
+      ?.getBoundingClientRect();
+    return toolbar && refresh
+      ? {
+          refreshTop: refresh.top,
+          toolbarBottom: toolbar.bottom,
+        }
+      : null;
+  });
+  expect(mobileLayout).not.toBeNull();
+  expect(mobileLayout!.refreshTop).toBeGreaterThan(
+    mobileLayout!.toolbarBottom,
+  );
+});
+
 test("空状态说明在 Light 和 Dark 下保持正文级对比度", async ({
   page,
   request,
