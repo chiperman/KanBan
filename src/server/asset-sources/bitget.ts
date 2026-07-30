@@ -453,6 +453,73 @@ function scopeLabel(scope: AssetHolding["sourceAccount"]): string {
   return "Bitget";
 }
 
+function bitgetCoverage(
+  accountMode: BitgetAccountMode,
+  positions: readonly BitgetPosition[],
+): NonNullable<AssetSnapshot["coverage"]> {
+  const hasAggregateEarn = positions.some(({ account }) => account === "earn");
+  const savingsCapability = hasAggregateEarn
+    ? "aggregate-only" as const
+    : "detailed" as const;
+  const savingsMessage = hasAggregateEarn
+    ? "Earn 总览与逐仓明细不一致，按币种保留平台汇总资产"
+    : null;
+  const products: NonNullable<AssetSnapshot["coverage"]>["products"] = [
+    {
+      product: "spot",
+      capability: "detailed",
+      freshness: "current",
+      message: null,
+    },
+    {
+      product: "funding",
+      capability: "detailed",
+      freshness: "current",
+      message: null,
+    },
+    {
+      product: "savings-flexible",
+      capability: savingsCapability,
+      freshness: "current",
+      message: savingsMessage,
+    },
+    {
+      product: "savings-fixed",
+      capability: savingsCapability,
+      freshness: "current",
+      message: savingsMessage,
+    },
+  ];
+  if (accountMode === "classic") {
+    products.push({
+      product: "futures-bot",
+      capability: "aggregate-only",
+      freshness: "current",
+      message: "读取平台聚合账户权益，不展开机器人订单和普通合约仓位",
+    });
+  }
+  products.push(
+    {
+      product: "sharkfin",
+      capability: "unsupported",
+      freshness: "current",
+      message: "官方提供只读资产查询，但当前适配器尚未接入",
+    },
+    {
+      product: "onchain-earn",
+      capability: "unsupported",
+      freshness: "current",
+      message: "官方提供只读资产查询，但当前适配器尚未接入",
+    },
+  );
+  return {
+    status: "partial",
+    products,
+    unexplainedValue: null,
+    excludedPositiveAccounts: [],
+  };
+}
+
 function compareHoldingValue(left: AssetHolding, right: AssetHolding): number {
   const leftValue = left.sourceMarketValue?.amount ?? null;
   const rightValue = right.sourceMarketValue?.amount ?? null;
@@ -509,6 +576,7 @@ function valuePositions(input: {
   usdtUsdQuote: PriceQuote | null;
   usdtUsdSource?: string | null;
   targetCurrency: "USDT" | "USD";
+  coverage?: AssetSnapshot["coverage"];
 }): AssetSnapshot {
   const livePairs = new Map<string, { asset: string; symbol: string }>();
   const normalizedPairs = new Map<string, Array<{ asset: string; symbol: string }>>();
@@ -671,6 +739,7 @@ function valuePositions(input: {
         }]
       : [],
     syncedAt: input.observedAt,
+    ...(input.coverage === undefined ? {} : { coverage: input.coverage }),
   };
 }
 
@@ -1053,36 +1122,38 @@ async function readFullSnapshot(input: {
     observedAt: input.observedAt,
     prices: input.prices,
   });
+  const positions = input.accountMode === "classic"
+    ? extractClassicPositions({
+        spot: accountAssets,
+        funding,
+        botFutures: botObservation?.data ?? [],
+        savingsOverview,
+        flexiblePages,
+        fixedPages,
+        observedAt: input.observedAt,
+        fundingObservedAt: fundingObservation.requestTime,
+        botObservedAt: botObservation?.requestTime,
+      })
+    : extractUtaPositions({
+        assets: accountAssets,
+        funding,
+        savingsOverview,
+        flexiblePages,
+        fixedPages,
+        observedAt: input.observedAt,
+        assetsObservedAt: accountAssetsObservation.requestTime,
+      });
   return {
     identity,
     snapshot: valuePositions({
-      positions: input.accountMode === "classic"
-        ? extractClassicPositions({
-            spot: accountAssets,
-            funding,
-            botFutures: botObservation?.data ?? [],
-            savingsOverview,
-            flexiblePages,
-            fixedPages,
-            observedAt: input.observedAt,
-            fundingObservedAt: fundingObservation.requestTime,
-            botObservedAt: botObservation?.requestTime,
-          })
-        : extractUtaPositions({
-            assets: accountAssets,
-            funding,
-            savingsOverview,
-            flexiblePages,
-            fixedPages,
-            observedAt: input.observedAt,
-            assetsObservedAt: accountAssetsObservation.requestTime,
-          }),
+      positions,
       instruments,
       tickers,
       observedAt: input.observedAt,
       usdtUsdQuote: usdtUsd.quote,
       usdtUsdSource: usdtUsd.source,
       targetCurrency: input.accountMode === "uta" ? "USD" : "USDT",
+      coverage: bitgetCoverage(input.accountMode, positions),
     }),
   };
 }
@@ -1199,6 +1270,7 @@ export class ProductionBitgetSourceRefresher implements AssetSourceRefresher {
           usdtUsdQuote: usdtUsd.quote,
           usdtUsdSource: usdtUsd.source,
           targetCurrency: source.snapshot.total.currency === "USD" ? "USD" : "USDT",
+          coverage: source.snapshot.coverage,
         });
       return {
         snapshot: preserveNewerPrices(source.snapshot, candidate),

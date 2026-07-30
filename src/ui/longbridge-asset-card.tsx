@@ -13,9 +13,9 @@ import type {
 } from "@/server/ports";
 import {
   assetHoldingKey,
-  binanceHoldingDisplayName,
-  BinanceCoverage,
-} from "@/ui/binance-coverage";
+  assetHoldingDisplayName,
+  AssetProductCoverage,
+} from "@/ui/asset-product-coverage";
 import {
   VibeMetric,
   VibeSegmentedBar,
@@ -96,7 +96,7 @@ function HoldingDetailRow({
       data-holding-key={assetHoldingKey(holding)}
     >
       <td>
-        <strong>{binanceHoldingDisplayName(holding)}</strong>
+        <strong>{assetHoldingDisplayName(holding)}</strong>
         <span className="holding-symbol">{holding.symbol}</span>
         <span className="holding-price-source">{valuationDetail}</span>
       </td>
@@ -133,6 +133,9 @@ export function AssetSourceCard({
 }) {
   const [hideSmallCryptoHoldings, setHideSmallCryptoHoldings] = useState(true);
   const supportsSmallHoldingFilter = source.kind !== "longbridge";
+  const supportsProductCoverage = ["binance", "okx", "bitget"].includes(
+    source.kind,
+  );
   const orderedHoldings = useMemo(
     () => source.snapshot.holdings.toSorted((left, right) =>
       compareNullableDecimalDescending(
@@ -224,8 +227,11 @@ export function AssetSourceCard({
           unit={source.snapshot.total.currency}
           value={showSensitiveInfo ? formatMoney(source.snapshot.total.amount) : "••••••"}
         />
-        {source.kind === "binance" ? (
-          <BinanceCoverage coverage={source.snapshot.coverage} />
+        {supportsProductCoverage ? (
+          <AssetProductCoverage
+            coverage={source.snapshot.coverage}
+            sourceKind={source.kind}
+          />
         ) : null}
         <div className="source-meter">
           <VibeSegmentedBar
@@ -265,7 +271,7 @@ export function AssetSourceCard({
               data-holding-key={assetHoldingKey(holding)}
               key={assetHoldingKey(holding)}
             >
-              <span>{binanceHoldingDisplayName(holding)}</span>
+              <span>{assetHoldingDisplayName(holding)}</span>
               <strong>
                 {holding.marketValue === null
                   ? `未估值（${holding.currency}）`

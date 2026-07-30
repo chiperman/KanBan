@@ -2514,7 +2514,7 @@ body {
   text-wrap: pretty;
 }
 
-.span-1 .asset-source-card [data-testid="binance-product-coverage"] {
+.span-1 .asset-source-card .vibe-coverage {
   display: none;
 }
 

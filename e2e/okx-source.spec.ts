@@ -98,6 +98,24 @@ test("OKX 只读凭证先预览后原子保存，并展示现货、资金与 Ear
     card.getByTestId("holding-top-list").getByRole("listitem"),
   ).toHaveCount(3);
   await expect(card).toContainText("现货");
+  await expect(card.getByTestId("okx-coverage-status")).toContainText(
+    "产品统计不完整",
+  );
+  const coverage = card.getByTestId("okx-product-coverage");
+  await expect(coverage).toContainText("06 PRODUCTS");
+  const resizeHandle = page.getByRole("button", {
+    name: /调整\s*OKX 资产宽度/,
+  });
+  const widened = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/asset-cards/layout") &&
+      response.request().method() === "PUT",
+  );
+  await resizeHandle.press("ArrowRight");
+  await widened;
+  await expect(coverage).toBeVisible();
+  await coverage.locator("summary").click();
+  await expect(coverage).toContainText("On-chain Earn");
   expect(responseBodies.join("\n")).not.toContain(API_SECRET);
   expect(responseBodies.join("\n")).not.toContain(PASSPHRASE);
 });
@@ -170,6 +188,49 @@ test("生产 OKX 适配器只读取 Spot、Funding 与 Flexible，并验证签�
   expect(body.snapshot.total).toEqual({
     amount: "10987.654321",
     currency: "USDT",
+  });
+  expect(body.snapshot.coverage).toEqual({
+    status: "partial",
+    products: [
+      {
+        product: "spot",
+        capability: "detailed",
+        freshness: "current",
+        message: null,
+      },
+      {
+        product: "trading-bot",
+        capability: "aggregate-only",
+        freshness: "current",
+        message: "按币种读取 Trading stgyEq，不展开机器人和策略明细",
+      },
+      {
+        product: "funding",
+        capability: "detailed",
+        freshness: "current",
+        message: null,
+      },
+      {
+        product: "simple-earn-flexible",
+        capability: "detailed",
+        freshness: "current",
+        message: null,
+      },
+      {
+        product: "simple-earn-fixed",
+        capability: "unsupported",
+        freshness: "current",
+        message: "官方当前仓位 API 已下线，无法证明 App 内定期产品余额为零",
+      },
+      {
+        product: "onchain-earn",
+        capability: "unsupported",
+        freshness: "current",
+        message: "官方提供只读查询，但当前适配器尚未接入",
+      },
+    ],
+    unexplainedValue: null,
+    excludedPositiveAccounts: [],
   });
   expect(body.snapshot.holdings).toEqual(expect.arrayContaining([
     expect.objectContaining({
@@ -360,6 +421,11 @@ test("OKX 同步失败保留最后成功数据并接入过期状态和日快照"
   await expect(card).toContainText("10,987.65 USDT");
   await expect(card).toContainText("过期数据");
   await expect(card).toContainText("OKX 同步失败");
+  await expect(
+    card
+      .getByTestId("okx-product-coverage")
+      .locator(".vibe-coverage-summary-freshness"),
+  ).toHaveText("00 CURRENT / 06 STALE");
   await expect(page.getByTestId("total-asset-overview")).toContainText(
     "包含 1 个过期来源",
   );
@@ -380,6 +446,15 @@ test("OKX 价格刷新保持公开边界，并规范化时间偏差、认证错�
       "GET /api/v5/market/tickers?instType=SPOT",
     ],
     total: { amount: "10987.654321", currency: "USDT" },
+    coverage: {
+      status: "partial",
+      products: expect.arrayContaining([
+        expect.objectContaining({
+          product: "onchain-earn",
+          freshness: "current",
+        }),
+      ]),
+    },
   });
 
   const olderTicker = await request.post(

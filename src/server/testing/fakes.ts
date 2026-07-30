@@ -388,7 +388,7 @@ export class FakeBitgetReadOnly implements BitgetReadOnly {
         label: `Bitget 账户 · UID ${userId}`,
       },
       scopeFingerprint: `${userId}:770001:${input.accountMode}:stor,wtor`,
-      snapshot: bitgetFixtureSnapshot(input.observedAt),
+      snapshot: bitgetFixtureSnapshot(input.observedAt, input.accountMode),
     });
   }
 

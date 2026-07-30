@@ -1,4 +1,8 @@
-import type { AssetSnapshot, PriceQuote } from "@/server/ports";
+import type {
+  AssetSnapshot,
+  BitgetAccountMode,
+  PriceQuote,
+} from "@/server/ports";
 
 export const BITGET_OBSERVED_AT = "2026-01-01T00:00:00.000Z";
 export const BITGET_OBSERVED_MS = String(Date.parse(BITGET_OBSERVED_AT));
@@ -207,7 +211,10 @@ export function bitgetApiFixture() {
   };
 }
 
-export function bitgetFixtureSnapshot(observedAt: string): AssetSnapshot {
+export function bitgetFixtureSnapshot(
+  observedAt: string,
+  accountMode: BitgetAccountMode = "classic",
+): AssetSnapshot {
   const holdings = [
     ["BTC", "现货", "0.1", "60000", "6000", "spot"],
     ["ETH", "资金", "1", "3000", "3000", "funding"],
@@ -249,5 +256,56 @@ export function bitgetFixtureSnapshot(observedAt: string): AssetSnapshot {
       observedAt,
     }],
     syncedAt: observedAt,
+    coverage: {
+      status: "partial",
+      products: [
+        {
+          product: "spot",
+          capability: "detailed",
+          freshness: "current",
+          message: null,
+        },
+        {
+          product: "funding",
+          capability: "detailed",
+          freshness: "current",
+          message: null,
+        },
+        {
+          product: "savings-flexible",
+          capability: "detailed",
+          freshness: "current",
+          message: null,
+        },
+        {
+          product: "savings-fixed",
+          capability: "detailed",
+          freshness: "current",
+          message: null,
+        },
+        ...(accountMode === "classic"
+          ? [{
+              product: "futures-bot",
+              capability: "aggregate-only" as const,
+              freshness: "current" as const,
+              message: "读取平台聚合账户权益，不展开机器人订单和普通合约仓位",
+            }]
+          : []),
+        {
+          product: "sharkfin",
+          capability: "unsupported",
+          freshness: "current",
+          message: "官方提供只读资产查询，但当前适配器尚未接入",
+        },
+        {
+          product: "onchain-earn",
+          capability: "unsupported",
+          freshness: "current",
+          message: "官方提供只读资产查询，但当前适配器尚未接入",
+        },
+      ],
+      unexplainedValue: null,
+      excludedPositiveAccounts: [],
+    },
   };
 }

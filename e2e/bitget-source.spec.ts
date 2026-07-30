@@ -102,6 +102,25 @@ test("Bitget 只读凭证先预览后原子保存，并展示现货、资金、E
     card.getByTestId("holding-top-list").getByRole("listitem"),
   ).toHaveCount(3);
   await expect(card).toContainText("现货");
+  await expect(card.getByTestId("bitget-coverage-status")).toContainText(
+    "产品统计不完整",
+  );
+  const coverage = card.getByTestId("bitget-product-coverage");
+  await expect(coverage).toContainText("07 PRODUCTS");
+  const resizeHandle = page.getByRole("button", {
+    name: /调整\s*Bitget 资产宽度/,
+  });
+  const widened = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/asset-cards/layout") &&
+      response.request().method() === "PUT",
+  );
+  await resizeHandle.press("ArrowRight");
+  await widened;
+  await expect(coverage).toBeVisible();
+  await coverage.locator("summary").click();
+  await expect(coverage).toContainText("SharkFin");
+  await expect(coverage).toContainText("Futures Bots");
   expect(responseBodies.join("\n")).not.toContain(API_SECRET);
   expect(responseBodies.join("\n")).not.toContain(PASSPHRASE);
 });
@@ -166,6 +185,55 @@ test("生产 Bitget Classic 适配器读取 Spot、Funding、Savings 与合约�
     label: "Bitget 账户 · UID 770001",
   });
   expect(body.snapshot.total).toEqual({ amount: "11141.98687228", currency: "USDT" });
+  expect(body.snapshot.coverage).toEqual({
+    status: "partial",
+    products: [
+      {
+        product: "spot",
+        capability: "detailed",
+        freshness: "current",
+        message: null,
+      },
+      {
+        product: "funding",
+        capability: "detailed",
+        freshness: "current",
+        message: null,
+      },
+      {
+        product: "savings-flexible",
+        capability: "detailed",
+        freshness: "current",
+        message: null,
+      },
+      {
+        product: "savings-fixed",
+        capability: "detailed",
+        freshness: "current",
+        message: null,
+      },
+      {
+        product: "futures-bot",
+        capability: "aggregate-only",
+        freshness: "current",
+        message: "读取平台聚合账户权益，不展开机器人订单和普通合约仓位",
+      },
+      {
+        product: "sharkfin",
+        capability: "unsupported",
+        freshness: "current",
+        message: "官方提供只读资产查询，但当前适配器尚未接入",
+      },
+      {
+        product: "onchain-earn",
+        capability: "unsupported",
+        freshness: "current",
+        message: "官方提供只读资产查询，但当前适配器尚未接入",
+      },
+    ],
+    unexplainedValue: null,
+    excludedPositiveAccounts: [],
+  });
   expect(body.snapshot.holdings).toEqual(expect.arrayContaining([
     expect.objectContaining({ sourceAccount: "spot", sourceAsset: "BTC", quantity: "0.1" }),
     expect.objectContaining({
@@ -223,7 +291,50 @@ test("生产 Bitget UTA 仅在纯现金范围证明完整时读取资产", async
   expect(valid.ok()).toBeTruthy();
   await expect(valid.json()).resolves.toMatchObject({
     account: { id: "bitget:770001" },
-    snapshot: { total: { amount: "10977.694481", currency: "USD" } },
+    snapshot: {
+      total: { amount: "10977.694481", currency: "USD" },
+      coverage: {
+        status: "partial",
+        products: [
+          {
+            product: "spot",
+            capability: "detailed",
+            freshness: "current",
+            message: null,
+          },
+          {
+            product: "funding",
+            capability: "detailed",
+            freshness: "current",
+            message: null,
+          },
+          {
+            product: "savings-flexible",
+            capability: "detailed",
+            freshness: "current",
+            message: null,
+          },
+          {
+            product: "savings-fixed",
+            capability: "detailed",
+            freshness: "current",
+            message: null,
+          },
+          {
+            product: "sharkfin",
+            capability: "unsupported",
+            freshness: "current",
+            message: "官方提供只读资产查询，但当前适配器尚未接入",
+          },
+          {
+            product: "onchain-earn",
+            capability: "unsupported",
+            freshness: "current",
+            message: "官方提供只读资产查询，但当前适配器尚未接入",
+          },
+        ],
+      },
+    },
     utaProof: {
       positionCategories: 3,
       orderCategories: 4,
@@ -312,6 +423,20 @@ test("Bitget Earn 总览与明细口径不一致时保留总览资产且不重�
       sourceAsset: "ETH",
     }),
   ]));
+  expect(mismatchBody.snapshot.coverage.products).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        product: "savings-flexible",
+        capability: "aggregate-only",
+        message: "Earn 总览与逐仓明细不一致，按币种保留平台汇总资产",
+      }),
+      expect.objectContaining({
+        product: "savings-fixed",
+        capability: "aggregate-only",
+        message: "Earn 总览与逐仓明细不一致，按币种保留平台汇总资产",
+      }),
+    ]),
+  );
 });
 
 test("Bitget Earn 分页和缺价失败均不伪造完整资产", async ({ request }) => {
@@ -370,6 +495,11 @@ test("Bitget 同步失败保留最后成功数据并接入过期状态和日快�
   await expect(card).toContainText("10,987.65 USDT");
   await expect(card).toContainText("过期数据");
   await expect(card).toContainText("Bitget 同步失败");
+  await expect(
+    card
+      .getByTestId("bitget-product-coverage")
+      .locator(".vibe-coverage-summary-freshness"),
+  ).toHaveText("00 CURRENT / 07 STALE");
   await expect(page.getByTestId("total-asset-overview")).toContainText("包含 1 个过期来源");
 });
 
@@ -385,6 +515,15 @@ test("Bitget 价格刷新保持公开边界并规范化时间与认证错误", a
       "GET /api/v2/spot/market/tickers",
     ],
     total: { amount: "11141.98687228", currency: "USDT" },
+    coverage: {
+      status: "partial",
+      products: expect.arrayContaining([
+        expect.objectContaining({
+          product: "sharkfin",
+          freshness: "current",
+        }),
+      ]),
+    },
   });
 
   for (const action of ["refresh-older-ticker", "refresh-all-older-ticker"]) {

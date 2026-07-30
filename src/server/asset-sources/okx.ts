@@ -227,6 +227,52 @@ function scopeLabel(scope: AssetHolding["sourceAccount"]): string {
   return "OKX";
 }
 
+function okxCoverage(): NonNullable<AssetSnapshot["coverage"]> {
+  return {
+    status: "partial",
+    products: [
+      {
+        product: "spot",
+        capability: "detailed",
+        freshness: "current",
+        message: null,
+      },
+      {
+        product: "trading-bot",
+        capability: "aggregate-only",
+        freshness: "current",
+        message: "按币种读取 Trading stgyEq，不展开机器人和策略明细",
+      },
+      {
+        product: "funding",
+        capability: "detailed",
+        freshness: "current",
+        message: null,
+      },
+      {
+        product: "simple-earn-flexible",
+        capability: "detailed",
+        freshness: "current",
+        message: null,
+      },
+      {
+        product: "simple-earn-fixed",
+        capability: "unsupported",
+        freshness: "current",
+        message: "官方当前仓位 API 已下线，无法证明 App 内定期产品余额为零",
+      },
+      {
+        product: "onchain-earn",
+        capability: "unsupported",
+        freshness: "current",
+        message: "官方提供只读查询，但当前适配器尚未接入",
+      },
+    ],
+    unexplainedValue: null,
+    excludedPositiveAccounts: [],
+  };
+}
+
 function compareHoldingValue(left: AssetHolding, right: AssetHolding): number {
   const leftValue = left.sourceMarketValue?.amount ?? null;
   const rightValue = right.sourceMarketValue?.amount ?? null;
@@ -283,6 +329,7 @@ function valuePositions(input: {
   observedAt: string;
   usdtUsdQuote: PriceQuote | null;
   usdtUsdSource?: string | null;
+  coverage?: AssetSnapshot["coverage"];
 }): AssetSnapshot {
   const livePairs = new Map<string, string>();
   for (const item of list(input.instruments, "OKX instruments data")) {
@@ -413,6 +460,7 @@ function valuePositions(input: {
       observedAt: usdtUsdQuote.quotedAt.toISOString(),
     }],
     syncedAt: input.observedAt,
+    ...(input.coverage === undefined ? {} : { coverage: input.coverage }),
   };
 }
 
@@ -599,6 +647,7 @@ async function readFullSnapshot(input: {
       observedAt: input.observedAt,
       usdtUsdQuote: usdtUsd.quote,
       usdtUsdSource: usdtUsd.source,
+      coverage: okxCoverage(),
     }),
   };
 }
@@ -709,6 +758,7 @@ export class ProductionOkxSourceRefresher implements AssetSourceRefresher {
           observedAt: attemptedAt,
           usdtUsdQuote: usdtUsd.quote,
           usdtUsdSource: usdtUsd.source,
+          coverage: source.snapshot.coverage,
         });
       return {
         snapshot: preserveNewerPrices(source.snapshot, candidate),

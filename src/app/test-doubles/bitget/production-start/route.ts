@@ -449,6 +449,7 @@ export async function POST(request: Request) {
         privateRequests,
         publicRequests,
         total: refreshed.snapshot.total,
+        coverage: refreshed.snapshot.coverage,
         holdingOrder: refreshed.snapshot.holdings
           .slice(0, 5)
           .map(({ sourceAsset }) => sourceAsset),
