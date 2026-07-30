@@ -427,11 +427,6 @@ export function OwnerDashboard({
   }
 
   const visibleCards = displayCards.filter((card) => !card.hidden);
-  const hasMobileOverview = assetSources.length > 0;
-  const allMobileSectionsExpanded =
-    (visibleCards.length > 0 || hasMobileOverview) &&
-    (!hasMobileOverview || mobileOverviewExpanded) &&
-    visibleCards.every(({ id }) => expandedMobileCardIds.has(id));
   const hiddenAssetCards = cards.flatMap((card) => {
     if (!card.hidden || !card.sourceId) return [];
     const source = assetSources.find((item) => item.id === card.sourceId);
@@ -454,14 +449,6 @@ export function OwnerDashboard({
       }
       return next;
     });
-  }
-
-  function toggleAllMobileCards() {
-    const expandAll = !allMobileSectionsExpanded;
-    setMobileOverviewExpanded(expandAll && hasMobileOverview);
-    setExpandedMobileCardIds(
-      expandAll ? new Set(visibleCards.map(({ id }) => id)) : new Set(),
-    );
   }
 
   function moveMobileCard(cardId: string, offset: -1 | 1) {
@@ -708,15 +695,6 @@ export function OwnerDashboard({
             {showSensitiveInfo ? "隐藏关键信息" : "显示关键信息"}
           </VibeButton>
           <AssetSourceFlow />
-          <VibeButton
-            type="button"
-            className="mobile-card-view-toggle"
-            hidden={mobileLayoutMode}
-            onClick={toggleAllMobileCards}
-            variant="outline"
-          >
-            {allMobileSectionsExpanded ? "全部折叠" : "全部展开"}
-          </VibeButton>
           <VibeButton
             type="button"
             className="mobile-card-layout-toggle"

@@ -347,8 +347,7 @@ a {
 
 .mobile-card-summary,
 .mobile-card-sort-row,
-.mobile-card-view-toggle,
-.mobile-card-layout-toggle,
+.vibe-button.mobile-card-layout-toggle,
 .mobile-overview-toggle {
   display: none;
 }
@@ -2648,8 +2647,7 @@ body {
     align-items: stretch;
   }
 
-  .mobile-card-view-toggle,
-  .mobile-card-layout-toggle {
+  .vibe-button.mobile-card-layout-toggle {
     display: inline-flex;
   }
 
@@ -2691,10 +2689,6 @@ body {
 
   .total-overview-card[data-mobile-expanded="false"] .total-overview {
     gap: var(--vibe-space-5);
-  }
-
-  .mobile-card-view-toggle[hidden] {
-    display: none;
   }
 
   .total-overview-card[data-mobile-expanded="true"]

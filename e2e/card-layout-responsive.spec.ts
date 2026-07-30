@@ -782,7 +782,17 @@ test("卡片较多时可从视口顶部拖到页面底部新行", async ({ page,
   await expect(cards.last()).toHaveClass(/starts-new-row/);
 });
 
-test("手机端默认折叠卡片并可按需展示全部内容", async ({ page }) => {
+test("桌面端不展示移动排序入口且不存在全局展开控制", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await loginAsOwner(page);
+
+  await expect(
+    page.getByRole("button", { name: "调整卡片顺序" }),
+  ).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "全部展开" })).toHaveCount(0);
+});
+
+test("手机端默认展示卡片摘要并可按需展开完整内容", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await loginAsOwner(page);
 
@@ -790,6 +800,10 @@ test("手机端默认折叠卡片并可按需展示全部内容", async ({ page 
   await expect(wide).toHaveAttribute("data-mobile-expanded", "false");
   await expect(wide.locator(".card-body")).toBeHidden();
   await expect(wide.getByRole("button", { name: "展开宽卡片" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "调整卡片顺序" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "全部展开" })).toHaveCount(0);
   await expect(wide.locator(".layout-resize-handle")).toBeHidden();
   await expect(wide.locator(".layout-drag-handle")).toBeHidden();
 
@@ -797,14 +811,6 @@ test("手机端默认折叠卡片并可按需展示全部内容", async ({ page 
   await expect(wide).toHaveAttribute("data-mobile-expanded", "true");
   await expect(wide.locator(".card-body")).toBeVisible();
   await expect(wide.locator(".card-body")).toContainText("桌面三格内容");
-
-  await page.getByRole("button", { name: "全部展开" }).click();
-  await expect(page.locator('.card[data-mobile-expanded="true"]')).toHaveCount(
-    CARDS.length,
-  );
-
-  await page.getByRole("button", { name: "全部折叠" }).click();
-  await expect(page.locator('.card[data-mobile-expanded="true"]')).toHaveCount(0);
 });
 
 test("手机端调整顺序时以标题行拖动并保留桌面宽度", async ({ page }) => {
@@ -998,17 +1004,16 @@ test("手机端总资产默认保留摘要并可展开全部详情", async ({ pa
   await expect(overview).toHaveAttribute("data-mobile-expanded", "true");
   await expect(page.getByTestId("total-asset-trend")).toBeVisible();
 
-  await page.getByRole("button", { name: "全部展开" }).click();
-  await page.getByRole("button", { name: "全部折叠" }).click();
+  await page.getByRole("button", { name: "折叠总资产详情" }).click();
   await expect(overview).toHaveAttribute("data-mobile-expanded", "false");
   await expect(page.getByTestId("total-asset-trend")).toBeHidden();
 
-  await page.getByRole("button", { name: "全部展开" }).click();
+  await page.getByRole("button", { name: "展开总资产详情" }).click();
   await expect(overview).toHaveAttribute("data-mobile-expanded", "true");
   await expect(page.getByTestId("total-asset-trend")).toBeVisible();
+  await expect(page.getByRole("button", { name: "全部展开" })).toHaveCount(0);
 
   await page.getByRole("button", { name: "调整卡片顺序" }).click();
-  await expect(page.getByRole("button", { name: "全部折叠" })).toBeHidden();
   await expect(page.getByTestId("total-asset-trend")).toBeHidden();
   await page.getByRole("button", { name: "完成调整" }).click();
   await expect(page.getByTestId("total-asset-trend")).toBeVisible();
