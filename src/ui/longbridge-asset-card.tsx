@@ -10,8 +10,13 @@ import {
   decimalSubtract,
   decimalToFixed,
 } from "@/domain/decimal";
-import { compareNullableDecimalDescending } from "@/domain/valuation";
+import {
+  compareNullableDecimalDescending,
+  convertCurrencyAmount,
+  type ReportingCurrency,
+} from "@/domain/valuation";
 import type {
+  AssetExchangeRate,
   AssetHolding,
   AssetSnapshot,
   AssetSourceSyncState,
@@ -111,8 +116,39 @@ function holdingProfit(holding: AssetHolding): {
   };
 }
 
+function holdingTodayProfit(holding: AssetHolding): {
+  amount: string;
+  percent: string;
+} | null {
+  if (
+    holding.currentPrice === null ||
+    holding.previousClose === null ||
+    holding.previousClose === undefined ||
+    holding.currentPrice.currency !== holding.previousClose.currency ||
+    holding.currentPrice.currency !== holding.currency
+  ) {
+    return null;
+  }
+  if (decimalCompare(holding.previousClose.amount, "0") === 0) return null;
+  const profit = decimalMultiply(
+    decimalSubtract(holding.currentPrice.amount, holding.previousClose.amount),
+    holding.quantity,
+  );
+  return {
+    amount: profit,
+    percent: decimalToFixed(
+      decimalDivide(decimalMultiply(profit, "100"), holding.previousClose.amount, 8),
+      2,
+    ),
+  };
+}
+
 function signedAmount(value: string, format: (value: string) => string): string {
   const formatted = format(value);
+  return decimalCompare(value, "0") > 0 ? `+${formatted}` : formatted;
+}
+
+function signedDisplayAmount(value: string, formatted: string): string {
   return decimalCompare(value, "0") > 0 ? `+${formatted}` : formatted;
 }
 
@@ -125,18 +161,102 @@ function profitDirection(
   return comparison > 0 ? "positive" : comparison < 0 ? "negative" : "neutral";
 }
 
+function HoldingProfitSummaryCell({
+  currency,
+  profit,
+  kind,
+  profitColorScheme,
+  showSensitiveInfo,
+  formatDisplayMoney,
+}: {
+  currency: string;
+  profit: { amount: string; percent: string } | null;
+  kind: "today" | "position";
+  profitColorScheme: ProfitColorScheme;
+  showSensitiveInfo: boolean;
+  formatDisplayMoney: (value: string, currency: string) => string | null;
+}) {
+  const masked = "••••••";
+  const displayedAmount = profit === null
+    ? null
+    : formatDisplayMoney(profit.amount, currency);
+  return (
+    <td
+      className={`holding-profit-summary holding-profit-summary--${kind} profit-color-value`}
+      data-profit-color-scheme={profitColorScheme}
+      data-profit-direction={
+        profit === null
+          ? "neutral"
+          : profitDirection(profit.amount, showSensitiveInfo)
+      }
+    >
+      <strong>
+        {profit === null
+          ? "—"
+          : !showSensitiveInfo
+            ? masked
+            : displayedAmount === null
+              ? "无法折算"
+              : signedDisplayAmount(profit.amount, displayedAmount)}
+      </strong>
+      <span>
+        {profit === null
+          ? "—"
+          : showSensitiveInfo
+            ? `${signedAmount(profit.percent, amount)}%`
+            : masked}
+      </span>
+    </td>
+  );
+}
+
+function HoldingMarketValueQuantityCell({
+  holding,
+  quoteUnavailable,
+  showSensitiveInfo,
+  formatDisplayMoney,
+}: {
+  holding: AssetHolding;
+  quoteUnavailable: boolean;
+  showSensitiveInfo: boolean;
+  formatDisplayMoney: (value: string, currency: string) => string | null;
+}) {
+  const masked = "••••••";
+  const displayedMarketValue = holding.marketValue === null
+    ? null
+    : formatDisplayMoney(holding.marketValue, holding.currency);
+  return (
+    <td className="holding-market-value-summary">
+      <strong>
+        {holding.marketValue === null
+          ? quoteUnavailable
+            ? "期权行情未接入"
+            : "未估值"
+          : !showSensitiveInfo
+            ? masked
+            : displayedMarketValue ?? "无法折算"}
+      </strong>
+      <span>{showSensitiveInfo ? amount(holding.quantity) : masked}</span>
+    </td>
+  );
+}
+
 function HoldingDetailRow({
   holding,
   profitColorScheme,
   showPlatformProfit,
+  compactProfitColumns,
   showSensitiveInfo,
-  formatMoney,
+  formatDisplayMoney,
+  formatDisplayPrice,
 }: {
   holding: AssetHolding;
   profitColorScheme: ProfitColorScheme;
   showPlatformProfit: boolean;
+  compactProfitColumns: boolean;
   showSensitiveInfo: boolean;
-  formatMoney: (value: string) => string;
+  formatDisplayMoney: (value: string, currency: string) => string | null;
+  formatDisplayPrice: (value: string, currency: string) => string | null;
 }) {
   const masked = "••••••";
   const quoteUnavailable = holding.valuation.status === "quote-unavailable";
@@ -144,6 +264,7 @@ function HoldingDetailRow({
     ? `${holding.valuation.priceSource} · ${formatShanghaiDateTime(holding.valuation.pricedAt)}`
     : holding.valuation.reason;
   const profit = holdingProfit(holding);
+  const todayProfit = holdingTodayProfit(holding);
   return (
     <tr
       className={holding.valuation.status === "unvalued" ? "is-unvalued" : undefined}
@@ -154,59 +275,114 @@ function HoldingDetailRow({
         <span className="holding-symbol">{holding.symbol}</span>
         <span className="holding-price-source">{valuationDetail}</span>
       </td>
-      <td>{showSensitiveInfo ? amount(holding.quantity) : masked}</td>
-      <td>
-        {holding.currentPrice
-          ? `${showSensitiveInfo ? amount(holding.currentPrice.amount) : masked} ${holding.currentPrice.currency}`
-          : quoteUnavailable
-            ? "现价不可用"
-            : holding.valuation.status === "unvalued"
-            ? `未估值（${holding.currency}）`
-            : "—"}
-      </td>
-      <td>
-        {holding.marketValue === null
-          ? quoteUnavailable
-            ? `期权行情未接入（${holding.currency}）`
-            : `未估值（${holding.currency}）`
-          : `${showSensitiveInfo ? formatMoney(holding.marketValue) : masked} ${holding.currency}`}
-      </td>
-      <td>
-        {holding.costPrice === null
-          ? "—"
-          : `${showSensitiveInfo ? amount(holding.costPrice) : masked} ${holding.currency}`}
-      </td>
-      {showPlatformProfit ? (
-        <td>{holding.platformProfit === null ? "—" : showSensitiveInfo ? formatMoney(holding.platformProfit) : masked}</td>
-      ) : null}
-      <td
-        className="holding-profit profit-color-value"
-        data-profit-color-scheme={profitColorScheme}
-        data-profit-direction={
-          profit === null
-            ? "neutral"
-            : profitDirection(profit.amount, showSensitiveInfo)
-        }
-      >
-        {profit === null
-          ? "—"
-          : `${showSensitiveInfo ? signedAmount(profit.amount, formatMoney) : masked} ${holding.currency}`}
-      </td>
-      <td
-        className="holding-profit profit-color-value"
-        data-profit-color-scheme={profitColorScheme}
-        data-profit-direction={
-          profit === null
-            ? "neutral"
-            : profitDirection(profit.percent, showSensitiveInfo)
-        }
-      >
-        {profit === null
-          ? "—"
-          : showSensitiveInfo
-            ? `${signedAmount(profit.percent, amount)}%`
-            : masked}
-      </td>
+      {compactProfitColumns ? (
+        <>
+          <HoldingMarketValueQuantityCell
+            formatDisplayMoney={formatDisplayMoney}
+            holding={holding}
+            quoteUnavailable={quoteUnavailable}
+            showSensitiveInfo={showSensitiveInfo}
+          />
+          <td>
+            {holding.currentPrice === null
+              ? quoteUnavailable ? "现价不可用" : "—"
+              : !showSensitiveInfo ? masked
+              : formatDisplayPrice(
+                holding.currentPrice.amount,
+                holding.currentPrice.currency,
+              ) ?? "无法折算"}
+          </td>
+          <td>
+            {holding.costPrice === null
+              ? "—"
+              : !showSensitiveInfo ? masked
+              : formatDisplayPrice(holding.costPrice, holding.currency) ?? "无法折算"}
+          </td>
+          <HoldingProfitSummaryCell
+            currency={holding.currency}
+            formatDisplayMoney={formatDisplayMoney}
+            kind="today"
+            profit={todayProfit}
+            profitColorScheme={profitColorScheme}
+            showSensitiveInfo={showSensitiveInfo}
+          />
+          <HoldingProfitSummaryCell
+            currency={holding.currency}
+            formatDisplayMoney={formatDisplayMoney}
+            kind="position"
+            profit={profit}
+            profitColorScheme={profitColorScheme}
+            showSensitiveInfo={showSensitiveInfo}
+          />
+        </>
+      ) : (
+        <>
+          <td>{showSensitiveInfo ? amount(holding.quantity) : masked}</td>
+          <td>
+            {holding.currentPrice === null
+              ? quoteUnavailable ? "现价不可用" : "—"
+              : !showSensitiveInfo ? masked
+              : formatDisplayPrice(
+                holding.currentPrice.amount,
+                holding.currentPrice.currency,
+              ) ?? "无法折算"}
+          </td>
+          <td>
+            {holding.marketValue === null
+              ? quoteUnavailable ? "期权行情未接入" : "未估值"
+              : !showSensitiveInfo ? masked
+              : formatDisplayMoney(holding.marketValue, holding.currency) ?? "无法折算"}
+          </td>
+          <td>
+            {holding.costPrice === null
+              ? "—"
+              : !showSensitiveInfo ? masked
+              : formatDisplayPrice(holding.costPrice, holding.currency) ?? "无法折算"}
+          </td>
+          {showPlatformProfit ? (
+            <td>
+              {holding.platformProfit === null
+                ? "—"
+                : !showSensitiveInfo ? masked
+                : formatDisplayMoney(holding.platformProfit, holding.currency) ?? "无法折算"}
+            </td>
+          ) : null}
+          <td
+            className="holding-profit profit-color-value"
+            data-profit-color-scheme={profitColorScheme}
+            data-profit-direction={
+              profit === null
+                ? "neutral"
+                : profitDirection(profit.amount, showSensitiveInfo)
+            }
+          >
+            {profit === null
+              ? "—"
+              : !showSensitiveInfo ? masked
+              : (() => {
+                const displayed = formatDisplayMoney(profit.amount, holding.currency);
+                return displayed === null
+                  ? "无法折算"
+                  : signedDisplayAmount(profit.amount, displayed);
+              })()}
+          </td>
+          <td
+            className="holding-profit profit-color-value"
+            data-profit-color-scheme={profitColorScheme}
+            data-profit-direction={
+              profit === null
+                ? "neutral"
+                : profitDirection(profit.percent, showSensitiveInfo)
+            }
+          >
+            {profit === null
+              ? "—"
+              : showSensitiveInfo
+                ? `${signedAmount(profit.percent, amount)}%`
+                : masked}
+          </td>
+        </>
+      )}
     </tr>
   );
 }
@@ -214,11 +390,15 @@ function HoldingDetailRow({
 export function AssetSourceCard({
   source,
   history,
+  reportingExchangeRates,
+  reportingCurrency,
   profitColorScheme,
   showSensitiveInfo,
 }: {
   source: AssetSourceView;
   history: DailyAssetSnapshot[];
+  reportingExchangeRates: AssetExchangeRate[];
+  reportingCurrency: ReportingCurrency;
   profitColorScheme: ProfitColorScheme;
   showSensitiveInfo: boolean;
 }) {
@@ -269,6 +449,7 @@ export function AssetSourceCard({
   const showPlatformProfit = visibleHoldings.some(
     (holding) => holding.platformProfit !== null,
   );
+  const compactProfitColumns = source.kind === "longbridge";
   const sourceHistory = history.flatMap((snapshot) => {
     const item = snapshot.sources.find(({ sourceId }) => sourceId === source.id);
     return item ? [{ day: snapshot.day, ...item }] : [];
@@ -302,7 +483,34 @@ export function AssetSourceCard({
       ? `${quoteUnavailableCount} QUOTE N/A`
       : "VALUATION / COMPLETE";
   const heading = sourceHeading(source);
-  const formatMoney = source.kind === "longbridge" ? amount : moneyAmount;
+  const displayExchangeRates = [
+    ...reportingExchangeRates,
+    ...source.snapshot.exchangeRates,
+  ];
+  const formatDisplayMoney = (value: string, currency: string) => {
+    const converted = convertCurrencyAmount(
+      value,
+      currency,
+      reportingCurrency,
+      displayExchangeRates,
+    );
+    return converted === null ? null : moneyAmount(converted);
+  };
+  const formatDisplayPrice = (value: string, currency: string) => {
+    const converted = convertCurrencyAmount(
+      value,
+      currency,
+      reportingCurrency,
+      displayExchangeRates,
+    );
+    return converted === null
+      ? null
+      : amount(decimalToFixed(converted, source.kind === "longbridge" ? 3 : 2));
+  };
+  const sourceTotal = formatDisplayMoney(
+    source.snapshot.total.amount,
+    source.snapshot.total.currency,
+  );
   const sourceState = source.lifecycle === "disconnected"
     ? { label: "OFFLINE", tone: "muted" as const }
     : source.sync.error
@@ -347,8 +555,8 @@ export function AssetSourceCard({
         <VibeMetric
           className="asset-total"
           data-testid="asset-source-total"
-          unit={source.snapshot.total.currency}
-          value={showSensitiveInfo ? formatMoney(source.snapshot.total.amount) : "••••••"}
+          unit={reportingCurrency}
+          value={showSensitiveInfo ? sourceTotal ?? "无法折算" : "••••••"}
         />
         {supportsProductCoverage ? (
           <AssetProductCoverage
@@ -363,15 +571,20 @@ export function AssetSourceCard({
           >
             <p className="card-label">CASH BALANCE</p>
             <ol className="holding-top-list">
-              {cashBalances.map((balance) => (
+              {cashBalances.map((balance, index) => (
                 <li
                   className="vibe-data-row"
                   key={`${balance.currency}:${balance.amount}`}
                 >
-                  <span>{balance.currency} CASH</span>
+                  <span>
+                    {cashBalances.length === 1
+                      ? "CASH"
+                      : `CASH ${String(index + 1).padStart(2, "0")}`}
+                  </span>
                   <strong>
-                    {showSensitiveInfo ? amount(balance.amount) : "••••••"}{" "}
-                    {balance.currency}
+                    {showSensitiveInfo
+                      ? formatDisplayMoney(balance.amount, balance.currency) ?? "无法折算"
+                      : "••••••"}
                   </strong>
                 </li>
               ))}
@@ -402,7 +615,7 @@ export function AssetSourceCard({
               onChange={(event) => setHideSmallCryptoHoldings(event.target.checked)}
             />
             <span>
-              隐藏低于 1 {source.snapshot.total.currency} 的持仓
+              隐藏低于 1 的持仓
               {hideSmallCryptoHoldings && hiddenSmallHoldingCount > 0
                 ? `（已隐藏 ${hiddenSmallHoldingCount} 项）`
                 : ""}
@@ -420,9 +633,11 @@ export function AssetSourceCard({
               <strong>
                 {holding.marketValue === null
                   ? holding.valuation.status === "quote-unavailable"
-                    ? `期权行情未接入（${holding.currency}）`
-                    : `未估值（${holding.currency}）`
-                  : `${showSensitiveInfo ? formatMoney(holding.marketValue) : "••••••"} ${holding.currency}`}
+                    ? "期权行情未接入"
+                    : "未估值"
+                  : showSensitiveInfo
+                    ? formatDisplayMoney(holding.marketValue, holding.currency) ?? "无法折算"
+                    : "••••••"}
               </strong>
             </li>
           ))}
@@ -442,13 +657,25 @@ export function AssetSourceCard({
               <thead>
                 <tr>
                   <th>名称</th>
-                  <th>数量</th>
-                  <th>现价</th>
-                  <th>持仓市值</th>
-                  <th>平均成本价</th>
-                  {showPlatformProfit ? <th>平台盈亏（来源提供）</th> : null}
-                  <th>浮动盈亏</th>
-                  <th>持仓盈亏率</th>
+                  {compactProfitColumns ? (
+                    <>
+                      <th>市值/数量</th>
+                      <th>现价</th>
+                      <th>平均成本价</th>
+                      <th>当日盈亏</th>
+                      <th>持仓盈亏</th>
+                    </>
+                  ) : (
+                    <>
+                      <th>数量</th>
+                      <th>现价</th>
+                      <th>持仓市值</th>
+                      <th>平均成本价</th>
+                      {showPlatformProfit ? <th>平台盈亏（来源提供）</th> : null}
+                      <th>浮动盈亏</th>
+                      <th>持仓盈亏率</th>
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -458,8 +685,10 @@ export function AssetSourceCard({
                     holding={holding}
                     profitColorScheme={profitColorScheme}
                     showPlatformProfit={showPlatformProfit}
+                    compactProfitColumns={compactProfitColumns}
                     showSensitiveInfo={showSensitiveInfo}
-                    formatMoney={formatMoney}
+                    formatDisplayMoney={formatDisplayMoney}
+                    formatDisplayPrice={formatDisplayPrice}
                   />
                 ))}
               </tbody>
@@ -480,7 +709,7 @@ export function AssetSourceCard({
           className="asset-trend source-trend"
           data-testid={`asset-source-trend-${source.id}`}
         >
-          <p className="card-label">来源趋势（USD）</p>
+          <p className="card-label">来源趋势</p>
           {sourceHistory.length === 0 ? (
             <p className="trend-empty">首次成功同步后开始记录</p>
           ) : (
@@ -491,7 +720,11 @@ export function AssetSourceCard({
                   <strong>
                     {snapshot.total.USD === null
                       ? "未估值"
-                      : `${showSensitiveInfo ? formatMoney(snapshot.total.USD) : "••••••"} USD`}
+                    : showSensitiveInfo
+                      ? snapshot.total[reportingCurrency] == null
+                        ? "未估值"
+                        : amount(snapshot.total[reportingCurrency])
+                      : "••••••"}
                   </strong>
                   <span>{snapshot.complete ? "完整" : "不完整"}</span>
                 </li>

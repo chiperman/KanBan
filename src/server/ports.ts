@@ -70,7 +70,9 @@ export interface DailyAssetSourceSnapshot {
   kind: string;
   capturedAt: string;
   complete: boolean;
-  total: Record<"USD" | "CNY", string | null>;
+  total: Record<"USD" | "CNY", string | null> & {
+    HKD?: string | null;
+  };
 }
 
 /** Asia/Shanghai 自然日内首次成功同步形成的不可改写基准。 */
@@ -78,7 +80,9 @@ export interface DailyAssetSnapshot {
   day: string;
   capturedAt: string;
   complete: boolean;
-  total: Record<"USD" | "CNY", string | null>;
+  total: Record<"USD" | "CNY", string | null> & {
+    HKD?: string | null;
+  };
   sources: DailyAssetSourceSnapshot[];
 }
 
@@ -204,6 +208,8 @@ export interface AssetHolding {
   /** 现金汇总持仓的来源原生币种拆分；总资产仍只计该持仓一次。 */
   cashBalances?: AssetCashBalance[];
   currentPrice: AssetMoney | null;
+  /** 来源上一交易日收盘价；用于计算当日持仓盈亏。 */
+  previousClose?: AssetMoney | null;
   marketValue: string | null;
   /** 来源按账户计价货币给出的可比较市值，仅用于来源内排序与汇总。 */
   sourceMarketValue: AssetMoney | null;

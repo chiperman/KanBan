@@ -451,7 +451,7 @@ pub async fn read_assets(
     }))
 }
 
-/// 读取指定标的的最新报价。只暴露标的、价格、币种和时间。
+/// 读取指定标的的最新报价。只暴露标的、现价、昨收和时间。
 #[napi]
 pub async fn read_quotes(client_id: String, callback_port: u32, symbols: Vec<String>) -> NapiResult<String> {
     let callback_port = u16::try_from(callback_port)
@@ -478,6 +478,7 @@ pub async fn read_quotes(client_id: String, callback_port: u32, symbols: Vec<Str
             serde_json::json!({
                 "symbol": quote.symbol,
                 "lastDone": quote.last_done.to_string(),
+                "prevClose": quote.prev_close.to_string(),
                 "timestamp": quote.timestamp.unix_timestamp(),
             })
         })

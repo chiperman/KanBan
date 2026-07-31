@@ -167,7 +167,12 @@ export function mapLongbridgeSnapshot(input: {
   accountPages: unknown[];
   positionPages: unknown[];
   syncedAt: string;
-  quotes?: Array<{ symbol: string; lastDone: string; timestamp: number }>;
+  quotes?: Array<{
+    symbol: string;
+    lastDone: string;
+    prevClose: string;
+    timestamp: number;
+  }>;
   exchangeRates?: unknown[];
 }): AssetSnapshot {
   const account = listFromPage(input.accountPages[0] ?? {}).at(0);
@@ -223,6 +228,9 @@ export function mapLongbridgeSnapshot(input: {
         currency,
         assetClass: "securities" as const,
         currentPrice: price ? { amount: price, currency } : null,
+        previousClose: quote
+          ? { amount: quote.prevClose, currency }
+          : null,
         marketValue,
         sourceMarketValue:
           sourceAmount === null
@@ -279,6 +287,7 @@ export function mapLongbridgeSnapshot(input: {
         assetClass: "cash",
         ...(cashBalances.length > 0 ? { cashBalances } : {}),
         currentPrice: { amount: "1", currency: accountCurrency },
+        previousClose: null,
         marketValue: totalCash,
         sourceMarketValue: {
           amount: totalCash,
@@ -827,7 +836,12 @@ async function keychainSnapshot(
 
 function snapshotWithQuotes(
   snapshot: AssetSnapshot,
-  quotes: Array<{ symbol: string; lastDone: string; timestamp: number }>,
+  quotes: Array<{
+    symbol: string;
+    lastDone: string;
+    prevClose: string;
+    timestamp: number;
+  }>,
   syncedAt: string,
 ): AssetSnapshot {
   const bySymbol = new Map(quotes.map((quote) => [quote.symbol, quote]));
@@ -842,6 +856,7 @@ function snapshotWithQuotes(
       return {
         ...holding,
         currentPrice: { amount: quote.lastDone, currency: holding.currency },
+        previousClose: { amount: quote.prevClose, currency: holding.currency },
         marketValue,
         sourceMarketValue:
           holding.currency === snapshot.total.currency

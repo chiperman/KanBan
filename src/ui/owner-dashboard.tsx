@@ -9,6 +9,7 @@ import {
 } from "react";
 
 import { assetSourceDefaultDisplayName } from "@/domain/asset-source-display-name";
+import type { ReportingCurrency } from "@/domain/valuation";
 import type { Card, CardSpan, DailyAssetSnapshot } from "@/server/ports";
 import { AssetSourceFlow } from "@/ui/asset-source-flow";
 import { AssetRefreshControls } from "@/ui/asset-refresh-controls";
@@ -148,6 +149,8 @@ export function OwnerDashboard({
 }) {
   const [error, setError] = useState("");
   const [showSensitiveInfo, setShowSensitiveInfo] = useState(true);
+  const [reportingCurrency, setReportingCurrency] =
+    useState<ReportingCurrency>("USD");
   const [profitColorScheme, setProfitColorScheme] =
     useState<ProfitColorScheme>(DEFAULT_PROFIT_COLOR_SCHEME);
   const [displayCards, setDisplayCards] = useState(cards);
@@ -208,6 +211,22 @@ export function OwnerDashboard({
       // The current page can still use the default scheme when storage is unavailable.
     }
   }, []);
+
+  useEffect(() => {
+    const savedCurrency = window.localStorage.getItem("reporting-currency");
+    if (
+      savedCurrency === "USD" ||
+      savedCurrency === "CNY" ||
+      savedCurrency === "HKD"
+    ) {
+      setReportingCurrency(savedCurrency);
+    }
+  }, []);
+
+  function changeReportingCurrency(currency: ReportingCurrency) {
+    setReportingCurrency(currency);
+    window.localStorage.setItem("reporting-currency", currency);
+  }
 
   useEffect(() => {
     const availableIds = new Set(cards.map(({ id }) => id));
@@ -479,10 +498,17 @@ export function OwnerDashboard({
 
   function renderCardBody(card: Card) {
     const source = sourceForCard(card);
+    const reportingExchangeRates = assetSources.flatMap((assetSource) =>
+      assetSource.kind === "longbridge"
+        ? assetSource.snapshot.exchangeRates
+        : [],
+    );
     return source ? (
       <AssetSourceCard
         source={source}
         history={dailyAssetSnapshots}
+        reportingCurrency={reportingCurrency}
+        reportingExchangeRates={reportingExchangeRates}
         profitColorScheme={profitColorScheme}
         showSensitiveInfo={showSensitiveInfo}
       />
@@ -685,6 +711,8 @@ export function OwnerDashboard({
           <CardCornerMarks />
           <TotalAssetOverview
             sources={assetSources}
+            currency={reportingCurrency}
+            onCurrencyChange={changeReportingCurrency}
             history={dailyAssetSnapshots}
             currentDay={currentDay}
             showSensitiveInfo={showSensitiveInfo}

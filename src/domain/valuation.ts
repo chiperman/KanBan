@@ -21,7 +21,7 @@ export type ValuationSource = Pick<
   "id" | "kind" | "label" | "displayName" | "snapshot" | "sync"
 >;
 
-export type ReportingCurrency = "USD" | "CNY";
+export type ReportingCurrency = "USD" | "CNY" | "HKD";
 export type DistributionDimension = "class" | "source" | "currency";
 
 export interface ValuationGroup {
@@ -133,6 +133,19 @@ function convert(
     : decimalMultiply(amount, observation.rate.rate);
 }
 
+/** 优先使用直接汇率；缺失时仅允许经 USD 进行两段可靠换算。 */
+export function convertCurrencyAmount(
+  amount: string,
+  from: string,
+  to: string,
+  rates: AssetExchangeRate[],
+): string | null {
+  const direct = convert(amount, from, to, rates);
+  if (direct !== null || from === "USD" || to === "USD") return direct;
+  const inUsd = convert(amount, from, "USD", rates);
+  return inUsd === null ? null : convert(inUsd, "USD", to, rates);
+}
+
 /** 从来源原始数量、价格及显式汇率生成快照，未估值项不按零计入总额。 */
 export function buildSnapshotFromPositions(input: {
   positions: RawAssetPosition[];
@@ -165,7 +178,7 @@ export function buildSnapshotFromPositions(input: {
       position.quantity,
       position.currentPrice.amount,
     );
-    const sourceAmount = convert(
+    const sourceAmount = convertCurrencyAmount(
       marketValue,
       position.currentPrice.currency,
       input.sourceCurrency,
@@ -221,15 +234,21 @@ export function buildTotalValuation(
   currency: ReportingCurrency,
   dimension: DistributionDimension,
 ): TotalValuation {
-  const allRates = sources.flatMap((source) => source.snapshot.exchangeRates);
-  const conversionObservation = currency === "CNY"
-    ? rateFor(allRates, "USD", "CNY")
-    : null;
+  const longbridgeRates = sources.flatMap((source) =>
+    source.kind === "longbridge" ? source.snapshot.exchangeRates : [],
+  );
+  const allRates = [
+    ...longbridgeRates,
+    ...sources.flatMap((source) => source.snapshot.exchangeRates),
+  ];
+  const conversionObservation = currency === "USD"
+    ? null
+    : rateFor(allRates, "USD", currency);
   const conversion = conversionObservation
     ? {
         ...conversionObservation.rate,
         baseCurrency: "USD",
-        quoteCurrency: "CNY",
+        quoteCurrency: currency,
         rate: conversionObservation.inverse
           ? decimalDivide("1", conversionObservation.rate.rate)
           : conversionObservation.rate.rate,
@@ -267,11 +286,11 @@ export function buildTotalValuation(
         incomplete = true;
       }
     }
-    const total = convert(
+    const total = convertCurrencyAmount(
       source.snapshot.total.amount,
       source.snapshot.total.currency,
       "USD",
-      source.snapshot.exchangeRates,
+      allRates,
     );
     if (total === null) {
       incomplete = true;
@@ -318,11 +337,11 @@ export function buildTotalValuation(
     let holdingTotalUsd = "0";
     for (const holding of source.snapshot.holdings) {
       if (holding.sourceMarketValue === null) continue;
-      const amount = convert(
+      const amount = convertCurrencyAmount(
         holding.sourceMarketValue.amount,
         holding.sourceMarketValue.currency,
         "USD",
-        source.snapshot.exchangeRates,
+        allRates,
       );
       if (amount === null) {
         incomplete = true;
@@ -394,13 +413,13 @@ export function buildTotalValuation(
 
   const displayAmount = sources.length > 0 && convertedSourceCount === 0
     ? null
-    : convert(totalUsd, "USD", currency, allRates);
-  if (currency === "CNY" && !conversion) incomplete = true;
+    : convertCurrencyAmount(totalUsd, "USD", currency, allRates);
+  if (currency !== "USD" && !conversion) incomplete = true;
   let groups = [...groupsUsd.values()].map((group) => ({
     ...group,
     amount: group.amount === null
       ? null
-      : convert(group.amount, "USD", currency, allRates),
+      : convertCurrencyAmount(group.amount, "USD", currency, allRates),
   }));
   if (dimension === "class") {
     const rank = (key: string) =>
@@ -461,7 +480,7 @@ export function buildTotalValuation(
     ...issue,
     amount: issue.amount === null
       ? null
-      : convert(issue.amount, "USD", currency, allRates),
+      : convertCurrencyAmount(issue.amount, "USD", currency, allRates),
   }));
   return {
     amount: displayAmount,

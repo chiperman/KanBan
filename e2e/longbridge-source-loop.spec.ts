@@ -152,6 +152,21 @@ async function configureLongbridge(
           }] },
         },
       ],
+      quotes: [{
+        symbol: "AAPL.US",
+        lastDone: "10",
+        prevClose: "9.5",
+        timestamp: 1767225600,
+      }],
+      exchangeRates: [{
+        base_currency: "CNY",
+        other_currency: "USD",
+        average_rate: "7.2",
+      }, {
+        base_currency: "HKD",
+        other_currency: "USD",
+        average_rate: "7.8",
+      }],
       ...overrides,
     },
   });
@@ -246,35 +261,53 @@ test("长桥 OAuth 先预览后原子保存，并展示总额与紧凑持仓", a
   await expect(holdingDetails.getByRole("row")).toHaveCount(8);
   await expect(holdingDetails.getByRole("columnheader")).toHaveText([
     "名称",
-    "数量",
+    /市值\s*\/\s*数量/,
     "现价",
-    "持仓市值",
     "平均成本价",
-    "浮动盈亏",
-    "持仓盈亏率",
+    "当日盈亏",
+    "持仓盈亏",
   ]);
+  const appleHolding = holdingDetails
+    .locator("tbody tr")
+    .filter({ hasText: "Apple" });
+  await expect(appleHolding.getByRole("cell")).toContainText("+5.06");
+  await expect(
+    appleHolding.locator(".holding-profit-summary--today"),
+  ).toContainText("+5.26%");
   const fundHolding = holdingDetails
     .locator("tbody tr")
     .filter({ hasText: "高腾微金美元货币基金A" });
   await expect(fundHolding.getByRole("cell")).toHaveText([
     /高腾微金美元货币基金A.*HK0000038064.*Longbridge 基金净值 · 2022-04-14 00:00/,
-    "10",
-    "15.22 USD",
-    "152.2 USD",
-    "14.50 USD",
-    "+7.2 USD",
-    "+4.97%",
+    /152.20.*10/,
+    "15.220",
+    "14.500",
+    /—.*—/,
+    /\+7.20.*\+4.97%/,
   ]);
-  const profitCells = fundHolding.locator(".holding-profit");
-  await expect(profitCells).toHaveCount(2);
+  await expect(holdingDetails).not.toContainText(/\bUSD\b/);
+
+  await page.getByRole("button", { name: /计价货币/ }).click();
+  await page.getByRole("option", { name: "CNY" }).click();
+  await expect(card.getByTestId("asset-source-total")).toHaveText(
+    "888,888.88 CNY",
+  );
+  await expect(fundHolding.getByRole("cell")).toHaveText([
+    /高腾微金美元货币基金A.*HK0000038064.*Longbridge 基金净值 · 2022-04-14 00:00/,
+    /1,095.84.*10/,
+    "109.584",
+    "104.400",
+    /—.*—/,
+    /\+51.84.*\+4.97%/,
+  ]);
+  const profitCells = fundHolding.locator(".holding-profit-summary--position");
+  await expect(profitCells).toHaveCount(1);
   const errorColor = await colorToken(page, "--error");
-  for (const index of [0, 1]) {
-    await expect(profitCells.nth(index)).toHaveAttribute(
-      "data-profit-color-scheme",
-      "red-up",
-    );
-    await expect(profitCells.nth(index)).toHaveCSS("color", errorColor);
-  }
+  await expect(profitCells).toHaveAttribute(
+    "data-profit-color-scheme",
+    "red-up",
+  );
+  await expect(profitCells).toHaveCSS("color", errorColor);
 
   await expect(
     page.getByTestId("total-asset-overview").getByRole("button", {
@@ -297,18 +330,16 @@ test("长桥 OAuth 先预览后原子保存，并展示总额与紧凑持仓", a
     .getByTestId("asset-holdings-detail")
     .locator("tbody tr")
     .filter({ hasText: "高腾微金美元货币基金A" })
-    .locator(".holding-profit");
+    .locator(".holding-profit-summary--position");
   const successColor = await colorToken(page, "--success");
-  for (const index of [0, 1]) {
-    await expect(updatedProfitCells.nth(index)).toHaveAttribute(
-      "data-profit-color-scheme",
-      "green-up",
-    );
-    await expect(updatedProfitCells.nth(index)).toHaveCSS(
-      "color",
-      successColor,
-    );
-  }
+  await expect(updatedProfitCells).toHaveAttribute(
+    "data-profit-color-scheme",
+    "green-up",
+  );
+  await expect(updatedProfitCells).toHaveCSS(
+    "color",
+    successColor,
+  );
 
   await page.reload();
   const reloadedProfitCells = page
@@ -316,13 +347,11 @@ test("长桥 OAuth 先预览后原子保存，并展示总额与紧凑持仓", a
     .getByTestId("asset-holdings-detail")
     .locator("tbody tr")
     .filter({ hasText: "高腾微金美元货币基金A" })
-    .locator(".holding-profit");
-  for (const index of [0, 1]) {
-    await expect(reloadedProfitCells.nth(index)).toHaveAttribute(
-      "data-profit-color-scheme",
-      "green-up",
-    );
-  }
+    .locator(".holding-profit-summary--position");
+  await expect(reloadedProfitCells).toHaveAttribute(
+    "data-profit-color-scheme",
+    "green-up",
+  );
   await expect(holdingDetails).toContainText("Longbridge 基金净值 · 2022-04-14 00:00");
 
   const state = await page.request.get("/test-doubles/longbridge");

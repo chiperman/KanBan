@@ -274,6 +274,7 @@ export async function POST(request: Request) {
         readQuotes: async () => [{
           symbol: "700.HK",
           lastDone: "600",
+          prevClose: "590",
           timestamp: 1785150000,
         }],
       });

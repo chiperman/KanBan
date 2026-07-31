@@ -653,10 +653,25 @@ body {
 }
 
 .span-1 .asset-source-card .holding-top-list li:nth-child(n + 4),
-.span-1 .asset-source-card .source-trend,
-.span-2 .asset-source-card .holding-top-list li:nth-child(n + 6),
-.span-2 .asset-source-card .source-trend {
+.span-2 .asset-source-card .holding-top-list li:nth-child(n + 6) {
   display: none;
+}
+
+.holding-profit-summary {
+  min-width: 128px;
+}
+
+.holding-market-value-summary strong,
+.holding-market-value-summary span,
+.holding-profit-summary strong,
+.holding-profit-summary span {
+  display: block;
+}
+
+.holding-market-value-summary span,
+.holding-profit-summary span {
+  margin-top: 3px;
+  font-size: 11px;
 }
 
 .asset-holdings-detail {

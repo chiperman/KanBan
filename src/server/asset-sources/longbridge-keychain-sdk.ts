@@ -43,6 +43,7 @@ export interface LongbridgeSdkAssets {
 export interface LongbridgeSdkQuote {
   symbol: string;
   lastDone: string;
+  prevClose: string;
   timestamp: number;
 }
 

@@ -37,6 +37,7 @@ import {
 const CURRENCY_OPTIONS: readonly VibeSelectOption<ReportingCurrency>[] = [
   { value: "USD", label: "USD" },
   { value: "CNY", label: "CNY" },
+  { value: "HKD", label: "HKD" },
 ];
 
 const DIMENSION_OPTIONS: readonly VibeSelectOption<DistributionDimension>[] = [
@@ -61,23 +62,22 @@ function signedAmount(value: string): string {
 
 export function TotalAssetOverview({
   sources,
+  currency,
+  onCurrencyChange,
   history,
   currentDay,
   showSensitiveInfo,
 }: {
   sources: ValuationSource[];
+  currency: ReportingCurrency;
+  onCurrencyChange(value: ReportingCurrency): void;
   history: DailyAssetSnapshot[];
   currentDay: string;
   showSensitiveInfo: boolean;
 }) {
-  const [currency, setCurrency] = useState<ReportingCurrency>("USD");
   const [dimension, setDimension] = useState<DistributionDimension>("class");
 
   useEffect(() => {
-    const savedCurrency = window.localStorage.getItem("reporting-currency");
-    if (savedCurrency === "USD" || savedCurrency === "CNY") {
-      setCurrency(savedCurrency);
-    }
     const savedDimension = window.localStorage.getItem("distribution-dimension");
     if (
       savedDimension === "class" ||
@@ -145,8 +145,7 @@ export function TotalAssetOverview({
         : "success";
 
   function changeCurrency(value: ReportingCurrency) {
-    setCurrency(value);
-    window.localStorage.setItem("reporting-currency", value);
+    onCurrencyChange(value);
   }
 
   function changeDimension(value: DistributionDimension) {
@@ -270,8 +269,7 @@ export function TotalAssetOverview({
           </p>
         ) : (
           <p className="today-change-amount">
-            {showSensitiveInfo ? signedAmount(todayChange) : "••••••"}{" "}
-            <span className="amount-unit">{currency}</span>
+            {showSensitiveInfo ? signedAmount(todayChange) : "••••••"}
             {changeIncomplete && todayChangeStatus ? (
               <span className="today-change-note"> · {todayChangeStatus}</span>
             ) : null}
@@ -294,8 +292,7 @@ export function TotalAssetOverview({
                 ? "未折算"
                 : showSensitiveInfo
                   ? amount(group.amount)
-                  : "••••••"}{" "}
-              {valuation.currency}
+                  : "••••••"}
             </strong>
           </div>
         ))}
@@ -310,12 +307,14 @@ export function TotalAssetOverview({
               <li key={snapshot.day}>
                 <time dateTime={snapshot.day}>{formatShanghaiDayLabel(snapshot.day)}</time>
                 <strong>
-                  {snapshot.total[currency] === null
+                  {snapshot.total[currency] == null
                     ? "未估值"
-                    : `${showSensitiveInfo ? amount(snapshot.total[currency]) : "••••••"} ${currency}`}
+                    : showSensitiveInfo
+                      ? amount(snapshot.total[currency])
+                      : "••••••"}
                 </strong>
                 <span>
-                  {snapshot.complete && snapshot.total[currency] !== null
+                  {snapshot.complete && snapshot.total[currency] != null
                     ? "历史快照：完整"
                     : "历史快照：不完整"}
                 </span>

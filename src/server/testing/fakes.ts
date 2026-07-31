@@ -162,6 +162,13 @@ export interface FakeLongbridgeConfig {
   account: { id: string; label: string };
   accountPages: unknown[];
   positionPages: unknown[];
+  quotes?: Array<{
+    symbol: string;
+    lastDone: string;
+    prevClose: string;
+    timestamp: number;
+  }>;
+  exchangeRates?: unknown[];
   previewError?: string;
   commitError?: string;
 }
@@ -200,6 +207,8 @@ export class FakeLongbridgeOAuth implements LongbridgeOAuth {
       snapshot: mapLongbridgeSnapshot({
         accountPages: config.accountPages,
         positionPages,
+        quotes: config.quotes,
+        exchangeRates: config.exchangeRates,
         syncedAt: "2026-01-01T00:00:00.000Z",
       }),
     };

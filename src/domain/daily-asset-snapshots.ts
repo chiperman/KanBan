@@ -52,6 +52,7 @@ function sourceSnapshot(
   const total = {
     USD: sourceValue(source, "USD"),
     CNY: sourceValue(source, "CNY"),
+    HKD: sourceValue(source, "HKD"),
   };
   return {
     sourceId: source.id,
@@ -63,7 +64,8 @@ function sourceSnapshot(
       (source.snapshot.coverage === undefined ||
         source.snapshot.coverage.status === "complete") &&
       !unvalued &&
-      total.USD !== null,
+      total.USD !== null &&
+      total.HKD !== null,
     total,
   };
 }
@@ -89,6 +91,7 @@ export function buildDailyAssetSnapshot(
   const total = {
     USD: totalValue(sources, "USD"),
     CNY: totalValue(sources, "CNY"),
+    HKD: totalValue(sources, "HKD"),
   };
   return {
     day: shanghaiDay(capturedAt),
@@ -96,7 +99,8 @@ export function buildDailyAssetSnapshot(
     complete:
       sourceSnapshots.length > 0 &&
       sourceSnapshots.every((source) => source.complete) &&
-      total.USD !== null,
+      total.USD !== null &&
+      total.HKD !== null,
     total,
     sources: sourceSnapshots,
   };
