@@ -1,5 +1,7 @@
 import type { HTMLAttributes, ReactNode } from "react";
 
+import { VibeLiveCounter } from "@/ui/vibe/vibe-live-counter";
+
 export interface VibeBarSegment {
   key: string;
   tone?: "error" | "muted" | "primary" | "signal";
@@ -104,7 +106,9 @@ export function VibeMetric({
       data-vibe-component="metric"
       {...props}
     >
-      <span className="vibe-metric__value">{value}</span>{" "}
+      <span className="vibe-metric__value">
+        <VibeLiveCounter resetKey={unit} value={value} />
+      </span>{" "}
       <span className="vibe-metric__unit">{unit}</span>
     </div>
   );
