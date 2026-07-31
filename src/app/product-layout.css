@@ -3413,6 +3413,10 @@ body {
   gap: var(--vibe-space-5);
 }
 
+.page-locked .login-error + .login-actions--choice {
+  margin-top: var(--vibe-space-6);
+}
+
 .page-locked .login-actions--choice .vibe-button {
   width: 100%;
   min-height: calc(var(--vibe-space-12) + var(--vibe-space-3));
@@ -3505,8 +3509,9 @@ body {
 }
 
 .locked-flow-device-status {
-  fill: var(--accent);
+  fill: var(--success);
   stroke: none !important;
+  animation: locked-flow-device-status 1.2s steps(1, end) infinite;
 }
 
 .locked-flow-device-vent circle {
@@ -3535,7 +3540,7 @@ body {
 }
 
 .locked-flow-route--signal {
-  color: var(--accent);
+  color: var(--success);
 }
 
 .locked-flow-route--error {
@@ -3605,6 +3610,18 @@ body {
   stroke: currentColor !important;
 }
 
+@keyframes locked-flow-device-status {
+  0%,
+  49.99% {
+    opacity: 1;
+  }
+
+  50%,
+  100% {
+    opacity: 0.25;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .locked-flow-source,
   .locked-flow-stage {
@@ -3614,6 +3631,11 @@ body {
 
   .locked-flow-screen .locked-flow-dashboard-point {
     fill: var(--accent);
+    opacity: 1;
+  }
+
+  .locked-flow-device-status {
+    animation: none;
     opacity: 1;
   }
 

@@ -478,6 +478,7 @@ function LockedProductFlow() {
             className="locked-flow-device-back"
             height="372"
             rx="10"
+            transform="translate(0 2)"
             width="640"
             x="20"
             y="20"
@@ -486,12 +487,13 @@ function LockedProductFlow() {
             className="locked-flow-device-front"
             height="340"
             rx="5"
+            transform="translate(0 2)"
             width="608"
             x="36"
             y="36"
           />
 
-          <g className="locked-flow-screen">
+          <g className="locked-flow-screen" transform="translate(0 2)">
             {LOCKED_FLOW_SOURCES.map((source, index) => {
               const centerY = source.y + 16;
               return (
@@ -614,12 +616,15 @@ function LockedProductFlow() {
             x="20"
             y="424"
           />
-          <path className="locked-flow-device-neck" d="M58 392V418H622V392" />
+          <path
+            className="locked-flow-device-neck"
+            d="M58 394V418H622V394"
+          />
           <path
             className="locked-flow-device-neck-base"
-            d="M58 418H622L656 424H24L58 418Z"
+            d="M58 418H622L650 424H30L58 418Z"
           />
-          <path className="locked-flow-device-chassis-line" d="M20 488H660" />
+          <path className="locked-flow-device-chassis-line" d="M20 491H660" />
           <rect
             className="locked-flow-device-drive"
             height="20"
@@ -641,9 +646,9 @@ function LockedProductFlow() {
               )),
             )}
           </g>
-          <circle className="locked-flow-device-status" cx="622" cy="462.5" r="3" />
+          <circle className="locked-flow-device-status" cx="621" cy="457.5" r="4" />
 
-          <g>
+          <g transform="translate(0 4)">
             <path
               className="locked-flow-keyboard-shell"
               d="M64 496H616Q620 496 621 501L650 553Q651 558 646 558H34Q29 558 30 553L59 501Q60 496 64 496Z"
