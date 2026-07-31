@@ -20,6 +20,12 @@ import {
   AssetSourceCard,
   type AssetSourceView,
 } from "@/ui/longbridge-asset-card";
+import {
+  DEFAULT_PROFIT_COLOR_SCHEME,
+  isProfitColorScheme,
+  PROFIT_COLOR_SCHEME_STORAGE_KEY,
+  type ProfitColorScheme,
+} from "@/ui/profit-color-scheme";
 import { TotalAssetOverview } from "@/ui/total-asset-overview";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeDialog } from "@/ui/vibe/vibe-dialog";
@@ -142,6 +148,8 @@ export function OwnerDashboard({
 }) {
   const [error, setError] = useState("");
   const [showSensitiveInfo, setShowSensitiveInfo] = useState(true);
+  const [profitColorScheme, setProfitColorScheme] =
+    useState<ProfitColorScheme>(DEFAULT_PROFIT_COLOR_SCHEME);
   const [displayCards, setDisplayCards] = useState(cards);
   const [expandedMobileCardIds, setExpandedMobileCardIds] = useState<Set<string>>(
     () => new Set(),
@@ -189,6 +197,17 @@ export function OwnerDashboard({
   useEffect(() => {
     setDisplayCards(cards);
   }, [cards]);
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(
+        PROFIT_COLOR_SCHEME_STORAGE_KEY,
+      );
+      if (isProfitColorScheme(saved)) setProfitColorScheme(saved);
+    } catch {
+      // The current page can still use the default scheme when storage is unavailable.
+    }
+  }, []);
 
   useEffect(() => {
     const availableIds = new Set(cards.map(({ id }) => id));
@@ -464,6 +483,7 @@ export function OwnerDashboard({
       <AssetSourceCard
         source={source}
         history={dailyAssetSnapshots}
+        profitColorScheme={profitColorScheme}
         showSensitiveInfo={showSensitiveInfo}
       />
     ) : (

@@ -89,8 +89,9 @@ test("移动端来源配置采用全屏 sheet，页头次要操作收进本机�
   await expect(page.getByRole("button", { name: "打开快捷命令" })).toBeHidden();
 
   await page.getByRole("button", { name: "本机设置" }).click();
+  await expect(page.getByRole("link", { name: "本机设置" })).toBeVisible();
   await expect(page.getByRole("button", { name: "打开快捷命令" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "配置备用登录" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "配置备用登录" })).toHaveCount(0);
 
   await page.getByRole("button", { name: "添加资产来源" }).click();
   const dialog = page.getByRole("dialog", { name: "添加资产来源" });

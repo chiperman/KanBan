@@ -3,7 +3,13 @@
 import { useMemo, useState } from "react";
 
 import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
-import { decimalCompare, decimalToFixed } from "@/domain/decimal";
+import {
+  decimalCompare,
+  decimalDivide,
+  decimalMultiply,
+  decimalSubtract,
+  decimalToFixed,
+} from "@/domain/decimal";
 import { compareNullableDecimalDescending } from "@/domain/valuation";
 import type {
   AssetHolding,
@@ -16,6 +22,7 @@ import {
   assetHoldingDisplayName,
   AssetProductCoverage,
 } from "@/ui/asset-product-coverage";
+import type { ProfitColorScheme } from "@/ui/profit-color-scheme";
 import {
   VibeMetric,
   VibeSegmentedBar,
@@ -75,13 +82,58 @@ function moneyAmount(value: string): string {
   return amount(decimalToFixed(value, 2));
 }
 
+function holdingProfit(holding: AssetHolding): {
+  amount: string;
+  percent: string;
+} | null {
+  if (
+    holding.currentPrice === null ||
+    holding.costPrice === null ||
+    holding.currentPrice.currency !== holding.currency
+  ) {
+    return null;
+  }
+  const costBasis = decimalMultiply(holding.costPrice, holding.quantity);
+  if (decimalCompare(costBasis, "0") === 0) return null;
+  const absoluteCostBasis = decimalCompare(costBasis, "0") < 0
+    ? costBasis.slice(1)
+    : costBasis;
+  const profit = decimalMultiply(
+    decimalSubtract(holding.currentPrice.amount, holding.costPrice),
+    holding.quantity,
+  );
+  return {
+    amount: profit,
+    percent: decimalToFixed(
+      decimalDivide(decimalMultiply(profit, "100"), absoluteCostBasis, 8),
+      2,
+    ),
+  };
+}
+
+function signedAmount(value: string, format: (value: string) => string): string {
+  const formatted = format(value);
+  return decimalCompare(value, "0") > 0 ? `+${formatted}` : formatted;
+}
+
+function profitDirection(
+  value: string,
+  showSensitiveInfo: boolean,
+): "positive" | "negative" | "neutral" {
+  if (!showSensitiveInfo) return "neutral";
+  const comparison = decimalCompare(value, "0");
+  return comparison > 0 ? "positive" : comparison < 0 ? "negative" : "neutral";
+}
+
 function HoldingDetailRow({
   holding,
+  profitColorScheme,
   showPlatformProfit,
   showSensitiveInfo,
   formatMoney,
 }: {
   holding: AssetHolding;
+  profitColorScheme: ProfitColorScheme;
   showPlatformProfit: boolean;
   showSensitiveInfo: boolean;
   formatMoney: (value: string) => string;
@@ -90,6 +142,7 @@ function HoldingDetailRow({
   const valuationDetail = holding.valuation.status === "valued"
     ? `${holding.valuation.priceSource} · ${formatShanghaiDateTime(holding.valuation.pricedAt)}`
     : holding.valuation.reason;
+  const profit = holdingProfit(holding);
   return (
     <tr
       className={holding.valuation.status === "unvalued" ? "is-unvalued" : undefined}
@@ -113,11 +166,42 @@ function HoldingDetailRow({
           ? `未估值（${holding.currency}）`
           : `${showSensitiveInfo ? formatMoney(holding.marketValue) : masked} ${holding.currency}`}
       </td>
-      <td>{holding.costPrice === null ? "—" : showSensitiveInfo ? amount(holding.costPrice) : masked}</td>
+      <td>
+        {holding.costPrice === null
+          ? "—"
+          : `${showSensitiveInfo ? amount(holding.costPrice) : masked} ${holding.currency}`}
+      </td>
       {showPlatformProfit ? (
         <td>{holding.platformProfit === null ? "—" : showSensitiveInfo ? formatMoney(holding.platformProfit) : masked}</td>
       ) : null}
-      <td>{holding.changePercent === null ? "—" : showSensitiveInfo ? `${holding.changePercent}%` : masked}</td>
+      <td
+        className="holding-profit profit-color-value"
+        data-profit-color-scheme={profitColorScheme}
+        data-profit-direction={
+          profit === null
+            ? "neutral"
+            : profitDirection(profit.amount, showSensitiveInfo)
+        }
+      >
+        {profit === null
+          ? "—"
+          : `${showSensitiveInfo ? signedAmount(profit.amount, formatMoney) : masked} ${holding.currency}`}
+      </td>
+      <td
+        className="holding-profit profit-color-value"
+        data-profit-color-scheme={profitColorScheme}
+        data-profit-direction={
+          profit === null
+            ? "neutral"
+            : profitDirection(profit.percent, showSensitiveInfo)
+        }
+      >
+        {profit === null
+          ? "—"
+          : showSensitiveInfo
+            ? `${signedAmount(profit.percent, amount)}%`
+            : masked}
+      </td>
     </tr>
   );
 }
@@ -125,10 +209,12 @@ function HoldingDetailRow({
 export function AssetSourceCard({
   source,
   history,
+  profitColorScheme,
   showSensitiveInfo,
 }: {
   source: AssetSourceView;
   history: DailyAssetSnapshot[];
+  profitColorScheme: ProfitColorScheme;
   showSensitiveInfo: boolean;
 }) {
   const [hideSmallCryptoHoldings, setHideSmallCryptoHoldings] = useState(true);
@@ -283,20 +369,25 @@ export function AssetSourceCard({
         <section
           className="asset-holdings-detail"
           data-testid="asset-holdings-detail"
-          aria-label={`${source.label} 持仓明细`}
+          aria-label={`${source.label} ${
+            source.kind === "longbridge" ? "证券持仓明细" : "持仓明细"
+          }`}
         >
-          <p className="card-label">持仓明细</p>
+          <p className="card-label">
+            {source.kind === "longbridge" ? "证券持仓明细" : "持仓明细"}
+          </p>
           <div className="asset-table-wrap">
             <table className="asset-table vibe-data-table" data-vibe-component="data-table">
               <thead>
                 <tr>
                   <th>名称</th>
                   <th>数量</th>
-                  <th>当前价格</th>
-                  <th>原始市值</th>
-                  <th>成本</th>
+                  <th>现价</th>
+                  <th>持仓市值</th>
+                  <th>平均成本价</th>
                   {showPlatformProfit ? <th>平台盈亏（来源提供）</th> : null}
-                  <th>涨跌</th>
+                  <th>浮动盈亏</th>
+                  <th>持仓盈亏率</th>
                 </tr>
               </thead>
               <tbody>
@@ -304,6 +395,7 @@ export function AssetSourceCard({
                   <HoldingDetailRow
                     key={assetHoldingKey(holding)}
                     holding={holding}
+                    profitColorScheme={profitColorScheme}
                     showPlatformProfit={showPlatformProfit}
                     showSensitiveInfo={showSensitiveInfo}
                     formatMoney={formatMoney}

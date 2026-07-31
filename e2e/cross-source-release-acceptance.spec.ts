@@ -124,7 +124,10 @@ test("完整锁定到所有者再锁定旅程不泄露敏感数据且不存在�
   page,
 }) => {
   await loginAsOwner(page);
-  await expect(page.getByRole("button", { name: "配置备用登录" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "本机设置" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "配置备用登录" }),
+  ).toHaveCount(0);
   await expect(
     page.getByRole("button", {
       name: /新建身份卡片|新建 Now 卡片|新建链接卡片|新建 Markdown 卡片/,

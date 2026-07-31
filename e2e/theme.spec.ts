@@ -50,13 +50,21 @@ test("点阵背景在浅色和深色模式下保持局部反相", async ({ brows
 test("所有者可以选择浅色或深色并记住选择", async ({ page }) => {
   await page.goto("/");
   const themeToggle = page.getByRole("button", { name: /^当前主题：/ });
+  const systemIcon = themeToggle.locator('[data-vibe-dot="computer"]');
+  await expect(systemIcon).toHaveCount(1);
+  await expect(systemIcon.locator("> .is-lit")).toHaveCount(30);
 
   await themeToggle.click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  const themeIcon = themeToggle.locator(":scope > .vibe-dot-icon");
+  await expect(themeIcon).toHaveAttribute("data-vibe-dot", "sun");
+  await expect(themeIcon.locator("> .is-lit")).toHaveCount(40);
 
   await themeToggle.click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await expect(page.locator("html")).toHaveAttribute("data-theme-choice", "dark");
+  await expect(themeIcon).toHaveAttribute("data-vibe-dot", "moon");
+  await expect(themeIcon.locator("> .is-lit")).toHaveCount(17);
 
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");

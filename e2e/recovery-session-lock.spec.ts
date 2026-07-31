@@ -93,7 +93,15 @@ function totpCode(secret: string, now: Date): string {
   return value.toString().padStart(6, "0");
 }
 
+async function openRecoverySettings(page: Page): Promise<void> {
+  if (new URL(page.url()).pathname !== "/settings") {
+    await page.getByRole("link", { name: "本机设置" }).click();
+  }
+  await expect(page.getByRole("heading", { name: "本机设置" })).toBeVisible();
+}
+
 async function configureRecovery(page: Page): Promise<string> {
+  await openRecoverySettings(page);
   await page.getByRole("button", { name: "配置备用登录" }).click();
   await page.getByRole("button", { name: "开始配置" }).click();
   const secret = await page.getByLabel("TOTP 密钥").inputValue();
@@ -118,6 +126,7 @@ test.beforeEach(async ({ request }) => {
 
 test("打开备用登录说明时不会立即生成或展示 TOTP 密钥", async ({ page }) => {
   await provisionAndLogin(page);
+  await openRecoverySettings(page);
 
   let setupRequests = 0;
   page.on("request", (request) => {
@@ -144,6 +153,7 @@ test("打开备用登录说明时不会立即生成或展示 TOTP 密钥", async
 
 test("所有者配置备用登录时只需要 TOTP", async ({ page }) => {
   await provisionAndLogin(page);
+  await openRecoverySettings(page);
   await page.getByRole("button", { name: "配置备用登录" }).click();
   await page.getByRole("button", { name: "开始配置" }).click();
 
@@ -163,6 +173,7 @@ test("所有者配置备用登录时只需要 TOTP", async ({ page }) => {
 
 test("备用登录配置错误与验证码字段关联并返回输入焦点", async ({ page }) => {
   await provisionAndLogin(page);
+  await openRecoverySettings(page);
   await page.getByRole("button", { name: "配置备用登录" }).click();
   await page.getByRole("button", { name: "开始配置" }).click();
   const secret = await page.getByLabel("TOTP 密钥").inputValue();
@@ -186,6 +197,7 @@ test("备用登录配置错误与验证码字段关联并返回输入焦点", as
 
 test("配置时使用的 TOTP 验证码不能再次登录", async ({ page }) => {
   await provisionAndLogin(page);
+  await openRecoverySettings(page);
   await page.getByRole("button", { name: "配置备用登录" }).click();
   await page.getByRole("button", { name: "开始配置" }).click();
   const secret = await page.getByLabel("TOTP 密钥").inputValue();
@@ -220,6 +232,7 @@ test("配置时使用的 TOTP 验证码不能再次登录", async ({ page }) => 
 
 test("所有者可仅凭 TOTP 备用登录", async ({ page, request }) => {
   await provisionAndLogin(page);
+  await openRecoverySettings(page);
   await page.getByRole("button", { name: "配置备用登录" }).click();
   await page.getByRole("button", { name: "开始配置" }).click();
   const secret = await page.getByLabel("TOTP 密钥").inputValue();
@@ -280,6 +293,7 @@ test("所有者可仅凭 TOTP 备用登录", async ({ page, request }) => {
 
 test("同一个 TOTP 验证码不能重复登录", async ({ page, request }) => {
   await provisionAndLogin(page);
+  await openRecoverySettings(page);
   await page.getByRole("button", { name: "配置备用登录" }).click();
   await page.getByRole("button", { name: "开始配置" }).click();
   const secret = await page.getByLabel("TOTP 密钥").inputValue();

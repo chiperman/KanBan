@@ -41,6 +41,20 @@ async function attachPasskey(page: Page): Promise<VirtualPasskey> {
   return { client, authenticatorId };
 }
 
+async function colorToken(
+  page: Page,
+  token: "--success" | "--error",
+): Promise<string> {
+  return page.evaluate((name) => {
+    const probe = document.createElement("span");
+    probe.style.color = `var(${name})`;
+    document.body.append(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  }, token);
+}
+
 async function loginAsOwner(page: Page): Promise<void> {
   await attachPasskey(page);
   await page.goto("/setup");
@@ -230,6 +244,85 @@ test("长桥 OAuth 先预览后原子保存，并展示总额与紧凑持仓", a
   await expect(topHoldings).toHaveCount(0);
   await expect(holdingDetails).toBeVisible();
   await expect(holdingDetails.getByRole("row")).toHaveCount(8);
+  await expect(holdingDetails.getByRole("columnheader")).toHaveText([
+    "名称",
+    "数量",
+    "现价",
+    "持仓市值",
+    "平均成本价",
+    "浮动盈亏",
+    "持仓盈亏率",
+  ]);
+  const fundHolding = holdingDetails
+    .locator("tbody tr")
+    .filter({ hasText: "高腾微金美元货币基金A" });
+  await expect(fundHolding.getByRole("cell")).toHaveText([
+    /高腾微金美元货币基金A.*HK0000038064.*Longbridge 基金净值 · 2022-04-14 00:00/,
+    "10",
+    "15.22 USD",
+    "152.2 USD",
+    "14.50 USD",
+    "+7.2 USD",
+    "+4.97%",
+  ]);
+  const profitCells = fundHolding.locator(".holding-profit");
+  await expect(profitCells).toHaveCount(2);
+  const errorColor = await colorToken(page, "--error");
+  for (const index of [0, 1]) {
+    await expect(profitCells.nth(index)).toHaveAttribute(
+      "data-profit-color-scheme",
+      "red-up",
+    );
+    await expect(profitCells.nth(index)).toHaveCSS("color", errorColor);
+  }
+
+  await expect(
+    page.getByTestId("total-asset-overview").getByRole("button", {
+      name: "盈亏颜色",
+    }),
+  ).toHaveCount(0);
+  await page.getByRole("link", { name: "本机设置" }).click();
+  await expect(page).toHaveURL(/\/settings$/);
+  await expect(page.getByRole("heading", { name: "本机设置" })).toBeVisible();
+  await expect(
+    page.getByText("这些偏好只保存在当前浏览器"),
+  ).toBeVisible();
+  await page.getByRole("radio", { name: /绿涨红跌/ }).check();
+  await expect(page.getByRole("radio", { name: /绿涨红跌/ })).toBeChecked();
+  await page.getByRole("link", { name: "返回资产看板" }).click();
+  await expect(page).toHaveURL("/");
+
+  const updatedProfitCells = page
+    .getByTestId("longbridge-card")
+    .getByTestId("asset-holdings-detail")
+    .locator("tbody tr")
+    .filter({ hasText: "高腾微金美元货币基金A" })
+    .locator(".holding-profit");
+  const successColor = await colorToken(page, "--success");
+  for (const index of [0, 1]) {
+    await expect(updatedProfitCells.nth(index)).toHaveAttribute(
+      "data-profit-color-scheme",
+      "green-up",
+    );
+    await expect(updatedProfitCells.nth(index)).toHaveCSS(
+      "color",
+      successColor,
+    );
+  }
+
+  await page.reload();
+  const reloadedProfitCells = page
+    .getByTestId("longbridge-card")
+    .getByTestId("asset-holdings-detail")
+    .locator("tbody tr")
+    .filter({ hasText: "高腾微金美元货币基金A" })
+    .locator(".holding-profit");
+  for (const index of [0, 1]) {
+    await expect(reloadedProfitCells.nth(index)).toHaveAttribute(
+      "data-profit-color-scheme",
+      "green-up",
+    );
+  }
   await expect(holdingDetails).toContainText("Longbridge 基金净值 · 2022-04-14 00:00");
 
   const state = await page.request.get("/test-doubles/longbridge");

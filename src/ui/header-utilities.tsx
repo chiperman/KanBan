@@ -3,13 +3,13 @@
 import { useState } from "react";
 
 import { CommandMenu } from "@/ui/command-menu";
-import { RecoverySetup } from "@/ui/recovery-setup";
+import { VibeLink } from "@/ui/vibe/vibe-button";
+import { VibeDotIcon } from "@/ui/vibe/vibe-dot-icon";
+import { VibeTooltip } from "@/ui/vibe/vibe-tooltip";
 
 export function HeaderUtilities({
-  recoveryConfigured,
   refreshEnabled,
 }: {
-  recoveryConfigured: boolean;
   refreshEnabled: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -25,8 +25,17 @@ export function HeaderUtilities({
         本机设置
       </button>
       <div className="header-utility-actions" data-open={open ? "true" : "false"}>
-        <RecoverySetup configured={recoveryConfigured} />
         <CommandMenu refreshEnabled={refreshEnabled} />
+        <VibeTooltip label="设置">
+          <VibeLink
+            aria-label="本机设置"
+            className="header-action-button header-settings-link"
+            href="/settings"
+            variant="outline"
+          >
+            <VibeDotIcon name="gear" size={24} />
+          </VibeLink>
+        </VibeTooltip>
         <button
           type="button"
           className="header-settings-close"

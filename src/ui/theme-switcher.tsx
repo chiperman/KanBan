@@ -2,6 +2,12 @@
 
 import { useEffect, useState } from "react";
 
+import {
+  VibeDotIcon,
+  type VibeDotIconName,
+} from "@/ui/vibe/vibe-dot-icon";
+import { VibeTooltip } from "@/ui/vibe/vibe-tooltip";
+
 type ThemeChoice = "light" | "dark" | "system";
 
 const STORAGE_KEY = "pad-theme";
@@ -40,30 +46,16 @@ function nextThemeChoice(choice: ThemeChoice): ThemeChoice {
   return THEME_ORDER[(currentIndex + 1) % THEME_ORDER.length];
 }
 
+const THEME_ICONS: Record<Exclude<ThemeChoice, "system">, VibeDotIconName> = {
+  light: "sun",
+  dark: "moon",
+};
+
 function ThemeIcon({ choice }: { choice: ThemeChoice }) {
-  if (choice === "light") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="12" r="3.5" />
-        <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M18.7 5.3l-1.4 1.4M6.7 17.3l-1.4 1.4" />
-      </svg>
-    );
+  if (choice === "system") {
+    return <VibeDotIcon name="computer" size={24} />;
   }
-
-  if (choice === "dark") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M20 15.1A8.2 8.2 0 0 1 8.9 4a8.5 8.5 0 1 0 11.1 11.1Z" />
-      </svg>
-    );
-  }
-
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="3.5" y="4.5" width="17" height="12" rx="2" />
-      <path d="M9 20h6M12 16.5V20" />
-    </svg>
-  );
+  return <VibeDotIcon name={THEME_ICONS[choice]} size={24} />;
 }
 
 export function ThemeSwitcher() {
@@ -87,15 +79,18 @@ export function ThemeSwitcher() {
 
   const nextChoice = nextThemeChoice(choice);
 
+  const tooltipLabel = `当前：${THEME_LABELS[choice]}；点击切换为${THEME_LABELS[nextChoice]}`;
+
   return (
-    <button
-      type="button"
-      className="theme-toggle"
-      aria-label={`当前主题：${THEME_LABELS[choice]}；点击切换为${THEME_LABELS[nextChoice]}`}
-      title={`当前：${THEME_LABELS[choice]} · 点击切换`}
-      onClick={() => selectTheme(nextChoice)}
-    >
-      <ThemeIcon choice={choice} />
-    </button>
+    <VibeTooltip align="end" label={tooltipLabel}>
+      <button
+        type="button"
+        className="theme-toggle"
+        aria-label={`当前主题：${THEME_LABELS[choice]}；点击切换为${THEME_LABELS[nextChoice]}`}
+        onClick={() => selectTheme(nextChoice)}
+      >
+        <ThemeIcon choice={choice} />
+      </button>
+    </VibeTooltip>
   );
 }

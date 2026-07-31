@@ -81,7 +81,6 @@ export default async function AssetDashboardPage({
             <span className="header-system">EXTERNAL ACCESS / READ ONLY</span>
             <ShanghaiClock initialTime={now.toISOString()} compact />
             <HeaderUtilities
-              recoveryConfigured={recoveryConfigured}
               refreshEnabled={assetSources.some((source) => source.lifecycle !== "disconnected")}
             />
             <LogoutButton />

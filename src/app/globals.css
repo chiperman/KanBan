@@ -715,6 +715,16 @@ body {
   white-space: normal;
 }
 
+.profit-color-value[data-profit-color-scheme="red-up"][data-profit-direction="positive"],
+.profit-color-value[data-profit-color-scheme="green-up"][data-profit-direction="negative"] {
+  color: var(--error);
+}
+
+.profit-color-value[data-profit-color-scheme="red-up"][data-profit-direction="negative"],
+.profit-color-value[data-profit-color-scheme="green-up"][data-profit-direction="positive"] {
+  color: var(--success);
+}
+
 .holding-top-list strong,
 .asset-updated,
 .asset-table td:not(:first-child) {
