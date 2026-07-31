@@ -1293,8 +1293,18 @@ body {
 
 .total-overview-head,
 .conversion-observation,
+.valuation-reconciliation-notice,
 .asset-trend {
   grid-column: 1 / -1;
+}
+
+.valuation-reconciliation-notice.vibe-notice {
+  max-width: none;
+  margin: 0;
+}
+
+.valuation-reconciliation-notice p + p {
+  margin-top: var(--vibe-space-2);
 }
 
 .total-overview-head {
@@ -1421,6 +1431,10 @@ body {
 .asset-total {
   margin-top: var(--vibe-space-5);
   font-size: clamp(34px, 4vw, var(--vibe-type-display-lg));
+}
+
+.asset-cash-balances {
+  margin-top: var(--vibe-space-6);
 }
 
 .holding-top-list {

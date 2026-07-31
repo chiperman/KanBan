@@ -4,6 +4,7 @@ import {
 } from "node:crypto";
 
 import type {
+  AssetCashBalance,
   AssetExchangeRate,
   AssetSourceRefreshResult,
   AssetSourceRefresher,
@@ -13,7 +14,12 @@ import type {
   LongbridgeOAuth,
 } from "@/server/ports";
 import { LongbridgeKeychainSdk } from "@/server/asset-sources/longbridge-keychain-sdk";
-import { decimalDivide, decimalMultiply } from "@/domain/decimal";
+import {
+  decimalAdd,
+  decimalCompare,
+  decimalDivide,
+  decimalMultiply,
+} from "@/domain/decimal";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -33,6 +39,10 @@ function text(value: unknown, field: string): string {
 
 function optionalText(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+export function isLongbridgeUsOptionSymbol(symbol: string): boolean {
+  return /^[A-Z0-9.]+\d{6}[CP]\d{6}\.US$/i.test(symbol);
 }
 
 function optionalUnixSecondsIso(value: unknown, field: string): string | null {
@@ -170,7 +180,7 @@ export function mapLongbridgeSnapshot(input: {
     input.exchangeRates ?? [],
     input.syncedAt,
   );
-  const holdings: AssetHolding[] = input.positionPages
+  const positionHoldings: AssetHolding[] = input.positionPages
     .flatMap(listFromPage)
     .map((item) => {
       const symbol = text(item.symbol, "symbol");
@@ -221,6 +231,11 @@ export function mapLongbridgeSnapshot(input: {
         valuation:
           sourceAmount !== null && priceSource
             ? { status: "valued" as const, priceSource, pricedAt }
+            : marketValue === null && isLongbridgeUsOptionSymbol(symbol)
+              ? {
+                  status: "quote-unavailable" as const,
+                  reason: "Longbridge Open API 未接入期权行情",
+                }
             : {
                 status: "unvalued" as const,
                 reason: marketValue === null
@@ -234,7 +249,51 @@ export function mapLongbridgeSnapshot(input: {
         changePercent:
           optionalText(item.change_rate ?? item.change_percent),
       };
+    });
+  const totalCash = optionalText(account.total_cash);
+  const cashBalances: AssetCashBalance[] = (
+    Array.isArray(account.cash_infos) ? account.cash_infos : []
+  )
+    .map((value) => {
+      const cash = record(value);
+      const availableCash = text(cash.available_cash, "available_cash");
+      const frozenCash = text(cash.frozen_cash, "frozen_cash");
+      return {
+        amount: decimalAdd(availableCash, frozenCash),
+        availableCash,
+        currency: text(cash.currency, "currency"),
+        frozenCash,
+        settlingCash: text(cash.settling_cash, "settling_cash"),
+        withdrawCash: text(cash.withdraw_cash, "withdraw_cash"),
+      };
     })
+    .filter(({ amount }) => decimalCompare(amount, "0") !== 0);
+  const cashHoldings: AssetHolding[] = totalCash === null
+    ? []
+    : [{
+        symbol: `CASH.${accountCurrency}`,
+        name: "账户现金",
+        sourceAsset: `cash:${accountCurrency}`,
+        quantity: totalCash,
+        currency: accountCurrency,
+        assetClass: "cash",
+        ...(cashBalances.length > 0 ? { cashBalances } : {}),
+        currentPrice: { amount: "1", currency: accountCurrency },
+        marketValue: totalCash,
+        sourceMarketValue: {
+          amount: totalCash,
+          currency: accountCurrency,
+        },
+        valuation: {
+          status: "valued",
+          priceSource: "Longbridge 账户现金总额",
+          pricedAt: input.syncedAt,
+        },
+        costPrice: null,
+        platformProfit: null,
+        changePercent: null,
+      }];
+  const holdings = [...positionHoldings, ...cashHoldings]
     .sort((left, right) => {
       if (left.sourceMarketValue === null) return right.sourceMarketValue === null ? 0 : 1;
       if (right.sourceMarketValue === null) return -1;

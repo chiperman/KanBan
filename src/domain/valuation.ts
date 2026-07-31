@@ -30,6 +30,21 @@ export interface ValuationGroup {
   amount: string | null;
 }
 
+export interface ValuationReconciliationIssue {
+  kind: "mismatch" | "quote-unavailable";
+  sourceId: string;
+  sourceLabel: string;
+  amount: string | null;
+  unvaluedCount: number;
+  quoteUnavailableCount: number;
+}
+
+export interface ValuationCoverageIssue {
+  sourceId: string;
+  sourceLabel: string;
+  status: "partial" | "unknown";
+}
+
 export interface TotalValuation {
   amount: string | null;
   currency: ReportingCurrency;
@@ -38,6 +53,9 @@ export interface TotalValuation {
   expiredCount: number;
   conversion: AssetExchangeRate | null;
   groups: ValuationGroup[];
+  coverageIssues: ValuationCoverageIssue[];
+  reconciliationIssues: ValuationReconciliationIssue[];
+  aggregateOnlySourceCount: number;
 }
 
 export interface RawAssetPosition {
@@ -62,6 +80,28 @@ export function compareNullableDecimalDescending(
   if (left === null) return right === null ? 0 : 1;
   if (right === null) return -1;
   return decimalCompare(right, left);
+}
+
+export function holdingMakesTotalIncomplete(holding: AssetHolding): boolean {
+  return (
+    holding.valuation.status === "unvalued" ||
+    (
+      holding.sourceMarketValue === null &&
+      holding.valuation.status !== "quote-unavailable"
+    )
+  );
+}
+
+function coverageHasKnownValueGap(
+  coverage: NonNullable<AssetSnapshot["coverage"]>,
+): boolean {
+  return (
+    (
+      coverage.unexplainedValue !== null &&
+      decimalCompare(coverage.unexplainedValue.amount, "0") !== 0
+    ) ||
+    coverage.excludedPositiveAccounts.length > 0
+  );
 }
 
 function rateFor(
@@ -200,15 +240,32 @@ export function buildTotalValuation(
   let unvaluedCount = 0;
   let expiredCount = 0;
   let convertedSourceCount = 0;
+  let aggregateOnlySourceCount = 0;
   const sourceTotals = new Map<string, string>();
+  const coverageIssues: ValuationCoverageIssue[] = [];
 
   for (const source of sources) {
     if (source.sync.status === "expired") expiredCount += 1;
     if (
+      source.snapshot.coverage?.products.some(
+        ({ capability, freshness }) =>
+          capability === "aggregate-only" && freshness === "current",
+      )
+    ) {
+      aggregateOnlySourceCount += 1;
+    }
+    if (
       source.snapshot.coverage !== undefined &&
       source.snapshot.coverage.status !== "complete"
     ) {
-      incomplete = true;
+      coverageIssues.push({
+        sourceId: source.id,
+        sourceLabel: assetSourceDisplayName(source),
+        status: source.snapshot.coverage.status,
+      });
+      if (coverageHasKnownValueGap(source.snapshot.coverage)) {
+        incomplete = true;
+      }
     }
     const total = convert(
       source.snapshot.total.amount,
@@ -223,75 +280,116 @@ export function buildTotalValuation(
       totalUsd = decimalAdd(totalUsd, total);
       sourceTotals.set(source.id, total);
     }
-    unvaluedCount += source.snapshot.holdings.filter(
-      (holding) =>
-        holding.valuation.status === "unvalued" ||
-        holding.sourceMarketValue === null,
-    ).length;
+    if (source.snapshot.coverage?.status !== "complete") {
+      unvaluedCount += source.snapshot.holdings.filter(
+        holdingMakesTotalIncomplete,
+      ).length;
+    }
   }
   incomplete ||= unvaluedCount > 0;
 
   const groupsUsd = new Map<string, ValuationGroup>();
-  if (dimension === "source") {
-    for (const source of sources) {
-      const amount = sourceTotals.get(source.id);
-      if (amount) {
+  const reconciliationIssuesUsd: ValuationReconciliationIssue[] = [];
+  let hasNonAuthoritativePositiveResidual = false;
+  for (const source of sources) {
+    const sourceTotal = sourceTotals.get(source.id);
+    const quoteUnavailableCount = source.snapshot.holdings.filter(
+      (holding) => holding.valuation.status === "quote-unavailable",
+    ).length;
+    if (quoteUnavailableCount > 0) {
+      reconciliationIssuesUsd.push({
+        kind: "quote-unavailable",
+        sourceId: source.id,
+        sourceLabel: assetSourceDisplayName(source),
+        amount: null,
+        unvaluedCount: 0,
+        quoteUnavailableCount,
+      });
+    }
+    if (dimension === "source" && sourceTotal) {
+      addGroup(
+        groupsUsd,
+        source.id,
+        assetSourceDisplayName(source),
+        sourceTotal,
+      );
+    }
+
+    let holdingTotalUsd = "0";
+    for (const holding of source.snapshot.holdings) {
+      if (holding.sourceMarketValue === null) continue;
+      const amount = convert(
+        holding.sourceMarketValue.amount,
+        holding.sourceMarketValue.currency,
+        "USD",
+        source.snapshot.exchangeRates,
+      );
+      if (amount === null) {
+        incomplete = true;
+        continue;
+      }
+      holdingTotalUsd = decimalAdd(holdingTotalUsd, amount);
+      if (dimension === "source") continue;
+      if (dimension === "class") {
         addGroup(
           groupsUsd,
-          source.id,
-          assetSourceDisplayName(source),
+          holding.assetClass,
+          holding.assetClass === "securities"
+            ? "证券"
+            : holding.assetClass === "crypto"
+              ? "加密资产"
+              : "现金",
           amount,
         );
+      } else {
+        addGroup(groupsUsd, holding.currency, holding.currency, amount);
       }
     }
-  } else {
-    for (const source of sources) {
-      let holdingTotalUsd = "0";
-      for (const holding of source.snapshot.holdings) {
-        if (holding.sourceMarketValue === null) continue;
-        const amount = convert(
-          holding.sourceMarketValue.amount,
-          holding.sourceMarketValue.currency,
-          "USD",
-          source.snapshot.exchangeRates,
+    if (sourceTotal) {
+      const residual = decimalAdd(sourceTotal, `-${holdingTotalUsd}`);
+      if (
+        dimension !== "source" &&
+        decimalCompare(residual, "0") > 0 &&
+        quoteUnavailableCount === 0
+      ) {
+        if (source.snapshot.coverage?.status !== "complete") {
+          hasNonAuthoritativePositiveResidual = true;
+        }
+        addGroup(
+          groupsUsd,
+          dimension === "class" ? "other" : source.snapshot.total.currency,
+          dimension === "class" ? "现金及其他" : source.snapshot.total.currency,
+          residual,
         );
-        if (amount === null) {
+      } else if (
+        decimalCompare(residual, "0") < 0 &&
+        quoteUnavailableCount === 0
+      ) {
+        if (source.snapshot.coverage?.status !== "complete") {
           incomplete = true;
-          continue;
         }
-        holdingTotalUsd = decimalAdd(holdingTotalUsd, amount);
-        if (dimension === "class") {
-          addGroup(
-            groupsUsd,
-            holding.assetClass,
-            holding.assetClass === "securities" ? "证券" : "加密资产",
-            amount,
-          );
-        } else {
-          addGroup(groupsUsd, holding.currency, holding.currency, amount);
-        }
-      }
-      const sourceTotal = sourceTotals.get(source.id);
-      if (sourceTotal) {
-        const residual = decimalAdd(sourceTotal, `-${holdingTotalUsd}`);
-        if (decimalCompare(residual, "0") > 0) {
-          addGroup(
-            groupsUsd,
-            dimension === "class" ? "other" : source.snapshot.total.currency,
-            dimension === "class" ? "现金及其他" : source.snapshot.total.currency,
-            residual,
-          );
-        } else if (decimalCompare(residual, "0") < 0) {
-          incomplete = true;
-          addGroup(
-            groupsUsd,
-            `reconciliation:${source.id}`,
-            "估值对账差额",
-            residual,
-          );
-        }
+        reconciliationIssuesUsd.push({
+          kind: "mismatch",
+          sourceId: source.id,
+          sourceLabel: assetSourceDisplayName(source),
+          amount: residual,
+          unvaluedCount: source.snapshot.holdings.filter(
+            holdingMakesTotalIncomplete,
+          ).length,
+          quoteUnavailableCount: 0,
+        });
       }
     }
+  }
+  if (
+    dimension === "class" &&
+    groupsUsd.has("cash") &&
+    groupsUsd.has("other") &&
+    hasNonAuthoritativePositiveResidual
+  ) {
+    const other = groupsUsd.get("other")!;
+    groupsUsd.set("other", { ...other, label: "未解释差额" });
+    incomplete = true;
   }
 
   const displayAmount = sources.length > 0 && convertedSourceCount === 0
@@ -310,19 +408,21 @@ export function buildTotalValuation(
         ? 0
         : key === "crypto"
           ? 1
-          : key === "other"
+          : key === "cash"
             ? 2
-            : key.startsWith("reconciliation:")
+            : key === "other"
               ? 3
               : 4;
     groups.sort((left, right) => rank(left.key) - rank(right.key));
   }
   if (
-    displayAmount !== null &&
     groups.length > 0 &&
     groups.every((group) => group.amount !== null)
   ) {
-    const roundedTotal = decimalToFixed(displayAmount, 2);
+    const roundedTotal = decimalToFixed(
+      decimalAdd(...groups.map((group) => group.amount!)),
+      2,
+    );
     const allocations = groups.map((group, index) => {
       const truncated = decimalTruncateToFixed(group.amount!, 2);
       return {
@@ -357,6 +457,12 @@ export function buildTotalValuation(
   groups = groups.toSorted((left, right) =>
     compareNullableDecimalDescending(left.amount, right.amount),
   );
+  const reconciliationIssues = reconciliationIssuesUsd.map((issue) => ({
+    ...issue,
+    amount: issue.amount === null
+      ? null
+      : convert(issue.amount, "USD", currency, allRates),
+  }));
   return {
     amount: displayAmount,
     currency,
@@ -365,5 +471,8 @@ export function buildTotalValuation(
     expiredCount,
     conversion,
     groups,
+    coverageIssues,
+    reconciliationIssues,
+    aggregateOnlySourceCount,
   };
 }

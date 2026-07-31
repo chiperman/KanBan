@@ -233,6 +233,124 @@ function missingSourceFxSources(): AssetSourceSummary[] {
   }];
 }
 
+function longbridgeCashSources(): AssetSourceSummary[] {
+  const snapshot = buildSnapshotFromPositions({
+    positions: [{
+      symbol: "AAPL.US",
+      name: "Apple",
+      quantity: "1",
+      currency: "USD",
+      assetClass: "securities",
+      currentPrice: { amount: "100", currency: "USD" },
+      priceSource: "Longbridge 实时行情",
+      pricedAt: SYNCED_AT,
+      costPrice: null,
+      platformProfit: null,
+      changePercent: null,
+    }, {
+      symbol: "CASH.USD",
+      name: "账户现金",
+      quantity: "677.82",
+      currency: "USD",
+      assetClass: "cash",
+      currentPrice: { amount: "1", currency: "USD" },
+      priceSource: "Longbridge 账户现金总额",
+      pricedAt: SYNCED_AT,
+      costPrice: null,
+      platformProfit: null,
+      changePercent: null,
+    }],
+    sourceCurrency: "USD",
+    exchangeRates: exchangeRates(false),
+    syncedAt: SYNCED_AT,
+    adjustment: "5",
+  });
+  snapshot.holdings = snapshot.holdings.map((holding) =>
+    holding.assetClass === "cash"
+      ? {
+          ...holding,
+          cashBalances: [{
+            amount: "661.11",
+            availableCash: "660.54",
+            currency: "USD",
+            frozenCash: "0.57",
+            settlingCash: "0.57",
+            withdrawCash: "660.54",
+          }, {
+            amount: "131.05",
+            availableCash: "131.05",
+            currency: "HKD",
+            frozenCash: "0",
+            settlingCash: "0",
+            withdrawCash: "131.05",
+          }],
+        }
+      : holding
+  );
+  return [{
+    id: "source-longbridge-cash",
+    kind: "longbridge",
+    label: "Longbridge Cash Account",
+    accountId: "longbridge:cash",
+    permissions: ["market-data", "account", "positions"],
+    credentialReference: "test-secret-longbridge-cash",
+    snapshot,
+    sync: CURRENT_SYNC,
+  }];
+}
+
+function longbridgeOptionQuoteUnavailableSources(): AssetSourceSummary[] {
+  return [{
+    id: "source-longbridge-options",
+    kind: "longbridge",
+    label: "长桥美股",
+    displayName: "长桥美股",
+    accountId: "longbridge:options",
+    permissions: ["market-data", "account", "positions"],
+    credentialReference: "test-secret-longbridge-options",
+    snapshot: {
+      total: { amount: "69930.10", currency: "USD" },
+      holdings: [{
+        symbol: "NVDA.US",
+        name: "NVIDIA",
+        quantity: "1",
+        currency: "USD",
+        assetClass: "securities",
+        currentPrice: { amount: "69970.74", currency: "USD" },
+        marketValue: "69970.74",
+        sourceMarketValue: { amount: "69970.74", currency: "USD" },
+        valuation: {
+          status: "valued",
+          priceSource: "Longbridge 实时行情",
+          pricedAt: SYNCED_AT,
+        },
+        costPrice: null,
+        platformProfit: null,
+        changePercent: null,
+      }, {
+        symbol: "NVDA260805C210000.US",
+        name: "NVDA 260805 210 Call",
+        quantity: "-1",
+        currency: "USD",
+        assetClass: "securities",
+        currentPrice: null,
+        marketValue: null,
+        sourceMarketValue: null,
+        valuation: {
+          status: "quote-unavailable",
+          reason: "Longbridge Open API 未接入期权行情",
+        },
+        costPrice: "0.450",
+        platformProfit: null,
+        changePercent: null,
+      }],
+      exchangeRates: exchangeRates(false),
+      syncedAt: SYNCED_AT,
+    },
+    sync: CURRENT_SYNC,
+  }];
+}
+
 function binancePartialSources(): AssetSourceSummary[] {
   return [{
     id: "source-binance-partial",
@@ -296,6 +414,101 @@ function binancePartialSources(): AssetSourceSummary[] {
   }];
 }
 
+function detailCoveragePartialSources(): AssetSourceSummary[] {
+  return [
+    {
+      id: "source-okx-detail-partial",
+      kind: "valuation-fixture",
+      label: "OKX 账户",
+      accountId: "okx:detail-partial",
+      permissions: ["market-data", "account", "positions"],
+      credentialReference: "test-secret-okx-detail-partial",
+      snapshot: {
+        ...buildSnapshotFromPositions({
+          positions: [{
+            symbol: "USDT",
+            name: "USDT · 交易机器人汇总",
+            quantity: "100",
+            currency: "USD",
+            assetClass: "crypto",
+            currentPrice: { amount: "1", currency: "USD" },
+            priceSource: "OKX 平台汇总权益",
+            pricedAt: SYNCED_AT,
+            costPrice: null,
+            platformProfit: null,
+            changePercent: null,
+          }],
+          sourceCurrency: "USD",
+          exchangeRates: exchangeRates(false),
+          syncedAt: SYNCED_AT,
+        }),
+        coverage: {
+          status: "complete",
+          products: [{
+            product: "trading-bot",
+            capability: "aggregate-only",
+            freshness: "current",
+            message: "按币种读取汇总权益，不展开策略明细",
+          }, {
+            product: "onchain-earn",
+            capability: "aggregate-only",
+            freshness: "current",
+            message: "平台总额已包含，当前仅提供产品汇总",
+          }],
+          unexplainedValue: null,
+          excludedPositiveAccounts: [],
+        },
+      },
+      sync: CURRENT_SYNC,
+    },
+    {
+      id: "source-bitget-detail-partial",
+      kind: "valuation-fixture",
+      label: "Bitget 账户",
+      accountId: "bitget:detail-partial",
+      permissions: ["market-data", "account", "positions"],
+      credentialReference: "test-secret-bitget-detail-partial",
+      snapshot: {
+        ...buildSnapshotFromPositions({
+          positions: [{
+            symbol: "USDT",
+            name: "USDT · Earn 汇总",
+            quantity: "50",
+            currency: "USD",
+            assetClass: "crypto",
+            currentPrice: { amount: "1", currency: "USD" },
+            priceSource: "Bitget 平台汇总资产",
+            pricedAt: SYNCED_AT,
+            costPrice: null,
+            platformProfit: null,
+            changePercent: null,
+          }],
+          sourceCurrency: "USD",
+          exchangeRates: exchangeRates(false),
+          syncedAt: SYNCED_AT,
+        }),
+        coverage: {
+          status: "complete",
+          products: [{
+            product: "savings-flexible",
+            capability: "aggregate-only",
+            freshness: "current",
+            message: "按币种保留平台汇总资产",
+          }, {
+            product: "sharkfin",
+            capability: "aggregate-only",
+            freshness: "current",
+            message: "读取平台聚合估值，不展开逐仓本金",
+          }],
+          unexplainedValue: null,
+          excludedPositiveAccounts: [],
+        },
+      },
+      sync: CURRENT_SYNC,
+    },
+  ];
+}
+
 export async function POST(request: Request) {
   if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
   const url = new URL(request.url);
@@ -306,8 +519,14 @@ export async function POST(request: Request) {
       ? manyRoundingSources()
       : scenario === "missing-source-fx"
         ? missingSourceFxSources()
+      : scenario === "longbridge-cash"
+        ? longbridgeCashSources()
+      : scenario === "longbridge-option-quote-unavailable"
+        ? longbridgeOptionQuoteUnavailableSources()
       : scenario === "binance-coverage-partial"
         ? binancePartialSources()
+      : scenario === "detail-coverage-partial"
+        ? detailCoveragePartialSources()
       : standardSources({
         inverse: url.searchParams.get("fx") === "inverse",
         alphaAdjustment:

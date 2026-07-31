@@ -28,6 +28,7 @@ import {
   VibeSelect,
   type VibeSelectOption,
 } from "@/ui/vibe/vibe-field";
+import { VibeNotice } from "@/ui/vibe/vibe-notice";
 import {
   formatShanghaiDateTime,
   formatShanghaiDayLabel,
@@ -39,7 +40,7 @@ const CURRENCY_OPTIONS: readonly VibeSelectOption<ReportingCurrency>[] = [
 ];
 
 const DIMENSION_OPTIONS: readonly VibeSelectOption<DistributionDimension>[] = [
-  { value: "class", label: "证券 / 加密资产" },
+  { value: "class", label: "资产类别" },
   { value: "source", label: "资产来源" },
   { value: "currency", label: "原始币种" },
 ];
@@ -115,16 +116,33 @@ export function TotalAssetOverview({
   const sourceTitleById = new Map(
     sources.map((source) => [source.id, sourceGroupTitle(source)]),
   );
-  const valuationStatus = [
-    valuation.incomplete
+  const valuationStatusText = valuation.incomplete
+    ? valuation.unvaluedCount > 0
       ? `当前估值：不完整 · ${valuation.unvaluedCount} 项未估值`
-      : "当前估值：完整",
+      : "当前估值：不完整"
+    : "当前估值：完整";
+  const valuationStatus = [
+    valuationStatusText,
+    valuation.coverageIssues.length > 0
+      ? `来源覆盖：不完整 · ${valuation.coverageIssues.length} 个来源`
+      : null,
+    valuation.aggregateOnlySourceCount > 0
+      ? `产品明细：部分仅汇总 · ${valuation.aggregateOnlySourceCount} 个来源`
+      : null,
     valuation.expiredCount > 0
       ? `包含 ${valuation.expiredCount} 个过期来源`
       : null,
   ]
     .filter(Boolean)
     .join(" · ");
+  const valuationStatusTone =
+    valuation.incomplete || valuation.expiredCount > 0
+      ? "error"
+      : valuation.coverageIssues.length > 0
+        ? "warning"
+        : valuation.aggregateOnlySourceCount > 0
+          ? "warning"
+        : "success";
 
   function changeCurrency(value: ReportingCurrency) {
     setCurrency(value);
@@ -157,7 +175,7 @@ export function TotalAssetOverview({
           />
           <VibeStatusTag
             className={`total-status${valuation.incomplete ? " incomplete" : ""}${valuation.expiredCount > 0 ? " expired" : ""}`}
-            tone={valuation.incomplete || valuation.expiredCount > 0 ? "error" : "success"}
+            tone={valuationStatusTone}
           >
             {valuationStatus}
           </VibeStatusTag>
@@ -199,6 +217,48 @@ export function TotalAssetOverview({
           汇率观察：{valuation.conversion.baseCurrency}/{valuation.conversion.quoteCurrency}{" "}
           {decimalToFixed(valuation.conversion.rate, 4)} · {valuation.conversion.source} · {formatShanghaiDateTime(valuation.conversion.observedAt)}
         </p>
+      ) : null}
+      {valuation.coverageIssues.length > 0 ? (
+        <VibeNotice
+          className="valuation-reconciliation-notice valuation-coverage-notice"
+          data-testid="valuation-coverage-notice"
+          role="status"
+          tone="info"
+        >
+          <p>
+            {valuation.coverageIssues.map((issue) => issue.sourceLabel).join("、")}
+            ：产品覆盖不完整，当前总资产按已接入及平台汇总范围计算。
+          </p>
+        </VibeNotice>
+      ) : null}
+      {valuation.reconciliationIssues.length > 0 ? (
+        <VibeNotice
+          className="valuation-reconciliation-notice"
+          data-testid="valuation-reconciliation-notice"
+          role="status"
+          tone="info"
+        >
+          {valuation.reconciliationIssues.map((issue) => {
+            if (issue.kind === "quote-unavailable") {
+              return (
+                <p key={issue.sourceId}>
+                  {`${issue.sourceLabel}：${issue.quoteUnavailableCount} 项期权行情未接入，当前持仓明细无法与账户总额精确对账。总资产以账户总额为准。`}
+                </p>
+              );
+            }
+            const prefix = issue.unvaluedCount > 0
+              ? `${issue.unvaluedCount} 项持仓未估值，`
+              : "";
+            return (
+              <p key={issue.sourceId}>
+                {issue.sourceLabel}：{showSensitiveInfo && issue.amount !== null
+                  ? `${prefix}持仓明细比账户总额高 ${amount(decimalSubtract("0", issue.amount))} ${valuation.currency}。`
+                  : `${prefix}持仓明细与账户总额暂未对齐。`}
+                总资产以账户总额为准。
+              </p>
+            );
+          })}
+        </VibeNotice>
       ) : null}
       <section className="today-asset-change" data-testid="today-asset-change">
         <p className="card-label">今日资产变动</p>

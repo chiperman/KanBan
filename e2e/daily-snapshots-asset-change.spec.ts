@@ -228,6 +228,38 @@ test("未估值趋势不伪造零值，平台盈亏只出现在来源提供的�
 
 });
 
+test("期权行情未接入不降低每日总额观测完整性", async ({
+  page,
+  request,
+}) => {
+  await configure(request);
+  await request.post("/test-doubles/daily-snapshots", {
+    data: { action: "add-option-quote-unavailable-source" },
+  });
+  await loginAsOwner(page);
+  await expect(page.getByTestId("asset-refresh-status")).toContainText(
+    "同步完成",
+  );
+
+  const snapshot = await history(request);
+  const optionSource = snapshot.days[0].sources.find(
+    ({ sourceId }) => sourceId === "source-option-quote-unavailable",
+  );
+  expect(optionSource).toMatchObject({
+    complete: true,
+    total: { USD: expect.any(String), CNY: expect.any(String) },
+  });
+  expect(snapshot.days[0].complete).toBe(true);
+  await expect(page.getByTestId("total-asset-trend")).toContainText(
+    "历史快照：完整",
+  );
+  await expect(
+    page.getByTestId(
+      "asset-source-trend-source-option-quote-unavailable",
+    ),
+  ).toContainText("完整");
+});
+
 test("来源确认的首次可信快照先建基准，随后刷新全失败也不会丢失", async ({
   page,
   request,

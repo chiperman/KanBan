@@ -21,6 +21,7 @@ import {
 } from "@/server/production";
 import type {
   AssetSnapshot,
+  AssetSourceSummary,
   BinanceAuthorizationResult,
   DailyAssetSnapshot,
 } from "@/server/ports";
@@ -143,6 +144,48 @@ function authorization(
           holdings: [...snapshot.holdings, 1n as never],
         }
       : snapshot,
+  };
+}
+
+function legacyLongbridgeOptionSource(): AssetSourceSummary {
+  const syncedAt = "2026-07-30T08:00:00.000Z";
+  return {
+    id: "legacy-longbridge-option",
+    kind: "longbridge",
+    label: "长桥美股",
+    accountId: "legacy-longbridge-option-account",
+    permissions: ["market-data", "account", "positions"],
+    credentialReference: "legacy-longbridge-option-reference",
+    snapshot: {
+      total: { amount: "69930.10", currency: "USD" },
+      holdings: [
+        {
+          symbol: "NVDA260805C210000.US",
+          name: "NVDA 260805 210 Call",
+          quantity: "-1",
+          currency: "USD",
+          assetClass: "securities",
+          currentPrice: null,
+          marketValue: null,
+          sourceMarketValue: null,
+          valuation: {
+            status: "unvalued",
+            reason: "Longbridge 未返回可靠价格",
+          },
+          costPrice: "0.450",
+          platformProfit: null,
+          changePercent: null,
+        },
+      ],
+      exchangeRates: [],
+      syncedAt,
+    },
+    sync: {
+      status: "current",
+      lastSuccessfulAt: syncedAt,
+      lastAttemptAt: syncedAt,
+      error: null,
+    },
   };
 }
 
@@ -315,7 +358,8 @@ export async function POST(request: Request) {
     action !== "delete-middle-source" &&
     action !== "startup-failures" &&
     action !== "schema-v2-migration" &&
-    action !== "display-name-persistence"
+    action !== "display-name-persistence" &&
+    action !== "longbridge-option-read-upgrade"
   ) {
     return Response.json({ error: "unknown action" }, { status: 400 });
   }
@@ -415,6 +459,35 @@ export async function POST(request: Request) {
           label: clearedSource.label,
           accountId: clearedSource.accountId,
         },
+      });
+    }
+
+    if (action === "longbridge-option-read-upgrade") {
+      await mkdir(dataDirectory, { recursive: true });
+      const databasePath = path.join(dataDirectory, "dashboard.sqlite");
+      const database = new SqliteDashboardDatabase(
+        databasePath,
+        path.join(dataDirectory, "dashboard.json"),
+        path.join(dataDirectory, "cards.json"),
+      );
+      await database.replaceSources([legacyLongbridgeOptionSource()]);
+
+      const inspection = new DatabaseSync(databasePath, { readOnly: true });
+      const raw = inspection
+        .prepare("SELECT holdings_json FROM asset_source_snapshots")
+        .get() as { holdings_json: string };
+      inspection.close();
+
+      const restarted = new SqliteDashboardDatabase(
+        databasePath,
+        path.join(dataDirectory, "dashboard.json"),
+        path.join(dataDirectory, "cards.json"),
+      );
+      const [source] = await restarted.listSources();
+      return Response.json({
+        rawStatus: JSON.parse(raw.holdings_json)[0].valuation.status,
+        readStatus: source.snapshot.holdings[0].valuation.status,
+        total: source.snapshot.total,
       });
     }
 

@@ -180,6 +180,49 @@ export async function POST(request: Request) {
     ]);
     return Response.json({ ok: true });
   }
+  if (body?.action === "add-option-quote-unavailable-source") {
+    const credentialReference = await services.secrets.put(
+      "option-quote-unavailable-readonly",
+    );
+    const base = sourceFixture({
+      id: "source-option-quote-unavailable",
+      label: "长桥期权账户",
+      amount: "88",
+      credentialReference,
+    });
+    const source: AssetSourceSummary = {
+      ...base,
+      kind: "longbridge",
+      displayName: "长桥期权账户",
+      snapshot: {
+        ...base.snapshot,
+        holdings: [...base.snapshot.holdings, {
+          symbol: "NVDA260805C210000.US",
+          name: "NVDA 260805 210 Call",
+          quantity: "-1",
+          currency: "USD",
+          assetClass: "securities",
+          currentPrice: null,
+          marketValue: null,
+          sourceMarketValue: null,
+          valuation: {
+            status: "quote-unavailable",
+            reason: "Longbridge Open API 未接入期权行情",
+          },
+          costPrice: "0.450",
+          platformProfit: null,
+          changePercent: null,
+        }],
+      },
+    };
+    const sources = [...(await services.assetSources.list()), source];
+    await services.assetSources.replaceAll(sources);
+    await services.assetCards.replaceAll([
+      ...(await services.assetCards.list()),
+      sourceCard(source, sources.length),
+    ]);
+    return Response.json({ ok: true });
+  }
   if (body?.action !== "configure") {
     return Response.json({ error: "每日快照测试配置无效" }, { status: 400 });
   }

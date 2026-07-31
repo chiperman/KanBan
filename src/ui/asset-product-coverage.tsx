@@ -94,9 +94,17 @@ export function AssetProductCoverage({
   coverage: AssetSnapshotCoverage | undefined;
   sourceKind: string;
 }) {
+  const aggregateOnlyCount = coverage?.products.filter(
+    ({ capability, freshness }) =>
+      capability === "aggregate-only" && freshness === "current",
+  ).length ?? 0;
   const label = coverage?.status === "partial"
-    ? "产品统计不完整"
-    : "产品覆盖未验证";
+    ? "当前总额不完整"
+    : coverage?.status === "unknown"
+      ? "当前总额未验证"
+      : aggregateOnlyCount > 0
+        ? "当前总额完整 · 部分产品仅汇总"
+        : null;
   const currentProductCount = coverage?.products.filter(
     ({ freshness }) => freshness === "current",
   ).length ?? 0;
@@ -111,9 +119,11 @@ export function AssetProductCoverage({
     : [];
   return (
     <>
-      {coverage?.status !== "complete" ? (
+      {label ? (
         <VibeStatusTag
-          className="asset-sync-status is-incomplete"
+          className={`asset-sync-status${
+            coverage?.status === "complete" ? "" : " is-incomplete"
+          }`}
           data-testid={`${sourceKind}-coverage-status`}
           tone="warning"
         >

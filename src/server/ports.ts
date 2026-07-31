@@ -116,7 +116,16 @@ export interface AssetMoney {
   currency: string;
 }
 
-export type AssetClass = "securities" | "crypto";
+export interface AssetCashBalance {
+  amount: string;
+  availableCash: string;
+  currency: string;
+  frozenCash: string;
+  settlingCash: string;
+  withdrawCash: string;
+}
+
+export type AssetClass = "securities" | "crypto" | "cash";
 
 export type AssetPositionState =
   | "active"
@@ -163,6 +172,11 @@ export type AssetValuation =
   | {
       status: "unvalued";
       reason: string;
+    }
+  | {
+      /** 来源账户总额已包含该持仓，但持仓级行情因来源能力限制不可用。 */
+      status: "quote-unavailable";
+      reason: string;
     };
 
 export interface AssetHolding {
@@ -187,6 +201,8 @@ export interface AssetHolding {
   quantity: string;
   currency: string;
   assetClass: AssetClass;
+  /** 现金汇总持仓的来源原生币种拆分；总资产仍只计该持仓一次。 */
+  cashBalances?: AssetCashBalance[];
   currentPrice: AssetMoney | null;
   marketValue: string | null;
   /** 来源按账户计价货币给出的可比较市值，仅用于来源内排序与汇总。 */

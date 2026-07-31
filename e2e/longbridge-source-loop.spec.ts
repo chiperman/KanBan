@@ -456,12 +456,55 @@ test("Keychain 长桥快照使用 USD 总额并按官方汇率估值跨币种持
     source: "Longbridge 官方账户汇率",
     observedAt: expect.any(String),
   });
-  expect(body.snapshot.holdings[0]).toMatchObject({
-    symbol: "700.HK",
-    marketValue: "6000",
-    sourceMarketValue: { amount: "765.06", currency: "USD" },
-    valuation: { status: "valued" },
-  });
+  expect(body.snapshot.holdings).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        symbol: "700.HK",
+        marketValue: "6000",
+        sourceMarketValue: { amount: "765.06", currency: "USD" },
+        valuation: expect.objectContaining({ status: "valued" }),
+      }),
+      expect.objectContaining({
+        symbol: "CASH.USD",
+        name: "账户现金",
+        quantity: "677.82",
+        currency: "USD",
+        assetClass: "cash",
+        marketValue: "677.82",
+        sourceMarketValue: { amount: "677.82", currency: "USD" },
+        cashBalances: [{
+          amount: "661.11",
+          availableCash: "660.54",
+          currency: "USD",
+          frozenCash: "0.57",
+          settlingCash: "0.57",
+          withdrawCash: "660.54",
+        }, {
+          amount: "131.05",
+          availableCash: "131.05",
+          currency: "HKD",
+          frozenCash: "0",
+          settlingCash: "0",
+          withdrawCash: "131.05",
+        }],
+        valuation: expect.objectContaining({
+          status: "valued",
+          priceSource: "Longbridge 账户现金总额",
+        }),
+      }),
+      expect.objectContaining({
+        symbol: "NVDA260805C210000.US",
+        quantity: "-1",
+        currentPrice: null,
+        marketValue: null,
+        sourceMarketValue: null,
+        valuation: {
+          status: "quote-unavailable",
+          reason: "Longbridge Open API 未接入期权行情",
+        },
+      }),
+    ]),
+  );
 });
 
 test("Keychain 瞬时认证失败只重试一次并给出统一修复命令", async ({

@@ -260,6 +260,154 @@ test("来源总额无法折算时显示未知而不是零资产", async ({ page,
   await expect(overview).not.toContainText("0.00 USD");
 });
 
+test("长桥现金按币种独立展示并与证券持仓分离", async ({
+  page,
+  request,
+}) => {
+  const configured = await request.post(
+    "/test-doubles/valuation?scenario=longbridge-cash",
+  );
+  expect(configured.ok()).toBeTruthy();
+  await loginAsOwner(page);
+
+  const overview = page.getByTestId("total-asset-overview");
+  await expect(overview).toContainText("782.82 USD");
+  await expect(
+    overview.getByLabel("资产分布").locator(".distribution-item"),
+  ).toContainText([
+    "现金677.82 USD",
+    "证券100.00 USD",
+    "未解释差额5.00 USD",
+  ]);
+  await expect(overview).toContainText("当前估值：不完整");
+  await expect(overview).not.toContainText("现金及其他");
+  const longbridgeCard = page.getByTestId("longbridge-card");
+  const cashBalances = longbridgeCard.getByTestId("asset-cash-balances");
+  await expect(cashBalances).toContainText("CASH BALANCE");
+  await expect(cashBalances.getByRole("listitem")).toContainText([
+    "USD CASH661.11 USD",
+    "HKD CASH131.05 HKD",
+  ]);
+  const sourceTotalBox = await longbridgeCard
+    .getByTestId("asset-source-total")
+    .boundingBox();
+  const cashBalancesBox = await cashBalances.boundingBox();
+  expect(sourceTotalBox).not.toBeNull();
+  expect(cashBalancesBox).not.toBeNull();
+  expect(
+    cashBalancesBox!.y - (sourceTotalBox!.y + sourceTotalBox!.height),
+  ).toBeGreaterThanOrEqual(24);
+  await expect(longbridgeCard).toContainText("01 POSITIONS");
+  await expect(longbridgeCard.getByTestId("holding-top-list")).not.toContainText(
+    "账户现金",
+  );
+  const holdingsDetail = longbridgeCard.getByTestId("asset-holdings-detail");
+  await expect(holdingsDetail).toContainText("Apple");
+  await expect(holdingsDetail).not.toContainText("账户现金");
+
+  const resizeHandle = page.getByRole("button", {
+    name: /调整Longbridge Cash Account宽度/,
+  });
+  for (const _ of [0, 1]) {
+    const resized = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/asset-cards/layout") &&
+        response.request().method() === "PUT",
+    );
+    await resizeHandle.press("ArrowRight");
+    await resized;
+  }
+  await expect(longbridgeCard.locator("..")).toHaveClass(/span-3/);
+  await expect(cashBalances).toBeVisible();
+  await expect(
+    cashBalances.getByRole("listitem").filter({ hasText: "USD CASH" }),
+  ).toBeVisible();
+  await expect(longbridgeCard.getByTestId("holding-top-list")).toBeHidden();
+  await expect(holdingsDetail).toBeVisible();
+});
+
+test("长桥期权行情未接入不降低账户总额完整性，也不把对账差额解释为期权价值", async ({
+  page,
+  request,
+}) => {
+  const configured = await request.post(
+    "/test-doubles/valuation?scenario=longbridge-option-quote-unavailable",
+  );
+  expect(configured.ok()).toBeTruthy();
+  await page.route("**/api/asset-sources/refresh", async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({ successCount: 1, failureCount: 0 }),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+  await loginAsOwner(page);
+
+  const overview = page.getByTestId("total-asset-overview");
+  await expect(overview).toContainText("69,930.10 USD");
+  await expect(overview).toContainText("当前估值：完整");
+  await expect(overview).not.toContainText("当前估值：不完整");
+  await expect(overview).not.toContainText("1 项未估值");
+  await expect(overview.locator(".total-status")).toHaveAttribute(
+    "data-vibe-tone",
+    "success",
+  );
+
+  const reconciliationNotice = overview.getByTestId(
+    "valuation-reconciliation-notice",
+  );
+  await expect(reconciliationNotice).toContainText(
+    "长桥美股：1 项期权行情未接入，当前持仓明细无法与账户总额精确对账。总资产以账户总额为准。",
+  );
+  await expect(reconciliationNotice).not.toContainText("40.64 USD");
+  await expect(reconciliationNotice).not.toContainText("26.00 USD");
+
+  const longbridgeCard = page.getByTestId("longbridge-card");
+  await expect(longbridgeCard).toContainText("NVDA260805C210000.US");
+  await expect(longbridgeCard).toContainText("期权行情未接入");
+  await expect(longbridgeCard).toContainText("现价不可用");
+  await expect(longbridgeCard).toContainText("账户总额已包含");
+  await expect(longbridgeCard).not.toContainText("含 1 项未估值资产");
+  await expect(
+    longbridgeCard.getByRole("img", {
+      name: "1 项已估值，0 项未估值，1 项行情未接入",
+    }),
+  ).toBeVisible();
+});
+
+test("只有持仓明细覆盖不足时当前估值保持完整并单独提示来源覆盖", async ({
+  page,
+  request,
+}) => {
+  const configured = await request.post(
+    "/test-doubles/valuation?scenario=detail-coverage-partial",
+  );
+  expect(configured.ok()).toBeTruthy();
+  await page.route("**/api/asset-sources/refresh", async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({ successCount: 2, failureCount: 0 }),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+  await loginAsOwner(page);
+
+  const overview = page.getByTestId("total-asset-overview");
+  await expect(overview).toContainText("150.00 USD");
+  await expect(overview).toContainText("当前估值：完整");
+  await expect(overview).toContainText("产品明细：部分仅汇总 · 2 个来源");
+  await expect(overview).not.toContainText("当前估值：不完整");
+  await expect(overview).not.toContainText("来源覆盖：不完整");
+  await expect(overview).not.toContainText("0 项未估值");
+  await expect(overview.locator(".total-status")).toHaveAttribute(
+    "data-vibe-tone",
+    "warning",
+  );
+  await expect(
+    overview.getByTestId("valuation-coverage-notice"),
+  ).toHaveCount(0);
+});
+
 test("Binance 钱包残差会同时传播到来源卡、总资产和完整性状态", async ({
   page,
   request,
@@ -278,10 +426,15 @@ test("Binance 钱包残差会同时传播到来源卡、总资产和完整性状
   await loginAsOwner(page);
 
   await expect(page.getByTestId("binance-coverage-status")).toContainText(
-    "产品统计不完整 · 未解释 600.00 USDT · 未纳入 Trading Bots",
+    "当前总额不完整 · 未解释 600.00 USDT · 未纳入 Trading Bots",
   );
-  await expect(page.getByTestId("total-asset-overview")).toContainText(
-    "当前估值：不完整 · 0 项未估值",
+  const overview = page.getByTestId("total-asset-overview");
+  await expect(overview).toContainText(
+    "当前估值：不完整 · 来源覆盖：不完整 · 1 个来源",
+  );
+  await expect(overview).not.toContainText("0 项未估值");
+  await expect(overview.getByTestId("valuation-coverage-notice")).toContainText(
+    "Binance 账户 · 测试：产品覆盖不完整，当前总资产按已接入及平台汇总范围计算。",
   );
   const binanceCard = page.getByTestId("binance-card");
   const coverage = binanceCard.getByTestId("binance-product-coverage");
@@ -355,8 +508,26 @@ test("正负对账差额与逐组舍入后的分布始终守恒", async ({ page,
   await request.post("/test-doubles/valuation?scenario=negative-residual");
   await page.reload();
   await expect(overview).toContainText("560.34 USD");
-  await expect(overview).toContainText("估值对账差额");
-  await expect(overview).toContainText("-1.00 USD");
+  const negativeDistribution = overview.getByLabel("资产分布");
+  await expect(negativeDistribution).not.toContainText("估值对账差额");
+  await expect(
+    negativeDistribution.locator(".distribution-item strong"),
+  ).toHaveText(["464.04 USD", "97.30 USD"]);
+  const reconciliationNotice = overview.getByTestId(
+    "valuation-reconciliation-notice",
+  );
+  await expect(reconciliationNotice).toContainText("Alpha Securities");
+  await expect(reconciliationNotice).toContainText(
+    "持仓明细比账户总额高 1.00 USD",
+  );
+  await expect(reconciliationNotice).toContainText("总资产以账户总额为准");
+
+  await page.getByTestId("sensitive-info-toggle").click();
+  await expect(reconciliationNotice).not.toContainText("1.00 USD");
+  await expect(reconciliationNotice).toContainText(
+    "持仓明细与账户总额暂未对齐",
+  );
+  await page.getByTestId("sensitive-info-toggle").click();
 
   await request.post("/test-doubles/valuation?scenario=rounding");
   await page.reload();
@@ -410,4 +581,32 @@ test("Ticket 06 旧落盘快照会迁移后在所有者页面正常显示", asyn
   );
   await expect(overview).toContainText("当前估值：不完整 · 1 项未估值");
   await expect(page.getByTestId("longbridge-card").locator(".asset-total")).toHaveText("200 USD");
+});
+
+test("旧落盘长桥期权缺价会直接升级为行情未接入，无需等待下一次同步", async ({
+  page,
+  request,
+}) => {
+  const loaded = await request.post(
+    "/test-doubles/longbridge/persistence?legacy=option",
+  );
+  expect(loaded.ok()).toBeTruthy();
+  await page.route("**/api/asset-sources/refresh", async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({ successCount: 1, failureCount: 0 }),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+  await loginAsOwner(page);
+
+  const overview = page.getByTestId("total-asset-overview");
+  await expect(overview).toContainText("当前估值：完整");
+  await expect(overview).not.toContainText("1 项未估值");
+  await expect(overview.getByTestId("valuation-reconciliation-notice")).toContainText(
+    "长桥美股：1 项期权行情未接入",
+  );
+  const longbridgeCard = page.getByTestId("longbridge-card");
+  await expect(longbridgeCard).toContainText("现价不可用");
+  await expect(longbridgeCard).toContainText("账户总额已包含");
 });

@@ -1,5 +1,9 @@
 import { decimalCompare } from "@/domain/decimal";
-import { buildTotalValuation, type ReportingCurrency } from "@/domain/valuation";
+import {
+  buildTotalValuation,
+  holdingMakesTotalIncomplete,
+  type ReportingCurrency,
+} from "@/domain/valuation";
 import type {
   AssetSourceSummary,
   DailyAssetSnapshot,
@@ -32,9 +36,7 @@ function sourceValue(
   const onlyUnknownHoldings =
     source.snapshot.holdings.length > 0 &&
     source.snapshot.holdings.every(
-      (holding) =>
-        holding.sourceMarketValue === null ||
-        holding.valuation.status === "unvalued",
+      holdingMakesTotalIncomplete,
     ) &&
     decimalCompare(source.snapshot.total.amount, "0") === 0;
   return hasKnownValue && !onlyUnknownHoldings ? valuation.amount : null;
@@ -45,9 +47,7 @@ function sourceSnapshot(
   capturedAt: string,
 ): DailyAssetSourceSnapshot {
   const unvalued = source.snapshot.holdings.some(
-    (holding) =>
-      holding.sourceMarketValue === null ||
-      holding.valuation.status === "unvalued",
+    holdingMakesTotalIncomplete,
   );
   const total = {
     USD: sourceValue(source, "USD"),

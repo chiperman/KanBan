@@ -34,6 +34,79 @@ const RESULT: LongbridgeAuthorizationResult = {
 export async function POST(request: Request) {
   if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
   const root = await mkdtemp(path.join(tmpdir(), "pad-ticket06-"));
+  if (new URL(request.url).searchParams.get("legacy") === "option") {
+    try {
+      const dashboardPath = path.join(root, "dashboard.json");
+      await writeFile(dashboardPath, JSON.stringify({
+        cards: [{
+          id: "legacy-option-card",
+          kind: "asset",
+          title: "长桥美股",
+          body: "只读证券账户",
+          sourceId: "legacy-option-source",
+          span: 2,
+        }],
+        assetSources: [{
+          id: "legacy-option-source",
+          kind: "longbridge",
+          label: "长桥美股",
+          displayName: "长桥美股",
+          accountId: "legacy-option-account",
+          permissions: ["market-data", "account", "positions"],
+          credentialReference: "legacy-option-reference",
+          snapshot: {
+            total: { amount: "69930.10", currency: "USD" },
+            holdings: [{
+              symbol: "NVDA.US",
+              name: "NVIDIA",
+              quantity: "1",
+              currency: "USD",
+              assetClass: "securities",
+              currentPrice: { amount: "69970.74", currency: "USD" },
+              marketValue: "69970.74",
+              sourceMarketValue: { amount: "69970.74", currency: "USD" },
+              valuation: {
+                status: "valued",
+                priceSource: "Longbridge 实时行情",
+                pricedAt: "2026-07-30T08:00:00.000Z",
+              },
+              costPrice: null,
+              platformProfit: null,
+              changePercent: null,
+            }, {
+              symbol: "NVDA260805C210000.US",
+              name: "NVDA 260805 210 Call",
+              quantity: "-1",
+              currency: "USD",
+              assetClass: "securities",
+              currentPrice: null,
+              marketValue: null,
+              sourceMarketValue: null,
+              valuation: {
+                status: "unvalued",
+                reason: "Longbridge 未返回可靠价格",
+              },
+              costPrice: "0.450",
+              platformProfit: null,
+              changePercent: null,
+            }],
+            exchangeRates: [],
+            syncedAt: "2026-07-30T08:00:00.000Z",
+          },
+        }],
+      }));
+      const database = new FileDashboardDatabase(
+        dashboardPath,
+        path.join(root, "legacy-cards.json"),
+      );
+      const services = getTestServices();
+      await services.assetCards.replaceAll(await database.listAssetCards());
+      await services.assetSources.replaceAll(await database.listSources());
+      return Response.json({ ok: true });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
   if (new URL(request.url).searchParams.get("legacy") === "1") {
     try {
       const dashboardPath = path.join(root, "dashboard.json");

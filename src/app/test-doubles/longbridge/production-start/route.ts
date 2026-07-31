@@ -219,7 +219,26 @@ export async function POST(request: Request) {
         readAssets: async () => {
           const assets = {
             accountPage: {
-              data: { list: [{ currency: "USD", net_assets: "74442.43" }] },
+              data: {
+                list: [{
+                  currency: "USD",
+                  net_assets: "74442.43",
+                  total_cash: "677.82",
+                  cash_infos: [{
+                    available_cash: "660.54",
+                    currency: "USD",
+                    frozen_cash: "0.57",
+                    settling_cash: "0.57",
+                    withdraw_cash: "660.54",
+                  }, {
+                    available_cash: "131.05",
+                    currency: "HKD",
+                    frozen_cash: "0",
+                    settling_cash: "0",
+                    withdraw_cash: "131.05",
+                  }],
+                }],
+              },
             },
             stockPage: {
               data: {
@@ -231,6 +250,12 @@ export async function POST(request: Request) {
                     quantity: "10",
                     currency: "HKD",
                     cost_price: "500",
+                  }, {
+                    symbol: "NVDA260805C210000.US",
+                    symbol_name: "NVDA 260805 210 Call",
+                    quantity: "-1",
+                    currency: "USD",
+                    cost_price: "0.450",
                   }],
                 }],
               },

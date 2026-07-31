@@ -670,7 +670,7 @@ body {
   display: block;
 }
 
-.span-3 .asset-source-card .holding-top-list {
+.span-3 .asset-source-card [data-testid="holding-top-list"] {
   display: none;
 }
 

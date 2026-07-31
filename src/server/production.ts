@@ -46,6 +46,7 @@ import type {
 import { SessionOwnerAuth } from "@/server/auth/session-auth";
 import { parseAssetCards } from "@/server/asset-cards";
 import {
+  isLongbridgeUsOptionSymbol,
   LongbridgeOAuthState,
   KeychainLongbridgeOAuth,
   KeychainLongbridgeSourceRefresher,
@@ -297,8 +298,17 @@ function migrateAssetSource(raw: unknown): AssetSourceSummary {
           legacy.currency === snapshot.total.currency
         ? { amount: legacy.marketValue, currency: snapshot.total.currency }
         : null;
-    const valuation = hasValuation
-      ? legacy.valuation
+    const persistedValuation = hasValuation ? legacy.valuation : undefined;
+    const valuation = persistedValuation
+      ? source.kind === "longbridge" &&
+          persistedValuation.status === "unvalued" &&
+          currentPrice === null &&
+          isLongbridgeUsOptionSymbol(legacy.symbol)
+        ? {
+            status: "quote-unavailable" as const,
+            reason: "Longbridge Open API 未接入期权行情",
+          }
+        : persistedValuation
       : currentPrice !== null && sourceMarketValue !== null
         ? {
             status: "valued" as const,
@@ -1125,7 +1135,7 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
     return rows.map((row) => {
       const snapshot = snapshotStatement.get(row.id as string) as SqliteRow;
       const sync = syncStatement.get(row.id as string) as SqliteRow;
-      return {
+      return migrateAssetSource({
         id: row.id as string,
         kind: row.kind as string,
         label: row.label as string,
@@ -1164,7 +1174,7 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
         ...(row.lifecycle === null
           ? {}
           : { lifecycle: row.lifecycle as "connected" | "disconnected" }),
-      };
+      });
     });
   }
 

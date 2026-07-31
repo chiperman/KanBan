@@ -99,6 +99,21 @@ test("资产来源自定义名称跨 SQLite 重启保留，清空后恢复默认
   });
 });
 
+test("SQLite 旧长桥期权缺价读取时升级为行情未接入并保留账户总额", async ({
+  request,
+}) => {
+  const response = await request.post(
+    "/test-doubles/sqlite-business-data-persistence?action=longbridge-option-read-upgrade",
+  );
+
+  expect(response.ok()).toBeTruthy();
+  await expect(response.json()).resolves.toEqual({
+    rawStatus: "unvalued",
+    readStatus: "quote-unavailable",
+    total: { amount: "69930.10", currency: "USD" },
+  });
+});
+
 test("迁移标记阻止第二次导入旧 JSON", async ({ request }) => {
   const response = await request.post(
     "/test-doubles/sqlite-business-data-persistence?action=repeat-import",

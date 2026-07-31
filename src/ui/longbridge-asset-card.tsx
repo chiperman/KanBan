@@ -139,6 +139,7 @@ function HoldingDetailRow({
   formatMoney: (value: string) => string;
 }) {
   const masked = "••••••";
+  const quoteUnavailable = holding.valuation.status === "quote-unavailable";
   const valuationDetail = holding.valuation.status === "valued"
     ? `${holding.valuation.priceSource} · ${formatShanghaiDateTime(holding.valuation.pricedAt)}`
     : holding.valuation.reason;
@@ -157,13 +158,17 @@ function HoldingDetailRow({
       <td>
         {holding.currentPrice
           ? `${showSensitiveInfo ? amount(holding.currentPrice.amount) : masked} ${holding.currentPrice.currency}`
-          : holding.valuation.status === "unvalued"
+          : quoteUnavailable
+            ? "现价不可用"
+            : holding.valuation.status === "unvalued"
             ? `未估值（${holding.currency}）`
             : "—"}
       </td>
       <td>
         {holding.marketValue === null
-          ? `未估值（${holding.currency}）`
+          ? quoteUnavailable
+            ? `期权行情未接入（${holding.currency}）`
+            : `未估值（${holding.currency}）`
           : `${showSensitiveInfo ? formatMoney(holding.marketValue) : masked} ${holding.currency}`}
       </td>
       <td>
@@ -231,20 +236,36 @@ export function AssetSourceCard({
     ),
     [source.snapshot.holdings],
   );
+  const cashHoldings = orderedHoldings.filter(
+    ({ assetClass }) => assetClass === "cash",
+  );
+  const positionHoldings = orderedHoldings.filter(
+    ({ assetClass }) => assetClass !== "cash",
+  );
+  const cashBalances = cashHoldings.flatMap((holding) =>
+    holding.cashBalances ?? [{
+      amount: holding.marketValue ?? holding.quantity,
+      availableCash: holding.quantity,
+      currency: holding.currency,
+      frozenCash: "0",
+      settlingCash: "0",
+      withdrawCash: holding.quantity,
+    }]
+  );
   const hiddenSmallHoldingCount = supportsSmallHoldingFilter
-    ? orderedHoldings.filter(
+    ? positionHoldings.filter(
         (holding) =>
           holding.marketValue !== null &&
           decimalCompare(holding.marketValue, "1") < 0,
       ).length
     : 0;
   const visibleHoldings = supportsSmallHoldingFilter && hideSmallCryptoHoldings
-    ? orderedHoldings.filter(
-        (holding) =>
-          holding.marketValue === null ||
-          decimalCompare(holding.marketValue, "1") >= 0,
+    ? positionHoldings.filter(
+      (holding) =>
+        holding.marketValue === null ||
+        decimalCompare(holding.marketValue, "1") >= 0,
       )
-    : orderedHoldings;
+    : positionHoldings;
   const showPlatformProfit = visibleHoldings.some(
     (holding) => holding.platformProfit !== null,
   );
@@ -255,15 +276,31 @@ export function AssetSourceCard({
   const unvaluedCount = visibleHoldings.filter(
     ({ valuation }) => valuation.status === "unvalued",
   ).length;
-  const valuedCount = visibleHoldings.length - unvaluedCount;
+  const quoteUnavailableCount = visibleHoldings.filter(
+    ({ valuation }) => valuation.status === "quote-unavailable",
+  ).length;
+  const valuedCount =
+    visibleHoldings.length - unvaluedCount - quoteUnavailableCount;
   const valuationSegments = visibleHoldings.map((holding) => ({
     key: assetHoldingKey(holding),
     tone:
       holding.valuation.status === "unvalued"
         ? "error" as const
+        : holding.valuation.status === "quote-unavailable"
+          ? "muted" as const
         : "primary" as const,
     value: 1,
   }));
+  const valuationAriaLabel = quoteUnavailableCount > 0
+    ? `${valuedCount} 项已估值，${unvaluedCount} 项未估值，${quoteUnavailableCount} 项行情未接入`
+    : `${valuedCount} 项已估值，${unvaluedCount} 项未估值`;
+  const valuationCaption = unvaluedCount > 0
+    ? `${unvaluedCount} UNVALUED${
+        quoteUnavailableCount > 0 ? ` · ${quoteUnavailableCount} QUOTE N/A` : ""
+      }`
+    : quoteUnavailableCount > 0
+      ? `${quoteUnavailableCount} QUOTE N/A`
+      : "VALUATION / COMPLETE";
   const heading = sourceHeading(source);
   const formatMoney = source.kind === "longbridge" ? amount : moneyAmount;
   const sourceState = source.lifecycle === "disconnected"
@@ -319,9 +356,31 @@ export function AssetSourceCard({
             sourceKind={source.kind}
           />
         ) : null}
+        {cashBalances.length > 0 ? (
+          <section
+            className="asset-cash-balances"
+            data-testid="asset-cash-balances"
+          >
+            <p className="card-label">CASH BALANCE</p>
+            <ol className="holding-top-list">
+              {cashBalances.map((balance) => (
+                <li
+                  className="vibe-data-row"
+                  key={`${balance.currency}:${balance.amount}`}
+                >
+                  <span>{balance.currency} CASH</span>
+                  <strong>
+                    {showSensitiveInfo ? amount(balance.amount) : "••••••"}{" "}
+                    {balance.currency}
+                  </strong>
+                </li>
+              ))}
+            </ol>
+          </section>
+        ) : null}
         <div className="source-meter">
           <VibeSegmentedBar
-            ariaLabel={`${valuedCount} 项已估值，${unvaluedCount} 项未估值`}
+            ariaLabel={valuationAriaLabel}
             cells={visibleHoldings.length}
             compact
             segments={valuationSegments}
@@ -332,7 +391,7 @@ export function AssetSourceCard({
         <p className="source-meter-caption">
           <span>{String(visibleHoldings.length).padStart(2, "0")} POSITIONS</span>
           <span className={unvaluedCount > 0 ? "is-incomplete" : undefined}>
-            {unvaluedCount === 0 ? "VALUATION / COMPLETE" : `${unvaluedCount} UNVALUED`}
+            {valuationCaption}
           </span>
         </p>
         {supportsSmallHoldingFilter ? (
@@ -360,7 +419,9 @@ export function AssetSourceCard({
               <span>{assetHoldingDisplayName(holding)}</span>
               <strong>
                 {holding.marketValue === null
-                  ? `未估值（${holding.currency}）`
+                  ? holding.valuation.status === "quote-unavailable"
+                    ? `期权行情未接入（${holding.currency}）`
+                    : `未估值（${holding.currency}）`
                   : `${showSensitiveInfo ? formatMoney(holding.marketValue) : "••••••"} ${holding.currency}`}
               </strong>
             </li>
@@ -408,6 +469,11 @@ export function AssetSourceCard({
         {unvaluedCount > 0 ? (
           <VibeStatusTag className="asset-sync-status" tone="warning">
             含 {unvaluedCount} 项未估值资产
+          </VibeStatusTag>
+        ) : null}
+        {quoteUnavailableCount > 0 ? (
+          <VibeStatusTag className="asset-sync-status" tone="muted">
+            {quoteUnavailableCount} 项期权行情未接入 · 账户总额已包含
           </VibeStatusTag>
         ) : null}
         <section
