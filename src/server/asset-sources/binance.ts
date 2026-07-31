@@ -619,7 +619,10 @@ function reconcileWallet(input: {
   incomplete: boolean;
 }): AssetSnapshot {
   const rows = list(input.walletBalances, "Binance Wallet Balance 响应");
-  const btcPrice = tickerPrices(input.tickers).get("BTCUSDT") ?? null;
+  const btcPrice = tickerPrices(
+    input.tickers,
+    new Set(["BTCUSDT"]),
+  ).get("BTCUSDT") ?? null;
   let includedBtc = "0";
   const excludedPositiveAccounts: string[] = [];
   for (const row of rows) {
@@ -694,14 +697,25 @@ function eligibleUsdtSymbols(exchangeInfo: unknown): Set<string> {
   );
 }
 
-function tickerPrices(tickers: unknown): Map<string, string> {
+function tickerPrices(
+  tickers: unknown,
+  neededSymbols: ReadonlySet<string>,
+): Map<string, string> {
   const values = Array.isArray(tickers) ? tickers : [tickers];
-  return new Map(
-    values.map((raw) => {
-      const item = record(raw, "Binance ticker 响应");
-      return [text(item.symbol, "symbol"), decimal(item.price, "price")] as const;
-    }),
-  );
+  const prices = new Map<string, string>();
+  for (const raw of values) {
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) continue;
+    const item = raw as JsonRecord;
+    const symbol = typeof item.symbol === "string" ? item.symbol : null;
+    if (symbol === null || !neededSymbols.has(symbol)) continue;
+    const price = typeof item.price === "string" &&
+        /^\d+(?:\.\d+)?$/.test(item.price)
+      ? item.price
+      : null;
+    if (price === null || !positive(price)) continue;
+    prices.set(symbol, price);
+  }
+  return prices;
 }
 
 function nativeUsdtUsdQuote(
@@ -718,8 +732,11 @@ function nativeUsdtUsdQuote(
     item.quoteAsset === "USD"
   );
   if (!available) return null;
-  const price = tickerPrices(tickers).get("USDTUSD") ?? null;
-  if (price === null || !positive(price)) return null;
+  const price = tickerPrices(
+    tickers,
+    new Set(["USDTUSD"]),
+  ).get("USDTUSD") ?? null;
+  if (price === null) return null;
   return {
     symbol: "USDT",
     currency: "USD",
@@ -753,7 +770,13 @@ function valuePositions(input: {
   coverage?: AssetSnapshot["coverage"];
 }): AssetSnapshot {
   const eligible = eligibleUsdtSymbols(input.exchangeInfo);
-  const prices = tickerPrices(input.tickers);
+  const neededSymbols = new Set(
+    input.positions.flatMap((position) => {
+      const symbol = `${position.asset}USDT`;
+      return position.asset !== "USDT" && eligible.has(symbol) ? [symbol] : [];
+    }),
+  );
+  const prices = tickerPrices(input.tickers, neededSymbols);
   const quoteAge = input.usdtUsdQuote
     ? Math.abs(
         Date.parse(input.observedAt) - input.usdtUsdQuote.quotedAt.getTime(),

@@ -326,6 +326,45 @@ test("生产 Binance 适配器只调用允许的读取端点并覆盖权限、�
           valuation: expect.objectContaining({ status: "unvalued" }),
         }),
       ]));
+
+  const emptyHeldPrice = await request.post(
+    "/test-doubles/binance/production-start",
+    { data: { action: "preview-empty-price" } },
+  );
+  expect(emptyHeldPrice.ok()).toBeTruthy();
+  await expect(emptyHeldPrice.json()).resolves.toMatchObject({
+    snapshot: {
+      total: { amount: "6849.5", currency: "USDT" },
+      holdings: expect.arrayContaining([
+        expect.objectContaining({
+          sourceAsset: "BTC",
+          currentPrice: null,
+          sourceMarketValue: null,
+          valuation: expect.objectContaining({ status: "unvalued" }),
+        }),
+      ]),
+    },
+  });
+});
+
+test("Binance 忽略未持有交易对的空行情，预览与价格刷新均继续", async ({
+  request,
+}) => {
+  for (const action of [
+    "preview-unrelated-empty-price",
+    "refresh-unrelated-empty-price",
+  ]) {
+    const response = await request.post(
+      "/test-doubles/binance/production-start",
+      { data: { action } },
+    );
+    expect(response.ok(), action).toBeTruthy();
+    await expect(response.json()).resolves.toMatchObject({
+      [action.startsWith("refresh-") ? "total" : "snapshot"]: action.startsWith("refresh-")
+        ? { amount: "12849.5", currency: "USDT" }
+        : { total: { amount: "12849.5", currency: "USDT" } },
+    });
+  }
 });
 
 test("Binance 不重复展示已由 Flexible Earn 总额包含的 LD 抵押凭证", async ({

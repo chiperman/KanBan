@@ -302,7 +302,13 @@ function nativeUsdtUsdQuote(
   if (!/^\d+$/.test(timestamp) || !Number.isSafeInteger(Number(timestamp))) return null;
   const quotedAt = new Date(Number(timestamp));
   const age = Math.abs(Date.parse(observedAt) - quotedAt.getTime());
-  const price = decimal(item.last, "last");
+  if (
+    typeof item.last !== "string" ||
+    !/^\d+(?:\.\d+)?$/.test(item.last)
+  ) {
+    return null;
+  }
+  const price = item.last;
   if (!Number.isFinite(age) || age > 5 * 60_000 || !positive(price)) return null;
   return { symbol: "USDT", currency: "USD", price, quotedAt };
 }
@@ -331,6 +337,7 @@ function valuePositions(input: {
   usdtUsdSource?: string | null;
   coverage?: AssetSnapshot["coverage"];
 }): AssetSnapshot {
+  const positionAssets = new Set(input.positions.map((position) => position.asset));
   const livePairs = new Map<string, string>();
   for (const item of list(input.instruments, "OKX instruments data")) {
     if (
@@ -338,11 +345,17 @@ function valuePositions(input: {
       item.state === "live" &&
       item.quoteCcy === "USDT"
     ) {
-      livePairs.set(text(item.baseCcy, "baseCcy"), text(item.instId, "instId"));
+      const baseCcy = text(item.baseCcy, "baseCcy");
+      if (positionAssets.has(baseCcy)) {
+        livePairs.set(baseCcy, text(item.instId, "instId"));
+      }
     }
   }
+  const neededInstruments = new Set(livePairs.values());
   const tickerByInstrument = new Map<string, { price: string; pricedAt: string }>();
   for (const item of list(input.tickers, "OKX tickers data")) {
+    const instrument = text(item.instId, "instId");
+    if (!neededInstruments.has(instrument)) continue;
     const timestamp = text(item.ts, "ts");
     if (!/^\d+$/.test(timestamp) || !Number.isSafeInteger(Number(timestamp))) {
       throw new Error("OKX ticker ts 格式无效");
@@ -350,9 +363,15 @@ function valuePositions(input: {
     const pricedAt = new Date(Number(timestamp));
     const age = Math.abs(Date.parse(input.observedAt) - pricedAt.getTime());
     if (!Number.isFinite(age) || age > 5 * 60_000) continue;
-    const price = decimal(item.last, "last");
+    if (
+      typeof item.last !== "string" ||
+      !/^\d+(?:\.\d+)?$/.test(item.last)
+    ) {
+      continue;
+    }
+    const price = item.last;
     if (!positive(price)) continue;
-    tickerByInstrument.set(text(item.instId, "instId"), {
+    tickerByInstrument.set(instrument, {
       price,
       pricedAt: pricedAt.toISOString(),
     });

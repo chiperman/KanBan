@@ -544,12 +544,20 @@ function nativeUsdtUsdQuote(
     (candidate) => candidate.symbol === "USDTUSD",
   );
   if (!item) return null;
-  const timestamp = text(item.ts, "ts");
+  const timestamp = typeof item.ts === "string" ? item.ts : "";
   if (!/^\d+$/.test(timestamp) || !Number.isSafeInteger(Number(timestamp))) return null;
   const quotedAt = new Date(Number(timestamp));
   const age = Math.abs(Date.parse(observedAt) - quotedAt.getTime());
-  const price = decimal(item.lastPr, "lastPr");
-  if (!Number.isFinite(age) || age > 5 * 60_000 || !positive(price)) return null;
+  const price = typeof item.lastPr === "string" &&
+      /^\d+(?:\.\d+)?$/.test(item.lastPr)
+    ? item.lastPr
+    : null;
+  if (
+    price === null ||
+    !Number.isFinite(age) ||
+    age > 5 * 60_000 ||
+    !positive(price)
+  ) return null;
   return { symbol: "USDT", currency: "USD", price, quotedAt };
 }
 
@@ -578,31 +586,51 @@ function valuePositions(input: {
   targetCurrency: "USDT" | "USD";
   coverage?: AssetSnapshot["coverage"];
 }): AssetSnapshot {
+  const positionAssetKeys = new Set(
+    input.positions.map((position) => position.asset.toUpperCase()),
+  );
   const livePairs = new Map<string, { asset: string; symbol: string }>();
   const normalizedPairs = new Map<string, Array<{ asset: string; symbol: string }>>();
   for (const item of list(input.instruments, "Bitget instruments data")) {
     if (item.status === "online" && item.quoteCoin === "USDT") {
+      if (
+        typeof item.baseCoin !== "string" ||
+        item.baseCoin.length === 0 ||
+        !positionAssetKeys.has(item.baseCoin.toUpperCase()) ||
+        typeof item.symbol !== "string" ||
+        item.symbol.length === 0
+      ) {
+        continue;
+      }
       const pair = {
-        asset: text(item.baseCoin, "baseCoin"),
-        symbol: text(item.symbol, "symbol"),
+        asset: item.baseCoin,
+        symbol: item.symbol,
       };
       livePairs.set(pair.asset, pair);
       const key = pair.asset.toUpperCase();
       normalizedPairs.set(key, [...(normalizedPairs.get(key) ?? []), pair]);
     }
   }
+  const neededInstruments = new Set(
+    [...livePairs.values()].map((pair) => pair.symbol),
+  );
   const tickerByInstrument = new Map<string, { price: string; pricedAt: string }>();
   for (const item of list(input.tickers, "Bitget tickers data")) {
-    const timestamp = text(item.ts, "ts");
+    const symbol = typeof item.symbol === "string" ? item.symbol : null;
+    if (symbol === null || !neededInstruments.has(symbol)) continue;
+    const timestamp = typeof item.ts === "string" ? item.ts : "";
     if (!/^\d+$/.test(timestamp) || !Number.isSafeInteger(Number(timestamp))) {
-      throw new Error("Bitget ticker ts 格式无效");
+      continue;
     }
     const pricedAt = new Date(Number(timestamp));
     const age = Math.abs(Date.parse(input.observedAt) - pricedAt.getTime());
     if (!Number.isFinite(age) || age > 5 * 60_000) continue;
-    const price = decimal(item.lastPr, "lastPr");
-    if (!positive(price)) continue;
-    tickerByInstrument.set(text(item.symbol, "symbol"), {
+    const price = typeof item.lastPr === "string" &&
+        /^\d+(?:\.\d+)?$/.test(item.lastPr)
+      ? item.lastPr
+      : null;
+    if (price === null || !positive(price)) continue;
+    tickerByInstrument.set(symbol, {
       price,
       pricedAt: pricedAt.toISOString(),
     });

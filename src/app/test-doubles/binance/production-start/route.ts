@@ -44,6 +44,8 @@ export async function POST(request: Request) {
     body?.action !== "preview-valid" &&
     body?.action !== "preview-trade" &&
     body?.action !== "preview-missing-price" &&
+    body?.action !== "preview-empty-price" &&
+    body?.action !== "preview-unrelated-empty-price" &&
     body?.action !== "preview-collateral-receipt" &&
     body?.action !== "preview-invalid-locked-status" &&
     body?.action !== "preview-unsafe-position-id" &&
@@ -53,8 +55,10 @@ export async function POST(request: Request) {
     body?.action !== "preview-wrapped-staking" &&
     body?.action !== "preview-product-failure" &&
     body?.action !== "preview-native-usdt-usd" &&
+    body?.action !== "preview-empty-native-usdt-usd" &&
     body?.action !== "preview-usdt-usd-fallback" &&
-    body?.action !== "refresh-prices"
+    body?.action !== "refresh-prices" &&
+    body?.action !== "refresh-unrelated-empty-price"
   ) {
     return Response.json({ error: "Binance 生产测试场景无效" }, { status: 400 });
   }
@@ -76,7 +80,24 @@ export async function POST(request: Request) {
     false,
     investmentScenario,
   );
-  if (body.action === "preview-native-usdt-usd") {
+  if (body.action === "preview-empty-price") {
+    const btc = fixture.tickers.find(({ symbol }) => symbol === "BTCUSDT");
+    if (btc) btc.price = "";
+  }
+  if (body.action === "preview-unrelated-empty-price") {
+    fixture.exchangeInfo.symbols.push({
+      symbol: "BROKENUSDT",
+      status: "TRADING",
+      baseAsset: "BROKEN",
+      quoteAsset: "USDT",
+      isSpotTradingAllowed: true,
+    });
+    fixture.tickers.push({ symbol: "BROKENUSDT", price: "" });
+  }
+  if (
+    body.action === "preview-native-usdt-usd" ||
+    body.action === "preview-empty-native-usdt-usd"
+  ) {
     fixture.exchangeInfo.symbols.push({
       symbol: "USDTUSD",
       status: "TRADING",
@@ -84,7 +105,10 @@ export async function POST(request: Request) {
       quoteAsset: "USD",
       isSpotTradingAllowed: true,
     });
-    fixture.tickers.push({ symbol: "USDTUSD", price: "0.997" });
+    fixture.tickers.push({
+      symbol: "USDTUSD",
+      price: body.action === "preview-empty-native-usdt-usd" ? "" : "0.997",
+    });
   }
   const privateRequests: string[] = [];
   const publicRequests: string[] = [];
@@ -227,7 +251,20 @@ export async function POST(request: Request) {
       apiSecret: API_SECRET,
       observedAt: BINANCE_OBSERVED_AT,
     });
-    if (body.action === "refresh-prices") {
+    if (
+      body.action === "refresh-prices" ||
+      body.action === "refresh-unrelated-empty-price"
+    ) {
+      if (body.action === "refresh-unrelated-empty-price") {
+        fixture.exchangeInfo.symbols.push({
+          symbol: "BROKENUSDT",
+          status: "TRADING",
+          baseAsset: "BROKEN",
+          quoteAsset: "USDT",
+          isSpotTradingAllowed: true,
+        });
+        fixture.tickers.push({ symbol: "BROKENUSDT", price: "" });
+      }
       privateRequests.length = 0;
       publicRequests.length = 0;
       const refreshed = await new ProductionBinanceSourceRefresher(

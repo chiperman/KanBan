@@ -36,8 +36,11 @@ export async function POST(request: Request) {
     "preview-strategy-equity",
     "preview-unreconciled-equity",
     "preview-missing-price",
+    "preview-empty-price",
     "preview-zero-price",
+    "preview-unrelated-empty-last",
     "preview-native-usdt-usd",
+    "preview-empty-native-usdt-usd",
     "preview-usdt-usd-fallback",
     "refresh-prices",
     "refresh-older-ticker",
@@ -90,11 +93,33 @@ export async function POST(request: Request) {
       frozenBal: "0",
     });
   }
+  if (body.action === "preview-empty-price") {
+    const btc = fixture.tickers.data.find(({ instId }) => instId === "BTC-USDT");
+    if (btc) btc.last = "";
+  }
   if (body.action === "preview-zero-price") {
     const btc = fixture.tickers.data.find(({ instId }) => instId === "BTC-USDT");
     if (btc) btc.last = "0";
   }
-  if (body.action === "preview-native-usdt-usd") {
+  if (body.action === "preview-unrelated-empty-last") {
+    (fixture.instruments.data as Array<Record<string, unknown>>).push({
+      instType: "SPOT",
+      instId: "GRVT-USDT",
+      baseCcy: "GRVT",
+      quoteCcy: "USDT",
+      state: "live",
+    });
+    (fixture.tickers.data as Array<Record<string, unknown>>).push({
+      instType: "SPOT",
+      instId: "GRVT-USDT",
+      last: "",
+      ts: String(Date.parse(OKX_OBSERVED_AT)),
+    });
+  }
+  if (
+    body.action === "preview-native-usdt-usd" ||
+    body.action === "preview-empty-native-usdt-usd"
+  ) {
     (fixture.instruments.data as Array<Record<string, unknown>>).push({
       instType: "SPOT",
       instId: "USDT-USD",
@@ -105,7 +130,7 @@ export async function POST(request: Request) {
     (fixture.tickers.data as Array<Record<string, unknown>>).push({
       instType: "SPOT",
       instId: "USDT-USD",
-      last: "0.997",
+      last: body.action === "preview-empty-native-usdt-usd" ? "" : "0.997",
       ts: String(Date.parse(OKX_OBSERVED_AT)),
     });
   }

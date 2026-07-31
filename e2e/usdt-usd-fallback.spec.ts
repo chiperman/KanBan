@@ -72,3 +72,27 @@ test("来源原生 USDT/USD 缺失时只请求一次 CoinGecko 参考价", async
     });
   }
 });
+
+test("来源原生 USDT/USD 成交价为空时使用 CoinGecko 参考价", async ({
+  request,
+}) => {
+  for (const provider of ["binance", "okx", "bitget"] as const) {
+    const response = await request.post(
+      `/test-doubles/${provider}/production-start`,
+      { data: { action: "preview-empty-native-usdt-usd" } },
+    );
+
+    expect(response.ok(), provider).toBeTruthy();
+    await expect(response.json()).resolves.toMatchObject({
+      snapshot: {
+        exchangeRates: [{
+          baseCurrency: "USDT",
+          quoteCurrency: "USD",
+          rate: "0.998",
+          source: "CoinGecko Tether/USD 参考价格",
+        }],
+      },
+      referencePriceRequests: 1,
+    });
+  }
+});

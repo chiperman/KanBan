@@ -33,10 +33,14 @@ export async function POST(request: Request) {
     "preview-withdraw",
     "preview-unknown",
     "preview-missing-price",
+    "preview-empty-price",
+    "preview-unrelated-empty-last",
     "preview-zero-price",
     "preview-native-usdt-usd",
+    "preview-empty-native-usdt-usd",
     "preview-usdt-usd-fallback",
     "refresh-prices",
+    "refresh-unrelated-empty-last",
     "refresh-older-ticker",
     "refresh-all-older-ticker",
     "timestamp-retry",
@@ -113,7 +117,27 @@ export async function POST(request: Request) {
       usdtValue: "0",
     });
   }
-  if (body.action === "preview-native-usdt-usd") {
+  if (body.action === "preview-empty-price") {
+    const btc = fixture.tickers.data.find(({ symbol }) => symbol === "BTCUSDT");
+    if (btc) btc.lastPr = "";
+  }
+  if (body.action === "preview-unrelated-empty-last") {
+    fixture.instruments.data.push({
+      symbol: "BROKENUSDT",
+      baseCoin: "BROKEN",
+      quoteCoin: "USDT",
+      status: "online",
+    });
+    fixture.tickers.data.push({
+      symbol: "BROKENUSDT",
+      lastPr: "",
+      ts: String(Date.parse(BITGET_OBSERVED_AT)),
+    });
+  }
+  if (
+    body.action === "preview-native-usdt-usd" ||
+    body.action === "preview-empty-native-usdt-usd"
+  ) {
     fixture.instruments.data.push({
       symbol: "USDTUSD",
       baseCoin: "USDT",
@@ -122,7 +146,7 @@ export async function POST(request: Request) {
     });
     fixture.tickers.data.push({
       symbol: "USDTUSD",
-      lastPr: "0.997",
+      lastPr: body.action === "preview-empty-native-usdt-usd" ? "" : "0.997",
       ts: String(Date.parse(BITGET_OBSERVED_AT)),
     });
   }
@@ -401,9 +425,25 @@ export async function POST(request: Request) {
     });
     if (
       body.action === "refresh-prices" ||
+      body.action === "refresh-unrelated-empty-last" ||
       body.action === "refresh-older-ticker" ||
       body.action === "refresh-all-older-ticker"
     ) {
+      if (
+        body.action === "refresh-unrelated-empty-last"
+      ) {
+        fixture.instruments.data.push({
+          symbol: "BROKENUSDT",
+          baseCoin: "BROKEN",
+          quoteCoin: "USDT",
+          status: "online",
+        });
+        fixture.tickers.data.push({
+          symbol: "BROKENUSDT",
+          lastPr: "",
+          ts: String(Date.parse(BITGET_OBSERVED_AT)),
+        });
+      }
       if (
         body.action === "refresh-older-ticker" ||
         body.action === "refresh-all-older-ticker"
