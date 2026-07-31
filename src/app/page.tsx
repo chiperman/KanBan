@@ -5,11 +5,11 @@ import {
 } from "@/server/auth/canonical-origin"
 import { getServices } from "@/server/composition"
 import { HeaderUtilities } from "@/ui/header-utilities"
+import { LocalClock } from "@/ui/local-clock"
 import { LogoutButton } from "@/ui/logout-button"
 import { OwnerDashboard } from "@/ui/owner-dashboard"
 import { OwnerLogin } from "@/ui/owner-login"
 import { SessionGuard } from "@/ui/session-guard"
-import { ShanghaiClock } from "@/ui/shanghai-clock"
 import { ThemeSwitcher } from "@/ui/theme-switcher"
 
 export const dynamic = "force-dynamic"
@@ -39,7 +39,7 @@ export default async function AssetDashboardPage({
             </span>
           </div>
           <div className="header-side">
-            <ShanghaiClock initialTime={new Date().toISOString()} compact />
+            <LocalClock initialTime={new Date().toISOString()} compact />
             <ThemeSwitcher />
           </div>
         </header>
@@ -79,7 +79,7 @@ export default async function AssetDashboardPage({
           </div>
           <div className="header-side">
             <span className="header-system">EXTERNAL ACCESS / READ ONLY</span>
-            <ShanghaiClock initialTime={now.toISOString()} compact />
+            <LocalClock initialTime={now.toISOString()} compact />
             <HeaderUtilities
               refreshEnabled={assetSources.some((source) => source.lifecycle !== "disconnected")}
             />

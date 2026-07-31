@@ -6,6 +6,7 @@ import {
   type PageSearchParams,
 } from "@/server/auth/canonical-origin";
 import { getServices } from "@/server/composition";
+import { LocalClock } from "@/ui/local-clock";
 import { LogoutButton } from "@/ui/logout-button";
 import {
   isProfitColorScheme,
@@ -14,7 +15,6 @@ import {
 import { ProfitColorSettings } from "@/ui/profit-color-settings";
 import { RecoverySetup } from "@/ui/recovery-setup";
 import { SessionGuard } from "@/ui/session-guard";
-import { ShanghaiClock } from "@/ui/shanghai-clock";
 import { ThemeSwitcher } from "@/ui/theme-switcher";
 import { VibeLink } from "@/ui/vibe/vibe-button";
 
@@ -56,7 +56,7 @@ export default async function SettingsPage({
             </p>
           </div>
           <div className="header-side">
-            <ShanghaiClock initialTime={now.toISOString()} compact />
+            <LocalClock initialTime={now.toISOString()} compact />
             <VibeLink className="header-action-button" href="/" variant="outline">
               返回资产看板
             </VibeLink>

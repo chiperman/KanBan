@@ -8,14 +8,6 @@ const shanghaiDateTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
   hourCycle: "h23",
 });
 
-const shanghaiTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
-  timeZone: "Asia/Shanghai",
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
-  hourCycle: "h23",
-});
-
 function dateTimeParts(
   formatter: Intl.DateTimeFormat,
   value: string | Date,
@@ -33,12 +25,6 @@ export function formatShanghaiDateTime(value: string | Date): string {
   const parts = dateTimeParts(shanghaiDateTimeFormatter, value);
 
   return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
-}
-
-export function formatShanghaiTime(value: string | Date): string {
-  const parts = dateTimeParts(shanghaiTimeFormatter, value);
-
-  return `${parts.hour}:${parts.minute}:${parts.second}`;
 }
 
 export function formatShanghaiDayLabel(day: string): string {

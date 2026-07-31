@@ -159,8 +159,8 @@ test("所有者可从锁定首页完成首次预置并返回登录资产看板",
 
   await login(page);
   await expect(page.getByTestId("view-mode")).toContainText("资产看板");
-  await expect(page.getByTestId("server-time")).toContainText("SHANGHAI");
-  await expect(page.getByTestId("server-time")).not.toContainText("UTC");
+  await expect(page.getByTestId("local-time")).toBeVisible();
+  await expect(page.getByTestId("local-time")).not.toContainText("LOCAL");
   const asset = page.getByTestId("card").filter({ hasText: SENSITIVE_TITLE });
   await expect(asset).toHaveCount(1);
   await expect(asset).toContainText(SENSITIVE_BODY);

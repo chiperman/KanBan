@@ -62,9 +62,9 @@ test("盈亏颜色设置首屏不会先显示错误的默认选项", async ({ br
 test("看板时间、来源状态和普通卡片遵守 Vibe 视觉层级", async ({ page }) => {
   await loginAsOwner(page)
 
-  await expect(page.getByTestId("server-time")).toContainText("SHANGHAI")
-  await expect(page.getByTestId("server-time")).not.toContainText("UTC")
-  await expect(page.getByTestId("server-time")).toHaveCSS("font-size", "12px")
+  await expect(page.getByTestId("local-time")).toBeVisible()
+  await expect(page.getByTestId("local-time")).not.toContainText("LOCAL")
+  await expect(page.getByTestId("local-time")).toHaveCSS("font-size", "12px")
   await expect(page.getByTestId("asset-refresh-status")).toHaveAttribute(
     "data-vibe-tone",
     "success"
