@@ -16,6 +16,7 @@ const ASSET_PRODUCT_LABELS: Record<string, string> = {
   "savings-flexible": "Savings Flexible",
   "savings-fixed": "Savings Fixed",
   "futures-bot": "Futures Bots",
+  futures: "Futures",
   "dual-investment": "Dual Investment",
   "dual-investment-rfq": "Dual Investment RFQ",
   "discount-buy": "Discount Buy",
@@ -25,6 +26,7 @@ const ASSET_PRODUCT_LABELS: Record<string, string> = {
   "sol-staking": "SOL Staking",
   "onchain-yields": "On-chain Yields",
   "onchain-earn": "On-chain Earn",
+  "onchain-elite": "On-chain Elite",
   sharkfin: "SharkFin",
   "soft-staking": "Soft Staking",
   "smart-arbitrage": "Smart Arbitrage",
@@ -46,6 +48,10 @@ const HOLDING_PRODUCT_LABELS: Record<string, string> = {
   "sol-staking": "SOL 质押",
   "onchain-yields": "链上收益",
   "onchain-yields-locked": "链上收益（定期）",
+  "onchain-earn": "链上 Earn",
+  "onchain-elite": "On-chain Elite",
+  sharkfin: "SharkFin",
+  savings: "Savings",
   "soft-staking": "软质押",
 };
 

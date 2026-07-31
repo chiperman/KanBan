@@ -7,6 +7,7 @@ import {
   decimalCompare,
   decimalDivide,
   decimalMultiply,
+  decimalSubtract,
 } from "@/domain/decimal";
 import type {
   AssetHolding,
@@ -77,6 +78,8 @@ interface BitgetPosition {
   asset: string;
   quantity: string;
   account: NonNullable<AssetHolding["sourceAccount"]>;
+  sourceProduct: string;
+  providerPositionId?: string;
   nativeValue?: {
     amount: string;
     currency: "USDT" | "USD";
@@ -95,6 +98,9 @@ interface BitgetIdentity {
 }
 
 const BITGET_ORIGIN = "https://api.bitget.com";
+const BITGET_RECONCILIATION_MIN_TOLERANCE = "0.5";
+const BITGET_RECONCILIATION_RATE = "0.0001";
+const BITGET_RECONCILIATION_MAX_TOLERANCE = "5";
 const READ_ONLY_AUTHORITIES = new Set([
   "coor",
   "cpor",
@@ -243,13 +249,41 @@ function addPosition(
   quantity: string,
   account: BitgetPosition["account"],
   nativeValue?: BitgetPosition["nativeValue"],
+  detail: {
+    sourceProduct?: string;
+    providerPositionId?: string;
+  } = {},
 ): void {
   if (!positive(quantity)) return;
-  const key = `${account}:${asset}`;
+  const sourceProduct = detail.sourceProduct ?? (
+    account === "spot"
+      ? "spot"
+      : account === "funding"
+        ? "funding"
+        : account === "trading-bot"
+          ? "futures-bot"
+          : account === "earn-flexible"
+            ? "savings-flexible"
+            : account === "earn-locked"
+              ? "savings-fixed"
+              : account === "staking"
+                ? "onchain-elite"
+                : "savings"
+  );
+  const key = [
+    account,
+    sourceProduct,
+    detail.providerPositionId ?? "aggregate",
+    asset,
+  ].join(":");
   const previous = values.get(key);
   values.set(key, {
     asset,
     account,
+    sourceProduct,
+    ...(detail.providerPositionId
+      ? { providerPositionId: detail.providerPositionId }
+      : {}),
     quantity: previous ? decimalAdd(previous.quantity, quantity) : quantity,
     nativeValue: previous ? undefined : nativeValue,
   });
@@ -262,6 +296,8 @@ function extractClassicPositions(input: {
   savingsOverview: unknown;
   flexiblePages: unknown[];
   fixedPages: unknown[];
+  sharkfinAccount: unknown;
+  eliteAssets: unknown;
   observedAt: string;
   fundingObservedAt?: string;
   botObservedAt?: string;
@@ -364,9 +400,74 @@ function extractClassicPositions(input: {
     ) {
       continue;
     }
-    positions.delete(`earn-flexible:${coin}`);
-    positions.delete(`earn-locked:${coin}`);
-    addPosition(positions, coin, overviewAmount, "earn");
+    positions.delete(
+      ["earn-flexible", "savings-flexible", "aggregate", coin].join(":"),
+    );
+    positions.delete(
+      ["earn-locked", "savings-fixed", "aggregate", coin].join(":"),
+    );
+    addPosition(
+      positions,
+      coin,
+      overviewAmount,
+      "earn",
+      undefined,
+      { sourceProduct: "savings" },
+    );
+  }
+  const sharkfin = record(
+    input.sharkfinAccount,
+    "Bitget earn/sharkfin/account data",
+  );
+  const sharkfinAmount = decimal(
+    sharkfin.usdtSubscribeAmount,
+    "usdtSubscribeAmount",
+  );
+  addPosition(
+    positions,
+    "USDT",
+    sharkfinAmount,
+    "earn",
+    {
+      amount: sharkfinAmount,
+      currency: "USDT",
+      pricedAt: input.observedAt,
+      source: "Bitget SharkFin usdtSubscribeAmount",
+    },
+    {
+      sourceProduct: "sharkfin",
+      providerPositionId: "aggregate",
+    },
+  );
+  const elite = record(input.eliteAssets, "Bitget earn/elite/assets data");
+  const eliteIds = new Set<string>();
+  for (
+    const item of list(
+      elite.resultList,
+      "Bitget earn/elite/assets resultList",
+    )
+  ) {
+    const productId = text(item.productId, "productId");
+    if (eliteIds.has(productId)) {
+      throw new Error("Bitget On-chain Elite 出现重复 productId");
+    }
+    eliteIds.add(productId);
+    addPosition(
+      positions,
+      text(item.productCoin, "productCoin"),
+      decimal(item.holdingAmount, "holdingAmount"),
+      "staking",
+      {
+        amount: decimal(item.usdtHoldingAmount, "usdtHoldingAmount"),
+        currency: "USDT",
+        pricedAt: input.observedAt,
+        source: "Bitget On-chain Elite usdtHoldingAmount",
+      },
+      {
+        sourceProduct: "onchain-elite",
+        providerPositionId: productId,
+      },
+    );
   }
   return [...positions.values()];
 }
@@ -377,6 +478,8 @@ function extractUtaPositions(input: {
   savingsOverview: unknown;
   flexiblePages: unknown[];
   fixedPages: unknown[];
+  sharkfinAccount: unknown;
+  eliteAssets: unknown;
   observedAt: string;
   assetsObservedAt: string;
 }): BitgetPosition[] {
@@ -421,6 +524,8 @@ function extractUtaPositions(input: {
     savingsOverview: input.savingsOverview,
     flexiblePages: input.flexiblePages,
     fixedPages: input.fixedPages,
+    sharkfinAccount: input.sharkfinAccount,
+    eliteAssets: input.eliteAssets,
     observedAt: input.observedAt,
   });
   const nativeByCoin = new Map(
@@ -450,14 +555,24 @@ function scopeLabel(scope: AssetHolding["sourceAccount"]): string {
   if (scope === "earn-flexible") return "活期 Earn";
   if (scope === "earn-locked") return "定期 Earn";
   if (scope === "earn") return "Earn";
+  if (scope === "staking") return "On-chain Elite";
   return "Bitget";
 }
 
 function bitgetCoverage(
   accountMode: BitgetAccountMode,
   positions: readonly BitgetPosition[],
+  input: {
+    status: NonNullable<AssetSnapshot["coverage"]>["status"];
+    unexplainedValue: NonNullable<
+      AssetSnapshot["coverage"]
+    >["unexplainedValue"];
+    excludedPositiveAccounts: string[];
+  },
 ): NonNullable<AssetSnapshot["coverage"]> {
-  const hasAggregateEarn = positions.some(({ account }) => account === "earn");
+  const hasAggregateEarn = positions.some(
+    ({ sourceProduct }) => sourceProduct === "savings",
+  );
   const savingsCapability = hasAggregateEarn
     ? "aggregate-only" as const
     : "detailed" as const;
@@ -491,32 +606,151 @@ function bitgetCoverage(
     },
   ];
   if (accountMode === "classic") {
-    products.push({
-      product: "futures-bot",
-      capability: "aggregate-only",
-      freshness: "current",
-      message: "读取平台聚合账户权益，不展开机器人订单和普通合约仓位",
-    });
+    products.push(
+      {
+        product: "futures-bot",
+        capability: "aggregate-only",
+        freshness: "current",
+        message: "读取平台聚合账户权益，不展开机器人订单",
+      },
+      {
+        product: "futures",
+        capability: "aggregate-only",
+        freshness: "current",
+        message: "平台总额已覆盖普通合约相关权益，不与 Futures Bots 重复相加；不展开仓位、保证金或未实现盈亏",
+      },
+    );
   }
   products.push(
     {
       product: "sharkfin",
-      capability: "unsupported",
+      capability: "aggregate-only",
       freshness: "current",
-      message: "官方提供只读资产查询，但当前适配器尚未接入",
+      message: "读取 SharkFin 账户聚合估值，官方当前记录不提供逐仓本金",
     },
     {
-      product: "onchain-earn",
-      capability: "unsupported",
+      product: "onchain-elite",
+      capability: "detailed",
       freshness: "current",
-      message: "官方提供只读资产查询，但当前适配器尚未接入",
+      message: null,
     },
   );
   return {
-    status: "partial",
+    status: input.status,
     products,
-    unexplainedValue: null,
-    excludedPositiveAccounts: [],
+    unexplainedValue: input.unexplainedValue,
+    excludedPositiveAccounts: input.excludedPositiveAccounts,
+  };
+}
+
+function classicAccountCoverage(input: {
+  overview: unknown;
+  snapshot: AssetSnapshot;
+  positions: readonly BitgetPosition[];
+}): {
+  total: AssetSnapshot["total"];
+  coverage: NonNullable<AssetSnapshot["coverage"]>;
+} {
+  const balances = new Map<string, string>();
+  for (
+    const item of list(
+      input.overview,
+      "Bitget account/all-account-balance data",
+    )
+  ) {
+    const accountType = text(item.accountType, "accountType");
+    if (balances.has(accountType)) {
+      throw new Error("Bitget 全账户总览出现重复 accountType");
+    }
+    balances.set(
+      accountType,
+      decimal(item.usdtBalance, "usdtBalance"),
+    );
+  }
+  const includedTypes = ["spot", "funding", "earn", "bots"] as const;
+  const excludedPositiveAccounts = [...balances.entries()]
+    .filter(([accountType, amount]) =>
+      accountType !== "futures" &&
+      !includedTypes.includes(accountType as typeof includedTypes[number]) &&
+      positive(amount)
+    )
+    .map(([accountType]) => accountType);
+  const total = decimalAdd(
+    ...includedTypes.map((accountType) => balances.get(accountType) ?? "0"),
+  );
+  const partitionByAccount = new Map<string, string>([
+    ["spot", "spot"],
+    ["funding", "funding"],
+    ["trading-bot", "bots"],
+    ["earn-flexible", "earn"],
+    ["earn-locked", "earn"],
+    ["earn", "earn"],
+    ["staking", "earn"],
+  ]);
+  const detailedTotals = new Map<string, string>();
+  const incompletePartitions = new Set<string>();
+  for (const holding of input.snapshot.holdings) {
+    const partition = holding.sourceAccount
+      ? partitionByAccount.get(holding.sourceAccount)
+      : undefined;
+    if (!partition) continue;
+    if (holding.sourceMarketValue === null) {
+      incompletePartitions.add(partition);
+      continue;
+    }
+    detailedTotals.set(
+      partition,
+      decimalAdd(
+        detailedTotals.get(partition) ?? "0",
+        holding.sourceMarketValue.amount,
+      ),
+    );
+  }
+  let netDifference = "0";
+  for (const partition of includedTypes) {
+    if (incompletePartitions.has(partition)) continue;
+    const difference = decimalSubtract(
+      balances.get(partition) ?? "0",
+      detailedTotals.get(partition) ?? "0",
+    );
+    netDifference = decimalAdd(netDifference, difference);
+  }
+  const absoluteDifference = decimalCompare(netDifference, "0") < 0
+    ? decimalSubtract("0", netDifference)
+    : netDifference;
+  const proportionalTolerance = decimalMultiply(
+    total,
+    BITGET_RECONCILIATION_RATE,
+  );
+  const cappedTolerance = decimalCompare(
+      proportionalTolerance,
+      BITGET_RECONCILIATION_MAX_TOLERANCE,
+    ) > 0
+    ? BITGET_RECONCILIATION_MAX_TOLERANCE
+    : proportionalTolerance;
+  const reconciliationTolerance = decimalCompare(
+      cappedTolerance,
+      BITGET_RECONCILIATION_MIN_TOLERANCE,
+    ) < 0
+    ? BITGET_RECONCILIATION_MIN_TOLERANCE
+    : cappedTolerance;
+  const unexplainedValue = decimalCompare(
+      absoluteDifference,
+      reconciliationTolerance,
+    ) > 0
+    ? { amount: absoluteDifference, currency: "USDT" }
+    : null;
+  const status =
+    unexplainedValue === null && excludedPositiveAccounts.length === 0
+      ? "complete"
+      : "partial";
+  return {
+    total: { amount: total, currency: "USDT" },
+    coverage: bitgetCoverage("classic", input.positions, {
+        status,
+        unexplainedValue,
+        excludedPositiveAccounts,
+      }),
   };
 }
 
@@ -585,6 +819,7 @@ function valuePositions(input: {
   usdtUsdSource?: string | null;
   targetCurrency: "USDT" | "USD";
   coverage?: AssetSnapshot["coverage"];
+  authoritativeTotal?: AssetSnapshot["total"];
 }): AssetSnapshot {
   const positionAssetKeys = new Set(
     input.positions.map((position) => position.asset.toUpperCase()),
@@ -681,6 +916,21 @@ function valuePositions(input: {
       pricedAt = position.nativeValue.pricedAt;
       priceSource = position.nativeValue.source;
     } else if (
+      position.nativeValue &&
+      position.nativeValue.currency === "USDT" &&
+      input.targetCurrency === "USD" &&
+      positive(position.nativeValue.amount) &&
+      Number.isFinite(nativeAge) &&
+      nativeAge <= 5 * 60_000
+    ) {
+      marketValue = decimalMultiply(
+        position.nativeValue.amount,
+        usdtUsdQuote.price,
+      );
+      price = decimalDivide(marketValue, position.quantity);
+      pricedAt = position.nativeValue.pricedAt;
+      priceSource = `${position.nativeValue.source} × ${usdtUsdSource}`;
+    } else if (
       displayAsset === "USDT" &&
       input.targetCurrency === "USDT"
     ) {
@@ -716,16 +966,25 @@ function valuePositions(input: {
         name: `${displayAsset} · ${scopeLabel(position.account)}`,
         sourceAsset: position.asset,
         sourceAccount: position.account,
+        sourceProduct: position.sourceProduct,
+        ...(position.providerPositionId
+          ? { providerPositionId: position.providerPositionId }
+          : {}),
         quantity: position.quantity,
         currency: input.targetCurrency,
         assetClass: "crypto",
         currentPrice: null,
         marketValue: null,
         sourceMarketValue: null,
-        valuation: {
-          status: "unvalued",
-          reason: `Bitget 没有可靠的 ${displayAsset} ${input.targetCurrency} 估值`,
-        },
+        valuation: input.authoritativeTotal
+          ? {
+              status: "quote-unavailable",
+              reason: `Bitget 平台总额已包含，但没有可靠的 ${displayAsset} ${input.targetCurrency} 持仓行情`,
+            }
+          : {
+              status: "unvalued",
+              reason: `Bitget 没有可靠的 ${displayAsset} ${input.targetCurrency} 估值`,
+            },
         costPrice: null,
         platformProfit: null,
         changePercent: null,
@@ -737,6 +996,10 @@ function valuePositions(input: {
       name: `${displayAsset} · ${scopeLabel(position.account)}`,
       sourceAsset: position.asset,
       sourceAccount: position.account,
+      sourceProduct: position.sourceProduct,
+      ...(position.providerPositionId
+        ? { providerPositionId: position.providerPositionId }
+        : {}),
       quantity: position.quantity,
       currency: input.targetCurrency,
       assetClass: "crypto",
@@ -755,7 +1018,10 @@ function valuePositions(input: {
   });
   holdings.sort(compareHoldingValue);
   return {
-    total: { amount: total, currency: input.targetCurrency },
+    total: input.authoritativeTotal ?? {
+      amount: total,
+      currency: input.targetCurrency,
+    },
     holdings,
     exchangeRates: input.targetCurrency === "USDT"
       ? [{
@@ -777,13 +1043,23 @@ function preserveNewerPrices(
 ): AssetSnapshot {
   const previousByPosition = new Map(
     previous.holdings.map((holding) => [
-      `${holding.sourceAccount ?? "default"}:${holding.sourceAsset ?? holding.symbol}`,
+      [
+        holding.sourceAccount ?? "default",
+        holding.sourceProduct ?? "legacy",
+        holding.providerPositionId ?? "aggregate",
+        holding.sourceAsset ?? holding.symbol,
+      ].join(":"),
       holding,
     ]),
   );
   const holdings = candidate.holdings.map((holding) => {
     const prior = previousByPosition.get(
-      `${holding.sourceAccount ?? "default"}:${holding.sourceAsset ?? holding.symbol}`,
+      [
+        holding.sourceAccount ?? "default",
+        holding.sourceProduct ?? "legacy",
+        holding.providerPositionId ?? "aggregate",
+        holding.sourceAsset ?? holding.symbol,
+      ].join(":"),
     );
     if (
       prior?.valuation.status === "valued" &&
@@ -814,7 +1090,9 @@ function preserveNewerPrices(
   );
   return {
     ...candidate,
-    total: { amount: total, currency: candidate.total.currency },
+    total: candidate.coverage?.status === "complete"
+      ? candidate.total
+      : { amount: total, currency: candidate.total.currency },
     holdings: holdings.sort(compareHoldingValue),
   };
 }
@@ -972,8 +1250,13 @@ class BitgetClient {
       { accountType: "futures" },
     );
   }
-  private async waitForEarnSlot(): Promise<void> {
-    const wait = this.lastEarnRequestAt + this.runtime.earnRequestIntervalMs -
+  allAccountBalance() {
+    return this.data("/api/v2/account/all-account-balance");
+  }
+  private async waitForEarnSlot(
+    intervalMs = this.runtime.earnRequestIntervalMs,
+  ): Promise<void> {
+    const wait = this.lastEarnRequestAt + intervalMs -
       this.runtime.now();
     if (wait > 0) await this.runtime.sleep(wait, this.signal);
     this.lastEarnRequestAt = this.runtime.now();
@@ -996,6 +1279,16 @@ class BitgetClient {
       endTime,
       ...(idLessThan ? { idLessThan } : {}),
     });
+  }
+  async sharkfinAccount() {
+    await this.waitForEarnSlot();
+    return this.data("/api/v2/earn/sharkfin/account");
+  }
+  async eliteAssets() {
+    await this.waitForEarnSlot(
+      Math.max(this.runtime.earnRequestIntervalMs, 200),
+    );
+    return this.data("/api/v2/earn/elite/assets");
   }
   utaPositions(category: string) {
     return this.data("/api/v3/position/current-position", { category });
@@ -1125,6 +1418,9 @@ async function readFullSnapshot(input: {
   const botObservation = input.accountMode === "classic"
     ? await input.client.botAssets()
     : null;
+  const allAccountBalance = input.accountMode === "classic"
+    ? await input.client.allAccountBalance()
+    : null;
   const accountAssets = accountAssetsObservation.data;
   const funding = fundingObservation.data;
   const savingsOverview = await input.client.earnOverview();
@@ -1140,6 +1436,8 @@ async function readFullSnapshot(input: {
     identity.registeredAt,
     input.observedAt,
   );
+  const sharkfinAccount = await input.client.sharkfinAccount();
+  const eliteAssets = await input.client.eliteAssets();
   const [instruments, tickers] = await Promise.all([
     input.client.instruments(),
     input.client.tickers(),
@@ -1158,6 +1456,8 @@ async function readFullSnapshot(input: {
         savingsOverview,
         flexiblePages,
         fixedPages,
+        sharkfinAccount,
+        eliteAssets,
         observedAt: input.observedAt,
         fundingObservedAt: fundingObservation.requestTime,
         botObservedAt: botObservation?.requestTime,
@@ -1168,12 +1468,17 @@ async function readFullSnapshot(input: {
         savingsOverview,
         flexiblePages,
         fixedPages,
+        sharkfinAccount,
+        eliteAssets,
         observedAt: input.observedAt,
         assetsObservedAt: accountAssetsObservation.requestTime,
       });
-  return {
-    identity,
-    snapshot: valuePositions({
+  const provisionalCoverage = bitgetCoverage(input.accountMode, positions, {
+    status: "complete",
+    unexplainedValue: null,
+    excludedPositiveAccounts: [],
+  });
+  const provisionalSnapshot = valuePositions({
       positions,
       instruments,
       tickers,
@@ -1181,8 +1486,28 @@ async function readFullSnapshot(input: {
       usdtUsdQuote: usdtUsd.quote,
       usdtUsdSource: usdtUsd.source,
       targetCurrency: input.accountMode === "uta" ? "USD" : "USDT",
-      coverage: bitgetCoverage(input.accountMode, positions),
-    }),
+      coverage: provisionalCoverage,
+      ...(input.accountMode === "classic"
+        ? {
+            authoritativeTotal: {
+              amount: "0",
+              currency: "USDT",
+            },
+          }
+        : {}),
+    });
+  if (input.accountMode === "classic") {
+    const accountCoverage = classicAccountCoverage({
+      overview: allAccountBalance,
+      snapshot: provisionalSnapshot,
+      positions,
+    });
+    provisionalSnapshot.total = accountCoverage.total;
+    provisionalSnapshot.coverage = accountCoverage.coverage;
+  }
+  return {
+    identity,
+    snapshot: provisionalSnapshot,
   };
 }
 
@@ -1290,6 +1615,10 @@ export class ProductionBitgetSourceRefresher implements AssetSourceRefresher {
               asset: holding.sourceAsset,
               account: holding.sourceAccount,
               quantity: holding.quantity,
+              sourceProduct: holding.sourceProduct ?? "legacy",
+              ...(holding.providerPositionId
+                ? { providerPositionId: holding.providerPositionId }
+                : {}),
             };
           }),
           instruments,
@@ -1299,6 +1628,9 @@ export class ProductionBitgetSourceRefresher implements AssetSourceRefresher {
           usdtUsdSource: usdtUsd.source,
           targetCurrency: source.snapshot.total.currency === "USD" ? "USD" : "USDT",
           coverage: source.snapshot.coverage,
+          ...(source.snapshot.coverage?.status === "complete"
+            ? { authoritativeTotal: source.snapshot.total }
+            : {}),
         });
       return {
         snapshot: preserveNewerPrices(source.snapshot, candidate),

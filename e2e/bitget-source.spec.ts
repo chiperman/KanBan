@@ -87,26 +87,28 @@ test("Bitget 只读凭证先预览后原子保存，并展示现货、资金、E
     name: "确认 Bitget 资产来源",
   });
   await expect(preview).toContainText("Bitget 账户 · UID 770001");
-  await expect(preview).toContainText("现货、资金、Earn、合约交易机器人（只读）");
+  await expect(preview).toContainText(
+    "现货、资金、Savings、SharkFin、On-chain Elite、普通 Futures（平台总额已含，不展开仓位）、合约交易机器人（只读）",
+  );
   await expect(preview).toContainText("Classic Account");
-  await expect(preview).toContainText("10,987.65 USDT");
+  await expect(preview).toContainText("11,641.99 USDT");
   await expect(page.getByText(API_SECRET)).toHaveCount(0);
   await expect(page.getByText(PASSPHRASE)).toHaveCount(0);
 
   await preview.getByRole("button", { name: "确认并保存" }).click();
   const card = page.getByTestId("bitget-card");
   await expect(card.getByTestId("asset-source-total")).toHaveText(
-    "10,987.65 USDT",
+    "11,641.99 USDT",
   );
   await expect(
     card.getByTestId("holding-top-list").getByRole("listitem"),
   ).toHaveCount(3);
   await expect(card).toContainText("现货");
   await expect(card.getByTestId("bitget-coverage-status")).toContainText(
-    "产品统计不完整",
+    "当前总额完整 · 部分产品仅汇总",
   );
   const coverage = card.getByTestId("bitget-product-coverage");
-  await expect(coverage).toContainText("07 PRODUCTS");
+  await expect(coverage).toContainText("08 PRODUCTS");
   const resizeHandle = page.getByRole("button", {
     name: /调整\s*Bitget 资产宽度/,
   });
@@ -121,6 +123,8 @@ test("Bitget 只读凭证先预览后原子保存，并展示现货、资金、E
   await coverage.locator("summary").click();
   await expect(coverage).toContainText("SharkFin");
   await expect(coverage).toContainText("Futures Bots");
+  await expect(coverage).toContainText("Futures");
+  await expect(coverage).toContainText("平台总额已覆盖普通合约相关权益");
   expect(responseBodies.join("\n")).not.toContain(API_SECRET);
   expect(responseBodies.join("\n")).not.toContain(PASSPHRASE);
 });
@@ -171,7 +175,7 @@ test("Bitget 写权限、确认前范围变化和保存失败均不留下来源�
   expect(await state(page)).toEqual({ savedSources: 0, savedSecrets: 0 });
 });
 
-test("生产 Bitget Classic 适配器读取 Spot、Funding、Savings 与合约交易机器人，并验证签名和分页", async ({
+test("生产 Bitget Classic 适配器以账户分区守恒并覆盖 SharkFin 与 On-chain Elite", async ({
   request,
 }) => {
   const response = await request.post("/test-doubles/bitget/production-start", {
@@ -184,9 +188,9 @@ test("生产 Bitget Classic 适配器读取 Spot、Funding、Savings 与合约�
     id: "bitget:770001",
     label: "Bitget 账户 · UID 770001",
   });
-  expect(body.snapshot.total).toEqual({ amount: "11141.98687228", currency: "USDT" });
+  expect(body.snapshot.total).toEqual({ amount: "11641.98687228", currency: "USDT" });
   expect(body.snapshot.coverage).toEqual({
-    status: "partial",
+    status: "complete",
     products: [
       {
         product: "spot",
@@ -216,19 +220,25 @@ test("生产 Bitget Classic 适配器读取 Spot、Funding、Savings 与合约�
         product: "futures-bot",
         capability: "aggregate-only",
         freshness: "current",
-        message: "读取平台聚合账户权益，不展开机器人订单和普通合约仓位",
+        message: "读取平台聚合账户权益，不展开机器人订单",
+      },
+      {
+        product: "futures",
+        capability: "aggregate-only",
+        freshness: "current",
+        message: "平台总额已覆盖普通合约相关权益，不与 Futures Bots 重复相加；不展开仓位、保证金或未实现盈亏",
       },
       {
         product: "sharkfin",
-        capability: "unsupported",
+        capability: "aggregate-only",
         freshness: "current",
-        message: "官方提供只读资产查询，但当前适配器尚未接入",
+        message: "读取 SharkFin 账户聚合估值，官方当前记录不提供逐仓本金",
       },
       {
-        product: "onchain-earn",
-        capability: "unsupported",
+        product: "onchain-elite",
+        capability: "detailed",
         freshness: "current",
-        message: "官方提供只读资产查询，但当前适配器尚未接入",
+        message: null,
       },
     ],
     unexplainedValue: null,
@@ -255,21 +265,39 @@ test("生产 Bitget Classic 适配器读取 Spot、Funding、Savings 与合约�
         pricedAt: "2025-12-31T23:59:59.000Z",
       }),
     }),
+    expect.objectContaining({
+      sourceAccount: "earn",
+      sourceProduct: "sharkfin",
+      sourceAsset: "USDT",
+      quantity: "200",
+      sourceMarketValue: { amount: "200", currency: "USDT" },
+    }),
+    expect.objectContaining({
+      sourceAccount: "staking",
+      sourceProduct: "onchain-elite",
+      providerPositionId: "elite-eth-1",
+      sourceAsset: "ETH",
+      quantity: "0.1",
+      sourceMarketValue: { amount: "300", currency: "USDT" },
+    }),
   ]));
   expect(body.privateRequests).toEqual([
     "GET /api/v2/spot/account/info",
     "GET /api/v2/spot/account/assets?assetType=hold_only",
     "GET /api/v2/account/funding-assets",
     "GET /api/v2/account/bot-assets?accountType=futures",
+    "GET /api/v2/account/all-account-balance",
     "GET /api/v2/earn/account/assets",
     "GET /api/v2/earn/savings/assets?periodType=flexible&limit=100&startTime=1764547200000&endTime=1767225600000",
     "GET /api/v2/earn/savings/assets?periodType=fixed&limit=100&startTime=1764547200000&endTime=1767225600000",
+    "GET /api/v2/earn/sharkfin/account",
+    "GET /api/v2/earn/elite/assets",
   ]);
   expect(body.allRequestsGet).toBeTruthy();
   expect(body.allPrivateRequestsSigned).toBeTruthy();
   expect(body.allHostsPinned).toBeTruthy();
-  expect(body.earnThrottleSleeps).toEqual([100, 100]);
-  expect(body.privateRequests.join("\n")).not.toMatch(/trade\/place|transfer|withdraw|mix|margin|loan|shark/i);
+  expect(body.earnThrottleSleeps).toEqual([100, 100, 100, 200]);
+  expect(body.privateRequests.join("\n")).not.toMatch(/trade\/place|transfer|withdraw|mix|margin|loan/i);
   expect(JSON.stringify(body)).not.toContain(API_SECRET);
   expect(JSON.stringify(body)).not.toContain(PASSPHRASE);
 
@@ -292,9 +320,9 @@ test("生产 Bitget UTA 仅在纯现金范围证明完整时读取资产", async
   await expect(valid.json()).resolves.toMatchObject({
     account: { id: "bitget:770001" },
     snapshot: {
-      total: { amount: "10977.694481", currency: "USD" },
+      total: { amount: "11476.694481", currency: "USD" },
       coverage: {
-        status: "partial",
+        status: "complete",
         products: [
           {
             product: "spot",
@@ -322,15 +350,15 @@ test("生产 Bitget UTA 仅在纯现金范围证明完整时读取资产", async
           },
           {
             product: "sharkfin",
-            capability: "unsupported",
+            capability: "aggregate-only",
             freshness: "current",
-            message: "官方提供只读资产查询，但当前适配器尚未接入",
+            message: "读取 SharkFin 账户聚合估值，官方当前记录不提供逐仓本金",
           },
           {
-            product: "onchain-earn",
-            capability: "unsupported",
+            product: "onchain-elite",
+            capability: "detailed",
             freshness: "current",
-            message: "官方提供只读资产查询，但当前适配器尚未接入",
+            message: null,
           },
         ],
       },
@@ -372,7 +400,7 @@ test("Bitget Savings 成功跨窗口翻页、保留旧持仓并去重，后页�
   });
   expect(success.ok()).toBeTruthy();
   const body = await success.json();
-  expect(body.snapshot.total).toEqual({ amount: "11151.98687228", currency: "USDT" });
+  expect(body.snapshot.total).toEqual({ amount: "11651.98687228", currency: "USDT" });
   expect(body.snapshot.holdings).toEqual(expect.arrayContaining([
     expect.objectContaining({ sourceAsset: "ADA", quantity: "10" }),
     expect.objectContaining({ sourceAsset: "SOL", quantity: "5" }),
@@ -437,6 +465,115 @@ test("Bitget Earn 总览与明细口径不一致时保留总览资产且不重�
       }),
     ]),
   );
+  expect(mismatchBody.snapshot.total).toEqual({
+    amount: "17641.98687228",
+    currency: "USDT",
+  });
+  expect(mismatchBody.snapshot.coverage.status).toBe("complete");
+});
+
+test("Bitget 全账户残差和排除账户会动态降级，P0 产品失败不伪装为零", async ({
+  request,
+}) => {
+  const offsettingDrift = await request.post(
+    "/test-doubles/bitget/production-start",
+    { data: { action: "preview-offsetting-partition-drift" } },
+  );
+  expect(offsettingDrift.ok()).toBeTruthy();
+  await expect(offsettingDrift.json()).resolves.toMatchObject({
+    snapshot: {
+      total: { amount: "11641.99687228", currency: "USDT" },
+      coverage: {
+        status: "complete",
+        unexplainedValue: null,
+        excludedPositiveAccounts: [],
+      },
+    },
+  });
+
+  const smallNetDrift = await request.post(
+    "/test-doubles/bitget/production-start",
+    { data: { action: "preview-small-net-drift" } },
+  );
+  expect(smallNetDrift.ok()).toBeTruthy();
+  await expect(smallNetDrift.json()).resolves.toMatchObject({
+    snapshot: {
+      total: { amount: "11642.09687228", currency: "USDT" },
+      coverage: {
+        status: "complete",
+        unexplainedValue: null,
+        excludedPositiveAccounts: [],
+      },
+    },
+  });
+
+  const residual = await request.post("/test-doubles/bitget/production-start", {
+    data: { action: "preview-all-account-residual" },
+  });
+  expect(residual.ok()).toBeTruthy();
+  await expect(residual.json()).resolves.toMatchObject({
+    snapshot: {
+      total: { amount: "11741.98687228", currency: "USDT" },
+      coverage: {
+        status: "partial",
+        unexplainedValue: { amount: "100", currency: "USDT" },
+        excludedPositiveAccounts: [],
+      },
+    },
+  });
+
+  const futuresAggregate = await request.post("/test-doubles/bitget/production-start", {
+    data: { action: "preview-positive-futures" },
+  });
+  expect(futuresAggregate.ok()).toBeTruthy();
+  await expect(futuresAggregate.json()).resolves.toMatchObject({
+    snapshot: {
+      total: { amount: "11641.98687228", currency: "USDT" },
+      coverage: {
+        status: "complete",
+        products: expect.arrayContaining([
+          {
+            product: "futures",
+            capability: "aggregate-only",
+            freshness: "current",
+            message: "平台总额已覆盖普通合约相关权益，不与 Futures Bots 重复相加；不展开仓位、保证金或未实现盈亏",
+          },
+        ]),
+        unexplainedValue: null,
+        excludedPositiveAccounts: [],
+      },
+    },
+  });
+
+  const excludedMargin = await request.post(
+    "/test-doubles/bitget/production-start",
+    { data: { action: "preview-positive-margin" } },
+  );
+  expect(excludedMargin.ok()).toBeTruthy();
+  await expect(excludedMargin.json()).resolves.toMatchObject({
+    snapshot: {
+      total: { amount: "11641.98687228", currency: "USDT" },
+      coverage: {
+        status: "partial",
+        unexplainedValue: null,
+        excludedPositiveAccounts: ["margin"],
+      },
+    },
+  });
+
+  for (const action of [
+    "preview-sharkfin-failure",
+    "preview-elite-failure",
+  ]) {
+    const failed = await request.post("/test-doubles/bitget/production-start", {
+      data: { action },
+    });
+    expect(failed.status(), action).toBe(400);
+    await expect(failed.json()).resolves.toMatchObject({
+      error: expect.stringContaining("40014"),
+      snapshotCommitted: false,
+    });
+  }
 });
 
 test("Bitget Earn 分页和缺价失败均不伪造完整资产", async ({ request }) => {
@@ -463,18 +600,56 @@ test("Bitget Earn 分页和缺价失败均不伪造完整资产", async ({ reque
       quantity: "8.123456789",
       currentPrice: null,
       sourceMarketValue: null,
-      valuation: expect.objectContaining({ status: "unvalued" }),
+      valuation: expect.objectContaining({ status: "quote-unavailable" }),
     }),
   ]));
-  expect(missingBody.snapshot.total).toEqual({ amount: "11141.98687228", currency: "USDT" });
+  expect(missingBody.snapshot.total).toEqual({ amount: "11641.98687228", currency: "USDT" });
 
   const zero = await request.post("/test-doubles/bitget/production-start", {
     data: { action: "preview-zero-price" },
   });
   expect(zero.ok()).toBeTruthy();
   await expect(zero.json()).resolves.toMatchObject({
-    snapshot: { total: { amount: "5141.98687228", currency: "USDT" } },
+    snapshot: { total: { amount: "11641.98687228", currency: "USDT" } },
   });
+
+  const empty = await request.post("/test-doubles/bitget/production-start", {
+    data: { action: "preview-empty-price" },
+  });
+  expect(empty.ok()).toBeTruthy();
+  await expect(empty.json()).resolves.toMatchObject({
+    snapshot: {
+      total: { amount: "11641.98687228", currency: "USDT" },
+      holdings: expect.arrayContaining([
+        expect.objectContaining({
+          sourceAsset: "BTC",
+          currentPrice: null,
+          sourceMarketValue: null,
+          valuation: expect.objectContaining({ status: "quote-unavailable" }),
+        }),
+      ]),
+    },
+  });
+});
+
+test("Bitget 忽略未持有交易对的空行情，预览与价格刷新均继续", async ({
+  request,
+}) => {
+  for (const action of [
+    "preview-unrelated-empty-last",
+    "refresh-unrelated-empty-last",
+  ]) {
+    const response = await request.post(
+      "/test-doubles/bitget/production-start",
+      { data: { action } },
+    );
+    expect(response.ok(), action).toBeTruthy();
+    await expect(response.json()).resolves.toMatchObject({
+      [action.startsWith("refresh-") ? "total" : "snapshot"]: action.startsWith("refresh-")
+        ? { amount: "11641.98687228", currency: "USDT" }
+        : { total: { amount: "11641.98687228", currency: "USDT" } },
+    });
+  }
 });
 
 test("Bitget 同步失败保留最后成功数据并接入过期状态和日快照", async ({ page }) => {
@@ -486,20 +661,20 @@ test("Bitget 同步失败保留最后成功数据并接入过期状态和日快�
     .getByRole("button", { name: "确认并保存" })
     .click();
   const card = page.getByTestId("bitget-card");
-  await expect(card).toContainText("10,987.65 USDT");
+  await expect(card).toContainText("11,641.99 USDT");
   await expect(page.getByTestId("asset-source-trend-test-bitget-source-1")).toContainText("01月01日");
 
   await configure(page, "refresh-failure");
   await page.getByRole("button", { name: "立即刷新资产" }).click();
   await expect(page.getByTestId("asset-refresh-status")).toContainText("1 个来源失败");
-  await expect(card).toContainText("10,987.65 USDT");
+  await expect(card).toContainText("11,641.99 USDT");
   await expect(card).toContainText("过期数据");
   await expect(card).toContainText("Bitget 同步失败");
   await expect(
     card
       .getByTestId("bitget-product-coverage")
       .locator(".vibe-coverage-summary-freshness"),
-  ).toHaveText("00 CURRENT / 07 STALE");
+  ).toHaveText("00 CURRENT / 08 STALE");
   await expect(page.getByTestId("total-asset-overview")).toContainText("包含 1 个过期来源");
 });
 
@@ -514,9 +689,9 @@ test("Bitget 价格刷新保持公开边界并规范化时间与认证错误", a
       "GET /api/v2/spot/public/symbols",
       "GET /api/v2/spot/market/tickers",
     ],
-    total: { amount: "11141.98687228", currency: "USDT" },
+    total: { amount: "11641.98687228", currency: "USDT" },
     coverage: {
-      status: "partial",
+      status: "complete",
       products: expect.arrayContaining([
         expect.objectContaining({
           product: "sharkfin",

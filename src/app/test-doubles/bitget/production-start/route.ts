@@ -55,6 +55,13 @@ export async function POST(request: Request) {
     "preview-uta-risk",
     "preview-uta-funding-mismatch",
     "preview-earn-mismatch",
+    "preview-offsetting-partition-drift",
+    "preview-small-net-drift",
+    "preview-all-account-residual",
+    "preview-positive-futures",
+    "preview-positive-margin",
+    "preview-sharkfin-failure",
+    "preview-elite-failure",
     "preview-earn-cursor-repeat",
     "preview-empty-funding",
     "preview-earn-multi-page",
@@ -88,6 +95,10 @@ export async function POST(request: Request) {
   const accountInfo = bitgetAccountInfo(authorities);
   if (body.action === "preview-earn-multi-page") {
     accountInfo.data.regisTime = String(Date.parse(BITGET_OBSERVED_AT) - 100 * 24 * 60 * 60_000);
+    const earnBalance = fixture.allAccountBalance.data.find(
+      ({ accountType }) => accountType === "earn",
+    );
+    if (earnBalance) earnBalance.usdtBalance = "1410";
     fixture.earnOverview.data.push({ coin: "ADA", amount: "10" });
     fixture.instruments.data.push({
       symbol: "ADAUSDT",
@@ -151,6 +162,10 @@ export async function POST(request: Request) {
     });
   }
   if (body.action === "preview-earn-mismatch") {
+    const earnBalance = fixture.allAccountBalance.data.find(
+      ({ accountType }) => accountType === "earn",
+    );
+    if (earnBalance) earnBalance.usdtBalance = "7400";
     fixture.earnOverview.data.push({ coin: "ETH", amount: "2" });
     fixture.flexible.data.resultList.push({
       productId: "flex-eth",
@@ -163,6 +178,44 @@ export async function POST(request: Request) {
       status: "in_holding",
       productLevel: "normal",
     });
+  }
+  if (body.action === "preview-offsetting-partition-drift") {
+    const spotBalance = fixture.allAccountBalance.data.find(
+      ({ accountType }) => accountType === "spot",
+    );
+    const fundingBalance = fixture.allAccountBalance.data.find(
+      ({ accountType }) => accountType === "funding",
+    );
+    if (spotBalance) spotBalance.usdtBalance = "7007.794321";
+    if (fundingBalance) fundingBalance.usdtBalance = "3079.87";
+  }
+  if (body.action === "preview-small-net-drift") {
+    const spotBalance = fixture.allAccountBalance.data.find(
+      ({ accountType }) => accountType === "spot",
+    );
+    const fundingBalance = fixture.allAccountBalance.data.find(
+      ({ accountType }) => accountType === "funding",
+    );
+    if (spotBalance) spotBalance.usdtBalance = "7007.894321";
+    if (fundingBalance) fundingBalance.usdtBalance = "3079.87";
+  }
+  if (body.action === "preview-all-account-residual") {
+    const earnBalance = fixture.allAccountBalance.data.find(
+      ({ accountType }) => accountType === "earn",
+    );
+    if (earnBalance) earnBalance.usdtBalance = "1500";
+  }
+  if (body.action === "preview-positive-futures") {
+    const futuresBalance = fixture.allAccountBalance.data.find(
+      ({ accountType }) => accountType === "futures",
+    );
+    if (futuresBalance) futuresBalance.usdtBalance = "50";
+  }
+  if (body.action === "preview-positive-margin") {
+    const marginBalance = fixture.allAccountBalance.data.find(
+      ({ accountType }) => accountType === "margin",
+    );
+    if (marginBalance) marginBalance.usdtBalance = "50";
   }
   if (body.action === "preview-earn-cursor-repeat") {
     fixture.flexible.data.endId = "same-cursor";
@@ -189,8 +242,11 @@ export async function POST(request: Request) {
     "/api/v2/spot/account/assets",
     "/api/v2/account/funding-assets",
     "/api/v2/account/bot-assets",
+    "/api/v2/account/all-account-balance",
     "/api/v2/earn/account/assets",
     "/api/v2/earn/savings/assets",
+    "/api/v2/earn/sharkfin/account",
+    "/api/v2/earn/elite/assets",
     "/api/v3/account/info",
     "/api/v3/account/assets",
     "/api/v3/account/funding-assets",
@@ -291,6 +347,8 @@ export async function POST(request: Request) {
       response = url.searchParams.get("accountType") === "futures"
         ? fixture.botFutures
         : { code: "40034", msg: "unexpected bot account type", data: {} };
+    } else if (url.pathname === "/api/v2/account/all-account-balance") {
+      response = fixture.allAccountBalance;
     } else if (url.pathname === "/api/v3/account/funding-assets") {
       response = utaFixture.funding;
     } else if (url.pathname === "/api/v2/earn/account/assets") {
@@ -361,6 +419,14 @@ export async function POST(request: Request) {
           ? fixture.fixed
           : fixture.flexible;
       }
+    } else if (url.pathname === "/api/v2/earn/sharkfin/account") {
+      response = body.action === "preview-sharkfin-failure"
+        ? { code: "40014", msg: "Incorrect permissions", data: {} }
+        : fixture.sharkfinAccount;
+    } else if (url.pathname === "/api/v2/earn/elite/assets") {
+      response = body.action === "preview-elite-failure"
+        ? { code: "40014", msg: "Incorrect permissions", data: {} }
+        : fixture.eliteAssets;
     } else if (url.pathname === "/api/v3/position/current-position") {
       const category = url.searchParams.get("category") ?? "";
       positionCategories.add(category);
@@ -514,8 +580,10 @@ export async function POST(request: Request) {
       accountInfoRequests,
       savingsRequests: privateRequests.filter((path) =>
         path.includes("/api/v2/earn/savings/assets")),
-      retrySleeps: recordedSleeps.filter((value) => value !== 100),
-      earnThrottleSleeps: recordedSleeps.filter((value) => value === 100),
+      retrySleeps: recordedSleeps.filter((value) =>
+        runtime.retryDelaysMs.includes(value)),
+      earnThrottleSleeps: recordedSleeps.filter((value) =>
+        !runtime.retryDelaysMs.includes(value)),
       btc: result.snapshot.holdings.find(
         ({ sourceAsset, sourceAccount }) =>
           sourceAsset === "BTC" && sourceAccount === "spot",
@@ -534,8 +602,10 @@ export async function POST(request: Request) {
         accountInfoRequests,
         savingsRequests: privateRequests.filter((path) =>
           path.includes("/api/v2/earn/savings/assets")),
-        retrySleeps: recordedSleeps.filter((value) => value !== 100),
-        earnThrottleSleeps: recordedSleeps.filter((value) => value === 100),
+        retrySleeps: recordedSleeps.filter((value) =>
+          runtime.retryDelaysMs.includes(value)),
+        earnThrottleSleeps: recordedSleeps.filter((value) =>
+          !runtime.retryDelaysMs.includes(value)),
         snapshotCommitted: false,
         allPrivateRequestsSigned:
           signatures.length === privateRequests.length && signatures.every(Boolean),

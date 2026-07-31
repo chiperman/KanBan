@@ -138,6 +138,19 @@ export function bitgetApiFixture() {
         usdtValue: "154.33255128",
       }],
     },
+    allAccountBalance: {
+      code: "00000",
+      msg: "success",
+      requestTime: Number(BITGET_OBSERVED_MS),
+      data: [
+        { accountType: "spot", usdtBalance: "7007.734321" },
+        { accountType: "futures", usdtBalance: "0" },
+        { accountType: "funding", usdtBalance: "3079.92" },
+        { accountType: "earn", usdtBalance: "1400" },
+        { accountType: "bots", usdtBalance: "154.33255128" },
+        { accountType: "margin", usdtBalance: "0" },
+      ],
+    },
     earnOverview: {
       code: "00000",
       msg: "success",
@@ -187,6 +200,35 @@ export function bitgetApiFixture() {
         endId: "",
       },
     },
+    sharkfinAccount: {
+      code: "00000",
+      msg: "success",
+      requestTime: Number(BITGET_OBSERVED_MS),
+      data: {
+        btcSubscribeAmount: "0.003333333333",
+        usdtSubscribeAmount: "200",
+        btcHistoricalAmount: "0",
+        usdtHistoricalAmount: "0",
+        btcTotalEarning: "0.00001",
+        usdtTotalEarning: "0.6",
+      },
+    },
+    eliteAssets: {
+      code: "00000",
+      msg: "success",
+      requestTime: Number(BITGET_OBSERVED_MS),
+      data: {
+        resultList: [{
+          productId: "elite-eth-1",
+          productCoin: "ETH",
+          holdingAmount: "0.1",
+          usdtHoldingAmount: "300",
+          exchangeRate: "3000",
+          subscriptionCoin: "USDT",
+          totalProfit: "0.02",
+        }],
+      },
+    },
     instruments: {
       code: "00000",
       msg: "success",
@@ -219,19 +261,32 @@ export function bitgetFixtureSnapshot(
     ["BTC", "现货", "0.1", "60000", "6000", "spot"],
     ["ETH", "资金", "1", "3000", "3000", "funding"],
     ["USDT", "现货", "1000", "1", "1000", "spot"],
+    ["ETH", "On-chain Elite", "0.1", "3000", "300", "staking", "onchain-elite", "elite-eth-1"],
+    ["USDT", "SharkFin", "200", "1", "200", "earn", "sharkfin", "aggregate"],
     ["SOL", "活期 Earn", "5", "100", "500", "earn-flexible"],
     ["BNB", "定期 Earn", "0.8", "500", "400", "earn-locked"],
     ["USDC", "资金", "80", "0.999", "79.92", "funding"],
     ["XRP", "现货", "15.468642", "0.5", "7.734321", "spot"],
   ] as const;
   return {
-    total: { amount: "10987.654321", currency: "USDT" },
+    total: { amount: "11641.98687228", currency: "USDT" },
     holdings: holdings.map(
-      ([symbol, scope, quantity, price, marketValue, sourceAccount]) => ({
+      ([
+        symbol,
+        scope,
+        quantity,
+        price,
+        marketValue,
+        sourceAccount,
+        sourceProduct,
+        providerPositionId,
+      ]) => ({
         symbol,
         name: `${symbol} · ${scope}`,
         sourceAsset: symbol,
         sourceAccount,
+        ...(sourceProduct ? { sourceProduct } : {}),
+        ...(providerPositionId ? { providerPositionId } : {}),
         quantity,
         currency: "USDT",
         assetClass: "crypto",
@@ -257,7 +312,7 @@ export function bitgetFixtureSnapshot(
     }],
     syncedAt: observedAt,
     coverage: {
-      status: "partial",
+      status: "complete",
       products: [
         {
           product: "spot",
@@ -284,24 +339,32 @@ export function bitgetFixtureSnapshot(
           message: null,
         },
         ...(accountMode === "classic"
-          ? [{
-              product: "futures-bot",
-              capability: "aggregate-only" as const,
-              freshness: "current" as const,
-              message: "读取平台聚合账户权益，不展开机器人订单和普通合约仓位",
-            }]
+          ? [
+              {
+                product: "futures-bot",
+                capability: "aggregate-only" as const,
+                freshness: "current" as const,
+                message: "读取平台聚合账户权益，不展开机器人订单",
+              },
+              {
+                product: "futures",
+                capability: "aggregate-only" as const,
+                freshness: "current" as const,
+                message: "平台总额已覆盖普通合约相关权益，不与 Futures Bots 重复相加；不展开仓位、保证金或未实现盈亏",
+              },
+            ]
           : []),
         {
           product: "sharkfin",
-          capability: "unsupported",
+          capability: "aggregate-only",
           freshness: "current",
-          message: "官方提供只读资产查询，但当前适配器尚未接入",
+          message: "读取 SharkFin 账户聚合估值，官方当前记录不提供逐仓本金",
         },
         {
-          product: "onchain-earn",
-          capability: "unsupported",
+          product: "onchain-elite",
+          capability: "detailed",
           freshness: "current",
-          message: "官方提供只读资产查询，但当前适配器尚未接入",
+          message: null,
         },
       ],
       unexplainedValue: null,
