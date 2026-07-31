@@ -119,7 +119,7 @@ export const ASSET_SOURCE_PROVIDERS: AssetSourceProviderDescription[] = [
     validationError: "OKX 凭证验证失败",
     dialogLabel: "确认 OKX 资产来源",
     previewTitle: "OKX 凭证预览",
-    previewScope: () => "现货、资金、Simple Earn Flexible（只读）",
+    previewScope: () => "现货、资金、Simple Earn、On-chain Earn（只读）",
     savedMaterial: "只读 API 凭证",
   },
   {

@@ -35,6 +35,8 @@ export async function POST(request: Request) {
     "preview-missing-liability-proof",
     "preview-strategy-equity",
     "preview-unreconciled-equity",
+    "preview-asset-valuation-residual",
+    "preview-onchain-failure",
     "preview-missing-price",
     "preview-empty-price",
     "preview-zero-price",
@@ -84,6 +86,13 @@ export async function POST(request: Request) {
         ? "0.150000000000001"
         : "0.14";
     }
+    if (body.action === "preview-strategy-equity") {
+      fixture.assetValuation.data[0].totalBal = "14637.654321";
+      fixture.assetValuation.data[0].details.trading = "10007.734321";
+    }
+  }
+  if (body.action === "preview-asset-valuation-residual") {
+    fixture.assetValuation.data[0].totalBal = "11737.654321";
   }
   if (body.action === "preview-missing-price") {
     fixture.funding.data.push({
@@ -139,7 +148,9 @@ export async function POST(request: Request) {
     "/api/v5/account/positions",
     "/api/v5/account/balance",
     "/api/v5/asset/balances",
+    "/api/v5/asset/asset-valuation",
     "/api/v5/finance/savings/balance",
+    "/api/v5/finance/staking-defi/orders-active",
   ]);
   const privateRequests: string[] = [];
   const publicRequests: string[] = [];
@@ -195,8 +206,14 @@ export async function POST(request: Request) {
       response = fixture.trading;
     } else if (url.pathname === "/api/v5/asset/balances") {
       response = fixture.funding;
+    } else if (url.pathname === "/api/v5/asset/asset-valuation") {
+      response = fixture.assetValuation;
     } else if (url.pathname === "/api/v5/finance/savings/balance") {
       response = fixture.savings;
+    } else if (url.pathname === "/api/v5/finance/staking-defi/orders-active") {
+      response = body.action === "preview-onchain-failure"
+        ? { code: "50011", msg: "Rate limit reached", data: [] }
+        : fixture.onchainActiveOrders;
     } else if (url.pathname === "/api/v5/public/instruments") {
       response = fixture.instruments;
     } else if (url.pathname === "/api/v5/market/tickers") {
@@ -281,6 +298,9 @@ export async function POST(request: Request) {
         btc: refreshed.snapshot.holdings.find(
           ({ sourceAsset, sourceAccount }) =>
             sourceAsset === "BTC" && sourceAccount === "spot",
+        ),
+        onchain: refreshed.snapshot.holdings.find(
+          ({ sourceProduct }) => sourceProduct === "onchain-earn",
         ),
       });
     }

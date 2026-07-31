@@ -124,6 +124,33 @@ export function okxApiFixture() {
         },
       ],
     },
+    assetValuation: {
+      code: "0",
+      msg: "",
+      data: [{
+        totalBal: "11637.654321",
+        ts: OKX_OBSERVED_MS,
+        details: {
+          trading: "7007.734321",
+          funding: "3079.92",
+          earn: "1550",
+          classic: "0",
+        },
+      }],
+    },
+    onchainActiveOrders: {
+      code: "0",
+      msg: "",
+      data: [{
+        ccy: "ETH",
+        amt: "0.2",
+        orderId: "okx-onchain-order-1",
+        productId: "okx-onchain-product-1",
+        protocol: "staking",
+        protocolType: "staking",
+        state: "3",
+      }],
+    },
     instruments: {
       code: "0",
       msg: "",
@@ -153,19 +180,31 @@ export function okxFixtureSnapshot(observedAt: string): AssetSnapshot {
     ["BTC", "现货", "0.1", "60000", "6000", "spot"],
     ["ETH", "资金", "1", "3000", "3000", "funding"],
     ["USDT", "现货", "1000", "1", "1000", "spot"],
+    ["ETH", "链上 Earn", "0.2", "3000", "600", "staking", "onchain-earn", "okx-onchain-order-1"],
     ["SOL", "活期 Earn", "5", "100", "500", "earn-flexible"],
     ["BNB", "活期 Earn", "0.8", "500", "400", "earn-flexible"],
     ["USDC", "资金", "80.08008008008008", "0.999", "80", "funding"],
     ["XRP", "现货", "15.308642", "0.5", "7.654321", "spot"],
   ] as const;
   return {
-    total: { amount: "10987.654321", currency: "USDT" },
+    total: { amount: "11637.654321", currency: "USDT" },
     holdings: holdings.map(
-      ([symbol, scope, quantity, price, marketValue, sourceAccount]) => ({
+      ([
+        symbol,
+        scope,
+        quantity,
+        price,
+        marketValue,
+        sourceAccount,
+        sourceProduct,
+        providerPositionId,
+      ]) => ({
         symbol,
         name: `${symbol} · ${scope}`,
         sourceAsset: symbol,
         sourceAccount,
+        ...(sourceProduct ? { sourceProduct } : {}),
+        ...(providerPositionId ? { providerPositionId } : {}),
         quantity,
         currency: "USDT",
         assetClass: "crypto",
@@ -191,7 +230,7 @@ export function okxFixtureSnapshot(observedAt: string): AssetSnapshot {
     }],
     syncedAt: observedAt,
     coverage: {
-      status: "partial",
+      status: "complete",
       products: [
         {
           product: "spot",
@@ -219,15 +258,15 @@ export function okxFixtureSnapshot(observedAt: string): AssetSnapshot {
         },
         {
           product: "simple-earn-fixed",
-          capability: "unsupported",
+          capability: "aggregate-only",
           freshness: "current",
-          message: "官方当前仓位 API 已下线，无法证明 App 内定期产品余额为零",
+          message: "平台 Earn 总额已包含，官方当前仓位 API 无法逐仓展开",
         },
         {
           product: "onchain-earn",
-          capability: "unsupported",
+          capability: "detailed",
           freshness: "current",
-          message: "官方提供只读查询，但当前适配器尚未接入",
+          message: null,
         },
       ],
       unexplainedValue: null,

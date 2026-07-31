@@ -38,6 +38,9 @@ interface OkxPosition {
   asset: string;
   quantity: string;
   account: NonNullable<AssetHolding["sourceAccount"]>;
+  sourceProduct?: string;
+  providerPositionId?: string;
+  providerPositionState?: string;
 }
 
 const OKX_ORIGINS: Record<OkxRegion, string> = {
@@ -149,14 +152,24 @@ function addPosition(
   asset: string,
   quantity: string,
   account: OkxPosition["account"],
+  detail: Pick<
+    OkxPosition,
+    "sourceProduct" | "providerPositionId" | "providerPositionState"
+  > = {},
 ): void {
   if (!positive(quantity)) return;
-  const key = `${account}:${asset}`;
+  const key = [
+    account,
+    detail.sourceProduct ?? "account",
+    detail.providerPositionId ?? "aggregate",
+    asset,
+  ].join(":");
   const previous = values.get(key);
   values.set(key, {
     asset,
     account,
     quantity: previous ? decimalAdd(previous.quantity, quantity) : quantity,
+    ...detail,
   });
 }
 
@@ -164,6 +177,7 @@ function extractPositions(input: {
   trading: unknown;
   funding: unknown;
   savings: unknown;
+  onchainActiveOrders: unknown;
 }): OkxPosition[] {
   const positions = new Map<string, OkxPosition>();
   const trading = first(input.trading, "OKX account/balance data");
@@ -216,6 +230,30 @@ function extractPositions(input: {
       "earn-flexible",
     );
   }
+  const orderIds = new Set<string>();
+  for (
+    const item of list(
+      input.onchainActiveOrders,
+      "OKX staking-defi/orders-active data",
+    )
+  ) {
+    const orderId = text(item.ordId ?? item.orderId, "ordId");
+    if (orderIds.has(orderId)) {
+      throw new Error("OKX On-chain Earn Active Orders 出现重复订单");
+    }
+    orderIds.add(orderId);
+    addPosition(
+      positions,
+      text(item.ccy, "ccy"),
+      decimal(item.amt, "amt"),
+      "staking",
+      {
+        sourceProduct: "onchain-earn",
+        providerPositionId: orderId,
+        providerPositionState: text(item.state, "state"),
+      },
+    );
+  }
   return [...positions.values()];
 }
 
@@ -224,12 +262,59 @@ function scopeLabel(scope: AssetHolding["sourceAccount"]): string {
   if (scope === "trading-bot") return "交易机器人";
   if (scope === "funding") return "资金";
   if (scope === "earn-flexible") return "活期 Earn";
+  if (scope === "staking") return "链上 Earn";
   return "OKX";
 }
 
-function okxCoverage(): NonNullable<AssetSnapshot["coverage"]> {
+function accountValuation(value: unknown): {
+  total: string;
+  coverage: NonNullable<AssetSnapshot["coverage"]>;
+} {
+  const row = first(value, "OKX asset/asset-valuation data");
+  const total = decimal(row.totalBal, "totalBal");
+  const timestamp = text(row.ts, "ts");
+  if (!/^\d+$/.test(timestamp) || !Number.isSafeInteger(Number(timestamp))) {
+    throw new Error("OKX asset-valuation ts 格式无效");
+  }
+  const details = record(row.details, "OKX asset-valuation details");
+  const trading = decimal(details.trading, "details.trading");
+  const funding = decimal(details.funding, "details.funding");
+  const earn = decimal(details.earn, "details.earn");
+  const classic = decimal(details.classic, "details.classic");
+  const partitionTotal = decimalAdd(trading, funding, earn, classic);
+  const difference = decimalSubtract(total, partitionTotal);
+  const absoluteDifference = decimalCompare(difference, "0") < 0
+    ? decimalSubtract("0", difference)
+    : difference;
+  const hasResidual = decimalCompare(
+    absoluteDifference,
+    OKX_EQUITY_ROUNDING_TOLERANCE,
+  ) > 0;
+  const excludedPositiveAccounts = positive(classic)
+    ? ["Classic account"]
+    : [];
   return {
-    status: "partial",
+    total,
+    coverage: okxCoverage({
+      unexplainedValue: hasResidual
+        ? { amount: absoluteDifference, currency: "USDT" }
+        : null,
+      excludedPositiveAccounts,
+    }),
+  };
+}
+
+function okxCoverage(input: {
+  unexplainedValue: NonNullable<
+    AssetSnapshot["coverage"]
+  >["unexplainedValue"];
+  excludedPositiveAccounts: string[];
+}): NonNullable<AssetSnapshot["coverage"]> {
+  const complete =
+    input.unexplainedValue === null &&
+    input.excludedPositiveAccounts.length === 0;
+  return {
+    status: complete ? "complete" : "partial",
     products: [
       {
         product: "spot",
@@ -257,19 +342,19 @@ function okxCoverage(): NonNullable<AssetSnapshot["coverage"]> {
       },
       {
         product: "simple-earn-fixed",
-        capability: "unsupported",
+        capability: "aggregate-only",
         freshness: "current",
-        message: "官方当前仓位 API 已下线，无法证明 App 内定期产品余额为零",
+        message: "平台 Earn 总额已包含，官方当前仓位 API 无法逐仓展开",
       },
       {
         product: "onchain-earn",
-        capability: "unsupported",
+        capability: "detailed",
         freshness: "current",
-        message: "官方提供只读查询，但当前适配器尚未接入",
+        message: null,
       },
     ],
-    unexplainedValue: null,
-    excludedPositiveAccounts: [],
+    unexplainedValue: input.unexplainedValue,
+    excludedPositiveAccounts: input.excludedPositiveAccounts,
   };
 }
 
@@ -336,6 +421,7 @@ function valuePositions(input: {
   usdtUsdQuote: PriceQuote | null;
   usdtUsdSource?: string | null;
   coverage?: AssetSnapshot["coverage"];
+  authoritativeTotal?: AssetSnapshot["total"];
 }): AssetSnapshot {
   const positionAssets = new Set(input.positions.map((position) => position.asset));
   const livePairs = new Map<string, string>();
@@ -405,6 +491,15 @@ function valuePositions(input: {
         name: `USDT · ${scopeLabel(position.account)}`,
         sourceAsset: "USDT",
         sourceAccount: position.account,
+        ...(position.sourceProduct
+          ? { sourceProduct: position.sourceProduct }
+          : {}),
+        ...(position.providerPositionId
+          ? { providerPositionId: position.providerPositionId }
+          : {}),
+        ...(position.providerPositionState
+          ? { providerPositionState: position.providerPositionState }
+          : {}),
         quantity: position.quantity,
         currency: "USDT",
         assetClass: "crypto",
@@ -429,16 +524,30 @@ function valuePositions(input: {
         name: `${position.asset} · ${scopeLabel(position.account)}`,
         sourceAsset: position.asset,
         sourceAccount: position.account,
+        ...(position.sourceProduct
+          ? { sourceProduct: position.sourceProduct }
+          : {}),
+        ...(position.providerPositionId
+          ? { providerPositionId: position.providerPositionId }
+          : {}),
+        ...(position.providerPositionState
+          ? { providerPositionState: position.providerPositionState }
+          : {}),
         quantity: position.quantity,
         currency: "USDT",
         assetClass: "crypto",
         currentPrice: null,
         marketValue: null,
         sourceMarketValue: null,
-        valuation: {
-          status: "unvalued",
-          reason: `OKX 没有可靠的 ${position.asset}-USDT 现货价格`,
-        },
+        valuation: input.coverage?.status === "complete"
+          ? {
+              status: "quote-unavailable",
+              reason: `OKX 平台总额已包含，但没有可靠的 ${position.asset}-USDT 持仓行情`,
+            }
+          : {
+              status: "unvalued",
+              reason: `OKX 没有可靠的 ${position.asset}-USDT 现货价格`,
+            },
         costPrice: null,
         platformProfit: null,
         changePercent: null,
@@ -451,6 +560,15 @@ function valuePositions(input: {
       name: `${position.asset} · ${scopeLabel(position.account)}`,
       sourceAsset: position.asset,
       sourceAccount: position.account,
+      ...(position.sourceProduct
+        ? { sourceProduct: position.sourceProduct }
+        : {}),
+      ...(position.providerPositionId
+        ? { providerPositionId: position.providerPositionId }
+        : {}),
+      ...(position.providerPositionState
+        ? { providerPositionState: position.providerPositionState }
+        : {}),
       quantity: position.quantity,
       currency: "USDT",
       assetClass: "crypto",
@@ -469,7 +587,7 @@ function valuePositions(input: {
   });
   holdings.sort(compareHoldingValue);
   return {
-    total: { amount: total, currency: "USDT" },
+    total: input.authoritativeTotal ?? { amount: total, currency: "USDT" },
     holdings,
     exchangeRates: [{
       baseCurrency: "USDT",
@@ -489,13 +607,23 @@ function preserveNewerPrices(
 ): AssetSnapshot {
   const previousByPosition = new Map(
     previous.holdings.map((holding) => [
-      `${holding.sourceAccount ?? "default"}:${holding.sourceAsset ?? holding.symbol}`,
+      [
+        holding.sourceAccount ?? "default",
+        holding.sourceProduct ?? "legacy",
+        holding.providerPositionId ?? "aggregate",
+        holding.sourceAsset ?? holding.symbol,
+      ].join(":"),
       holding,
     ]),
   );
   const holdings = candidate.holdings.map((holding) => {
     const prior = previousByPosition.get(
-      `${holding.sourceAccount ?? "default"}:${holding.sourceAsset ?? holding.symbol}`,
+      [
+        holding.sourceAccount ?? "default",
+        holding.sourceProduct ?? "legacy",
+        holding.providerPositionId ?? "aggregate",
+        holding.sourceAsset ?? holding.symbol,
+      ].join(":"),
     );
     if (
       prior?.valuation.status === "valued" &&
@@ -526,7 +654,9 @@ function preserveNewerPrices(
   );
   return {
     ...candidate,
-    total: { amount: total, currency: "USDT" },
+    total: candidate.coverage?.status === "complete"
+      ? candidate.total
+      : { amount: total, currency: "USDT" },
     holdings: holdings.sort(compareHoldingValue),
   };
 }
@@ -616,7 +746,13 @@ class OkxClient {
   }
   trading() { return this.data("/api/v5/account/balance"); }
   funding() { return this.data("/api/v5/asset/balances"); }
+  assetValuation() {
+    return this.data("/api/v5/asset/asset-valuation", { ccy: "USDT" });
+  }
   savings() { return this.data("/api/v5/finance/savings/balance"); }
+  onchainActiveOrders() {
+    return this.data("/api/v5/finance/staking-defi/orders-active");
+  }
   instruments() {
     return this.data(
       "/api/v5/public/instruments",
@@ -646,7 +782,9 @@ async function readFullSnapshot(input: {
   validateNoOptions(await input.client.options());
   const trading = await input.client.trading();
   const funding = await input.client.funding();
+  const valuation = accountValuation(await input.client.assetValuation());
   const savings = await input.client.savings();
+  const onchainActiveOrders = await input.client.onchainActiveOrders();
   const [instruments, tickers] = await Promise.all([
     input.client.instruments(),
     input.client.tickers(),
@@ -660,13 +798,22 @@ async function readFullSnapshot(input: {
   return {
     identity,
     snapshot: valuePositions({
-      positions: extractPositions({ trading, funding, savings }),
+      positions: extractPositions({
+        trading,
+        funding,
+        savings,
+        onchainActiveOrders,
+      }),
       instruments,
       tickers,
       observedAt: input.observedAt,
       usdtUsdQuote: usdtUsd.quote,
       usdtUsdSource: usdtUsd.source,
-      coverage: okxCoverage(),
+      coverage: valuation.coverage,
+      authoritativeTotal: {
+        amount: valuation.total,
+        currency: "USDT",
+      },
     }),
   };
 }
@@ -770,6 +917,15 @@ export class ProductionOkxSourceRefresher implements AssetSourceRefresher {
               asset: holding.sourceAsset,
               account: holding.sourceAccount,
               quantity: holding.quantity,
+              ...(holding.sourceProduct
+                ? { sourceProduct: holding.sourceProduct }
+                : {}),
+              ...(holding.providerPositionId
+                ? { providerPositionId: holding.providerPositionId }
+                : {}),
+              ...(holding.providerPositionState
+                ? { providerPositionState: holding.providerPositionState }
+                : {}),
             };
           }),
           instruments,
@@ -778,6 +934,7 @@ export class ProductionOkxSourceRefresher implements AssetSourceRefresher {
           usdtUsdQuote: usdtUsd.quote,
           usdtUsdSource: usdtUsd.source,
           coverage: source.snapshot.coverage,
+          authoritativeTotal: source.snapshot.total,
         });
       return {
         snapshot: preserveNewerPrices(source.snapshot, candidate),
