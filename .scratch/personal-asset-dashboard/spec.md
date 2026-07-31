@@ -17,7 +17,7 @@ Status: ready-for-human
 - 页面只存在资产卡片；卡片可以排序、调整一格/两格/三格宽度和隐藏，高度始终随内容自适应；卡片不能发布，也没有公开/私密访问级别。
 - 产品不执行交易、划转、提现、签名、调仓或任何资产写操作。
 - 首版资产来源为长桥、Binance、OKX、Bitget、Ethereum 与 BNB Smart Chain 观察钱包。
-- 资产按来源原生定价，默认折算为 USD，可切换为 CNY；系统保存每日资产快照，并明确区分今日资产变动、平台盈亏、过期数据和未估值资产。
+- 资产按来源原生定价，默认折算为 USD，可切换为 CNY 或 HKD；系统分别保存不可改写的日初基准和可随成功刷新更新的每日趋势观测，并明确区分今日资产变动、区间资产变动、平台盈亏、过期数据和未估值资产。
 
 实现、自动化验收与待人工确认事项见 [`docs/current-baseline.md`](../../docs/current-baseline.md)。
 
@@ -28,7 +28,7 @@ Status: ready-for-human
 1. As an 所有者, I want all supported investment assets on one page, so that I do not need to open several products.
 2. As an 所有者, I want the total asset overview to be the first visual focus.
 3. As an 所有者, I want current value, today asset change, and asset distribution shown together.
-4. As an 所有者, I want USD as the default valuation currency and CNY as an optional display currency.
+4. As an 所有者, I want USD as the default valuation currency and CNY or HKD as optional display currencies.
 5. As an 所有者, I want each holding to preserve its native currency and source values.
 6. As an 所有者, I want distribution views by asset class, source, and currency.
 7. As an 所有者, I want each source card to show its total, status, update time, and compact holding summary.
@@ -66,7 +66,7 @@ Status: ready-for-human
 30. As an 所有者, I want a manual refresh action.
 31. As an 所有者, I want each source failure isolated from successful sources.
 32. As an 所有者, I want the last successful data preserved and marked expired after failure.
-33. As an 所有者, I want one daily snapshot using Asia/Shanghai as the canonical day boundary.
+33. As an 所有者, I want an immutable daily baseline and an updatable daily trend observation using Asia/Shanghai as the canonical day boundary.
 34. As an 所有者, I want history to start from the first successful synchronization without automatic backfill.
 35. As an 所有者, I want snapshot difference called today asset change rather than investment profit.
 
@@ -109,7 +109,7 @@ Status: ready-for-human
 - Preserve unvalued holdings but exclude them from numeric totals. Never fabricate price, value, exchange rate, or profit.
 - Fetch immediately after authentication. While visible, refresh prices every 30 seconds and holdings every five minutes; pause scheduled refresh while hidden and allow manual refresh.
 - Preserve last successful source data on failure, mark it expired, and propagate incomplete status to the total.
-- Persist one daily snapshot using Asia/Shanghai day boundaries. Do not import transactions or backfill historical data.
+- Persist an immutable daily baseline for today asset change and an updatable daily trend observation for historical trends, both using Asia/Shanghai day boundaries. Do not import transactions or backfill historical data.
 - Separate visibility from lifecycle: hiding changes layout only; disconnect removes credentials and stops sync; permanent deletion removes source history after a second confirmation.
 - Keep theme, responsive asset layout, Nothing accents, Bloomberg-style financial typography, and Command-K navigation.
 - Future remote persistence remains owner-private. Credentials are configured separately in server-side secret storage and are never synchronized through ordinary data.
@@ -123,9 +123,9 @@ Status: ready-for-human
 - Verify removed content routes return 404 and no identity, Now, links, Markdown, publish, or access-level controls exist after login.
 - Verify asset-card ordering, width, responsive reflow, hidden state, disconnect, and permanent deletion through browser-visible behavior.
 - Verify onboarding rejects write-capable or ambiguous permissions and leaves no partial source or secret.
-- Verify source-native prices, CNY conversion, stablecoin market prices, unvalued holdings, expired data, and distribution conservation.
+- Verify source-native prices, CNY and HKD conversion, stablecoin market prices, unvalued holdings, expired data, and distribution conservation.
 - Verify source-isolated refresh, refresh cadence, hidden-page pause, manual refresh, and concurrent source connection.
-- Verify daily snapshot day boundaries, idempotency, first-success start, no backfill, and today asset change semantics.
+- Verify daily baseline and trend-observation day boundaries, idempotency, first-success start, same-day trend updates, no backfill, and today asset change semantics.
 - Perform real-source acceptance only with owner-confirmed minimum read-only credentials or public addresses.
 - Perform manual visual acceptance separately on desktop, medium, and phone widths in light and dark themes.
 
