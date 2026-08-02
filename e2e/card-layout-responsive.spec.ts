@@ -432,6 +432,88 @@ test("拖动经过插入位置时兄弟资产卡片会在松手前实时让位",
   expect(saveCount).toBe(1);
 });
 
+test("向左拖动首次进入左侧插入位置时兄弟卡片平滑向右让位", async ({
+  page,
+  request,
+}) => {
+  const fixture = await request.post("/test-doubles/asset-cards", {
+    data: {
+      assetCards: [
+        { id: "first", kind: "asset", title: "第一张卡片", body: "一格", span: 1 },
+        { id: "second", kind: "asset", title: "第二张卡片", body: "一格", span: 1 },
+        { id: "third", kind: "asset", title: "第三张卡片", body: "一格", span: 1 },
+      ],
+    },
+  });
+  expect(fixture.ok()).toBeTruthy();
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await loginAsOwner(page);
+  await page.reload();
+  await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
+
+  const first = page.locator('[data-layout-card-id="first"]');
+  const source = page.locator('[data-layout-card-id="third"]');
+  const handle = source.getByRole("button", {
+    name: "拖动第三张卡片调整排序",
+  });
+  await handle.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }),
+  );
+  const handleBox = await handle.boundingBox();
+  const firstBox = await first.boundingBox();
+  const secondBox = await page
+    .locator('[data-layout-card-id="second"]')
+    .boundingBox();
+  expect(handleBox).not.toBeNull();
+  expect(firstBox).not.toBeNull();
+  expect(secondBox).not.toBeNull();
+
+  await page.mouse.move(
+    handleBox!.x + handleBox!.width / 2,
+    handleBox!.y + handleBox!.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    handleBox!.x + handleBox!.width / 2 + 8,
+    handleBox!.y + handleBox!.height / 2,
+  );
+  await expect(source).toHaveClass(/card-dragging/);
+  await page.mouse.move(
+    firstBox!.x + 4,
+    firstBox!.y + firstBox!.height / 2,
+    { steps: 1 },
+  );
+  await expect(page.getByTestId("layout-drop-slot")).toBeVisible();
+  await page.waitForTimeout(40);
+  const firstYieldFrame = await first.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    return {
+      left: box.left,
+      offsetLeft: element.offsetLeft,
+      transform: window.getComputedStyle(element).transform,
+      animations: element.getAnimations().map((animation) => ({
+        playState: animation.playState,
+        currentTime: animation.currentTime,
+      })),
+    };
+  });
+  expect(firstYieldFrame.offsetLeft).toBeGreaterThan(firstBox!.x);
+  expect(firstYieldFrame.left).toBeGreaterThan(firstBox!.x + 8);
+  expect(firstYieldFrame.left).toBeLessThan(secondBox!.x - 8);
+  expect(firstYieldFrame.transform).not.toBe("none");
+  expect(firstYieldFrame.animations).toEqual([
+    expect.objectContaining({
+      playState: "running",
+      currentTime: expect.any(Number),
+    }),
+  ]);
+
+  await page.keyboard.press("Escape");
+});
+
 test("Escape 取消网格放置且不保存布局", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 1000 });
   await loginAsOwner(page);

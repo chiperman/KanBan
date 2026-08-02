@@ -184,11 +184,30 @@ function DraggableCard({
   useLayoutEffect(() => {
     const element = elementRef.current;
     if (!element) return;
+    const previousPosition = previousPositionRef.current;
     const nextPosition = {
       left: element.offsetLeft,
       top: element.offsetTop,
     };
-    const previousPosition = previousPositionRef.current;
+    if (!previousPosition) {
+      previousPositionRef.current = nextPosition;
+      return;
+    }
+    if (
+      previousPosition.left === nextPosition.left &&
+      previousPosition.top === nextPosition.top
+    ) {
+      return;
+    }
+    const previousAnimation = layoutAnimationRef.current;
+    const previousAnimationIsRunning =
+      previousAnimation?.playState === "running";
+    const computedTransform = window.getComputedStyle(element).transform;
+    const previousTransform =
+      previousAnimationIsRunning && computedTransform !== "none"
+        ? new DOMMatrixReadOnly(computedTransform)
+        : null;
+    previousAnimation?.cancel();
     previousPositionRef.current = nextPosition;
     if (
       !animateLayout ||
@@ -198,10 +217,15 @@ function DraggableCard({
     ) {
       return;
     }
-    const deltaX = previousPosition.left - nextPosition.left;
-    const deltaY = previousPosition.top - nextPosition.top;
+    const origin = previousTransform
+      ? {
+          left: previousPosition.left + previousTransform.m41,
+          top: previousPosition.top + previousTransform.m42,
+        }
+      : previousPosition;
+    const deltaX = origin.left - nextPosition.left;
+    const deltaY = origin.top - nextPosition.top;
     if (Math.abs(deltaX) < 1 && Math.abs(deltaY) < 1) return;
-    layoutAnimationRef.current?.cancel();
     layoutAnimationRef.current = element.animate(
       [
         { transform: `translate(${deltaX}px, ${deltaY}px)` },
@@ -213,11 +237,6 @@ function DraggableCard({
       },
     );
   });
-
-  useEffect(
-    () => () => layoutAnimationRef.current?.cancel(),
-    [],
-  );
 
   return renderCard(card, {
     cardRef: setCardRef,
