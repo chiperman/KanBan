@@ -9,6 +9,7 @@ import {
 } from "react";
 
 import { assetSourceDefaultDisplayName } from "@/domain/asset-source-display-name";
+import { portfolioSourceTotal } from "@/domain/evm-token-preferences";
 import { shanghaiDay } from "@/domain/daily-asset-snapshots";
 import type {
   Card,
@@ -38,7 +39,7 @@ import {
   TotalAssetOverview,
   type TrendRange,
 } from "@/ui/total-asset-overview";
-import { VibeButton } from "@/ui/vibe/vibe-button";
+import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
 import { VibeDialog } from "@/ui/vibe/vibe-dialog";
 import { VibeField } from "@/ui/vibe/vibe-field";
 import { VibeMenu } from "@/ui/vibe/vibe-menu";
@@ -85,6 +86,7 @@ function MobileCardIdentity({
   cardIndex: number;
   showSensitiveInfo: boolean;
 }) {
+  const sourceTotal = source ? portfolioSourceTotal(source) : null;
   return (
     <>
       <span className="mobile-card-summary-index">
@@ -95,9 +97,9 @@ function MobileCardIdentity({
         {source ? (
           <span>
             {showSensitiveInfo
-              ? groupedAmount(source.snapshot.total.amount)
+              ? groupedAmount(sourceTotal!.amount)
               : "••••••"}{" "}
-            {source.snapshot.total.currency}
+            {sourceTotal!.currency}
           </span>
         ) : null}
       </span>
@@ -936,6 +938,15 @@ export function OwnerDashboard({
             placeholder={assetSourceDefaultDisplayName(managementTarget)}
             value={displayNameDraft}
           />
+          {managementTarget.kind.startsWith("evm-watch-") ? (
+            <VibeLink
+              className="source-management-scope-link"
+              href={`/asset-sources/${encodeURIComponent(managementTarget.id)}/settings`}
+              variant="outline"
+            >
+              管理资产范围
+            </VibeLink>
+          ) : null}
         </VibeDialog>
       ) : null}
       {deleteTarget ? (

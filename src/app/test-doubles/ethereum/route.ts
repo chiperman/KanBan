@@ -18,6 +18,10 @@ export async function POST(request: Request) {
     services.assetSynchronization.reset("passthrough");
     return Response.json({ ok: true });
   }
+  if (body.scenario === "refresh-unknown-valued") {
+    services.assetSynchronization.reset("evm-unknown-valued");
+    return Response.json({ ok: true });
+  }
   services.evm.configure(body.scenario ?? "valid");
   services.assetSourceConnections.failNext(body.commitError);
   if ((await services.assetCards.list()).length === 0) {

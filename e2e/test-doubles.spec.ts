@@ -28,6 +28,17 @@ test("测试环境可以替换时间、资产来源、价格、身份认证和�
   }
 });
 
+test("热更新后会替换缺少新增生命周期方法的缓存服务", async ({
+  request,
+}) => {
+  const response = await request.post("/test-doubles/context");
+
+  expect(response.ok()).toBeTruthy();
+  await expect(response.json()).resolves.toEqual({
+    supportsEvmTokenPreferences: true,
+  });
+});
+
 test.describe("本地时区时钟", () => {
   test.use({ timezoneId: "America/New_York" });
 

@@ -1,4 +1,5 @@
 import { decimalAdd, decimalCompare } from "@/domain/decimal";
+import { activeSourceHoldings } from "@/domain/evm-token-preferences";
 import {
   buildTotalValuation,
   holdingMakesTotalIncomplete,
@@ -41,9 +42,10 @@ function sourceValue(
   const hasKnownValue = valuation.groups.some(
     (group) => group.key === source.id && group.amount !== null,
   );
+  const activeHoldings = activeSourceHoldings(source);
   const onlyUnknownHoldings =
-    source.snapshot.holdings.length > 0 &&
-    source.snapshot.holdings.every(
+    activeHoldings.length > 0 &&
+    activeHoldings.every(
       holdingMakesTotalIncomplete,
     ) &&
     decimalCompare(source.snapshot.total.amount, "0") === 0;

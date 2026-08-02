@@ -24,6 +24,7 @@ import type {
   AssetSourceSummary,
   BinanceAuthorizationResult,
   DailyAssetSnapshot,
+  EvmWatchAuthorizationResult,
 } from "@/server/ports";
 
 export const dynamic = "force-dynamic";
@@ -144,6 +145,67 @@ function authorization(
           holdings: [...snapshot.holdings, 1n as never],
         }
       : snapshot,
+  };
+}
+
+function evmAuthorization(): EvmWatchAuthorizationResult {
+  const capturedAt = "2026-08-02T02:00:00.000Z";
+  return {
+    credentials: JSON.stringify({
+      chain: "bsc",
+      addresses: ["0x1111111111111111111111111111111111111111"],
+    }),
+    chain: "bsc",
+    permissions: ["public-address", "market-data", "positions"],
+    account: {
+      id: "evm:56:preference-persistence",
+      label: "BNB Smart Chain 观察钱包 · 1 个地址",
+    },
+    snapshot: {
+      total: { amount: "600", currency: "USD" },
+      holdings: [
+        {
+          symbol: "BNB",
+          name: "BNB Smart Chain",
+          sourceAsset: "evm:56:native",
+          quantity: "1",
+          currency: "USD",
+          assetClass: "crypto",
+          currentPrice: { amount: "600", currency: "USD" },
+          marketValue: "600",
+          sourceMarketValue: { amount: "600", currency: "USD" },
+          valuation: {
+            status: "valued",
+            priceSource: "CoinGecko BNB Smart Chain/USD 参考价格",
+            pricedAt: capturedAt,
+          },
+          costPrice: null,
+          platformProfit: null,
+          changePercent: null,
+        },
+        {
+          symbol: "UNKNOWN",
+          name: "UNKNOWN · BNB Smart Chain BEP-20",
+          sourceAsset:
+            "evm:56:0xcccccccccccccccccccccccccccccccccccccccc",
+          quantity: "1000",
+          currency: "USD",
+          assetClass: "crypto",
+          currentPrice: null,
+          marketValue: null,
+          sourceMarketValue: null,
+          valuation: {
+            status: "unvalued",
+            reason: "CoinGecko 未返回可靠 USD 参考价格",
+          },
+          costPrice: null,
+          platformProfit: null,
+          changePercent: null,
+        },
+      ],
+      exchangeRates: [],
+      syncedAt: capturedAt,
+    },
   };
 }
 
@@ -385,6 +447,7 @@ export async function POST(request: Request) {
     action !== "schema-v4-trend-observation-migration" &&
     action !== "schema-v6-hkd-fx-migration" &&
     action !== "display-name-persistence" &&
+    action !== "evm-token-preference-persistence" &&
     action !== "longbridge-option-read-upgrade"
   ) {
     return Response.json({ error: "unknown action" }, { status: 400 });
@@ -407,6 +470,8 @@ export async function POST(request: Request) {
       downgrade.exec(`
         ALTER TABLE asset_source_snapshots DROP COLUMN coverage_json;
         ALTER TABLE asset_sources DROP COLUMN display_name;
+        ALTER TABLE asset_sources DROP COLUMN ignored_asset_keys_json;
+        ALTER TABLE asset_sources DROP COLUMN included_asset_keys_json;
         UPDATE schema_metadata SET value = '2' WHERE key = 'schema_version';
       `);
       downgrade.close();
@@ -473,6 +538,8 @@ export async function POST(request: Request) {
       downgrade.exec(`
         DROP TABLE daily_asset_source_trend_observations;
         DROP TABLE daily_asset_trend_observations;
+        ALTER TABLE asset_sources DROP COLUMN ignored_asset_keys_json;
+        ALTER TABLE asset_sources DROP COLUMN included_asset_keys_json;
         UPDATE schema_metadata SET value = '4' WHERE key = 'schema_version';
       `);
       downgrade.close();
@@ -575,6 +642,43 @@ export async function POST(request: Request) {
       });
     }
 
+    if (action === "evm-token-preference-persistence") {
+      const assetKey =
+        "evm:56:0xcccccccccccccccccccccccccccccccccccccccc";
+      const first = createProductionServices(dataDirectory);
+      await first.secrets.get("startup-ready");
+      await first.assetSourceConnections.connectEvm(evmAuthorization());
+      const [connected] = await first.assetSources.list();
+      await first.assetSourceLifecycle.setEvmTokenPreference(
+        connected.id,
+        [assetKey],
+        "ignored",
+      );
+
+      const restartedIgnored = createProductionServices(dataDirectory);
+      await restartedIgnored.secrets.get("startup-ready");
+      const [ignoredSource] = await restartedIgnored.assetSources.list();
+      await restartedIgnored.assetSourceLifecycle.setEvmTokenPreference(
+        ignoredSource.id,
+        [assetKey],
+        "included",
+      );
+
+      const restartedIncluded = createProductionServices(dataDirectory);
+      await restartedIncluded.secrets.get("startup-ready");
+      const [includedSource] = await restartedIncluded.assetSources.list();
+      return Response.json({
+        ignoredAfterRestart: {
+          ignoredAssetKeys: ignoredSource.ignoredAssetKeys ?? [],
+          includedAssetKeys: ignoredSource.includedAssetKeys ?? [],
+        },
+        includedAfterRestart: {
+          ignoredAssetKeys: includedSource.ignoredAssetKeys ?? [],
+          includedAssetKeys: includedSource.includedAssetKeys ?? [],
+        },
+      });
+    }
+
     if (action === "longbridge-option-read-upgrade") {
       await mkdir(dataDirectory, { recursive: true });
       const databasePath = path.join(dataDirectory, "dashboard.sqlite");
@@ -622,6 +726,8 @@ export async function POST(request: Request) {
         ALTER TABLE daily_asset_trend_observations DROP COLUMN exchange_rates_json;
         ALTER TABLE daily_asset_trend_observations DROP COLUMN total_hkd;
         ALTER TABLE daily_asset_source_trend_observations DROP COLUMN total_hkd;
+        ALTER TABLE asset_sources DROP COLUMN ignored_asset_keys_json;
+        ALTER TABLE asset_sources DROP COLUMN included_asset_keys_json;
         UPDATE schema_metadata SET value = '6' WHERE key = 'schema_version';
       `);
       downgrade.close();

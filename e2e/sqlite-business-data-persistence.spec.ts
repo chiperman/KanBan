@@ -69,7 +69,7 @@ test("SQLite schema v2 自动迁移并持久化 Binance 覆盖证据", async ({ 
 
   expect(response.ok()).toBeTruthy();
   await expect(response.json()).resolves.toEqual({
-    schemaVersion: "7",
+    schemaVersion: "8",
     coverageColumn: true,
     displayNameColumn: true,
     coverageStatus: "partial",
@@ -86,7 +86,7 @@ test("SQLite schema v4 升级后分离日初基准与每日趋势观测并跨重
 
   expect(response.ok()).toBeTruthy();
   await expect(response.json()).resolves.toEqual({
-    schemaVersion: "7",
+    schemaVersion: "8",
     migratedTrend: {
       capturedAt: "2026-07-28T00:30:00.000Z",
       complete: false,
@@ -161,6 +161,30 @@ test("资产来源自定义名称跨 SQLite 重启保留，清空后恢复默认
       displayName: null,
       label: "Binance persistence",
       accountId: "persistence",
+    },
+  });
+});
+
+test("EVM 代币忽略与保留状态跨 SQLite 重启持久化", async ({
+  request,
+}) => {
+  const response = await request.post(
+    "/test-doubles/sqlite-business-data-persistence?action=evm-token-preference-persistence",
+  );
+
+  expect(response.ok()).toBeTruthy();
+  await expect(response.json()).resolves.toEqual({
+    ignoredAfterRestart: {
+      ignoredAssetKeys: [
+        "evm:56:0xcccccccccccccccccccccccccccccccccccccccc",
+      ],
+      includedAssetKeys: [],
+    },
+    includedAfterRestart: {
+      ignoredAssetKeys: [],
+      includedAssetKeys: [
+        "evm:56:0xcccccccccccccccccccccccccccccccccccccccc",
+      ],
     },
   });
 });

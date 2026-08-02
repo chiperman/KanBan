@@ -20,6 +20,10 @@ import {
   mergeDailyTrendObservation,
 } from "@/domain/daily-asset-snapshots";
 import { normalizeAssetSourceDisplayName } from "@/domain/asset-source-display-name";
+import {
+  normalizeIgnoredAssetKeys,
+  updateEvmTokenPreferences,
+} from "@/domain/evm-token-preferences";
 import type {
   AppServices,
   Card,
@@ -95,15 +99,15 @@ class SystemClock implements Clock {
 }
 
 interface DashboardState {
-  schemaVersion: 7;
+  schemaVersion: 8;
   assetCards: Card[];
   assetSources: AssetSourceSummary[];
   dailyAssetSnapshots: DailyAssetSnapshot[];
   dailyAssetTrendObservations: DailyAssetTrendObservation[];
 }
 
-const DASHBOARD_SCHEMA_VERSION = 7 as const;
-const SQLITE_SCHEMA_VERSION = 7;
+const DASHBOARD_SCHEMA_VERSION = 8 as const;
+const SQLITE_SCHEMA_VERSION = 8;
 
 type SourceConnectionKind = "longbridge" | "binance" | "okx" | "bitget" | "evm";
 type SourceAuthorizationResult =
@@ -204,6 +208,11 @@ interface DashboardDatabase {
   setAssetSourceDisplayName(
     sourceId: string,
     displayName: string | null,
+  ): Promise<void>;
+  setAssetSourceEvmTokenPreferences(
+    sourceId: string,
+    ignoredAssetKeys: string[],
+    includedAssetKeys: string[],
   ): Promise<void>;
   disconnectAssetSource(sourceId: string): Promise<string | null>;
   deleteAssetSourceData(sourceId: string): Promise<string | null>;
@@ -375,8 +384,16 @@ function migrateAssetSource(raw: unknown): AssetSourceSummary {
           excludedPositiveAccounts: [],
         }
       : undefined);
+  const ignoredAssetKeys = normalizeIgnoredAssetKeys(
+    source.ignoredAssetKeys,
+  );
+  const includedAssetKeys = normalizeIgnoredAssetKeys(
+    source.includedAssetKeys,
+  );
   return {
     ...source,
+    ...(ignoredAssetKeys.length === 0 ? {} : { ignoredAssetKeys }),
+    ...(includedAssetKeys.length === 0 ? {} : { includedAssetKeys }),
     snapshot: {
       ...snapshot,
       total,
@@ -631,6 +648,21 @@ export class FileDashboardDatabase {
     });
   }
 
+  async setAssetSourceEvmTokenPreferences(
+    sourceId: string,
+    ignoredAssetKeys: string[],
+    includedAssetKeys: string[],
+  ): Promise<void> {
+    await this.mutate((state) => {
+      const source = state.assetSources.find((item) => item.id === sourceId);
+      if (!source) throw new Error("资产来源不存在");
+      if (ignoredAssetKeys.length === 0) delete source.ignoredAssetKeys;
+      else source.ignoredAssetKeys = ignoredAssetKeys;
+      if (includedAssetKeys.length === 0) delete source.includedAssetKeys;
+      else source.includedAssetKeys = includedAssetKeys;
+    });
+  }
+
   async disconnectAssetSource(sourceId: string): Promise<string | null> {
     return this.mutate((state) => {
       const source = state.assetSources.find((item) => item.id === sourceId);
@@ -790,7 +822,7 @@ function parseLegacyDashboardStateSync(
 
 /** SQLite 只保存业务数据与不透明凭证引用；秘密正文仍由 SecretStore 持有。 */
 export class SqliteDashboardDatabase implements DashboardDatabase {
-  private database!: DatabaseSync;
+  private database!: InstanceType<typeof DatabaseSync>;
 
   constructor(
     private readonly databasePath: string,
@@ -837,6 +869,10 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
         account_id TEXT NOT NULL,
         permissions_json TEXT NOT NULL CHECK (json_valid(permissions_json)),
         credential_reference TEXT,
+        ignored_asset_keys_json TEXT NOT NULL DEFAULT '[]'
+          CHECK (json_valid(ignored_asset_keys_json)),
+        included_asset_keys_json TEXT NOT NULL DEFAULT '[]'
+          CHECK (json_valid(included_asset_keys_json)),
         lifecycle TEXT CHECK (lifecycle IS NULL OR lifecycle IN ('connected', 'disconnected'))
       ) STRICT;
       CREATE TABLE IF NOT EXISTS asset_source_snapshots (
@@ -943,6 +979,10 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
     if (schemaVersion === "6") {
       this.migrateSchemaVersionSix();
       schemaVersion = "7";
+    }
+    if (schemaVersion === "7") {
+      this.migrateSchemaVersionSeven();
+      schemaVersion = "8";
     }
     if (schemaVersion !== String(SQLITE_SCHEMA_VERSION)) {
       throw new Error(`不支持的 SQLite schema 版本: ${schemaVersion}`);
@@ -1094,6 +1134,22 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
     });
   }
 
+  private migrateSchemaVersionSeven(): void {
+    this.transaction(() => {
+      this.database.exec(`
+        ALTER TABLE asset_sources
+        ADD COLUMN ignored_asset_keys_json TEXT NOT NULL DEFAULT '[]'
+        CHECK (json_valid(ignored_asset_keys_json));
+        ALTER TABLE asset_sources
+        ADD COLUMN included_asset_keys_json TEXT NOT NULL DEFAULT '[]'
+        CHECK (json_valid(included_asset_keys_json));
+      `);
+      this.database
+        .prepare("UPDATE schema_metadata SET value = ? WHERE key = ?")
+        .run("8", "schema_version");
+    });
+  }
+
   private initializeLegacyData(): void {
     if (this.metadata("json_import_complete") === "1") return;
     const state = parseLegacyDashboardStateSync(
@@ -1204,8 +1260,9 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
       .prepare(`
         INSERT INTO asset_sources (
           id, position, kind, label, display_name, account_id, permissions_json,
-          credential_reference, lifecycle
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          credential_reference, ignored_asset_keys_json, included_asset_keys_json,
+          lifecycle
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
       .run(
         source.id,
@@ -1216,6 +1273,8 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
         source.accountId,
         JSON.stringify(source.permissions),
         source.credentialReference,
+        JSON.stringify(source.ignoredAssetKeys ?? []),
+        JSON.stringify(source.includedAssetKeys ?? []),
         source.lifecycle ?? null,
       );
     this.upsertSourceDetails(source);
@@ -1481,6 +1540,16 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
           typeof row.credential_reference === "string"
             ? row.credential_reference
             : null,
+        ignoredAssetKeys: normalizeIgnoredAssetKeys(
+          JSON.parse(
+            (row.ignored_asset_keys_json as string | null) ?? "[]",
+          ),
+        ),
+        includedAssetKeys: normalizeIgnoredAssetKeys(
+          JSON.parse(
+            (row.included_asset_keys_json as string | null) ?? "[]",
+          ),
+        ),
         snapshot: {
           total: {
             amount: snapshot.total_amount as string,
@@ -1613,7 +1682,9 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
         .prepare(`
           UPDATE asset_sources
           SET kind = ?, label = ?, display_name = ?, account_id = ?,
-              permissions_json = ?, credential_reference = ?, lifecycle = ?
+              permissions_json = ?, credential_reference = ?,
+              ignored_asset_keys_json = ?, included_asset_keys_json = ?,
+              lifecycle = ?
           WHERE id = ?
         `)
         .run(
@@ -1623,6 +1694,8 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
           source.accountId,
           JSON.stringify(source.permissions),
           source.credentialReference,
+          JSON.stringify(source.ignoredAssetKeys ?? []),
+          JSON.stringify(source.includedAssetKeys ?? []),
           source.lifecycle ?? null,
           source.id,
         );
@@ -1722,6 +1795,27 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
       const result = this.database
         .prepare("UPDATE asset_sources SET display_name = ? WHERE id = ?")
         .run(displayName, sourceId);
+      if (result.changes === 0) throw new Error("资产来源不存在");
+    });
+  }
+
+  async setAssetSourceEvmTokenPreferences(
+    sourceId: string,
+    ignoredAssetKeys: string[],
+    includedAssetKeys: string[],
+  ): Promise<void> {
+    this.transaction(() => {
+      const result = this.database
+        .prepare(
+          `UPDATE asset_sources
+           SET ignored_asset_keys_json = ?, included_asset_keys_json = ?
+           WHERE id = ?`,
+        )
+        .run(
+          JSON.stringify(ignoredAssetKeys),
+          JSON.stringify(includedAssetKeys),
+          sourceId,
+        );
       if (result.changes === 0) throw new Error("资产来源不存在");
     });
   }
@@ -2035,6 +2129,27 @@ class DatabaseAssetSourceLifecycle implements AssetSourceLifecycle {
     return this.database.setAssetSourceDisplayName(
       sourceId,
       normalizeAssetSourceDisplayName(displayName),
+    );
+  }
+
+  async setEvmTokenPreference(
+    sourceId: string,
+    assetKeys: string[],
+    status: "included" | "ignored" | "unrecognized",
+  ): Promise<void> {
+    const source = (await this.database.listSources()).find(
+      (item) => item.id === sourceId,
+    );
+    if (!source) throw new Error("资产来源不存在");
+    const preferences = updateEvmTokenPreferences(
+      source,
+      assetKeys,
+      status,
+    );
+    await this.database.setAssetSourceEvmTokenPreferences(
+      sourceId,
+      preferences.ignoredAssetKeys,
+      preferences.includedAssetKeys,
     );
   }
 

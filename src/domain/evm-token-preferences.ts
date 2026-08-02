@@ -1,0 +1,167 @@
+import type { AssetHolding, AssetSourceSummary } from "@/server/ports";
+import { decimalAdd } from "@/domain/decimal";
+
+const EVM_TOKEN_ASSET_KEY_PATTERN =
+  /^evm:(1|56):0x[0-9a-f]{40}$/;
+
+type SourceWithEvmTokenPreferences = Pick<
+  AssetSourceSummary,
+  "kind" | "ignoredAssetKeys" | "includedAssetKeys" | "snapshot"
+>;
+
+export class InvalidEvmTokenPreferenceError extends Error {}
+
+export function isEvmTokenAssetKey(value: string): boolean {
+  return EVM_TOKEN_ASSET_KEY_PATTERN.test(value);
+}
+
+export function isEvmTokenHolding(
+  sourceKind: string,
+  holding: AssetHolding,
+): boolean {
+  return (
+    sourceKind.startsWith("evm-watch-") &&
+    typeof holding.sourceAsset === "string" &&
+    isEvmTokenAssetKey(holding.sourceAsset)
+  );
+}
+
+export function isUnrecognizedEvmTokenHolding(
+  source: SourceWithEvmTokenPreferences,
+  holding: AssetHolding,
+): boolean {
+  if (!holding.sourceAsset) return false;
+  return (
+    isEvmTokenHolding(source.kind, holding) &&
+    holding.valuation.status === "unvalued" &&
+    !ignoredAssetKeySet(source).has(holding.sourceAsset) &&
+    !includedAssetKeySet(source).has(holding.sourceAsset)
+  );
+}
+
+export function ignoredAssetKeySet(
+  source: Pick<AssetSourceSummary, "ignoredAssetKeys">,
+): Set<string> {
+  return new Set(source.ignoredAssetKeys ?? []);
+}
+
+export function includedAssetKeySet(
+  source: Pick<AssetSourceSummary, "includedAssetKeys">,
+): Set<string> {
+  return new Set(source.includedAssetKeys ?? []);
+}
+
+export function activeSourceHoldings(
+  source: SourceWithEvmTokenPreferences,
+): AssetHolding[] {
+  const ignored = ignoredAssetKeySet(source);
+  return source.snapshot.holdings.filter(
+    (holding) =>
+      holding.sourceAsset === undefined ||
+      !ignored.has(holding.sourceAsset),
+  );
+}
+
+export function portfolioSourceTotal(
+  source: SourceWithEvmTokenPreferences,
+): AssetSourceSummary["snapshot"]["total"] {
+  if (
+    !source.kind.startsWith("evm-watch-") ||
+    (source.ignoredAssetKeys?.length ?? 0) === 0
+  ) {
+    return source.snapshot.total;
+  }
+  const amount = decimalAdd(
+    ...activeSourceHoldings(source).flatMap((holding) =>
+      holding.sourceMarketValue?.currency === source.snapshot.total.currency
+        ? [holding.sourceMarketValue.amount]
+        : [],
+    ),
+  );
+  return {
+    amount,
+    currency: source.snapshot.total.currency,
+  };
+}
+
+export function ignoredSourceHoldings(
+  source: SourceWithEvmTokenPreferences,
+): AssetHolding[] {
+  const ignored = ignoredAssetKeySet(source);
+  return source.snapshot.holdings.filter(
+    (holding) =>
+      holding.sourceAsset !== undefined &&
+      ignored.has(holding.sourceAsset),
+  );
+}
+
+export function includedSourceHoldings(
+  source: SourceWithEvmTokenPreferences,
+): AssetHolding[] {
+  const included = includedAssetKeySet(source);
+  return source.snapshot.holdings.filter(
+    (holding) =>
+      holding.sourceAsset !== undefined &&
+      included.has(holding.sourceAsset),
+  );
+}
+
+export function normalizeIgnoredAssetKeys(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [
+    ...new Set(
+      value.filter(
+        (item): item is string =>
+          typeof item === "string" && isEvmTokenAssetKey(item),
+      ),
+    ),
+  ].sort();
+}
+
+export function updateEvmTokenPreferences(
+  source: SourceWithEvmTokenPreferences,
+  assetKeys: string[],
+  status: "included" | "ignored" | "unrecognized",
+): {
+  ignoredAssetKeys: string[];
+  includedAssetKeys: string[];
+} {
+  if (!source.kind.startsWith("evm-watch-")) {
+    throw new InvalidEvmTokenPreferenceError("只有 EVM 观察钱包可以忽略代币");
+  }
+  if (assetKeys.length === 0) {
+    throw new InvalidEvmTokenPreferenceError("请至少选择一个代币");
+  }
+  const available = new Set([
+    ...source.snapshot.holdings.flatMap((holding) =>
+      isEvmTokenHolding(source.kind, holding) &&
+      holding.valuation.status === "unvalued" &&
+      holding.sourceAsset
+        ? [holding.sourceAsset]
+        : [],
+    ),
+    ...(source.ignoredAssetKeys ?? []),
+    ...(source.includedAssetKeys ?? []),
+  ]);
+  if (
+    assetKeys.some(
+      (assetKey) =>
+        !isEvmTokenAssetKey(assetKey) ||
+        !available.has(assetKey),
+    )
+  ) {
+    throw new InvalidEvmTokenPreferenceError("代币合约不属于该观察钱包");
+  }
+  const ignored = ignoredAssetKeySet(source);
+  const included = includedAssetKeySet(source);
+  for (const assetKey of assetKeys) {
+    ignored.delete(assetKey);
+    included.delete(assetKey);
+    if (status === "ignored") ignored.add(assetKey);
+    if (status === "included") included.add(assetKey);
+  }
+  return {
+    ignoredAssetKeys: [...ignored].sort(),
+    includedAssetKeys: [...included].sort(),
+  };
+}

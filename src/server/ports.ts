@@ -40,6 +40,10 @@ export interface AssetSourceSummary {
   credentialReference: string | null;
   snapshot: AssetSnapshot;
   sync: AssetSourceSyncState;
+  /** 所有者按 EVM chain ID + contract address 明确忽略的来源资产标识。 */
+  ignoredAssetKeys?: string[];
+  /** 所有者确认属于投资资产、即使暂时缺价也应正常展示的 EVM 资产标识。 */
+  includedAssetKeys?: string[];
   /** 旧数据缺省为 connected；断开后仅保留历史身份与快照。 */
   lifecycle?: "connected" | "disconnected";
 }
@@ -424,6 +428,11 @@ export interface AssetSources {
 export interface AssetSourceLifecycle {
   setHidden(sourceId: string, hidden: boolean): Promise<void>;
   setDisplayName(sourceId: string, displayName: string): Promise<void>;
+  setEvmTokenPreference(
+    sourceId: string,
+    assetKeys: string[],
+    status: "included" | "ignored" | "unrecognized",
+  ): Promise<void>;
   disconnect(sourceId: string): Promise<void>;
   deleteData(sourceId: string): Promise<void>;
 }

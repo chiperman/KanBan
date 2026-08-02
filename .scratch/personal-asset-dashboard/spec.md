@@ -90,6 +90,9 @@ Status: ready-for-human
 48. As an 所有者, I want disconnecting a source to delete its credential and stop future synchronization while retaining snapshots.
 49. As an 所有者, I want permanent source-data deletion separate from disconnect and protected by a second confirmation.
 50. As an 所有者, I want Command-K for asset navigation, refresh, and lock, with equivalent pointer controls.
+51. As an 所有者, I want unrecognized ERC-20 and BEP-20 balances collapsed until I review them.
+52. As an 所有者, I want to ignore or restore an EVM token by chain and contract address without any on-chain action.
+53. As an 所有者, I want ignored tokens excluded from holding counts and valuation completeness while ordinary unvalued assets remain truthful.
 
 ## Implementation Decisions
 
@@ -107,6 +110,7 @@ Status: ready-for-human
 - Support Ethereum mainnet and BNB Smart Chain mainnet through one chain-configured EVM adapter. Defer Base, Arbitrum, Solana, Bitcoin, NFTs, staking, LP, lending, and other DeFi positions.
 - Use source-native valuation for platform assets and an identified independent price source for observation wallets or missing native prices.
 - Preserve unvalued holdings but exclude them from numeric totals. Never fabricate price, value, exchange rate, or profit.
+- Treat an unpriced EVM token as unrecognized until the owner classifies it. Persist ignored-token rules by chain and contract address, keep them reversible, and exclude only owner-ignored tokens from portfolio counts and valuation completeness.
 - Fetch immediately after authentication. While visible, refresh prices every 30 seconds and holdings every five minutes; pause scheduled refresh while hidden and allow manual refresh.
 - Preserve last successful source data on failure, mark it expired, and propagate incomplete status to the total.
 - Persist an immutable daily baseline for today asset change and an updatable daily trend observation for historical trends, both using Asia/Shanghai day boundaries. Do not import transactions or backfill historical data.

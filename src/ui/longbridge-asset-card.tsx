@@ -11,6 +11,10 @@ import {
   decimalToFixed,
 } from "@/domain/decimal";
 import {
+  isUnrecognizedEvmTokenHolding,
+  portfolioSourceTotal,
+} from "@/domain/evm-token-preferences";
+import {
   compareNullableDecimalDescending,
   convertCurrencyAmount,
   type ReportingCurrency,
@@ -53,6 +57,8 @@ export interface AssetSourceView {
   accountId: string;
   snapshot: AssetSnapshot;
   sync: AssetSourceSyncState;
+  ignoredAssetKeys?: string[];
+  includedAssetKeys?: string[];
   lifecycle?: "connected" | "disconnected";
 }
 
@@ -290,19 +296,25 @@ function HoldingDetailRow({
             showSensitiveInfo={showSensitiveInfo}
           />
           <td>
-            {holding.currentPrice === null
-              ? quoteUnavailable ? "现价不可用" : "—"
-              : !showSensitiveInfo ? masked
-              : formatDisplayPrice(
-                holding.currentPrice.amount,
-                holding.currentPrice.currency,
-              ) ?? "无法折算"}
+            {holding.currentPrice
+              ? !showSensitiveInfo
+                ? masked
+                : formatDisplayPrice(
+                  holding.currentPrice.amount,
+                  holding.currentPrice.currency,
+                ) ?? "无法折算"
+              : quoteUnavailable
+                ? "现价不可用"
+                : holding.valuation.status === "unvalued"
+                  ? "未估值"
+                  : "—"}
           </td>
           <td>
             {holding.costPrice === null
               ? "—"
-              : !showSensitiveInfo ? masked
-              : formatDisplayPrice(holding.costPrice, holding.currency) ?? "无法折算"}
+              : !showSensitiveInfo
+                ? masked
+                : formatDisplayPrice(holding.costPrice, holding.currency) ?? "无法折算"}
           </td>
           <HoldingProfitSummaryCell
             currency={holding.currency}
@@ -325,32 +337,42 @@ function HoldingDetailRow({
         <>
           <td>{showSensitiveInfo ? amount(holding.quantity) : masked}</td>
           <td>
-            {holding.currentPrice === null
-              ? quoteUnavailable ? "现价不可用" : "—"
-              : !showSensitiveInfo ? masked
-              : formatDisplayPrice(
-                holding.currentPrice.amount,
-                holding.currentPrice.currency,
-              ) ?? "无法折算"}
+            {holding.currentPrice
+              ? !showSensitiveInfo
+                ? masked
+                : formatDisplayPrice(
+                  holding.currentPrice.amount,
+                  holding.currentPrice.currency,
+                ) ?? "无法折算"
+              : quoteUnavailable
+                ? "现价不可用"
+                : holding.valuation.status === "unvalued"
+                ? "未估值"
+                : "—"}
           </td>
           <td>
             {holding.marketValue === null
-              ? quoteUnavailable ? "期权行情未接入" : "未估值"
-              : !showSensitiveInfo ? masked
-              : formatDisplayMoney(holding.marketValue, holding.currency) ?? "无法折算"}
+              ? quoteUnavailable
+                ? "期权行情未接入"
+                : "未估值"
+              : !showSensitiveInfo
+                ? masked
+                : formatDisplayMoney(holding.marketValue, holding.currency) ?? "无法折算"}
           </td>
           <td>
             {holding.costPrice === null
               ? "—"
-              : !showSensitiveInfo ? masked
-              : formatDisplayPrice(holding.costPrice, holding.currency) ?? "无法折算"}
+              : !showSensitiveInfo
+                ? masked
+                : formatDisplayPrice(holding.costPrice, holding.currency) ?? "无法折算"}
           </td>
           {showPlatformProfit ? (
             <td>
               {holding.platformProfit === null
                 ? "—"
-                : !showSensitiveInfo ? masked
-                : formatDisplayMoney(holding.platformProfit, holding.currency) ?? "无法折算"}
+                : !showSensitiveInfo
+                  ? masked
+                  : formatDisplayMoney(holding.platformProfit, holding.currency) ?? "无法折算"}
             </td>
           ) : null}
           <td
@@ -414,6 +436,7 @@ export function AssetSourceCard({
 }) {
   const [hideSmallCryptoHoldings, setHideSmallCryptoHoldings] = useState(true);
   const supportsSmallHoldingFilter = source.kind !== "longbridge";
+  const supportsEvmTokenPreferences = source.kind.startsWith("evm-watch-");
   const supportsProductCoverage = ["binance", "okx", "bitget"].includes(
     source.kind,
   );
@@ -432,6 +455,27 @@ export function AssetSourceCard({
   const positionHoldings = orderedHoldings.filter(
     ({ assetClass }) => assetClass !== "cash",
   );
+  const ignoredAssetKeys = new Set(source.ignoredAssetKeys ?? []);
+  const activePositionHoldings = positionHoldings.filter(
+    (holding) =>
+      holding.sourceAsset === undefined ||
+      !ignoredAssetKeys.has(holding.sourceAsset),
+  );
+  const unrecognizedHoldings = supportsEvmTokenPreferences
+    ? activePositionHoldings.filter((holding) =>
+        isUnrecognizedEvmTokenHolding(source, holding)
+      )
+    : [];
+  const unrecognizedAssetKeys = new Set(
+    unrecognizedHoldings.flatMap((holding) =>
+      holding.sourceAsset ? [holding.sourceAsset] : [],
+    ),
+  );
+  const reviewedPositionHoldings = activePositionHoldings.filter(
+    (holding) =>
+      holding.sourceAsset === undefined ||
+      !unrecognizedAssetKeys.has(holding.sourceAsset),
+  );
   const cashBalances = cashHoldings.flatMap((holding) =>
     holding.cashBalances ?? [{
       amount: holding.marketValue ?? holding.quantity,
@@ -443,19 +487,19 @@ export function AssetSourceCard({
     }]
   );
   const hiddenSmallHoldingCount = supportsSmallHoldingFilter
-    ? positionHoldings.filter(
+    ? reviewedPositionHoldings.filter(
         (holding) =>
           holding.marketValue !== null &&
           decimalCompare(holding.marketValue, "1") < 0,
       ).length
     : 0;
   const visibleHoldings = supportsSmallHoldingFilter && hideSmallCryptoHoldings
-    ? positionHoldings.filter(
+    ? reviewedPositionHoldings.filter(
       (holding) =>
         holding.marketValue === null ||
         decimalCompare(holding.marketValue, "1") >= 0,
       )
-    : positionHoldings;
+    : reviewedPositionHoldings;
   const showPlatformProfit = visibleHoldings.some(
     (holding) => holding.platformProfit !== null,
   );
@@ -568,9 +612,10 @@ export function AssetSourceCard({
       ? null
       : amount(decimalToFixed(converted, source.kind === "longbridge" ? 3 : 2));
   };
+  const effectiveSourceTotal = portfolioSourceTotal(source);
   const sourceTotal = formatDisplayMoney(
-    source.snapshot.total.amount,
-    source.snapshot.total.currency,
+    effectiveSourceTotal.amount,
+    effectiveSourceTotal.currency,
   );
   const sourceState = source.lifecycle === "disconnected"
     ? { label: "OFFLINE", tone: "muted" as const }

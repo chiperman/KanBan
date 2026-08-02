@@ -8,6 +8,10 @@ import {
   decimalTruncateToFixed,
 } from "@/domain/decimal";
 import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
+import {
+  activeSourceHoldings,
+  portfolioSourceTotal,
+} from "@/domain/evm-token-preferences";
 import type {
   AssetExchangeRate,
   AssetHolding,
@@ -18,7 +22,13 @@ import type {
 
 export type ValuationSource = Pick<
   AssetSourceSummary,
-  "id" | "kind" | "label" | "displayName" | "snapshot" | "sync"
+  | "id"
+  | "kind"
+  | "label"
+  | "displayName"
+  | "snapshot"
+  | "sync"
+  | "ignoredAssetKeys"
 >;
 
 export type ReportingCurrency = "USD" | "CNY" | "HKD";
@@ -277,6 +287,7 @@ export function buildTotalValuation(
   const coverageIssues: ValuationCoverageIssue[] = [];
 
   for (const source of sources) {
+    const activeHoldings = activeSourceHoldings(source);
     if (source.sync.status === "expired") expiredCount += 1;
     if (
       source.snapshot.coverage?.products.some(
@@ -303,9 +314,10 @@ export function buildTotalValuation(
       ...longbridgeRates,
       ...source.snapshot.exchangeRates,
     ];
+    const portfolioTotal = portfolioSourceTotal(source);
     const total = convertCurrencyAmount(
-      source.snapshot.total.amount,
-      source.snapshot.total.currency,
+      portfolioTotal.amount,
+      portfolioTotal.currency,
       "USD",
       sourceRates,
     );
@@ -317,7 +329,7 @@ export function buildTotalValuation(
       sourceTotals.set(source.id, total);
     }
     if (source.snapshot.coverage?.status !== "complete") {
-      unvaluedCount += source.snapshot.holdings.filter(
+      unvaluedCount += activeHoldings.filter(
         holdingMakesTotalIncomplete,
       ).length;
     }
@@ -328,8 +340,13 @@ export function buildTotalValuation(
   const reconciliationIssuesUsd: ValuationReconciliationIssue[] = [];
   let hasNonAuthoritativePositiveResidual = false;
   for (const source of sources) {
+    const activeHoldings = activeSourceHoldings(source);
     const sourceTotal = sourceTotals.get(source.id);
-    const quoteUnavailableCount = source.snapshot.holdings.filter(
+    const sourceRates = [
+      ...longbridgeRates,
+      ...source.snapshot.exchangeRates,
+    ];
+    const quoteUnavailableCount = activeHoldings.filter(
       (holding) => holding.valuation.status === "quote-unavailable",
     ).length;
     if (quoteUnavailableCount > 0) {
@@ -352,13 +369,13 @@ export function buildTotalValuation(
     }
 
     let holdingTotalUsd = "0";
-    for (const holding of source.snapshot.holdings) {
+    for (const holding of activeHoldings) {
       if (holding.sourceMarketValue === null) continue;
       const amount = convertCurrencyAmount(
         holding.sourceMarketValue.amount,
         holding.sourceMarketValue.currency,
         "USD",
-        allRates,
+        sourceRates,
       );
       if (amount === null) {
         incomplete = true;

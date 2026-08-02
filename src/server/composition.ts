@@ -77,7 +77,8 @@ function hasCurrentServices(
 ): services is AppServices {
   return (
     services !== null &&
-    services.externalServices !== undefined
+    services.externalServices !== undefined &&
+    typeof services.assetSourceLifecycle.setEvmTokenPreference === "function"
   );
 }
 

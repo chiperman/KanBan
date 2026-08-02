@@ -1,5 +1,6 @@
 import { getServices } from "@/server/composition";
 import { InvalidAssetSourceDisplayNameError } from "@/domain/asset-source-display-name";
+import { InvalidEvmTokenPreferenceError } from "@/domain/evm-token-preferences";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,8 @@ export async function PATCH(
     action?: unknown;
     displayName?: unknown;
     hidden?: unknown;
+    assetKeys?: unknown;
+    status?: unknown;
   } | null;
 
   try {
@@ -40,6 +43,21 @@ export async function PATCH(
         id,
         body.displayName,
       );
+    } else if (
+      body?.action === "evm-token-preference" &&
+      Array.isArray(body.assetKeys) &&
+      body.assetKeys.every((assetKey) => typeof assetKey === "string") &&
+      (
+        body.status === "included" ||
+        body.status === "ignored" ||
+        body.status === "unrecognized"
+      )
+    ) {
+      await context.services.assetSourceLifecycle.setEvmTokenPreference(
+        id,
+        body.assetKeys,
+        body.status,
+      );
     } else if (body?.action === "disconnect") {
       await context.services.assetSourceLifecycle.disconnect(id);
     } else {
@@ -50,7 +68,10 @@ export async function PATCH(
       { error: error instanceof Error ? error.message : "来源操作失败" },
       {
         status:
-          error instanceof InvalidAssetSourceDisplayNameError ? 400 : 500,
+          error instanceof InvalidAssetSourceDisplayNameError ||
+            error instanceof InvalidEvmTokenPreferenceError
+            ? 400
+            : 500,
       },
     );
   }

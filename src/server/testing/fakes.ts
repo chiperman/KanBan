@@ -40,6 +40,7 @@ import type {
 } from "@/server/ports";
 import type { AppServices } from "@/server/composition";
 import { SessionOwnerAuth } from "@/server/auth/session-auth";
+import { updateEvmTokenPreferences } from "@/domain/evm-token-preferences";
 import {
   LongbridgeOAuthState,
   mapLongbridgeSnapshot,
@@ -557,6 +558,7 @@ export type FakeRefreshScenario =
   | "bitget-refresh-failure"
   | "evm-ethereum-refresh-failure"
   | "evm-ethereum-price-refresh-failure"
+  | "evm-unknown-valued"
   | "release-partial-failure";
 
 export class FakeAssetSourceRefresher implements AssetSourceRefresher {
@@ -633,6 +635,41 @@ export class FakeAssetSourceRefresher implements AssetSourceRefresher {
       mode === "prices"
     ) {
       throw new Error("Ethereum 定价失败");
+    }
+    if (
+      this.scenario === "evm-unknown-valued" &&
+      source.kind === "evm-watch-ethereum"
+    ) {
+      const holdings = source.snapshot.holdings.map((holding) =>
+        holding.sourceAsset ===
+            "evm:1:0xcccccccccccccccccccccccccccccccccccccccc"
+          ? {
+              ...holding,
+              currentPrice: { amount: "1", currency: "USD" },
+              marketValue: holding.quantity,
+              sourceMarketValue: {
+                amount: holding.quantity,
+                currency: "USD",
+              },
+              valuation: {
+                status: "valued" as const,
+                priceSource: "CoinGecko Ethereum token/USD 参考价格",
+                pricedAt: attemptedAt,
+              },
+            }
+          : holding
+      );
+      return {
+        snapshot: {
+          ...source.snapshot,
+          total: {
+            amount: decimalAdd(source.snapshot.total.amount, "7"),
+            currency: "USD",
+          },
+          holdings,
+          syncedAt: attemptedAt,
+        },
+      };
     }
     if (source.id === "source-unvalued") {
       return {
@@ -1021,6 +1058,35 @@ export class InMemoryAssetSourceLifecycle implements AssetSourceLifecycle {
       return;
     }
     await this.sources.update({ ...source, displayName: normalized });
+  }
+
+  async setEvmTokenPreference(
+    sourceId: string,
+    assetKeys: string[],
+    status: "included" | "ignored" | "unrecognized",
+  ): Promise<void> {
+    const sources = await this.sources.list();
+    const source = sources.find((item) => item.id === sourceId);
+    if (!source) throw new Error("资产来源不存在");
+    const preferences = updateEvmTokenPreferences(
+      source,
+      assetKeys,
+      status,
+    );
+    const {
+      ignoredAssetKeys: _ignoredAssetKeys,
+      includedAssetKeys: _includedAssetKeys,
+      ...rest
+    } = source;
+    await this.sources.update({
+      ...rest,
+      ...(preferences.ignoredAssetKeys.length === 0
+        ? {}
+        : { ignoredAssetKeys: preferences.ignoredAssetKeys }),
+      ...(preferences.includedAssetKeys.length === 0
+        ? {}
+        : { includedAssetKeys: preferences.includedAssetKeys }),
+    });
   }
 
   async disconnect(sourceId: string): Promise<void> {

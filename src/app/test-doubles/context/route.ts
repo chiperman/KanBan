@@ -31,3 +31,30 @@ export async function GET() {
     },
   });
 }
+
+/**
+ * 模拟开发服务器热更新后，全局缓存仍保留旧生命周期服务的情形。
+ * 仅测试环境可达，用于验证组合根会在服务契约扩展时自动重建。
+ */
+export async function POST() {
+  if (!isTestEnv()) {
+    return Response.json({ error: "not found" }, { status: 404 });
+  }
+
+  const staleServices = getTestServices();
+  Object.defineProperty(
+    staleServices.assetSourceLifecycle,
+    "setEvmTokenPreference",
+    {
+      configurable: true,
+      value: undefined,
+    },
+  );
+
+  const refreshedServices = getTestServices();
+  return Response.json({
+    supportsEvmTokenPreferences:
+      typeof refreshedServices.assetSourceLifecycle.setEvmTokenPreference ===
+      "function",
+  });
+}
