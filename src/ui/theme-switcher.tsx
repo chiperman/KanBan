@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 
 import {
   VibeDotIcon,
@@ -39,6 +39,22 @@ function readSavedChoice(): ThemeChoice {
   } catch {
     return "system";
   }
+}
+
+export function ThemeInitializer() {
+  useLayoutEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const applySavedTheme = () => applyTheme(readSavedChoice());
+    const updateSystemTheme = () => {
+      if (readSavedChoice() === "system") applySavedTheme();
+    };
+
+    applySavedTheme();
+    media.addEventListener("change", updateSystemTheme);
+    return () => media.removeEventListener("change", updateSystemTheme);
+  }, []);
+
+  return null;
 }
 
 function nextThemeChoice(choice: ThemeChoice): ThemeChoice {
