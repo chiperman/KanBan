@@ -610,7 +610,9 @@ test("Ticket 06 旧落盘快照会迁移后在所有者页面正常显示", asyn
     "200.00 USD",
   );
   await expect(overview).toContainText("当前估值：不完整 · 1 项未估值");
-  await expect(page.getByTestId("longbridge-card").locator(".asset-total")).toHaveText("200 USD");
+  await expect(page.getByTestId("longbridge-card").locator(".asset-total")).toHaveText(
+    "200.00 USD",
+  );
 });
 
 test("旧落盘长桥期权缺价会直接升级为行情未接入，无需等待下一次同步", async ({

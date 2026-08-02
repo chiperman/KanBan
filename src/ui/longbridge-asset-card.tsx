@@ -75,7 +75,7 @@ function providerCardLabel(source: AssetSourceView): string {
 function providerCode(source: AssetSourceView): string {
   if (source.kind === "longbridge") return "LB";
   if (source.kind === "binance") return "BN";
-  if (source.kind === "okx") return "OK";
+  if (source.kind === "okx") return "OKX";
   if (source.kind === "bitget") return "BG";
   if (source.kind === "evm-watch-ethereum") return "ETH";
   if (source.kind === "evm-watch-bsc") return "BSC";
@@ -142,14 +142,21 @@ function holdingTodayProfit(holding: AssetHolding): {
     return null;
   }
   if (decimalCompare(holding.previousClose.amount, "0") === 0) return null;
-  const profit = decimalMultiply(
+  const amount = decimalMultiply(
     decimalSubtract(holding.currentPrice.amount, holding.previousClose.amount),
     holding.quantity,
   );
   return {
-    amount: profit,
+    amount,
     percent: decimalToFixed(
-      decimalDivide(decimalMultiply(profit, "100"), holding.previousClose.amount, 8),
+      decimalDivide(
+        decimalMultiply(
+          decimalSubtract(holding.currentPrice.amount, holding.previousClose.amount),
+          "100",
+        ),
+        holding.previousClose.amount,
+        8,
+      ),
       2,
     ),
   };
@@ -386,13 +393,14 @@ function HoldingDetailRow({
           >
             {profit === null
               ? "—"
-              : !showSensitiveInfo ? masked
-              : (() => {
-                const displayed = formatDisplayMoney(profit.amount, holding.currency);
-                return displayed === null
-                  ? "无法折算"
-                  : signedDisplayAmount(profit.amount, displayed);
-              })()}
+              : !showSensitiveInfo
+                ? masked
+                : (() => {
+                  const displayed = formatDisplayMoney(profit.amount, holding.currency);
+                  return displayed === null
+                    ? "无法折算"
+                    : signedDisplayAmount(profit.amount, displayed);
+                })()}
           </td>
           <td
             className="holding-profit profit-color-value"
@@ -867,8 +875,6 @@ export function AssetSourceCard({
             tone={source.sync.status === "expired" ? "warning" : "muted"}
           >
             {source.sync.status === "expired" ? "过期数据" : "数据当前"}
-            {" · 最后成功："}
-            {formatShanghaiDateTime(source.sync.lastSuccessfulAt)}
           </VibeStatusTag>
         )}
         {source.sync.error ? (

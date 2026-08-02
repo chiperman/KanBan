@@ -250,7 +250,7 @@ export interface AssetHolding {
   /** 现金汇总持仓的来源原生币种拆分；总资产仍只计该持仓一次。 */
   cashBalances?: AssetCashBalance[];
   currentPrice: AssetMoney | null;
-  /** 来源上一交易日收盘价；用于计算当日持仓盈亏。 */
+  /** 用于按来源上一交易日收盘价计算当日持仓盈亏；旧快照可缺省。 */
   previousClose?: AssetMoney | null;
   marketValue: string | null;
   /** 来源按账户计价货币给出的可比较市值，仅用于来源内排序与汇总。 */

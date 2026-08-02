@@ -657,23 +657,6 @@ body {
   display: none;
 }
 
-.holding-profit-summary {
-  min-width: 128px;
-}
-
-.holding-market-value-summary strong,
-.holding-market-value-summary span,
-.holding-profit-summary strong,
-.holding-profit-summary span {
-  display: block;
-}
-
-.holding-market-value-summary span,
-.holding-profit-summary span {
-  margin-top: 3px;
-  font-size: 11px;
-}
-
 .asset-holdings-detail {
   display: none;
   margin-top: 18px;
@@ -744,6 +727,23 @@ body {
 .asset-updated,
 .asset-table td:not(:first-child) {
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.holding-profit-summary {
+  min-width: 128px;
+}
+
+.holding-market-value-summary strong,
+.holding-market-value-summary span,
+.holding-profit-summary strong,
+.holding-profit-summary span {
+  display: block;
+}
+
+.holding-market-value-summary span,
+.holding-profit-summary span {
+  margin-top: 3px;
+  font-size: 11px;
 }
 
 .asset-updated {

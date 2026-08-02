@@ -232,7 +232,7 @@ test("长桥 OAuth 先预览后原子保存，并展示总额与紧凑持仓", a
   await preview.getByRole("button", { name: "确认并保存" }).click();
 
   const card = page.getByTestId("longbridge-card");
-  await expect(card).toContainText("123,456.7891 USD");
+  await expect(card).toContainText("123,456.79 USD");
   await expect(card).toContainText("最后更新：2026-01-01 08:00");
   await expect(card).not.toContainText("UTC");
   const topHoldings = card.getByTestId("holding-top-list").getByRole("listitem");
@@ -270,10 +270,11 @@ test("长桥 OAuth 先预览后原子保存，并展示总额与紧凑持仓", a
   const appleHolding = holdingDetails
     .locator("tbody tr")
     .filter({ hasText: "Apple" });
-  await expect(appleHolding.getByRole("cell")).toContainText("+5.06");
-  await expect(
-    appleHolding.locator(".holding-profit-summary--today"),
-  ).toContainText("+5.26%");
+  const appleTodayProfit = appleHolding.locator(
+    ".holding-profit-summary--today",
+  );
+  await expect(appleTodayProfit).toContainText("+5.06");
+  await expect(appleTodayProfit).toContainText("+5.26%");
   const fundHolding = holdingDetails
     .locator("tbody tr")
     .filter({ hasText: "高腾微金美元货币基金A" });
@@ -380,7 +381,7 @@ test("长桥持仓刷新失败时保留最后成功数据并明确标记过期",
 
   const card = page.getByTestId("longbridge-card");
   await expect(card.getByTestId("asset-source-total")).toHaveText(
-    "123,456.7891 USD",
+    "123,456.79 USD",
   );
   const configured = await page.request.post("/test-doubles/longbridge", {
     data: { scenario: "refresh-failure" },
@@ -392,7 +393,7 @@ test("长桥持仓刷新失败时保留最后成功数据并明确标记过期",
     "1 个来源失败",
   );
   await expect(card.getByTestId("asset-source-total")).toHaveText(
-    "123,456.7891 USD",
+    "123,456.79 USD",
   );
   await expect(card).toContainText("过期数据");
   await expect(card).toContainText("长桥同步失败");

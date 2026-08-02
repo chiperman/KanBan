@@ -165,11 +165,12 @@ test("部分失败保留最后成功数据并标记过期，手动刷新可见�
   await expect(overview).toContainText("包含 1 个过期来源");
   const alpha = page.getByTestId("asset-source-card-source-alpha");
   const beta = page.getByTestId("asset-source-card-source-beta");
-  await expect(alpha).toContainText("110 USD");
+  await expect(alpha).toContainText("110.00 USD");
   await expect(alpha).toContainText("数据当前");
   await expect(beta.getByTestId("asset-source-total")).toHaveText("200.00 USD");
   await expect(beta).toContainText("过期数据");
-  await expect(beta).toContainText("最后成功：2026-04-01 16:00");
+  await expect(beta).toContainText("最后更新：2026-04-01 16:00");
+  await expect(beta).not.toContainText("最后成功：");
   await expect(beta).not.toContainText("UTC");
   await expect(beta).toContainText("Beta Crypto 同步失败：来源暂时不可用");
   const expiredStatus = beta.locator(".asset-sync-status");
@@ -363,13 +364,13 @@ test("挂起来源超时不阻塞成功提交，刷新期间新增来源也不�
     "361.00 USD",
   );
   await expect(page.getByTestId("asset-source-card-source-alpha")).toContainText(
-    "110 USD",
+    "110.00 USD",
   );
   await expect(page.getByTestId("asset-source-card-source-beta")).toContainText(
     "过期数据",
   );
   await expect(page.getByTestId("asset-source-card-source-gamma")).toContainText(
-    "50 USD",
+    "50.00 USD",
   );
 });
 
