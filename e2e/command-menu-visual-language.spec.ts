@@ -49,11 +49,12 @@ async function connectEthereum(page: Page): Promise<void> {
     data: { scenario: "valid" },
   });
   await page.getByRole("button", { name: "添加资产来源" }).click();
-  await page.getByRole("radio", { name: "Ethereum 观察钱包" }).check();
-  await page.getByLabel("Ethereum 公开地址（每行一个）").fill(ADDRESS);
+  await page.getByRole("radio", { name: "EVM 观察钱包" }).check();
+  await page.getByRole("checkbox", { name: "BNB Smart Chain 观察钱包" }).uncheck();
+  await page.getByLabel("EVM 公开地址（每行一个）").fill(ADDRESS);
   await page.getByRole("button", { name: "验证公开地址" }).click();
   await page
-    .getByRole("dialog", { name: "确认 Ethereum 观察钱包" })
+    .getByRole("dialog", { name: "确认 EVM 观察钱包" })
     .getByRole("button", { name: "确认并保存" })
     .click();
   await expect(page.getByTestId("ethereum-watch-card")).toBeVisible();

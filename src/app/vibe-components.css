@@ -1003,6 +1003,19 @@ body::before {
   margin-top: 16px;
 }
 
+.source-evm-chains {
+  display: grid;
+  gap: 8px;
+  width: min(100%, 500px);
+  margin: 10px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.source-evm-chains .vibe-field__label {
+  margin-bottom: 0;
+}
+
 .source-field-help {
   margin-top: 12px;
 }

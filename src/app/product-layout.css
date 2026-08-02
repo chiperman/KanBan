@@ -3014,6 +3014,106 @@ body {
   margin-top: var(--vibe-space-6);
 }
 
+.external-service-settings {
+  margin-top: var(--vibe-space-12);
+  padding-top: var(--vibe-space-6);
+  border-top: 1px solid var(--line-2);
+}
+
+.external-service-settings__head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--vibe-space-6);
+}
+
+.external-service-settings__head h2 {
+  margin: 0;
+  color: var(--display);
+  font-size: var(--vibe-type-heading);
+}
+
+.external-service-settings__scope {
+  color: var(--muted);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-label);
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+}
+
+.external-service-statuses {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--vibe-space-3);
+  margin: var(--vibe-space-6) 0 0;
+}
+
+.external-service-statuses > div {
+  min-width: 0;
+  padding: var(--vibe-space-4);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.external-service-statuses dt,
+.external-service-statuses dd {
+  margin: 0;
+}
+
+.external-service-statuses dt {
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-label);
+  letter-spacing: 0.08em;
+}
+
+.external-service-statuses dd {
+  margin-top: var(--vibe-space-2);
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
+}
+
+.external-service-statuses dd[data-vibe-tone="success"] {
+  color: var(--success);
+}
+
+.external-service-statuses dd[data-vibe-tone="warning"] {
+  color: var(--warning);
+}
+
+.external-service-form {
+  display: grid;
+  gap: var(--vibe-space-4);
+  max-width: 720px;
+  margin-top: var(--vibe-space-6);
+}
+
+.external-service-form__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--vibe-space-4);
+  flex-wrap: wrap;
+}
+
+.external-service-form__actions > span {
+  color: var(--secondary);
+  font-size: var(--vibe-type-caption);
+  line-height: 1.5;
+}
+
+@media (max-width: 639px) {
+  .external-service-settings__head {
+    display: grid;
+  }
+
+  .external-service-statuses {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+}
+
 .settings-choice-group {
   min-width: 0;
   margin: 0;
@@ -4130,6 +4230,13 @@ body {
 
 .source-provider-list {
   margin-top: var(--vibe-space-4);
+}
+
+.source-evm-service-notice .vibe-button {
+  display: inline-flex;
+  min-height: 32px;
+  margin-left: var(--vibe-space-3);
+  padding-inline: var(--vibe-space-3);
 }
 
 @media (min-width: 1440px) {

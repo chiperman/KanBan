@@ -33,25 +33,27 @@ test("添加来源先选择类型再配置，返回保留草稿而取消会清�
   const dialog = page.getByRole("dialog", { name: "添加资产来源" });
   await expect(dialog).toHaveAttribute("data-vibe-component", "modal");
   await expect(dialog.getByRole("heading", { name: "选择来源类型" })).toBeVisible();
-  await expect(dialog.getByLabel("Ethereum 公开地址（每行一个）")).toHaveCount(0);
+  await expect(dialog.getByLabel("EVM 公开地址（每行一个）")).toHaveCount(0);
 
-  await dialog.getByRole("radio", { name: "Ethereum 观察钱包" }).click();
-  await expect(dialog.getByRole("heading", { name: "Ethereum 观察钱包" })).toBeVisible();
+  await dialog.getByRole("radio", { name: "EVM 观察钱包" }).click();
+  await expect(dialog.getByRole("heading", { name: "EVM 观察钱包" })).toBeVisible();
   await expect(dialog.getByRole("radio")).toHaveCount(0);
 
-  const addressField = dialog.getByLabel("Ethereum 公开地址（每行一个）");
+  const addressField = dialog.getByLabel("EVM 公开地址（每行一个）");
+  await expect(dialog.getByRole("checkbox", { name: "Ethereum 观察钱包" })).toBeChecked();
+  await expect(dialog.getByRole("checkbox", { name: "BNB Smart Chain 观察钱包" })).toBeChecked();
   await addressField.fill(ADDRESS);
   await dialog.getByRole("button", { name: "返回来源列表" }).click();
   await expect(dialog.getByRole("heading", { name: "选择来源类型" })).toBeVisible();
 
-  await dialog.getByRole("radio", { name: "Ethereum 观察钱包" }).click();
+  await dialog.getByRole("radio", { name: "EVM 观察钱包" }).click();
   await expect(addressField).toHaveValue(ADDRESS);
   await dialog.getByRole("button", { name: "取消" }).click();
 
   await page.getByRole("button", { name: "添加资产来源" }).click();
   await expect(dialog.getByRole("heading", { name: "选择来源类型" })).toBeVisible();
-  await dialog.getByRole("radio", { name: "Ethereum 观察钱包" }).click();
-  await expect(dialog.getByLabel("Ethereum 公开地址（每行一个）")).toHaveValue("");
+  await dialog.getByRole("radio", { name: "EVM 观察钱包" }).click();
+  await expect(dialog.getByLabel("EVM 公开地址（每行一个）")).toHaveValue("");
 });
 
 test("来源 Dialog 打开后捕获焦点，Escape 关闭并恢复触发按钮", async ({ page }) => {
@@ -69,7 +71,7 @@ test("来源 Dialog 打开后捕获焦点，Escape 关闭并恢复触发按钮",
   await page.keyboard.press("Tab");
   await expect(firstProvider).toBeFocused();
 
-  await dialog.getByRole("radio", { name: "Ethereum 观察钱包" }).click();
+  await dialog.getByRole("radio", { name: "EVM 观察钱包" }).click();
   await expect(
     dialog.getByRole("button", { name: "返回来源列表" }),
   ).toBeFocused();

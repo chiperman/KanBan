@@ -6,7 +6,12 @@ import {
   ProductionBinanceSourceRefresher,
 } from "@/server/asset-sources/binance";
 import { isTestEnv } from "@/server/composition";
-import type { Prices } from "@/server/ports";
+import type {
+  ExternalServiceConfiguration,
+  ExternalServiceConfigurationInput,
+  ExternalServiceConfigurationStatus,
+  Prices,
+} from "@/server/ports";
 import {
   BINANCE_OBSERVED_AT,
   BINANCE_USDT_USD_QUOTE,
@@ -18,6 +23,27 @@ export const dynamic = "force-dynamic";
 
 const API_KEY = "binance-browser-api-key";
 const API_SECRET = "binance-browser-secret-must-not-leak";
+
+const noCoinGeckoKey: ExternalServiceConfiguration = {
+  async status(): Promise<ExternalServiceConfigurationStatus> {
+    return {
+      coinGecko: { configured: false, verifiedAt: null },
+      ethereumRpc: { configured: false, verifiedAt: null },
+      bscRpc: { configured: false, verifiedAt: null },
+    };
+  },
+  async saveAndVerify(
+    _input: ExternalServiceConfigurationInput,
+  ): Promise<ExternalServiceConfigurationStatus> {
+    throw new Error("生产 Binance 测试不支持保存外部服务");
+  },
+  async coinGeckoDemoApiKey() {
+    return null;
+  },
+  async rpcUrl() {
+    return null;
+  },
+};
 
 function businessLabel(method: string, url: URL, body: URLSearchParams | null) {
   const params = method === "POST" ? body! : url.searchParams;
@@ -307,9 +333,12 @@ export async function POST(request: Request) {
       allRequestsSigned: signedChecks.length > 0 && signedChecks.every(Boolean),
       allHostsPinned: hostChecks.length > 0 && hostChecks.every(Boolean),
       missingReferencePriceFallsBack:
-        (await new CoinGeckoUsdtUsdPrices(async () => {
-          throw new Error("reference price unavailable");
-        }).quote("USDT")) === null,
+        (await new CoinGeckoUsdtUsdPrices(
+          noCoinGeckoKey,
+          async () => {
+            throw new Error("reference price unavailable");
+          },
+        ).quote("USDT")) === null,
     });
   } catch (error) {
     return Response.json(

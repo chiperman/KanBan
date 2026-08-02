@@ -14,6 +14,7 @@ import {
 } from "@/ui/profit-color-scheme";
 import { ProfitColorSettings } from "@/ui/profit-color-settings";
 import { RecoverySetup } from "@/ui/recovery-setup";
+import { ExternalServiceSettings } from "@/ui/external-service-settings";
 import { SessionGuard } from "@/ui/session-guard";
 import { ThemeSwitcher } from "@/ui/theme-switcher";
 import { VibeLink } from "@/ui/vibe/vibe-button";
@@ -37,6 +38,7 @@ export default async function SettingsPage({
     ? savedProfitColorScheme
     : null;
   const now = services.clock.now();
+  const externalServiceStatus = await services.externalServices.status();
 
   return (
     <div className="page page-settings">
@@ -69,9 +71,10 @@ export default async function SettingsPage({
             <p className="card-label">LOCAL / SETTINGS</p>
             <h1>本机设置</h1>
             <p>
-              管理当前终端的显示偏好与备用登录方式。这些偏好只保存在当前浏览器。
+              管理显示偏好、外部服务连接与备用登录方式。
             </p>
           </header>
+          <ExternalServiceSettings initialStatus={externalServiceStatus} />
           <section
             className="settings-section"
             aria-label="持仓盈亏显示设置"

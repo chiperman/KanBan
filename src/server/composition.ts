@@ -10,6 +10,7 @@ import type {
   AssetCardStore,
   Clock,
   DailyAssetSnapshots,
+  ExternalServiceConfiguration,
   LongbridgeOAuth,
   OwnerAuth,
   OwnerCredentialStore,
@@ -37,6 +38,7 @@ export interface AppServices {
   assetSourceLifecycle: AssetSourceLifecycle;
   assetSynchronization: AssetSynchronization;
   dailyAssetSnapshots: DailyAssetSnapshots;
+  externalServices: ExternalServiceConfiguration;
   prices: Prices;
   auth: OwnerAuth;
   ownerCredentials: OwnerCredentialStore;
@@ -70,11 +72,22 @@ export function isTestEnv(): boolean {
   return process.env.APP_ENV === "test";
 }
 
+function hasCurrentServices(
+  services: AppServices | null,
+): services is AppServices {
+  return (
+    services !== null &&
+    services.externalServices !== undefined
+  );
+}
+
 export function getServices(): AppServices {
   const current = slot();
-  current.current ??= isTestEnv()
-    ? createTestServices()
-    : createProductionServices();
+  if (!hasCurrentServices(current.current)) {
+    current.current = isTestEnv()
+      ? createTestServices()
+      : createProductionServices();
+  }
   return current.current;
 }
 

@@ -44,6 +44,7 @@ import type {
   OwnerCredentialStore,
   OwnerRecoveryCredential,
   OwnerRecoveryCredentialStore,
+  ExternalServiceConfiguration,
   SecretStore,
   LongbridgeAuthorizationResult,
 } from "@/server/ports";
@@ -74,6 +75,7 @@ import {
   ProductionEvmWatchSourceRefresher,
   ProductionEvmWatchWallet,
 } from "@/server/asset-sources/ethereum";
+import { FileExternalServiceConfiguration } from "@/server/external-service-configuration";
 import {
   atomicWritePrivateFile,
   hardenLocalDataPermissions,
@@ -2305,14 +2307,19 @@ export function createProductionServices(
   void secretRecovery.catch(() => undefined);
   const assetSources = new DatabaseAssetSources(database);
   const dailyAssetSnapshots = new DatabaseDailyAssetSnapshots(database);
-  const prices = new CoinGeckoUsdtUsdPrices();
   const readySecrets = new ReadySecretStore(secrets, secretRecovery);
-  const evmRefresher = new ProductionEvmWatchSourceRefresher();
+  const externalServices: ExternalServiceConfiguration =
+    new FileExternalServiceConfiguration(
+      path.join(dataDir, "external-services.json"),
+      readySecrets,
+    );
+  const prices = new CoinGeckoUsdtUsdPrices(externalServices);
+  const evmRefresher = new ProductionEvmWatchSourceRefresher(externalServices);
   const longbridge = new KeychainLongbridgeOAuth();
   const binance = new ProductionBinanceReadOnly(prices);
   const okx = new ProductionOkxReadOnly(prices);
   const bitget = new ProductionBitgetReadOnly(prices);
-  const evm = new ProductionEvmWatchWallet();
+  const evm = new ProductionEvmWatchWallet(externalServices);
   const assetSourceConnections = new DatabaseAssetSourceConnections(
     database,
     secrets,
@@ -2338,6 +2345,7 @@ export function createProductionServices(
       readySecrets,
     ),
     dailyAssetSnapshots,
+    externalServices,
     assetSynchronization: new SourceIsolatedAssetSynchronization(
       assetSources,
       readySecrets,

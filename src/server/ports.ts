@@ -288,6 +288,37 @@ export interface BitgetAuthorizationResult {
 
 export type EvmChain = "ethereum" | "bsc";
 
+export interface ExternalServiceConnectionStatus {
+  configured: boolean;
+  verifiedAt: string | null;
+}
+
+/** 仅返回配置状态；密钥与 RPC URL 本文永不返回浏览器。 */
+export interface ExternalServiceConfigurationStatus {
+  coinGecko: ExternalServiceConnectionStatus;
+  ethereumRpc: ExternalServiceConnectionStatus;
+  bscRpc: ExternalServiceConnectionStatus;
+}
+
+export interface ExternalServiceConfigurationInput {
+  coinGeckoDemoApiKey?: string;
+  ethereumRpcUrl?: string;
+  bscRpcUrl?: string;
+}
+
+/**
+ * 全局行情与链节点配置。
+ * 外部服务凭证只进入 SecretStore，资产来源仅关联使用结果。
+ */
+export interface ExternalServiceConfiguration {
+  status(): Promise<ExternalServiceConfigurationStatus>;
+  saveAndVerify(
+    input: ExternalServiceConfigurationInput,
+  ): Promise<ExternalServiceConfigurationStatus>;
+  coinGeckoDemoApiKey(): Promise<string | null>;
+  rpcUrl(chain: EvmChain): Promise<string | null>;
+}
+
 export interface EvmWatchAuthorizationResult {
   credentials: string;
   chain: EvmChain;

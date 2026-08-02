@@ -11,6 +11,7 @@ import type {
   AssetSourceRefreshResult,
   AssetSourceRefresher,
   EvmChain,
+  ExternalServiceConfiguration,
   EvmWatchAuthorizationResult,
   EvmWatchWalletReadOnly,
 } from "@/server/ports";
@@ -23,6 +24,7 @@ type EvmFetch = (
 
 const ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/;
 const RPC_PAGE_LIMIT = 100;
+const RPC_NETWORK_ATTEMPTS = 3;
 const COINGECKO_ORIGIN = "https://api.coingecko.com";
 
 interface EvmChainConfig {
@@ -32,7 +34,6 @@ interface EvmChainConfig {
   label: "Ethereum" | "BNB Smart Chain";
   nativeSymbol: "ETH" | "BNB";
   tokenStandard: "ERC-20" | "BEP-20";
-  rpcEnv: "ETHEREUM_RPC_URL" | "BSC_RPC_URL";
   coinGeckoCoinId: "ethereum" | "binancecoin";
   coinGeckoNetwork: "eth" | "bsc";
 }
@@ -45,7 +46,6 @@ const EVM_CHAINS: Record<EvmChain, EvmChainConfig> = {
     label: "Ethereum",
     nativeSymbol: "ETH",
     tokenStandard: "ERC-20",
-    rpcEnv: "ETHEREUM_RPC_URL",
     coinGeckoCoinId: "ethereum",
     coinGeckoNetwork: "eth",
   },
@@ -56,7 +56,6 @@ const EVM_CHAINS: Record<EvmChain, EvmChainConfig> = {
     label: "BNB Smart Chain",
     nativeSymbol: "BNB",
     tokenStandard: "BEP-20",
-    rpcEnv: "BSC_RPC_URL",
     coinGeckoCoinId: "binancecoin",
     coinGeckoNetwork: "bsc",
   },
@@ -200,14 +199,28 @@ class EvmRpcClient {
   ) {}
 
   async call(method: string, params: unknown[]): Promise<unknown> {
-    const response = await this.request(this.rpcUrl, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: ++this.id, method, params }),
-      cache: "no-store",
-      redirect: "error",
-      signal: this.signal,
-    });
+    let response: Response | null = null;
+    for (let attempt = 1; attempt <= RPC_NETWORK_ATTEMPTS; attempt += 1) {
+      try {
+        response = await this.request(this.rpcUrl, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ jsonrpc: "2.0", id: ++this.id, method, params }),
+          cache: "no-store",
+          redirect: "error",
+          signal: this.signal,
+        });
+        break;
+      } catch (error) {
+        if (!(error instanceof TypeError) || attempt === RPC_NETWORK_ATTEMPTS) {
+          if (error instanceof TypeError) {
+            throw new Error(`EVM RPC ${method} 网络请求失败，请稍后重试`);
+          }
+          throw error;
+        }
+      }
+    }
+    if (!response) throw new Error(`EVM RPC ${method} 网络请求失败，请稍后重试`);
     const body = record(
       await response.json().catch(() => null),
       "EVM JSON-RPC 响应",
@@ -287,11 +300,30 @@ class EvmRpcClient {
 }
 
 class CoinGeckoEvmPrices {
-  constructor(private readonly request: EvmFetch) {}
+  constructor(
+    private readonly services: ExternalServiceConfiguration,
+    private readonly request: EvmFetch,
+  ) {}
 
-  private headers(): HeadersInit | undefined {
-    const key = process.env.COINGECKO_DEMO_API_KEY;
-    return key ? { "x-cg-demo-api-key": key } : undefined;
+  private async headers(): Promise<HeadersInit | undefined> {
+    const key = await this.services.coinGeckoDemoApiKey();
+    if (!key) throw new Error("未配置 CoinGecko Demo API Key");
+    return { "x-cg-demo-api-key": key };
+  }
+
+  private async get(url: URL, signal?: AbortSignal): Promise<Response | null> {
+    try {
+      return await this.request(url, {
+        method: "GET",
+        headers: await this.headers(),
+        cache: "no-store",
+        redirect: "error",
+        signal,
+      });
+    } catch (error) {
+      if (error instanceof TypeError) return null;
+      throw error;
+    }
   }
 
   async read(
@@ -307,31 +339,27 @@ class CoinGeckoEvmPrices {
       url.searchParams.set("ids", config.coinGeckoCoinId);
       url.searchParams.set("vs_currencies", "usd");
       url.searchParams.set("include_last_updated_at", "true");
-      const response = await this.request(url, {
-        method: "GET",
-        headers: this.headers(),
-        cache: "no-store",
-        redirect: "error",
-        signal,
-      });
-      if (!response.ok) {
+      const response = await this.get(url, signal);
+      if (response && !response.ok) {
         throw new Error(`CoinGecko ${config.nativeSymbol} 价格读取失败（HTTP ${response.status}）`);
       }
-      const root = record(await response.json(), `CoinGecko ${config.nativeSymbol} 价格响应`);
-      const rawNative = root[config.coinGeckoCoinId];
-      if (rawNative !== undefined) {
-        const native = record(rawNative, `CoinGecko ${config.label} 价格响应`);
-        const rawPrice = native.usd;
-        const updatedAt = native.last_updated_at;
-        const quotedAt = typeof updatedAt === "number" && Number.isSafeInteger(updatedAt)
-          ? new Date(updatedAt * 1000)
-          : null;
-        if (rawPrice !== undefined && quotedAt && !Number.isNaN(quotedAt.getTime())) {
-        prices.set(`evm:${config.chainId}:native`, {
-          price: decimal(rawPrice, `${config.coinGeckoCoinId}.usd`),
-          quotedAt: quotedAt.toISOString(),
-          source: `CoinGecko ${config.label}/USD 参考价格`,
-        });
+      if (response) {
+        const root = record(await response.json(), `CoinGecko ${config.nativeSymbol} 价格响应`);
+        const rawNative = root[config.coinGeckoCoinId];
+        if (rawNative !== undefined) {
+          const native = record(rawNative, `CoinGecko ${config.label} 价格响应`);
+          const rawPrice = native.usd;
+          const updatedAt = native.last_updated_at;
+          const quotedAt = typeof updatedAt === "number" && Number.isSafeInteger(updatedAt)
+            ? new Date(updatedAt * 1000)
+            : null;
+          if (rawPrice !== undefined && quotedAt && !Number.isNaN(quotedAt.getTime())) {
+            prices.set(`evm:${config.chainId}:native`, {
+              price: decimal(rawPrice, `${config.coinGeckoCoinId}.usd`),
+              quotedAt: quotedAt.toISOString(),
+              source: `CoinGecko ${config.label}/USD 参考价格`,
+            });
+          }
         }
       }
     }
@@ -342,16 +370,11 @@ class CoinGeckoEvmPrices {
         `/api/v3/onchain/simple/networks/${config.coinGeckoNetwork}/token_price/${batch.join(",")}`,
         COINGECKO_ORIGIN,
       );
-      const response = await this.request(url, {
-        method: "GET",
-        headers: this.headers(),
-        cache: "no-store",
-        redirect: "error",
-        signal,
-      });
-      if (!response.ok) {
+      const response = await this.get(url, signal);
+      if (response && !response.ok) {
         throw new Error(`CoinGecko ${config.tokenStandard} 价格读取失败（HTTP ${response.status}）`);
       }
+      if (!response) continue;
       const root = record(await response.json(), "CoinGecko 同质化代币价格响应");
       const data = record(root.data, "CoinGecko token data");
       const attributes = record(data.attributes, "CoinGecko token attributes");
@@ -374,14 +397,13 @@ class CoinGeckoEvmPrices {
   }
 }
 
-function rpcUrl(config: EvmChainConfig): string {
-  const value = process.env[config.rpcEnv];
-  if (!value) throw new Error(`未配置 ${config.rpcEnv}`);
-  const url = new URL(value);
-  if (url.protocol !== "https:" && url.hostname !== "localhost") {
-    throw new Error(`${config.rpcEnv} 必须使用 HTTPS`);
-  }
-  return url.toString();
+async function rpcUrl(
+  services: ExternalServiceConfiguration,
+  config: EvmChainConfig,
+): Promise<string> {
+  const value = await services.rpcUrl(config.chain);
+  if (!value) throw new Error(`未配置 ${config.label} RPC`);
+  return value;
 }
 
 function parseCredentials(credentials: string): { config: EvmChainConfig; addresses: string[] } {
@@ -402,6 +424,7 @@ async function readFullSnapshot(input: {
   addresses: string[];
   observedAt: string;
   rpcUrl: string;
+  services: ExternalServiceConfiguration;
   request: EvmFetch;
   signal?: AbortSignal;
 }): Promise<AssetSnapshot> {
@@ -450,7 +473,10 @@ async function readFullSnapshot(input: {
       quantity: units(balance, token.decimals, `${contract} balance`),
     };
   });
-  const prices = await new CoinGeckoEvmPrices(input.request).read(
+  const prices = await new CoinGeckoEvmPrices(
+    input.services,
+    input.request,
+  ).read(
     input.config,
     contracts,
     input.observedAt,
@@ -462,8 +488,8 @@ async function readFullSnapshot(input: {
 
 export class ProductionEvmWatchWallet implements EvmWatchWalletReadOnly {
   constructor(
+    private readonly services: ExternalServiceConfiguration,
     private readonly request: EvmFetch = globalThis.fetch,
-    private readonly endpoint: string | null = null,
   ) {}
 
   async preview(input: { chain: EvmChain; addresses: string[]; observedAt: string }): Promise<EvmWatchAuthorizationResult> {
@@ -489,7 +515,8 @@ export class ProductionEvmWatchWallet implements EvmWatchWalletReadOnly {
         config,
         addresses,
         observedAt,
-        rpcUrl: this.endpoint ?? rpcUrl(config),
+        rpcUrl: await rpcUrl(this.services, config),
+        services: this.services,
         request: this.request,
       }),
     };
@@ -498,8 +525,8 @@ export class ProductionEvmWatchWallet implements EvmWatchWalletReadOnly {
 
 export class ProductionEvmWatchSourceRefresher implements AssetSourceRefresher {
   constructor(
+    private readonly services: ExternalServiceConfiguration,
     private readonly request: EvmFetch = globalThis.fetch,
-    private readonly endpoint: string | null = null,
   ) {}
 
   async refresh({ source, credentials, mode, attemptedAt, signal }: Parameters<AssetSourceRefresher["refresh"]>[0]): Promise<AssetSourceRefreshResult> {
@@ -516,7 +543,10 @@ export class ProductionEvmWatchSourceRefresher implements AssetSourceRefresher {
           ? [holding.sourceAsset.slice(`evm:${config.chainId}:`.length)]
           : [],
       );
-      const prices = await new CoinGeckoEvmPrices(this.request).read(
+      const prices = await new CoinGeckoEvmPrices(
+        this.services,
+        this.request,
+      ).read(
         config,
         [...new Set(contracts)],
         attemptedAt,
@@ -539,7 +569,8 @@ export class ProductionEvmWatchSourceRefresher implements AssetSourceRefresher {
         config,
         addresses: stored.addresses,
         observedAt: attemptedAt,
-        rpcUrl: this.endpoint ?? rpcUrl(config),
+        rpcUrl: await rpcUrl(this.services, config),
+        services: this.services,
         request: this.request,
         signal,
       }),

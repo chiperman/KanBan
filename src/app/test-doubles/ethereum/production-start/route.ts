@@ -3,6 +3,12 @@ import {
   ProductionEvmWatchWallet,
 } from "@/server/asset-sources/ethereum";
 import { isTestEnv } from "@/server/composition";
+import type {
+  EvmChain,
+  ExternalServiceConfiguration,
+  ExternalServiceConfigurationInput,
+  ExternalServiceConfigurationStatus,
+} from "@/server/ports";
 
 export const dynamic = "force-dynamic";
 
@@ -13,18 +19,43 @@ const B = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const C = "0xcccccccccccccccccccccccccccccccccccccccc";
 const RPC = "https://eth-mainnet.g.alchemy.com/v2/server-secret-test-key";
 
+const testExternalServices: ExternalServiceConfiguration = {
+  async status(): Promise<ExternalServiceConfigurationStatus> {
+    return {
+      coinGecko: { configured: true, verifiedAt: null },
+      ethereumRpc: { configured: true, verifiedAt: null },
+      bscRpc: { configured: true, verifiedAt: null },
+    };
+  },
+  async saveAndVerify(
+    _input: ExternalServiceConfigurationInput,
+  ): Promise<ExternalServiceConfigurationStatus> {
+    throw new Error("生产 EVM 测试不支持保存外部服务");
+  },
+  async coinGeckoDemoApiKey() {
+    return "server-secret-test-key";
+  },
+  async rpcUrl(_chain: EvmChain) {
+    return RPC;
+  },
+};
+
 export async function POST(request: Request) {
   if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
   const body = (await request.json().catch(() => ({}))) as {
     chain?: "ethereum" | "bsc";
-    action?: "preview" | "empty" | "partial-failure" | "index-failure" | "price-failure" | "refresh-prices" | "refresh-holdings";
+    action?: "preview" | "empty" | "partial-failure" | "index-failure" | "price-failure" | "price-network-failure" | "rpc-network-once" | "refresh-prices" | "refresh-holdings";
   };
   const rpcMethods: string[] = [];
   const priceRequests: string[] = [];
+  let remainingRpcNetworkFailures = body.action === "rpc-network-once" ? 1 : 0;
   const mockFetch = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const url = new URL(input instanceof Request ? input.url : input.toString());
     if (url.origin === "https://api.coingecko.com") {
       priceRequests.push(`${init?.method ?? "GET"} ${url.pathname}${url.search}`);
+      if (body.action === "price-network-failure") {
+        throw new TypeError("fetch failed");
+      }
       if (body.action === "price-failure") {
         return Response.json({ error: "rate limited" }, { status: 429 });
       }
@@ -47,6 +78,10 @@ export async function POST(request: Request) {
       method: string;
       params: unknown[];
     };
+    if (remainingRpcNetworkFailures > 0) {
+      remainingRpcNetworkFailures -= 1;
+      throw new TypeError("fetch failed");
+    }
     rpcMethods.push(payload.method);
     if (payload.method === "eth_chainId") {
       return Response.json({
@@ -110,7 +145,10 @@ export async function POST(request: Request) {
   };
   try {
     const chain = body.chain ?? "ethereum";
-    const adapter = new ProductionEvmWatchWallet(mockFetch, RPC);
+    const adapter = new ProductionEvmWatchWallet(
+      testExternalServices,
+      mockFetch,
+    );
     const result = await adapter.preview({
       chain,
       addresses: [ADDRESS_ONE, ADDRESS_TWO],
@@ -119,7 +157,10 @@ export async function POST(request: Request) {
     if (body.action === "refresh-prices" || body.action === "refresh-holdings") {
       rpcMethods.length = 0;
       priceRequests.length = 0;
-      const refreshed = await new ProductionEvmWatchSourceRefresher(mockFetch, RPC).refresh({
+      const refreshed = await new ProductionEvmWatchSourceRefresher(
+        testExternalServices,
+        mockFetch,
+      ).refresh({
         source: {
           id: "ethereum-production-test",
           kind: chain === "ethereum" ? "evm-watch-ethereum" : "evm-watch-bsc",

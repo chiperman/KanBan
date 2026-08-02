@@ -18,6 +18,7 @@ import type {
   AssetSourceRefresher,
   BinanceAuthorizationResult,
   BinanceReadOnly,
+  ExternalServiceConfiguration,
   PriceQuote,
   Prices,
 } from "@/server/ports";
@@ -1530,7 +1531,10 @@ export class ProductionBinanceSourceRefresher
 }
 
 export class CoinGeckoUsdtUsdPrices implements Prices {
-  constructor(private readonly request: BinanceFetch = globalThis.fetch) {}
+  constructor(
+    private readonly services: ExternalServiceConfiguration,
+    private readonly request: BinanceFetch = globalThis.fetch,
+  ) {}
 
   async quote(symbol: string): Promise<PriceQuote | null> {
     if (symbol !== "USDT") return null;
@@ -1539,7 +1543,8 @@ export class CoinGeckoUsdtUsdPrices implements Prices {
       url.searchParams.set("ids", "tether");
       url.searchParams.set("vs_currencies", "usd");
       url.searchParams.set("include_last_updated_at", "true");
-      const apiKey = process.env.COINGECKO_DEMO_API_KEY;
+      const apiKey = await this.services.coinGeckoDemoApiKey();
+      if (!apiKey) return null;
       const response = await this.request(url, {
         method: "GET",
         headers: apiKey ? { "x-cg-demo-api-key": apiKey } : undefined,

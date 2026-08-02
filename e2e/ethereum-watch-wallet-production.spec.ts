@@ -35,13 +35,18 @@ async function addEvmSource(
 ): Promise<void> {
   await page.getByRole("button", { name: "添加资产来源" }).click();
   const label = chain === "ethereum" ? "Ethereum 观察钱包" : "BNB Smart Chain 观察钱包";
-  await page.getByRole("radio", { name: label }).check();
+  await page.getByRole("radio", { name: "EVM 观察钱包" }).check();
   await page
-    .getByLabel(`${chain === "ethereum" ? "Ethereum" : "BNB Smart Chain"} 公开地址（每行一个）`)
+    .getByRole("checkbox", {
+      name: chain === "ethereum" ? "BNB Smart Chain 观察钱包" : "Ethereum 观察钱包",
+    })
+    .uncheck();
+  await page
+    .getByLabel("EVM 公开地址（每行一个）")
     .fill(address);
   await page.getByRole("button", { name: "验证公开地址" }).click();
   await page
-    .getByRole("dialog", { name: `确认 ${label}` })
+    .getByRole("dialog", { name: "确认 EVM 观察钱包" })
     .getByRole("button", { name: "确认并保存" })
     .click();
   await expect(page.getByTestId(chain === "ethereum" ? "ethereum-watch-card" : "bsc-watch-card"))
@@ -111,12 +116,13 @@ test("统一来源流程可独立保存 BNB Smart Chain 公开地址", async ({ 
   await page.request.post("/test-doubles/ethereum", { data: { scenario: "valid" } });
   await loginAsOwner(page);
   await page.getByRole("button", { name: "添加资产来源" }).click();
-  await page.getByRole("radio", { name: "BNB Smart Chain 观察钱包" }).check();
+  await page.getByRole("radio", { name: "EVM 观察钱包" }).check();
+  await page.getByRole("checkbox", { name: "Ethereum 观察钱包" }).uncheck();
   const dialog = page.getByRole("dialog", { name: "添加资产来源" });
   await expect(dialog.getByText(/助记词|私钥|MPC|WalletConnect|连接钱包|签名/)).toHaveCount(0);
-  await page.getByLabel("BNB Smart Chain 公开地址（每行一个）").fill(ADDRESS);
+  await page.getByLabel("EVM 公开地址（每行一个）").fill(ADDRESS);
   await page.getByRole("button", { name: "验证公开地址" }).click();
-  const preview = page.getByRole("dialog", { name: "确认 BNB Smart Chain 观察钱包" });
+  const preview = page.getByRole("dialog", { name: "确认 EVM 观察钱包" });
   await expect(preview).toContainText("BNB、BEP-20（公开地址只读）");
   await expect(preview).toContainText("2,019.00 USD");
   await preview.getByRole("button", { name: "确认并保存" }).click();
@@ -135,11 +141,12 @@ test("公开地址验证与保存保持原子，失败不留下来源或服务�
   });
   expect(invalid.status()).toBe(400);
   await page.getByRole("button", { name: "添加资产来源" }).click();
-  await page.getByRole("radio", { name: "Ethereum 观察钱包" }).check();
-  await page.getByLabel("Ethereum 公开地址（每行一个）").fill(ADDRESS);
+  await page.getByRole("radio", { name: "EVM 观察钱包" }).check();
+  await page.getByRole("checkbox", { name: "BNB Smart Chain 观察钱包" }).uncheck();
+  await page.getByLabel("EVM 公开地址（每行一个）").fill(ADDRESS);
   await page.getByRole("button", { name: "验证公开地址" }).click();
   await page
-    .getByRole("dialog", { name: "确认 Ethereum 观察钱包" })
+    .getByRole("dialog", { name: "确认 EVM 观察钱包" })
     .getByRole("button", { name: "确认并保存" })
     .click();
   await expect(page.locator(".login-error[role=alert]")).toContainText("EVM 原子保存失败");
@@ -217,7 +224,33 @@ test("Ethereum 空钱包为零资产，RPC 部分失败不会提交不完整结�
   }
 });
 
-test("Ethereum 30 秒价格刷新不读取链上余额，5 分钟持仓刷新恢复完整读取", async ({ request }) => {
+test("CoinGecko 网络瞬断不阻断 EVM 公开地址预览", async ({ request }) => {
+  const response = await request.post("/test-doubles/ethereum/production-start", {
+    data: { action: "price-network-failure" },
+  });
+  expect(response.ok()).toBeTruthy();
+  const body = await response.json();
+  expect(body.snapshot.total).toEqual({ amount: "0", currency: "USD" });
+  expect(body.snapshot.holdings).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      symbol: "ETH",
+      marketValue: null,
+      valuation: expect.objectContaining({ status: "unvalued" }),
+    }),
+  ]));
+});
+
+test("Alchemy RPC 单次网络瞬断会重试并继续预览", async ({ request }) => {
+  const response = await request.post("/test-doubles/ethereum/production-start", {
+    data: { action: "rpc-network-once" },
+  });
+  expect(response.ok()).toBeTruthy();
+  await expect(response.json()).resolves.toMatchObject({
+    snapshot: { total: { amount: "5519", currency: "USD" } },
+  });
+});
+
+test("Ethereum 行情刷新不读取链上余额，完整刷新恢复读取持仓", async ({ request }) => {
   const prices = await request.post("/test-doubles/ethereum/production-start", {
     data: { action: "refresh-prices" },
   });
