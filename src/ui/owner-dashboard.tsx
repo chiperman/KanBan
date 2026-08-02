@@ -206,6 +206,22 @@ export function OwnerDashboard({
   const [displayNameDraft, setDisplayNameDraft] = useState("");
   const [displayNamePending, setDisplayNamePending] = useState(false);
   const [lifecyclePending, setLifecyclePending] = useState(false);
+  const hasEvmSources = assetSources.some(
+    (source) =>
+      source.lifecycle !== "disconnected" &&
+      source.kind.startsWith("evm-watch-"),
+  );
+  const hasNonEvmSources = assetSources.some(
+    (source) =>
+      source.lifecycle !== "disconnected" &&
+      !source.kind.startsWith("evm-watch-"),
+  );
+  const needsDailyEvmPriceRefresh = assetSources.some(
+    (source) =>
+      source.lifecycle !== "disconnected" &&
+      source.kind.startsWith("evm-watch-") &&
+      shanghaiDay(source.sync.lastAttemptAt) !== currentDay,
+  );
   const displayNameChanged =
     managementTarget !== null &&
     displayNameDraft.trim() !== (managementTarget.displayName ?? "");
@@ -799,6 +815,9 @@ export function OwnerDashboard({
         </div>
         <AssetRefreshControls
           enabled={assetSources.some((source) => source.lifecycle !== "disconnected")}
+          hasEvmSources={hasEvmSources}
+          hasNonEvmSources={hasNonEvmSources}
+          needsDailyEvmPriceRefresh={needsDailyEvmPriceRefresh}
         />
       </div>
       {error ? (

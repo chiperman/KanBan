@@ -1,6 +1,7 @@
 import type {
   AssetRefreshMode,
   AssetRefreshReport,
+  AssetRefreshScope,
   DailyAssetSnapshots,
   AssetSourceRefresher,
   AssetSources,
@@ -25,8 +26,12 @@ export class SourceIsolatedAssetSynchronization
     private readonly dailySnapshots: DailyAssetSnapshots,
   ) {}
 
-  refresh(mode: AssetRefreshMode): Promise<AssetRefreshReport> {
-    const run = this.queue.then(() => this.execute(mode));
+  refresh(
+    mode: AssetRefreshMode,
+    scope: AssetRefreshScope = "all",
+    sourceId?: string,
+  ): Promise<AssetRefreshReport> {
+    const run = this.queue.then(() => this.execute(mode, scope, sourceId));
     this.queue = run.then(
       () => undefined,
       () => undefined,
@@ -34,11 +39,21 @@ export class SourceIsolatedAssetSynchronization
     return run;
   }
 
-  private async execute(mode: AssetRefreshMode): Promise<AssetRefreshReport> {
+  private async execute(
+    mode: AssetRefreshMode,
+    scope: AssetRefreshScope,
+    sourceId?: string,
+  ): Promise<AssetRefreshReport> {
     const sources = (await this.sources.list()).filter(
       (source) =>
         source.lifecycle !== "disconnected" &&
-        source.credentialReference !== null,
+        source.credentialReference !== null &&
+        (sourceId !== undefined
+          ? source.id === sourceId
+          : scope === "all" ||
+            (scope === "evm"
+              ? source.kind.startsWith("evm-watch-")
+              : !source.kind.startsWith("evm-watch-"))),
     );
     const attemptedAt = this.clock.now().toISOString();
     const outcomes = await Promise.all(

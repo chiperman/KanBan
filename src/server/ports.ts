@@ -55,13 +55,19 @@ export interface AssetSourceSyncState {
 
 export type AssetRefreshMode = "all" | "prices" | "holdings";
 
+export type AssetRefreshScope = "all" | "evm" | "non-evm";
+
 export interface AssetRefreshReport {
   successCount: number;
   failureCount: number;
 }
 
 export interface AssetSynchronization {
-  refresh(mode: AssetRefreshMode): Promise<AssetRefreshReport>;
+  refresh(
+    mode: AssetRefreshMode,
+    scope?: AssetRefreshScope,
+    sourceId?: string,
+  ): Promise<AssetRefreshReport>;
 }
 
 export interface DailyAssetSourceSnapshot {

@@ -9,13 +9,14 @@ const INITIAL_AT = "2026-04-01T08:00:00.000Z";
 
 function sourceFixture(input: {
   id: string;
+  kind: "refresh-fixture" | "evm-watch-ethereum";
   label: string;
   amount: string;
   credentialReference: string;
 }): AssetSourceSummary {
   return {
     id: input.id,
-    kind: "refresh-fixture",
+    kind: input.kind,
     label: input.label,
     accountId: input.id,
     permissions: ["market-data", "account", "positions"],
@@ -52,6 +53,7 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as {
     action?: unknown;
     scenario?: unknown;
+    sourceKind?: unknown;
     hold?: unknown;
   } | null;
   const services = getTestServices();
@@ -75,6 +77,7 @@ export async function POST(request: Request) {
     const reference = await services.secrets.put("gamma-readonly-secret");
     const source = sourceFixture({
       id: "source-gamma",
+      kind: "refresh-fixture",
       label: "Gamma Wallet",
       amount: "50",
       credentialReference: reference,
@@ -98,11 +101,17 @@ export async function POST(request: Request) {
   }
   if (
     body?.action !== "configure" ||
-    (body.scenario !== "schedule" && body.scenario !== "partial-failure")
+    (body.scenario !== "schedule" && body.scenario !== "partial-failure") ||
+    (body.sourceKind !== undefined &&
+      body.sourceKind !== "refresh-fixture" &&
+      body.sourceKind !== "evm-watch-ethereum")
   ) {
     return Response.json({ error: "刷新测试配置无效" }, { status: 400 });
   }
   const scenario = body.scenario as FakeRefreshScenario;
+  const sourceKind = (body.sourceKind ?? "refresh-fixture") as
+    | "refresh-fixture"
+    | "evm-watch-ethereum";
   services.clock.set("2026-04-02T08:00:00.000Z");
   services.assetSynchronization.reset(scenario);
   const alphaReference = await services.secrets.put("alpha-readonly-secret");
@@ -110,12 +119,14 @@ export async function POST(request: Request) {
   const sources = [
     sourceFixture({
       id: "source-alpha",
+      kind: sourceKind,
       label: "Alpha Securities",
       amount: "100",
       credentialReference: alphaReference,
     }),
     sourceFixture({
       id: "source-beta",
+      kind: sourceKind,
       label: "Beta Crypto",
       amount: "200",
       credentialReference: betaReference,
@@ -139,6 +150,8 @@ export async function GET() {
   const synchronization = getTestServices().assetSynchronization;
   return Response.json({
     modes: synchronization.modes,
+    scopes: synchronization.scopes,
+    sourceIds: synchronization.sourceIds,
     active: synchronization.active,
   });
 }

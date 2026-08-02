@@ -2648,11 +2648,125 @@ body {
   padding-right: var(--vibe-space-8);
 }
 
+.asset-source-head-actions,
+.asset-source-refresh-control {
+  display: flex;
+  align-items: center;
+  gap: var(--vibe-space-2);
+}
+
+.asset-source-head-actions {
+  min-width: 0;
+  justify-content: flex-end;
+}
+
+.asset-source-refresh-control {
+  position: relative;
+  flex: 0 0 auto;
+  min-height: 40px;
+  justify-content: flex-end;
+}
+
+.asset-source-refresh-button.vibe-button {
+  position: relative;
+  width: 76px;
+  min-width: 76px;
+  min-height: 24px;
+  height: 24px;
+  justify-content: center;
+  gap: var(--vibe-space-2);
+  padding: 0 var(--vibe-space-2);
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  color: var(--secondary);
+  font-size: var(--vibe-type-caption);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.asset-source-refresh-button.vibe-button::after {
+  content: "";
+  position: absolute;
+  inset: -8px 0;
+}
+
+.asset-source-refresh-button.vibe-button:hover {
+  border-color: var(--primary);
+  background: var(--raised);
+  color: var(--primary);
+}
+
+.asset-source-refresh-control[data-refresh-state="pending"]
+  .asset-source-refresh-button.vibe-button:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+.asset-source-refresh-control[data-refresh-state="success"]
+  .asset-source-refresh-button.vibe-button {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.asset-source-refresh-control[data-refresh-state="error"]
+  .asset-source-refresh-button.vibe-button {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+.asset-source-refresh-icon {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+
+.asset-source-refresh-icon > path {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.asset-source-refresh-control[data-refresh-state="pending"]
+  .asset-source-refresh-icon > path {
+  animation: asset-source-refresh-spin 0.8s linear infinite;
+}
+
+.asset-source-refresh-feedback {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes asset-source-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .asset-source-refresh-control[data-refresh-state="pending"]
+    .asset-source-refresh-icon > path {
+    animation: none;
+  }
+}
+
 .source-live-state {
   display: inline-flex;
+  min-height: 24px;
   align-items: center;
   gap: var(--vibe-space-2);
   margin: 0;
+  font-size: 10px;
 }
 
 .asset-source-title {

@@ -38,6 +38,15 @@ async function loginAsOwner(page: Page): Promise<void> {
   await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
 }
 
+async function metrics(request: APIRequestContext) {
+  return (await (await request.get("/test-doubles/refresh")).json()) as {
+    modes: string[];
+    scopes: string[];
+    sourceIds: Array<string | null>;
+    active: number;
+  };
+}
+
 async function setVisibility(page: Page, state: "visible" | "hidden") {
   await page.evaluate((nextState) => {
     const scope = window as typeof window & { __testVisibility?: string };
@@ -52,11 +61,14 @@ async function setVisibility(page: Page, state: "visible" | "hidden") {
   }, state);
 }
 
-async function metrics(request: APIRequestContext) {
-  return (await (await request.get("/test-doubles/refresh")).json()) as {
-    modes: string[];
-    active: number;
-  };
+async function configureRefresh(
+  request: APIRequestContext,
+  scenario: "schedule" | "partial-failure",
+  sourceKind?: "refresh-fixture" | "evm-watch-ethereum",
+) {
+  await request.post("/test-doubles/refresh", {
+    data: { action: "configure", scenario, sourceKind },
+  });
 }
 
 async function tokenColor(page: Page, token: "--success" | "--error") {
@@ -74,61 +86,67 @@ test.beforeEach(async ({ request }) => {
   await request.post("/test-doubles/reset");
 });
 
-test("所有者页面立即同步，并按 30 秒/5 分钟节奏在可见时刷新", async ({
+test("非 EVM 来源维持 30 秒行情刷新，回到前台执行完整刷新", async ({
   page,
   request,
 }) => {
-  await request.post("/test-doubles/refresh", {
-    data: { action: "configure", scenario: "schedule" },
-  });
+  await configureRefresh(request, "schedule");
+  await page.clock.install();
   await loginAsOwner(page);
   const refreshStatus = page.getByTestId("asset-refresh-status");
-  await expect(refreshStatus).toContainText("同步完成");
-  await request.post("/test-doubles/refresh", {
-    data: { action: "reset-schedule" },
-  });
-  await page.clock.install();
-  await page.reload();
-  await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
+  await expect.poll(async () => (await metrics(request)).modes).toEqual([
+    "all",
+  ]);
   await expect(refreshStatus).toContainText("同步完成");
   await expect(page.getByTestId("total-asset-amount")).toHaveText("302.00 USD");
-  await expect.poll(async () => (await metrics(request)).modes).toEqual(["all"]);
 
   await page.clock.fastForward("00:00:30");
   await expect.poll(async () => (await metrics(request)).modes).toEqual([
     "all",
     "prices",
   ]);
+  expect((await metrics(request)).scopes).toEqual(["non-evm", "non-evm"]);
 
-  for (let interval = 2; interval <= 10; interval += 1) {
-    await page.clock.fastForward("00:00:30");
-    await expect.poll(async () => (await metrics(request)).modes.length).toBe(
-      interval + 1,
-    );
-  }
-  await expect.poll(async () => {
-    const modes = (await metrics(request)).modes;
-    return {
-      prices: modes.filter((mode) => mode === "prices").length,
-      holdings: modes.filter((mode) => mode === "holdings").length,
-    };
-  }).toEqual({ prices: 9, holdings: 1 });
-
-  const beforeHidden = (await metrics(request)).modes;
   await setVisibility(page, "hidden");
   await page.clock.fastForward("00:05:00");
-  expect((await metrics(request)).modes).toEqual(beforeHidden);
+  expect((await metrics(request)).modes).toEqual(["all", "prices"]);
 
   await setVisibility(page, "visible");
-  await expect.poll(async () => {
-    const modes = (await metrics(request)).modes;
-    return modes.filter((mode) => mode === "holdings").length;
-  }).toBe(2);
-  await page.clock.fastForward("00:00:30");
-  await expect.poll(async () => {
-    const modes = (await metrics(request)).modes;
-    return modes.filter((mode) => mode === "prices").length;
-  }).toBe(10);
+  await expect.poll(async () => (await metrics(request)).modes).toEqual([
+    "all",
+    "prices",
+    "all",
+  ]);
+  expect((await metrics(request)).scopes).toEqual([
+    "non-evm",
+    "non-evm",
+    "all",
+  ]);
+});
+
+test("EVM 每日首次只刷新行情，回到前台执行完整刷新", async ({
+  page,
+  request,
+}) => {
+  await configureRefresh(request, "schedule", "evm-watch-ethereum");
+  await loginAsOwner(page);
+
+  await expect.poll(async () => (await metrics(request)).modes).toEqual([
+    "prices",
+  ]);
+  expect((await metrics(request)).scopes).toEqual(["evm"]);
+
+  await page.clock.install();
+  await page.clock.fastForward("00:05:00");
+  expect((await metrics(request)).modes).toEqual(["prices"]);
+
+  await setVisibility(page, "hidden");
+  await setVisibility(page, "visible");
+  await expect.poll(async () => (await metrics(request)).modes).toEqual([
+    "prices",
+    "all",
+  ]);
+  expect((await metrics(request)).scopes).toEqual(["evm", "all"]);
 });
 
 test("部分失败保留最后成功数据并标记过期，手动刷新可见进行中与恢复状态", async ({
@@ -245,6 +263,77 @@ test("部分失败保留最后成功数据并标记过期，手动刷新可见�
   await expect(beta).not.toContainText("来源暂时不可用");
 });
 
+test("资产卡片只刷新对应来源，并在卡片内显示状态", async ({
+  page,
+  request,
+}) => {
+  await configureRefresh(request, "schedule");
+  await loginAsOwner(page);
+  await expect.poll(async () => (await metrics(request)).sourceIds).toEqual([
+    null,
+  ]);
+
+  const alpha = page.getByTestId("asset-source-card-source-alpha");
+  const beta = page.getByTestId("asset-source-card-source-beta");
+  const alphaRefresh = alpha.getByRole("button", {
+    name: "刷新 Alpha Securities",
+  });
+  const betaRefresh = beta.getByRole("button", {
+    name: "刷新 Beta Crypto",
+  });
+  await expect(alphaRefresh).toBeEnabled();
+  await expect(betaRefresh).toBeEnabled();
+  await expect(alpha.getByTestId("asset-source-total")).toHaveText("101.00 USD");
+  await expect(beta.getByTestId("asset-source-total")).toHaveText("201.00 USD");
+
+  await request.post("/test-doubles/refresh", {
+    data: { action: "prepare-recovery", hold: true },
+  });
+  await betaRefresh.click();
+  await expect(betaRefresh).toBeDisabled();
+  await expect(betaRefresh).toContainText("刷新中");
+  const refreshIcon = betaRefresh.locator(".asset-source-refresh-icon");
+  const refreshIconPath = refreshIcon.locator("path");
+  await expect(refreshIcon).toHaveCSS("animation-name", "none");
+  await expect(refreshIconPath).toHaveCSS(
+    "animation-name",
+    "asset-source-refresh-spin",
+  );
+  const spinGeometry = await refreshIconPath.evaluate((path) => {
+    const box = (path as SVGGraphicsElement).getBBox();
+    const style = getComputedStyle(path);
+    const [originX, originY] = style.transformOrigin
+      .split(" ")
+      .map((value) => Number.parseFloat(value));
+    return {
+      transformBox: style.transformBox,
+      originOffsetX: Math.abs(originX - box.width / 2),
+      originOffsetY: Math.abs(originY - box.height / 2),
+    };
+  });
+  expect(spinGeometry.transformBox).toBe("fill-box");
+  expect(spinGeometry.originOffsetX).toBeLessThan(0.01);
+  expect(spinGeometry.originOffsetY).toBeLessThan(0.01);
+  await expect(
+    beta.getByTestId("asset-source-refresh-status-source-beta"),
+  ).toContainText("正在刷新");
+  await expect(alphaRefresh).toBeEnabled();
+  await expect.poll(async () => (await metrics(request)).active).toBe(1);
+  await request.post("/test-doubles/refresh", { data: { action: "release" } });
+
+  await expect(
+    beta.getByTestId("asset-source-refresh-status-source-beta"),
+  ).toContainText("刷新完成");
+  await expect.poll(async () => (await metrics(request)).sourceIds).toEqual([
+    null,
+    "source-beta",
+  ]);
+  expect((await metrics(request)).scopes).toEqual(["non-evm", "all"]);
+  await expect(alpha.getByTestId("asset-source-total")).toHaveText("101.00 USD");
+  await expect(beta.getByTestId("asset-source-total")).toHaveText("202.00 USD");
+  await expect(page.getByTestId("total-asset-amount")).toHaveText("303.00 USD");
+});
+
 test("挂起来源超时不阻塞成功提交，刷新期间新增来源也不会被旧列表覆盖", async ({
   page,
   request,
@@ -300,6 +389,25 @@ test("未认证状态不能触发同步，也不会收到来源刷新状态", as
   for (const value of ["source-alpha", "source-beta", "过期数据", "来源暂时不可用"]) {
     expect(exposed).not.toContain(value);
   }
+});
+
+test("单来源刷新拒绝无效目标和范围组合", async ({ page, request }) => {
+  await configureRefresh(request, "schedule");
+  await loginAsOwner(page);
+
+  const missing = await page.request.post("/api/asset-sources/refresh", {
+    data: { mode: "all", sourceId: "source-missing" },
+  });
+  expect(missing.status()).toBe(404);
+  await expect(missing.json()).resolves.toEqual({ error: "资产来源不存在" });
+
+  const conflicting = await page.request.post("/api/asset-sources/refresh", {
+    data: { mode: "all", scope: "non-evm", sourceId: "source-alpha" },
+  });
+  expect(conflicting.status()).toBe(400);
+  await expect(conflicting.json()).resolves.toEqual({
+    error: "单来源刷新不能同时指定来源范围",
+  });
 });
 
 test("生产长桥刷新保持只读边界，并在读取前拒绝非纯 scope 6 凭证", async ({

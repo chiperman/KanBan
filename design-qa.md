@@ -371,3 +371,186 @@ Latest verification:
 No P3 follow-up is required for this scoped status-light correction.
 
 final result: passed
+
+## Refresh control corrective real-page verification
+
+This section supersedes the earlier temporary-preview acceptance for the refresh-control size. That preview incorrectly assumed the source status tag rendered at 32px; the real dashboard computes it at 24px.
+
+### Comparison target
+
+- Source visual truth: the existing `LB / CURRENT` status tag in the authenticated dashboard, plus the user-selected direction to shrink the refresh button.
+- Real-page before screenshot: `./.scratch/refresh-button-real-before.jpg` (1977 × 1011px).
+- Real-page implementation screenshot: `./.scratch/refresh-button-real-after.jpg` (1977 × 1011px).
+- Focused before/after comparison: `./.scratch/refresh-button-real-comparison.jpg` (720 × 140px; before on the left, implementation on the right).
+- Browser state: authenticated owner dashboard at `http://localhost:3000/`, dark theme, idle refresh action, scroll position 1135px.
+- Browser viewport: 1992 × 1019 CSS px, DPR 2. Browser capture output is normalized to 1977 × 1011px by the connected Chrome surface.
+
+### Findings
+
+No actionable P0, P1, or P2 mismatch remains in the requested scope:
+
+- The real status tag computes to 112.21 × 24px.
+- The refresh button now computes to 76 × 24px instead of 76 × 32px.
+- Both visible outlines have the same vertical center; measured center difference is 0px.
+- The refresh icon was reduced from 16px to 14px so the 24px control does not look vertically crowded.
+- The refresh wrapper remains 40px tall, and the button pseudo-element extends 8px above and below the visible outline, preserving the required 40px interaction target.
+
+### Required fidelity surfaces
+
+- Fonts and typography: the native status-tag typography is unchanged; the refresh label remains the existing compact mono caption without truncation.
+- Spacing and layout rhythm: both controls now share the same 24px visible height and remain separated by the existing 8px gap.
+- Colors and visual tokens: the existing surface, outline, foreground, hover, success, and error tokens are unchanged.
+- Image and asset fidelity: no new image assets were introduced; the existing interface icon remains a line glyph.
+- Copy and content: `LB / CURRENT`, `刷新`, and all refresh-state copy remain unchanged.
+
+### Comparison history
+
+- [P2] The previous browser acceptance measured the refresh button but did not measure the real status tag after CSS cascade, so it incorrectly reported an equal 32px height.
+  - Fix: use the authenticated dashboard as the feedback loop and read both elements from `getBoundingClientRect()`.
+  - Post-fix evidence: `.scratch/refresh-button-real-comparison.jpg`.
+- [P2] Real dashboard result was still 24px status tag versus 32px refresh button.
+  - Fix: reduce only the visible refresh button and icon; preserve the existing 40px wrapper/hit target.
+  - Post-fix evidence: real-page measurements of 24px versus 24px with a 0px center difference.
+
+### Verification
+
+- `pnpm typecheck`: passed.
+- `git diff --check`: passed.
+- Real authenticated dashboard computed-style check: passed.
+- No refresh button was clicked and no external asset-source synchronization was triggered.
+
+### Follow-up polish
+
+No P3 follow-up is required for this scoped correction.
+
+final result: passed
+
+## Superseded attempt: Refresh control equal-height refinement
+
+Superseded by `Refresh control corrective real-page verification`; the measurements below came from a temporary preview and are not the current acceptance result.
+
+### Comparison target
+
+- Selected design: `./.scratch/refresh-control-balanced-design.png` (796 × 288px, source screenshot density 2).
+- Browser-rendered implementation: `./.scratch/refresh-control-implemented-preview.png` (398 × 144px CSS-focused capture).
+- Normalized comparison: `./.scratch/refresh-control-design-implementation-comparison.png` (816 × 176px).
+- Density normalization: the selected design was reduced from 796 × 288px to 398 × 144px before comparison; the browser capture is already normalized to one output pixel per CSS pixel.
+- State: dark theme, default source status, idle refresh action.
+- Scope: asset-source card header controls only. The focused component fills the complete comparison target, so a separate full-page comparison is not required.
+
+### Findings
+
+No actionable P0, P1, or P2 mismatch remains:
+
+- Status tag and refresh button both render at 32px visible height.
+- Their vertical-center difference is 0px.
+- The refresh button renders at 76 × 32px, matching the selected compact direction.
+- The status tag renders at approximately 115.6 × 32px. The small width difference from the approximate 112px design value is content/font driven and preserves the complete `LB / CURRENT` label without compression.
+- The refresh control wrapper remains 76 × 40px. A button pseudo-element extends four pixels above and below the visible outline, preserving a 40px interaction target without making the control visually heavy.
+- The pending `刷新中` label fits inside the fixed 76px width without wrapping or overflow.
+
+### Required fidelity surfaces
+
+- Fonts and typography: status text uses the existing 10px Vibe status-tag treatment; refresh text retains the 12px caption treatment. Both remain mono-aligned and untruncated.
+- Spacing and layout rhythm: the controls share a 32px visible height, 8px inter-control gap, 6px radius, and exact vertical centering. The row remains 40px tall, so card content does not move.
+- Colors and visual tokens: existing `--surface`, `--line-2`, `--secondary`, `--success`, and hover/state tokens are unchanged.
+- Image and asset fidelity: the component contains no raster assets. The existing refresh interface glyph and dot decoration remain intact.
+- Copy and content: `LB / CURRENT`, `刷新`, and `刷新中` remain unchanged and fit their controls.
+
+### Comparison history
+
+- [P2] Previous implementation paired a 24px status tag with an 88 × 40px refresh button, making the action visually dominate the status.
+  - Fix: move both visible outlines to 32px, reduce the refresh width to 76px, and preserve the 40px interaction target outside the visible border.
+  - Post-fix evidence: `.scratch/refresh-control-design-implementation-comparison.png`.
+
+### Verification
+
+- `pnpm typecheck`: passed.
+- `git diff --check`: passed.
+- Browser default-state capture: completed through a temporary local preview loading the project’s actual token, component, and product-layout styles.
+- Pending-state layout probe: 76 × 32px; no horizontal overflow.
+- Browser console: no application error. The only entries were Chrome-extension connection messages.
+- The live dashboard was locked during verification, so no account login or real asset refresh was performed.
+
+### Follow-up polish
+
+No P3 follow-up is required for this scoped equal-height correction.
+
+final result: passed
+
+## Superseded baseline: Refresh button visual correction
+
+Superseded by `Refresh control corrective real-page verification`; the 88 × 40px state below is retained only as comparison history.
+
+### Comparison target
+
+- Source visual truth, default state: `/var/folders/hh/cg4z8pk92z59lqmtrjqb385r0000gn/T/TemporaryItems/NSIRD_screencaptureui_fConRD/截屏2026-08-01 08.07.53.png` (3212 × 382px).
+- Source visual truth, pending state: `/var/folders/hh/cg4z8pk92z59lqmtrjqb385r0000gn/T/TemporaryItems/NSIRD_screencaptureui_RswqsI/截屏2026-08-01 08.08.21.png` (3340 × 374px).
+- Browser-rendered implementation, focused card: `./.scratch/refresh-button-after-default.png` (1500 × 300px).
+- Browser-rendered implementation, full page: `./.scratch/refresh-button-after-full.png` (1977 × 1067px).
+- Normalized focused comparison: `./.scratch/refresh-button-default-comparison.png` (720 × 137px; source on the left, implementation on the right).
+- Pending-state source crop: `./.scratch/refresh-button-before-pending-focus.png`.
+- Browser viewport: 1992 × 1075 CSS px, DPR 2. Browser screenshots are normalized to one output pixel per CSS pixel.
+- State: dark theme, owner dashboard, asset-source card header.
+- Design reference checked: `wangbh030722/vibe-nothing-ui-design@46661e55ae04537215a229be49f2ac1bd37a4255`.
+
+### Findings
+
+No actionable P0, P1, or P2 mismatch remains in the requested refresh-control scope:
+
+- The button now owns an opaque `--surface` background, so the card dot matrix no longer shows through the control.
+- The control has a stable 88 × 40px footprint and remains vertically centered with the 112.21 × 24px source-status tag; state changes do not shift the card header.
+- Pending opacity is 0.68 instead of inheriting the global disabled opacity of 0.3, preserving legibility while still communicating a disabled state.
+- Pending, success, and error copy is contained inside the button (`刷新中`, `已刷新`, `重试`). The detailed live-region copy remains available to assistive technology but no longer creates a second visible line below the button.
+- Success and error states reuse the existing `--success` and `--error` tokens. Reduced-motion mode disables the decorative spin without removing the textual state.
+
+### Required fidelity surfaces
+
+- Fonts and typography: the existing mono/button roles are retained. Caption sizing and 0.04em tracking match the surrounding technical labels.
+- Spacing and layout rhythm: the 88 × 40px button preserves the required 40px hit target, uses existing spacing tokens, and does not alter the asset-card composition.
+- Colors and visual tokens: `--surface`, `--raised`, `--line-2`, `--secondary`, `--primary`, `--success`, and `--error` are reused; no second visual language was introduced.
+- Image and asset fidelity: there are no raster assets in this control. The existing refresh icon remains a small interface glyph; the card dot matrix is preserved as card decoration rather than being recreated inside the button.
+- Copy and content: the duplicate visible `刷新中` / `正在刷新` presentation is reduced to one visible state label. The longer status remains in `role="status"` for screen readers and test contracts.
+
+### Full-view and focused evidence
+
+- Full-view evidence confirms the asset card layout, status tag, card content, and right-side decoration remain unchanged outside the requested control.
+- The normalized focused comparison places the user screenshot and browser capture in one image. It shows the new opaque control surface, stable footprint, and cleaner separation from the dot matrix.
+- The pending-state implementation was not triggered against the live source because doing so would start a real account refresh. The source pending screenshot was compared with the implemented state contract and focused CSS; this is recorded as a residual interaction-capture gap rather than treated as live-provider acceptance.
+
+### Comparison history
+
+- [P2] The transparent/default button allowed the card dot matrix to compete with the icon and label.
+  - Fix: add an opaque `--surface` background and a stable 88 × 40px control box.
+  - Post-fix evidence: `.scratch/refresh-button-default-comparison.png`.
+- [P2] The global disabled opacity made the pending control too faint.
+  - Fix: override the pending disabled opacity to 0.68.
+  - Post-fix evidence: the pending selector is scoped to `data-refresh-state="pending"`; no global button behavior changed.
+- [P2] `刷新中` and `正在刷新` appeared as two visible lines and compressed the header.
+  - Fix: move the state label into the button and visually hide only the detailed live-region feedback.
+  - Post-fix evidence: the component renders one visible label and one screen-reader status node.
+
+### Verification
+
+- `pnpm typecheck`: passed.
+- `git diff --check`: passed.
+- Chrome measured button: 88 × 40px.
+- Chrome measured status tag: 112.21 × 24px.
+- Chrome vertical-center difference: 0px.
+- No real asset-source refresh was triggered during visual verification.
+- No Next.js error overlay was observed. The only previously captured console noise was a Chrome-extension connection message.
+
+### Follow-up polish
+
+No P3 follow-up is required for this scoped refresh-button correction.
+
+final result: passed
+
+## Current refresh-control result
+
+- Real authenticated dashboard: status tag 112.21 × 24px; refresh button 76 × 24px.
+- Vertical-center difference: 0px.
+- Visible button height is compact; the wrapper and pseudo-element retain a 40px interaction target.
+- Current evidence: `.scratch/refresh-button-real-after.jpg` and `.scratch/refresh-button-real-comparison.jpg`.
+
+final result: passed

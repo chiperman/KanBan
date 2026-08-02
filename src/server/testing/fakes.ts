@@ -6,6 +6,7 @@ import type {
   AssetSourceConnections,
   AssetRefreshMode,
   AssetRefreshReport,
+  AssetRefreshScope,
   AssetSourceRefresher,
   AssetSynchronization,
   BinanceAuthorizationResult,
@@ -696,6 +697,8 @@ export class FakeAssetSourceRefresher implements AssetSourceRefresher {
 
 export class FakeAssetSynchronization implements AssetSynchronization {
   readonly modes: AssetRefreshMode[] = [];
+  readonly scopes: AssetRefreshScope[] = [];
+  readonly sourceIds: Array<string | null> = [];
   active = 0;
   private holdNext = false;
   private releasePending: (() => void) | null = null;
@@ -707,6 +710,8 @@ export class FakeAssetSynchronization implements AssetSynchronization {
 
   reset(scenario: FakeRefreshScenario): void {
     this.modes.length = 0;
+    this.scopes.length = 0;
+    this.sourceIds.length = 0;
     this.active = 0;
     this.holdNext = false;
     this.releasePending = null;
@@ -723,8 +728,14 @@ export class FakeAssetSynchronization implements AssetSynchronization {
     this.releasePending = null;
   }
 
-  async refresh(mode: AssetRefreshMode): Promise<AssetRefreshReport> {
+  async refresh(
+    mode: AssetRefreshMode,
+    scope: AssetRefreshScope = "all",
+    sourceId?: string,
+  ): Promise<AssetRefreshReport> {
     this.modes.push(mode);
+    this.scopes.push(scope);
+    this.sourceIds.push(sourceId ?? null);
     this.active += 1;
     try {
       if (this.holdNext) {
@@ -733,7 +744,7 @@ export class FakeAssetSynchronization implements AssetSynchronization {
           this.releasePending = resolve;
         });
       }
-      return await this.delegate.refresh(mode);
+      return await this.delegate.refresh(mode, scope, sourceId);
     } finally {
       this.active -= 1;
     }

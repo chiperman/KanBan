@@ -43,6 +43,7 @@ import {
   formatShanghaiDateTime,
   formatShanghaiDayLabel,
 } from "@/ui/shanghai-date-time";
+import { AssetSourceRefreshButton } from "@/ui/asset-refresh-controls";
 
 export interface AssetSourceView {
   id: string;
@@ -601,12 +602,20 @@ export function AssetSourceCard({
       >
         <header className="asset-source-head">
           <p className="card-label">{providerCardLabel(source)}</p>
-          <VibeStatusTag
-            className={`source-live-state ${source.sync.status}`}
-            tone={sourceState.tone}
-          >
-            {providerCode(source)} / {sourceState.label}
-          </VibeStatusTag>
+          <div className="asset-source-head-actions">
+            <VibeStatusTag
+              className={`source-live-state ${source.sync.status}`}
+              tone={sourceState.tone}
+            >
+              {providerCode(source)} / {sourceState.label}
+            </VibeStatusTag>
+            {source.lifecycle !== "disconnected" ? (
+              <AssetSourceRefreshButton
+                sourceId={source.id}
+                sourceName={heading.title}
+              />
+            ) : null}
+          </div>
         </header>
         <h2 className="asset-source-title">{heading.title}</h2>
         {heading.metadata ? (
