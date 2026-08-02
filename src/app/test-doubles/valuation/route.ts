@@ -111,12 +111,14 @@ function betaPositions(): RawAssetPosition[] {
 function standardSources(input: {
   inverse: boolean;
   alphaAdjustment?: string;
+  alphaKind?: string;
+  alphaLabel?: string;
 }): AssetSourceSummary[] {
   const rates = exchangeRates(input.inverse);
   return [{
     id: "source-alpha",
-    kind: "valuation-fixture",
-    label: "Alpha Securities",
+    kind: input.alphaKind ?? "valuation-fixture",
+    label: input.alphaLabel ?? "Alpha Securities",
     accountId: "alpha",
     permissions: ["market-data", "account", "positions"],
     credentialReference: "test-secret-alpha",
@@ -414,6 +416,59 @@ function binancePartialSources(): AssetSourceSummary[] {
   }];
 }
 
+function bitgetAuthoritativeTotalSources(): AssetSourceSummary[] {
+  return [{
+    id: "source-bitget-authoritative-total",
+    kind: "bitget",
+    label: "Bitget 账户 · 平台总额",
+    accountId: "bitget:authoritative-total",
+    permissions: ["market-data", "account", "positions"],
+    credentialReference: "test-secret-bitget-authoritative-total",
+    snapshot: {
+      total: { amount: "17200", currency: "USDT" },
+      holdings: [{
+        symbol: "USDT",
+        name: "USDT · 持仓明细",
+        quantity: "16599.5",
+        currency: "USDT",
+        assetClass: "crypto",
+        currentPrice: { amount: "1", currency: "USDT" },
+        marketValue: "16599.5",
+        sourceMarketValue: { amount: "16599.5", currency: "USDT" },
+        valuation: {
+          status: "valued",
+          priceSource: "Bitget 现货 USDTUSD",
+          pricedAt: SYNCED_AT,
+        },
+        costPrice: null,
+        platformProfit: null,
+        changePercent: null,
+      }],
+      exchangeRates: [{
+        baseCurrency: "USDT",
+        quoteCurrency: "USD",
+        rate: "0.998",
+        source: "Bitget 现货 USDTUSD",
+        observedAt: SYNCED_AT,
+      }],
+      syncedAt: SYNCED_AT,
+      coverage: {
+        status: "partial",
+        totalIsAuthoritative: true,
+        products: [{
+          product: "spot",
+          capability: "detailed",
+          freshness: "current",
+          message: null,
+        }],
+        unexplainedValue: { amount: "600.5", currency: "USDT" },
+        excludedPositiveAccounts: [],
+      },
+    },
+    sync: CURRENT_SYNC,
+  }];
+}
+
 function detailCoveragePartialSources(): AssetSourceSummary[] {
   return [
     {
@@ -525,15 +580,21 @@ export async function POST(request: Request) {
         ? longbridgeOptionQuoteUnavailableSources()
       : scenario === "binance-coverage-partial"
         ? binancePartialSources()
+      : scenario === "bitget-authoritative-total"
+        ? bitgetAuthoritativeTotalSources()
       : scenario === "detail-coverage-partial"
         ? detailCoveragePartialSources()
       : standardSources({
         inverse: url.searchParams.get("fx") === "inverse",
+        alphaKind: scenario === "okx-negative-residual" ? "okx" : undefined,
+        alphaLabel: scenario === "okx-negative-residual" ? "OKX" : undefined,
         alphaAdjustment:
           scenario === "positive-residual"
             ? "1"
             : scenario === "negative-residual"
               ? "-1"
+              : scenario === "okx-negative-residual"
+                ? "-0.16"
               : undefined,
       });
   const cards: Card[] = sources.map((source, index) => ({

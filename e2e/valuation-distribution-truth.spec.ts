@@ -408,6 +408,36 @@ test("只有持仓明细覆盖不足时当前估值保持完整并单独提示�
   ).toHaveCount(0);
 });
 
+test("平台账户总额与持仓明细有残差时，当前估值仍以平台总额为准", async ({
+  page,
+  request,
+}) => {
+  const configured = await request.post(
+    "/test-doubles/valuation?scenario=bitget-authoritative-total",
+  );
+  expect(configured.ok()).toBeTruthy();
+  await page.route("**/api/asset-sources/refresh", async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({ successCount: 1, failureCount: 0 }),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+  await loginAsOwner(page);
+
+  const overview = page.getByTestId("total-asset-overview");
+  await expect(overview).toContainText("17,165.60 USD");
+  await expect(overview).toContainText("当前估值：完整");
+  await expect(overview).not.toContainText("当前估值：不完整");
+  await expect(overview.getByTestId("valuation-coverage-notice")).toHaveCount(0);
+  await expect(
+    overview.getByTestId("valuation-reconciliation-notice"),
+  ).toContainText("总资产以账户总额为准");
+  await expect(
+    page.getByTestId("bitget-coverage-status"),
+  ).toContainText("持仓明细待对账");
+});
+
 test("Binance 钱包残差会同时传播到来源卡、总资产和完整性状态", async ({
   page,
   request,
@@ -488,7 +518,7 @@ test("Binance 钱包残差会同时传播到来源卡、总资产和完整性状
   );
 });
 
-test("正负对账差额与逐组舍入后的分布始终守恒", async ({ page, request }) => {
+test("正向对账差额与逐组舍入后的分布始终守恒，负向差额不提示", async ({ page, request }) => {
   await page.route("**/api/asset-sources/refresh", async (route) => {
     await route.fulfill({
       body: JSON.stringify({ successCount: 1, failureCount: 0 }),
@@ -513,21 +543,9 @@ test("正负对账差额与逐组舍入后的分布始终守恒", async ({ page,
   await expect(
     negativeDistribution.locator(".distribution-item strong"),
   ).toHaveText(["464.04 USD", "97.30 USD"]);
-  const reconciliationNotice = overview.getByTestId(
-    "valuation-reconciliation-notice",
-  );
-  await expect(reconciliationNotice).toContainText("Alpha Securities");
-  await expect(reconciliationNotice).toContainText(
-    "持仓明细比账户总额高 1.00 USD",
-  );
-  await expect(reconciliationNotice).toContainText("总资产以账户总额为准");
-
-  await page.getByTestId("sensitive-info-toggle").click();
-  await expect(reconciliationNotice).not.toContainText("1.00 USD");
-  await expect(reconciliationNotice).toContainText(
-    "持仓明细与账户总额暂未对齐",
-  );
-  await page.getByTestId("sensitive-info-toggle").click();
+  await expect(
+    overview.getByTestId("valuation-reconciliation-notice"),
+  ).toHaveCount(0);
 
   await request.post("/test-doubles/valuation?scenario=rounding");
   await page.reload();
@@ -566,6 +584,18 @@ test("正负对账差额与逐组舍入后的分布始终守恒", async ({ page,
     "0.00 USD",
     "0.00 USD",
   ]);
+});
+
+test("OKX 持仓明细略高于账户总额时不显示对账提示", async ({ page, request }) => {
+  await loginAsOwner(page);
+  await request.post("/test-doubles/valuation?scenario=okx-negative-residual");
+  await page.reload();
+
+  const overview = page.getByTestId("total-asset-overview");
+  await expect(overview).toContainText("561.18 USD");
+  await expect(
+    overview.getByTestId("valuation-reconciliation-notice"),
+  ).toHaveCount(0);
 });
 
 test("Ticket 06 旧落盘快照会迁移后在所有者页面正常显示", async ({ page, request }) => {

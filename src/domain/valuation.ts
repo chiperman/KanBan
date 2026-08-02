@@ -109,10 +109,17 @@ function coverageHasKnownValueGap(
   return (
     (
       coverage.unexplainedValue !== null &&
+      !coverage.totalIsAuthoritative &&
       decimalCompare(coverage.unexplainedValue.amount, "0") !== 0
     ) ||
     coverage.excludedPositiveAccounts.length > 0
   );
+}
+
+function coverageNeedsTotalWarning(
+  coverage: NonNullable<AssetSnapshot["coverage"]>,
+): boolean {
+  return coverage.status === "unknown" || coverageHasKnownValueGap(coverage);
 }
 
 function rateFor(
@@ -301,11 +308,13 @@ export function buildTotalValuation(
       source.snapshot.coverage !== undefined &&
       source.snapshot.coverage.status !== "complete"
     ) {
-      coverageIssues.push({
-        sourceId: source.id,
-        sourceLabel: assetSourceDisplayName(source),
-        status: source.snapshot.coverage.status,
-      });
+      if (coverageNeedsTotalWarning(source.snapshot.coverage)) {
+        coverageIssues.push({
+          sourceId: source.id,
+          sourceLabel: assetSourceDisplayName(source),
+          status: source.snapshot.coverage.status,
+        });
+      }
       if (coverageHasKnownValueGap(source.snapshot.coverage)) {
         incomplete = true;
       }
@@ -359,6 +368,27 @@ export function buildTotalValuation(
         quoteUnavailableCount,
       });
     }
+    const coverage = source.snapshot.coverage;
+    const coverageResidual = coverage?.unexplainedValue;
+    if (
+      coverage?.totalIsAuthoritative &&
+      coverageResidual != null &&
+      decimalCompare(coverageResidual.amount, "0") !== 0
+    ) {
+      reconciliationIssuesUsd.push({
+        kind: "mismatch",
+        sourceId: source.id,
+        sourceLabel: assetSourceDisplayName(source),
+        amount: convertCurrencyAmount(
+          coverageResidual.amount,
+          coverageResidual.currency,
+          "USD",
+          sourceRates,
+        ),
+        unvaluedCount: 0,
+        quoteUnavailableCount: 0,
+      });
+    }
     if (dimension === "source" && sourceTotal) {
       addGroup(
         groupsUsd,
@@ -405,7 +435,10 @@ export function buildTotalValuation(
         decimalCompare(residual, "0") > 0 &&
         quoteUnavailableCount === 0
       ) {
-        if (source.snapshot.coverage?.status !== "complete") {
+        if (
+          coverage?.status !== "complete" &&
+          !coverage?.totalIsAuthoritative
+        ) {
           hasNonAuthoritativePositiveResidual = true;
         }
         addGroup(
@@ -414,23 +447,6 @@ export function buildTotalValuation(
           dimension === "class" ? "现金及其他" : source.snapshot.total.currency,
           residual,
         );
-      } else if (
-        decimalCompare(residual, "0") < 0 &&
-        quoteUnavailableCount === 0
-      ) {
-        if (source.snapshot.coverage?.status !== "complete") {
-          incomplete = true;
-        }
-        reconciliationIssuesUsd.push({
-          kind: "mismatch",
-          sourceId: source.id,
-          sourceLabel: assetSourceDisplayName(source),
-          amount: residual,
-          unvaluedCount: source.snapshot.holdings.filter(
-            holdingMakesTotalIncomplete,
-          ).length,
-          quoteUnavailableCount: 0,
-        });
       }
     }
   }

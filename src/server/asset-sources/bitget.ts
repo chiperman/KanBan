@@ -637,6 +637,7 @@ function bitgetCoverage(
   );
   return {
     status: input.status,
+    totalIsAuthoritative: input.excludedPositiveAccounts.length === 0,
     products,
     unexplainedValue: input.unexplainedValue,
     excludedPositiveAccounts: input.excludedPositiveAccounts,

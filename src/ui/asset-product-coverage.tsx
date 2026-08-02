@@ -105,7 +105,9 @@ export function AssetProductCoverage({
       capability === "aggregate-only" && freshness === "current",
   ).length ?? 0;
   const label = coverage?.status === "partial"
-    ? "当前总额不完整"
+    ? coverage.totalIsAuthoritative
+      ? "持仓明细待对账"
+      : "当前总额不完整"
     : coverage?.status === "unknown"
       ? "当前总额未验证"
       : aggregateOnlyCount > 0
@@ -128,7 +130,9 @@ export function AssetProductCoverage({
       {label ? (
         <VibeStatusTag
           className={`asset-sync-status${
-            coverage?.status === "complete" ? "" : " is-incomplete"
+            coverage?.status === "complete" || coverage?.totalIsAuthoritative
+              ? ""
+              : " is-incomplete"
           }`}
           data-testid={`${sourceKind}-coverage-status`}
           tone="warning"

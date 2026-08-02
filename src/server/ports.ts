@@ -191,6 +191,11 @@ export interface AssetProductCoverage {
 
 export interface AssetSnapshotCoverage {
   status: "complete" | "partial" | "unknown";
+  /**
+   * 平台账户总额可作为总资产的权威依据；持仓明细差额仅用于对账提示。
+   * 缺省为 false，以兼容不能证明平台总额覆盖范围的旧快照。
+   */
+  totalIsAuthoritative?: boolean;
   products: AssetProductCoverage[];
   unexplainedValue: AssetMoney | null;
   excludedPositiveAccounts: string[];
