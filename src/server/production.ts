@@ -12,7 +12,12 @@ import {
 } from "node:fs";
 import { rm } from "node:fs/promises";
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
+
+const sqlite = process.getBuiltinModule("node:sqlite");
+if (sqlite === undefined) {
+  throw new Error("当前 Node.js 运行时不支持 node:sqlite");
+}
+const { DatabaseSync } = sqlite;
 
 import { decimalAdd, decimalCompare, decimalDivide } from "@/domain/decimal";
 import {
