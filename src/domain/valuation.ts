@@ -52,6 +52,7 @@ export interface TotalValuation {
   unvaluedCount: number;
   expiredCount: number;
   conversion: AssetExchangeRate | null;
+  exchangeRateObservations: AssetExchangeRate[];
   groups: ValuationGroup[];
   coverageIssues: ValuationCoverageIssue[];
   reconciliationIssues: ValuationReconciliationIssue[];
@@ -119,7 +120,7 @@ function rateFor(
   return inverse ? { rate: inverse, inverse: true } : null;
 }
 
-function convert(
+function convertDirect(
   amount: string,
   from: string,
   to: string,
@@ -133,17 +134,22 @@ function convert(
     : decimalMultiply(amount, observation.rate.rate);
 }
 
-/** 优先使用直接汇率；缺失时仅允许经 USD 进行两段可靠换算。 */
+/**
+ * 使用来源原生汇率换算金额；当直接汇率缺失时，只允许经 USD 的两段可靠换算。
+ * 展示币种的 USD/CNY/HKD 汇率由调用方放在 rates 首位，以保持长桥账户汇率优先。
+ */
 export function convertCurrencyAmount(
   amount: string,
   from: string,
   to: string,
   rates: AssetExchangeRate[],
 ): string | null {
-  const direct = convert(amount, from, to, rates);
+  const direct = convertDirect(amount, from, to, rates);
   if (direct !== null || from === "USD" || to === "USD") return direct;
-  const inUsd = convert(amount, from, "USD", rates);
-  return inUsd === null ? null : convert(inUsd, "USD", to, rates);
+  const inUsd = convertDirect(amount, from, "USD", rates);
+  return inUsd === null
+    ? null
+    : convertDirect(inUsd, "USD", to, rates);
 }
 
 /** 从来源原始数量、价格及显式汇率生成快照，未估值项不按零计入总额。 */
@@ -241,19 +247,26 @@ export function buildTotalValuation(
     ...longbridgeRates,
     ...sources.flatMap((source) => source.snapshot.exchangeRates),
   ];
-  const conversionObservation = currency === "USD"
-    ? null
-    : rateFor(allRates, "USD", currency);
-  const conversion = conversionObservation
-    ? {
-        ...conversionObservation.rate,
-        baseCurrency: "USD",
-        quoteCurrency: currency,
-        rate: conversionObservation.inverse
-          ? decimalDivide("1", conversionObservation.rate.rate)
-          : conversionObservation.rate.rate,
-      }
-    : null;
+  const displayRate = (quoteCurrency: "CNY" | "HKD") => {
+    const observation = rateFor(allRates, "USD", quoteCurrency);
+    return observation
+      ? {
+          ...observation.rate,
+          baseCurrency: "USD",
+          quoteCurrency,
+          rate: observation.inverse
+            ? decimalDivide("1", observation.rate.rate)
+            : observation.rate.rate,
+        }
+      : null;
+  };
+  const exchangeRateObservations = (["CNY", "HKD"] as const).flatMap(
+    (quoteCurrency) => {
+      const observation = displayRate(quoteCurrency);
+      return observation === null ? [] : [observation];
+    },
+  );
+  const conversion = currency === "USD" ? null : displayRate(currency);
   let totalUsd = "0";
   let incomplete = false;
   let unvaluedCount = 0;
@@ -286,11 +299,15 @@ export function buildTotalValuation(
         incomplete = true;
       }
     }
+    const sourceRates = [
+      ...longbridgeRates,
+      ...source.snapshot.exchangeRates,
+    ];
     const total = convertCurrencyAmount(
       source.snapshot.total.amount,
       source.snapshot.total.currency,
       "USD",
-      allRates,
+      sourceRates,
     );
     if (total === null) {
       incomplete = true;
@@ -489,6 +506,7 @@ export function buildTotalValuation(
     unvaluedCount,
     expiredCount,
     conversion,
+    exchangeRateObservations,
     groups,
     coverageIssues,
     reconciliationIssues,

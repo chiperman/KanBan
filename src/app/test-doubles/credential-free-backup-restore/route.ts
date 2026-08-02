@@ -59,6 +59,21 @@ function snapshot(day: string) {
   };
 }
 
+function trendObservation(day: string) {
+  const baseline = snapshot(day);
+  if (day !== "2026-07-28") return baseline;
+  return {
+    ...baseline,
+    capturedAt: "2026-07-28T02:05:00.000Z",
+    total: { USD: "130.00", CNY: "936.00" },
+    sources: baseline.sources.map((source) => ({
+      ...source,
+      capturedAt: "2026-07-28T02:05:00.000Z",
+      total: { USD: "130.00", CNY: "936.00" },
+    })),
+  };
+}
+
 function backupState(): BusinessDataState {
   return {
     assetCards: [
@@ -75,6 +90,10 @@ function backupState(): BusinessDataState {
     ],
     assetSources: [source()],
     dailyAssetSnapshots: [snapshot("2026-07-27"), snapshot("2026-07-28")],
+    dailyAssetTrendObservations: [
+      trendObservation("2026-07-27"),
+      trendObservation("2026-07-28"),
+    ],
   };
 }
 
@@ -262,6 +281,7 @@ export async function POST(request: Request) {
         assetCards: [],
         assetSources: [],
         dailyAssetSnapshots: [],
+        dailyAssetTrendObservations: [],
       });
       await backups.restore(exported.fileName);
       const [restoredSource] = await database.listSources();
@@ -319,16 +339,25 @@ export async function POST(request: Request) {
       assetCards: [],
       assetSources: [],
       dailyAssetSnapshots: [],
+      dailyAssetTrendObservations: [],
     });
     const preview = await backups.previewRestore(exported.fileName);
     await backups.restore(exported.fileName);
     const [restoredSource] = await database.listSources();
+    const trendObservations = await database.listDailyAssetTrendObservations();
     return Response.json({
       preview,
       restored: {
         sourceIds: (await database.listSources()).map(({ id }) => id),
         cardIds: (await database.listAssetCards()).map(({ id }) => id),
         snapshotDays: (await database.listDailyAssetSnapshots()).map(({ day }) => day),
+        trendObservations: {
+          days: trendObservations.map(({ day }) => day),
+          latest: {
+            capturedAt: trendObservations.at(-1)?.capturedAt,
+            totalUsd: trendObservations.at(-1)?.total.USD,
+          },
+        },
         lifecycle: restoredSource.lifecycle,
         credentialReference: restoredSource.credentialReference,
       },

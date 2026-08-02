@@ -247,8 +247,12 @@ export async function POST(request: Request) {
       100,
       {
         list: () => rotationDashboard.listDailyAssetSnapshots(),
+        listTrendObservations: () =>
+          rotationDashboard.listDailyAssetTrendObservations(),
         createIfAbsent: (snapshot) =>
           rotationDashboard.createDailyAssetSnapshotIfAbsent(snapshot),
+        record: (snapshot, createBaseline) =>
+          rotationDashboard.recordDailyAssetObservation(snapshot, createBaseline),
       },
     ).refresh("all");
     const rotationRaw = await readFile(

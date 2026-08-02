@@ -131,12 +131,13 @@ export class SourceIsolatedAssetSynchronization
       }),
     );
     const successCount = outcomes.filter(Boolean).length;
-    if (successCount > 0) {
-      const connectedSources = (await this.sources.list()).filter(
-        (source) => source.lifecycle !== "disconnected",
-      );
-      await this.dailySnapshots.createIfAbsent(
+    const connectedSources = (await this.sources.list()).filter(
+      (source) => source.lifecycle !== "disconnected",
+    );
+    if (connectedSources.length > 0) {
+      await this.dailySnapshots.record(
         buildDailyAssetSnapshot(connectedSources, attemptedAt),
+        successCount > 0,
       );
     }
     return {

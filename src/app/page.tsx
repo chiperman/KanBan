@@ -56,6 +56,8 @@ export default async function AssetDashboardPage({
     ({ credentialReference: _credentialReference, permissions: _permissions, ...source }) => source
   )
   const dailyAssetSnapshots = await services.dailyAssetSnapshots.list()
+  const dailyAssetTrendObservations =
+    await services.dailyAssetSnapshots.listTrendObservations()
 
   return (
     <div className="page page-dashboard">
@@ -92,6 +94,7 @@ export default async function AssetDashboardPage({
             cards={assetCards}
             assetSources={assetSources}
             dailyAssetSnapshots={dailyAssetSnapshots}
+            dailyAssetTrendObservations={dailyAssetTrendObservations}
             currentDay={shanghaiDay(now)}
           />
         </main>

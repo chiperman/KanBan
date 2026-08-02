@@ -34,6 +34,13 @@ test("导出后可以恢复业务数据且来源默认断开", async ({ request 
       sourceIds: ["backup-source"],
       cardIds: ["backup-card"],
       snapshotDays: ["2026-07-27", "2026-07-28"],
+      trendObservations: {
+        days: ["2026-07-27", "2026-07-28"],
+        latest: {
+          capturedAt: "2026-07-28T02:05:00.000Z",
+          totalUsd: "130",
+        },
+      },
       lifecycle: "disconnected",
       credentialReference: null,
     },

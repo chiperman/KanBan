@@ -20,7 +20,7 @@ import type {
   AssetHolding,
   AssetSnapshot,
   AssetSourceSyncState,
-  DailyAssetSnapshot,
+  DailyAssetTrendObservation,
 } from "@/server/ports";
 import {
   assetHoldingKey,
@@ -34,6 +34,11 @@ import {
   VibeStatusTag,
 } from "@/ui/vibe/vibe-data-instrument";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
+import {
+  daysForTrendRange,
+  type TrendRange,
+} from "@/ui/total-asset-overview";
+import { AssetTrendChart } from "@/ui/asset-trend-chart";
 import {
   formatShanghaiDateTime,
   formatShanghaiDayLabel,
@@ -392,13 +397,17 @@ export function AssetSourceCard({
   history,
   reportingExchangeRates,
   reportingCurrency,
+  trendRange,
+  currentDay,
   profitColorScheme,
   showSensitiveInfo,
 }: {
   source: AssetSourceView;
-  history: DailyAssetSnapshot[];
+  history: DailyAssetTrendObservation[];
   reportingExchangeRates: AssetExchangeRate[];
   reportingCurrency: ReportingCurrency;
+  trendRange: TrendRange;
+  currentDay: string;
   profitColorScheme: ProfitColorScheme;
   showSensitiveInfo: boolean;
 }) {
@@ -454,6 +463,57 @@ export function AssetSourceCard({
     const item = snapshot.sources.find(({ sourceId }) => sourceId === source.id);
     return item ? [{ day: snapshot.day, ...item }] : [];
   });
+  const sourceTrendDays = daysForTrendRange(
+    trendRange,
+    currentDay,
+    sourceHistory.reduce<string | undefined>(
+      (earliest, observation) =>
+        earliest === undefined || observation.day < earliest
+          ? observation.day
+          : earliest,
+      undefined,
+    ),
+  );
+  const sourceTrendByDay = new Map(
+    sourceHistory.map((observation) => [observation.day, observation]),
+  );
+  const missingSourceTrendDayCount = sourceTrendDays.filter(
+    (day) => !sourceTrendByDay.has(day),
+  ).length;
+  const sourceTrendPoints = sourceTrendDays.map((day, index) => {
+    const observation = sourceTrendByDay.get(day);
+    return {
+      day,
+      index,
+      amount: observation?.total[reportingCurrency] ?? null,
+      observed: observation !== undefined,
+      status: observation?.status ??
+        (observation?.complete ? "complete" : "incomplete"),
+    };
+  });
+  const unavailableSourceTrendPoints = sourceTrendPoints.filter(
+    (point) => point.amount === null && sourceTrendByDay.has(point.day),
+  );
+  const abnormalSourceTrendPoints = sourceTrendPoints.filter(
+    (point) => point.amount !== null && point.status !== "complete",
+  );
+  const sourceTrendNotice = [
+    missingSourceTrendDayCount > 0
+      ? `缺少 ${missingSourceTrendDayCount} 天观测，折线已断开`
+      : null,
+    abnormalSourceTrendPoints.length > 0 || unavailableSourceTrendPoints.length > 0
+      ? `数据受限：${
+        [
+          abnormalSourceTrendPoints.length > 0
+            ? `${abnormalSourceTrendPoints.length} 天不完整或过期`
+            : null,
+          unavailableSourceTrendPoints.length > 0
+            ? `${unavailableSourceTrendPoints.length} 天未估值`
+            : null,
+        ].filter(Boolean).join(" · ")
+      }`
+      : null,
+  ].filter(Boolean).join(" · ");
   const unvaluedCount = visibleHoldings.filter(
     ({ valuation }) => valuation.status === "unvalued",
   ).length;
@@ -558,6 +618,43 @@ export function AssetSourceCard({
           unit={reportingCurrency}
           value={showSensitiveInfo ? sourceTotal ?? "无法折算" : "••••••"}
         />
+        <section
+          className="asset-trend source-trend"
+          data-testid={`asset-source-trend-${source.id}`}
+        >
+          <p className="card-label">来源趋势</p>
+          {!showSensitiveInfo ? (
+            <AssetTrendChart
+              ariaLabel={`${heading.title}来源总额趋势已隐藏`}
+              currency={reportingCurrency}
+              formatAmount={moneyAmount}
+              formatDay={formatShanghaiDayLabel}
+              incompleteCount={0}
+              isSensitiveHidden
+              points={[]}
+              showCurrency={false}
+              unavailableCount={0}
+              variant="source"
+            />
+          ) : sourceHistory.length === 0 ? (
+            <p className="trend-empty">首次成功同步后开始记录</p>
+          ) : (
+            <AssetTrendChart
+              ariaLabel={`${heading.title}来源总额趋势`}
+              currency={reportingCurrency}
+              formatAmount={moneyAmount}
+              formatDay={formatShanghaiDayLabel}
+              incompleteCount={abnormalSourceTrendPoints.length}
+              points={sourceTrendPoints}
+              showCurrency={false}
+              unavailableCount={unavailableSourceTrendPoints.length}
+              variant="source"
+            />
+          )}
+          {showSensitiveInfo && sourceTrendNotice ? (
+            <p className="trend-note">{sourceTrendNotice}</p>
+          ) : null}
+        </section>
         {supportsProductCoverage ? (
           <AssetProductCoverage
             coverage={source.snapshot.coverage}
@@ -705,33 +802,6 @@ export function AssetSourceCard({
             {quoteUnavailableCount} 项期权行情未接入 · 账户总额已包含
           </VibeStatusTag>
         ) : null}
-        <section
-          className="asset-trend source-trend"
-          data-testid={`asset-source-trend-${source.id}`}
-        >
-          <p className="card-label">来源趋势</p>
-          {sourceHistory.length === 0 ? (
-            <p className="trend-empty">首次成功同步后开始记录</p>
-          ) : (
-            <ol className="trend-list">
-              {sourceHistory.map((snapshot) => (
-                <li key={snapshot.day}>
-                  <time dateTime={snapshot.day}>{formatShanghaiDayLabel(snapshot.day)}</time>
-                  <strong>
-                    {snapshot.total.USD === null
-                      ? "未估值"
-                    : showSensitiveInfo
-                      ? snapshot.total[reportingCurrency] == null
-                        ? "未估值"
-                        : amount(snapshot.total[reportingCurrency])
-                      : "••••••"}
-                  </strong>
-                  <span>{snapshot.complete ? "完整" : "不完整"}</span>
-                </li>
-              ))}
-            </ol>
-          )}
-        </section>
         <p className="asset-updated">最后更新：{formatShanghaiDateTime(source.snapshot.syncedAt)}</p>
         {source.lifecycle === "disconnected" ? (
           <VibeStatusTag className="asset-sync-status expired" tone="muted">

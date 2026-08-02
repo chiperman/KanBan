@@ -70,25 +70,52 @@ export interface DailyAssetSourceSnapshot {
   kind: string;
   capturedAt: string;
   complete: boolean;
+  /** 旧记录可能缺省；读取时按 complete 安全回退。 */
+  status?: "complete" | "incomplete" | "expired";
+  /** 旧记录可缺少 HKD；新观测始终写入三种计价货币。 */
   total: Record<"USD" | "CNY", string | null> & {
     HKD?: string | null;
   };
 }
 
-/** Asia/Shanghai 自然日内首次成功同步形成的不可改写基准。 */
-export interface DailyAssetSnapshot {
+interface DailyAssetObservation {
   day: string;
   capturedAt: string;
+  /** 用于本次三币种折算的原始汇率观察；旧记录可缺省。 */
+  exchangeRates?: AssetExchangeRate[];
   complete: boolean;
+  /** 旧记录可能缺省；读取时按 complete 安全回退。 */
+  status?: "complete" | "incomplete" | "expired";
+  /** 旧记录可缺少 HKD；新观测始终写入三种计价货币。 */
   total: Record<"USD" | "CNY", string | null> & {
     HKD?: string | null;
   };
   sources: DailyAssetSourceSnapshot[];
 }
 
+/** Asia/Shanghai 自然日内首次成功同步形成的不可改写基准。 */
+export interface DailyAssetBaseline extends DailyAssetObservation {}
+
+/** 每个上海自然日的最佳已有资产价值观测；同日成功刷新可以更新。 */
+export interface DailyAssetTrendObservation extends DailyAssetObservation {}
+
+/** 旧接口名称只指日初基准，避免调用方混用两类每日记录。 */
+export type DailyAssetSnapshot = DailyAssetBaseline;
+
 export interface DailyAssetSnapshots {
-  list(): Promise<DailyAssetSnapshot[]>;
+  /** 日初基准，仅用于今日资产变动。 */
+  list(): Promise<DailyAssetBaseline[]>;
+  /** 每日趋势观测，仅用于历史趋势。 */
+  listTrendObservations(): Promise<DailyAssetTrendObservation[]>;
   createIfAbsent(snapshot: DailyAssetSnapshot): Promise<boolean>;
+  /**
+   * 成功刷新建立日初基准（如尚不存在）并更新趋势观测；
+   * 失败刷新只更新已存在趋势观测的完整性/过期状态。
+   */
+  record(
+    snapshot: DailyAssetTrendObservation,
+    createBaseline: boolean,
+  ): Promise<void>;
 }
 
 export interface AssetSourceRefreshResult {

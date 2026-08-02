@@ -41,7 +41,10 @@ import {
   mapLongbridgeSnapshot,
 } from "@/server/asset-sources/longbridge";
 import { SourceIsolatedAssetSynchronization } from "@/server/asset-synchronization";
-import { buildDailyAssetSnapshot } from "@/domain/daily-asset-snapshots";
+import {
+  buildDailyAssetSnapshot,
+  mergeDailyTrendObservation,
+} from "@/domain/daily-asset-snapshots";
 import { decimalAdd } from "@/domain/decimal";
 import { normalizeAssetSourceDisplayName } from "@/domain/asset-source-display-name";
 import {
@@ -109,34 +112,44 @@ export class FakeAssetSources implements AssetSources {
 
 export class InMemoryDailyAssetSnapshots implements DailyAssetSnapshots {
   private snapshots: DailyAssetSnapshot[] = [];
+  private trendObservations: DailyAssetSnapshot[] = [];
 
   async list(): Promise<DailyAssetSnapshot[]> {
     return this.snapshots;
   }
 
+  async listTrendObservations(): Promise<DailyAssetSnapshot[]> {
+    return this.trendObservations;
+  }
+
   async createIfAbsent(snapshot: DailyAssetSnapshot): Promise<boolean> {
     const existing = this.snapshots.find(({ day }) => day === snapshot.day);
-    if (existing) {
-      const existingSourceIds = new Set(
-        existing.sources.map(({ sourceId }) => sourceId),
-      );
-      existing.sources.push(
-        ...snapshot.sources.filter(
-          ({ sourceId }) => !existingSourceIds.has(sourceId),
-        ),
-      );
-      return false;
-    }
+    if (existing) return false;
     this.snapshots = [...this.snapshots, snapshot].sort((left, right) =>
       left.day.localeCompare(right.day),
     );
+    this.trendObservations = [
+      ...this.trendObservations,
+      structuredClone(snapshot),
+    ].sort((left, right) => left.day.localeCompare(right.day));
     return true;
   }
 
+  async record(snapshot: DailyAssetSnapshot, createBaseline: boolean): Promise<void> {
+    if (createBaseline) await this.createIfAbsent(snapshot);
+    const index = this.trendObservations.findIndex(({ day }) => day === snapshot.day);
+    if (index === -1) return;
+    this.trendObservations[index] = mergeDailyTrendObservation(
+      this.trendObservations[index],
+      snapshot,
+      !createBaseline,
+    );
+  }
+
   removeSource(sourceId: string): void {
-    this.snapshots = this.snapshots.flatMap((snapshot) => {
+    const remove = (snapshot: DailyAssetSnapshot): DailyAssetSnapshot | null => {
       const sources = snapshot.sources.filter((source) => source.sourceId !== sourceId);
-      if (sources.length === 0) return [];
+      if (sources.length === 0) return null;
       const total = {
         USD: sources.some((source) => source.total.USD !== null)
           ? decimalAdd(...sources.flatMap((source) => source.total.USD ?? []))
@@ -144,14 +157,27 @@ export class InMemoryDailyAssetSnapshots implements DailyAssetSnapshots {
         CNY: sources.some((source) => source.total.CNY !== null)
           ? decimalAdd(...sources.flatMap((source) => source.total.CNY ?? []))
           : null,
+        HKD: sources.some((source) => source.total.HKD !== null)
+          ? decimalAdd(...sources.flatMap((source) => source.total.HKD ?? []))
+          : null,
       };
-      return [{
+      return {
         ...snapshot,
         sources,
         total,
         complete:
-          sources.every((source) => source.complete) && total.USD !== null,
-      }];
+          sources.every((source) => source.complete) &&
+          total.USD !== null &&
+          total.HKD !== null,
+      };
+    };
+    this.snapshots = this.snapshots.flatMap((snapshot) => {
+      const updated = remove(snapshot);
+      return updated ? [updated] : [];
+    });
+    this.trendObservations = this.trendObservations.flatMap((snapshot) => {
+      const updated = remove(snapshot);
+      return updated ? [updated] : [];
     });
   }
 }
@@ -168,7 +194,6 @@ export interface FakeLongbridgeConfig {
     prevClose: string;
     timestamp: number;
   }>;
-  exchangeRates?: unknown[];
   previewError?: string;
   commitError?: string;
 }
@@ -208,7 +233,6 @@ export class FakeLongbridgeOAuth implements LongbridgeOAuth {
         accountPages: config.accountPages,
         positionPages,
         quotes: config.quotes,
-        exchangeRates: config.exchangeRates,
         syncedAt: "2026-01-01T00:00:00.000Z",
       }),
     };
@@ -837,8 +861,9 @@ export class InMemoryAssetSourceConnections implements AssetSourceConnections {
         span: 1,
       },
     ]);
-    await this.dailySnapshots.createIfAbsent(
+    await this.dailySnapshots.record(
       buildDailyAssetSnapshot(updatedSources, this.clock.now().toISOString()),
+      true,
     );
   }
 

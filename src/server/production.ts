@@ -15,7 +15,10 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 import { decimalAdd, decimalCompare, decimalDivide } from "@/domain/decimal";
-import { buildDailyAssetSnapshot } from "@/domain/daily-asset-snapshots";
+import {
+  buildDailyAssetSnapshot,
+  mergeDailyTrendObservation,
+} from "@/domain/daily-asset-snapshots";
 import { normalizeAssetSourceDisplayName } from "@/domain/asset-source-display-name";
 import type {
   AppServices,
@@ -32,6 +35,7 @@ import type {
   EvmWatchAuthorizationResult,
   OkxAuthorizationResult,
   DailyAssetSnapshot,
+  DailyAssetTrendObservation,
   DailyAssetSnapshots,
   AssetCardStore,
   Clock,
@@ -89,14 +93,15 @@ class SystemClock implements Clock {
 }
 
 interface DashboardState {
-  schemaVersion: 5;
+  schemaVersion: 7;
   assetCards: Card[];
   assetSources: AssetSourceSummary[];
   dailyAssetSnapshots: DailyAssetSnapshot[];
+  dailyAssetTrendObservations: DailyAssetTrendObservation[];
 }
 
-const DASHBOARD_SCHEMA_VERSION = 5 as const;
-const SQLITE_SCHEMA_VERSION = 4;
+const DASHBOARD_SCHEMA_VERSION = 7 as const;
+const SQLITE_SCHEMA_VERSION = 7;
 
 type SourceConnectionKind = "longbridge" | "binance" | "okx" | "bitget" | "evm";
 type SourceAuthorizationResult =
@@ -185,9 +190,14 @@ interface DashboardDatabase {
   replaceSources(sources: AssetSourceSummary[]): Promise<void>;
   updateSource(source: AssetSourceSummary): Promise<void>;
   listDailyAssetSnapshots(): Promise<DailyAssetSnapshot[]>;
+  listDailyAssetTrendObservations(): Promise<DailyAssetTrendObservation[]>;
   createDailyAssetSnapshotIfAbsent(
     snapshot: DailyAssetSnapshot,
   ): Promise<boolean>;
+  recordDailyAssetObservation(
+    snapshot: DailyAssetTrendObservation,
+    createBaseline: boolean,
+  ): Promise<void>;
   setAssetCardHidden(sourceId: string, hidden: boolean): Promise<void>;
   setAssetSourceDisplayName(
     sourceId: string,
@@ -235,13 +245,18 @@ function withoutSnapshotSource(
     CNY: sources.some((source) => source.total.CNY !== null)
       ? decimalAdd(...sources.flatMap((source) => source.total.CNY ?? []))
       : null,
+    HKD: sources.some((source) => source.total.HKD !== null)
+      ? decimalAdd(...sources.flatMap((source) => source.total.HKD ?? []))
+      : null,
   };
   return {
     ...snapshot,
     sources,
     total,
     complete:
-      sources.every((source) => source.complete) && total.USD !== null,
+      sources.every((source) => source.complete) &&
+      total.USD !== null &&
+      total.HKD !== null,
   };
 }
 
@@ -385,6 +400,43 @@ function isMissingFile(error: unknown): boolean {
   );
 }
 
+function migrateDailyObservation<T extends DailyAssetSnapshot>(
+  observation: T,
+): T {
+  const total = {
+    ...observation.total,
+    HKD: observation.total.HKD ?? null,
+  };
+  const complete = observation.complete && total.HKD !== null;
+  const status = observation.status === "expired"
+    ? "expired"
+    : complete
+      ? "complete"
+      : "incomplete";
+  return {
+    ...observation,
+    complete,
+    status,
+    total,
+    exchangeRates: Array.isArray(observation.exchangeRates)
+      ? observation.exchangeRates
+      : [],
+    sources: observation.sources.map((source) => ({
+      ...source,
+      complete: source.complete && (source.total.HKD ?? null) !== null,
+      status: source.status === "expired"
+        ? "expired"
+        : source.complete && (source.total.HKD ?? null) !== null
+          ? "complete"
+          : "incomplete",
+      total: {
+        ...source.total,
+        HKD: source.total.HKD ?? null,
+      },
+    })),
+  };
+}
+
 /** 普通 Dashboard 数据只保存不透明凭证引用，不保存凭证或密文。 */
 export class FileDashboardDatabase {
   private queue: Promise<void> = Promise.resolve();
@@ -415,6 +467,7 @@ export class FileDashboardDatabase {
         assetCards,
         assetSources: [],
         dailyAssetSnapshots: [],
+        dailyAssetTrendObservations: [],
       };
     }
     const value = JSON.parse(raw) as Partial<DashboardState> & {
@@ -432,8 +485,13 @@ export class FileDashboardDatabase {
       assetCards,
       assetSources: value.assetSources.map(migrateAssetSource),
       dailyAssetSnapshots: Array.isArray(value.dailyAssetSnapshots)
-        ? value.dailyAssetSnapshots
+        ? value.dailyAssetSnapshots.map(migrateDailyObservation)
         : [],
+      dailyAssetTrendObservations: Array.isArray(value.dailyAssetTrendObservations)
+        ? value.dailyAssetTrendObservations.map(migrateDailyObservation)
+        : Array.isArray(value.dailyAssetSnapshots)
+          ? value.dailyAssetSnapshots.map(migrateDailyObservation)
+          : [],
     };
   }
 
@@ -492,6 +550,11 @@ export class FileDashboardDatabase {
     return (await this.load()).dailyAssetSnapshots;
   }
 
+  async listDailyAssetTrendObservations(): Promise<DailyAssetTrendObservation[]> {
+    await this.queue;
+    return (await this.load()).dailyAssetTrendObservations;
+  }
+
   async createDailyAssetSnapshotIfAbsent(
     snapshot: DailyAssetSnapshot,
   ): Promise<boolean> {
@@ -499,22 +562,45 @@ export class FileDashboardDatabase {
       const existing = state.dailyAssetSnapshots.find(
         ({ day }) => day === snapshot.day,
       );
-      if (existing) {
-        const existingSourceIds = new Set(
-          existing.sources.map(({ sourceId }) => sourceId),
-        );
-        existing.sources.push(
-          ...snapshot.sources.filter(
-            ({ sourceId }) => !existingSourceIds.has(sourceId),
-          ),
-        );
-        return false;
-      }
+      if (existing) return false;
       state.dailyAssetSnapshots.push(snapshot);
       state.dailyAssetSnapshots.sort((left, right) =>
         left.day.localeCompare(right.day),
       );
+      state.dailyAssetTrendObservations.push(structuredClone(snapshot));
+      state.dailyAssetTrendObservations.sort((left, right) =>
+        left.day.localeCompare(right.day),
+      );
       return true;
+    });
+  }
+
+  async recordDailyAssetObservation(
+    snapshot: DailyAssetTrendObservation,
+    createBaseline: boolean,
+  ): Promise<void> {
+    await this.mutate((state) => {
+      const baseline = state.dailyAssetSnapshots.find(({ day }) => day === snapshot.day);
+      if (baseline === undefined && createBaseline) {
+        state.dailyAssetSnapshots.push(structuredClone(snapshot));
+        state.dailyAssetSnapshots.sort((left, right) => left.day.localeCompare(right.day));
+      }
+      const index = state.dailyAssetTrendObservations.findIndex(
+        ({ day }) => day === snapshot.day,
+      );
+      if (index === -1) {
+        if (!createBaseline) return;
+        state.dailyAssetTrendObservations.push(structuredClone(snapshot));
+      } else {
+        state.dailyAssetTrendObservations[index] = mergeDailyTrendObservation(
+          state.dailyAssetTrendObservations[index],
+          snapshot,
+          !createBaseline,
+        );
+      }
+      state.dailyAssetTrendObservations.sort((left, right) =>
+        left.day.localeCompare(right.day),
+      );
     });
   }
 
@@ -564,6 +650,12 @@ export class FileDashboardDatabase {
         const updated = withoutSnapshotSource(snapshot, sourceId);
         return updated ? [updated] : [];
       });
+      state.dailyAssetTrendObservations = state.dailyAssetTrendObservations.flatMap(
+        (snapshot) => {
+          const updated = withoutSnapshotSource(snapshot, sourceId);
+          return updated ? [updated] : [];
+        },
+      );
       return source.credentialReference;
     });
   }
@@ -622,28 +714,24 @@ export class FileDashboardDatabase {
       );
       state.assetSources.push(connected.source);
       state.assetCards.push(connected.card);
-      const dailySnapshot = buildDailyAssetSnapshot(
-        state.assetSources,
-        capturedAt,
-      );
-      const existingDailySnapshot = state.dailyAssetSnapshots.find(
+      const dailySnapshot = buildDailyAssetSnapshot(state.assetSources, capturedAt);
+      const trendIndex = state.dailyAssetTrendObservations.findIndex(
         ({ day }) => day === dailySnapshot.day,
       );
-      if (existingDailySnapshot) {
-        const existingSourceIds = new Set(
-          existingDailySnapshot.sources.map(({ sourceId }) => sourceId),
-        );
-        existingDailySnapshot.sources.push(
-          ...dailySnapshot.sources.filter(
-            ({ sourceId }) => !existingSourceIds.has(sourceId),
-          ),
-        );
+      if (trendIndex === -1) {
+        state.dailyAssetTrendObservations.push(structuredClone(dailySnapshot));
       } else {
-        state.dailyAssetSnapshots.push(dailySnapshot);
-        state.dailyAssetSnapshots.sort((left, right) =>
-          left.day.localeCompare(right.day),
+        state.dailyAssetTrendObservations[trendIndex] = mergeDailyTrendObservation(
+          state.dailyAssetTrendObservations[trendIndex],
+          dailySnapshot,
+          false,
         );
       }
+      if (!state.dailyAssetSnapshots.some(({ day }) => day === dailySnapshot.day)) {
+        state.dailyAssetSnapshots.push(structuredClone(dailySnapshot));
+      }
+      state.dailyAssetSnapshots.sort((left, right) => left.day.localeCompare(right.day));
+      state.dailyAssetTrendObservations.sort((left, right) => left.day.localeCompare(right.day));
     });
   }
 }
@@ -661,6 +749,7 @@ function parseLegacyDashboardStateSync(
         assetCards: [],
         assetSources: [],
         dailyAssetSnapshots: [],
+        dailyAssetTrendObservations: [],
       };
     }
     const assetCards = parseAssetCards(
@@ -672,6 +761,7 @@ function parseLegacyDashboardStateSync(
       assetCards,
       assetSources: [],
       dailyAssetSnapshots: [],
+      dailyAssetTrendObservations: [],
     };
   }
 
@@ -686,8 +776,13 @@ function parseLegacyDashboardStateSync(
     assetCards,
     assetSources: value.assetSources.map(migrateAssetSource),
     dailyAssetSnapshots: Array.isArray(value.dailyAssetSnapshots)
-      ? value.dailyAssetSnapshots
+      ? value.dailyAssetSnapshots.map(migrateDailyObservation)
       : [],
+    dailyAssetTrendObservations: Array.isArray(value.dailyAssetTrendObservations)
+      ? value.dailyAssetTrendObservations.map(migrateDailyObservation)
+      : Array.isArray(value.dailyAssetSnapshots)
+        ? value.dailyAssetSnapshots.map(migrateDailyObservation)
+        : [],
   };
 }
 
@@ -773,8 +868,11 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
         day TEXT PRIMARY KEY,
         captured_at TEXT NOT NULL,
         complete INTEGER NOT NULL CHECK (complete IN (0, 1)),
+        status TEXT NOT NULL CHECK (status IN ('complete', 'incomplete', 'expired')),
         total_usd TEXT,
-        total_cny TEXT
+        total_cny TEXT,
+        total_hkd TEXT,
+        exchange_rates_json TEXT NOT NULL CHECK (json_valid(exchange_rates_json))
       ) STRICT;
       CREATE TABLE IF NOT EXISTS daily_asset_source_snapshots (
         day TEXT NOT NULL REFERENCES daily_asset_snapshots(day) ON DELETE CASCADE,
@@ -783,8 +881,33 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
         kind TEXT NOT NULL,
         captured_at TEXT NOT NULL,
         complete INTEGER NOT NULL CHECK (complete IN (0, 1)),
+        status TEXT NOT NULL CHECK (status IN ('complete', 'incomplete', 'expired')),
         total_usd TEXT,
         total_cny TEXT,
+        total_hkd TEXT,
+        PRIMARY KEY (day, source_id)
+      ) STRICT;
+      CREATE TABLE IF NOT EXISTS daily_asset_trend_observations (
+        day TEXT PRIMARY KEY,
+        captured_at TEXT NOT NULL,
+        complete INTEGER NOT NULL CHECK (complete IN (0, 1)),
+        status TEXT NOT NULL CHECK (status IN ('complete', 'incomplete', 'expired')),
+        total_usd TEXT,
+        total_cny TEXT,
+        total_hkd TEXT,
+        exchange_rates_json TEXT NOT NULL CHECK (json_valid(exchange_rates_json))
+      ) STRICT;
+      CREATE TABLE IF NOT EXISTS daily_asset_source_trend_observations (
+        day TEXT NOT NULL REFERENCES daily_asset_trend_observations(day) ON DELETE CASCADE,
+        source_id TEXT NOT NULL,
+        label TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        captured_at TEXT NOT NULL,
+        complete INTEGER NOT NULL CHECK (complete IN (0, 1)),
+        status TEXT NOT NULL CHECK (status IN ('complete', 'incomplete', 'expired')),
+        total_usd TEXT,
+        total_cny TEXT,
+        total_hkd TEXT,
         PRIMARY KEY (day, source_id)
       ) STRICT;
     `);
@@ -806,6 +929,18 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
     if (schemaVersion === "3") {
       this.migrateSchemaVersionThree();
       schemaVersion = "4";
+    }
+    if (schemaVersion === "4") {
+      this.migrateSchemaVersionFour();
+      schemaVersion = "5";
+    }
+    if (schemaVersion === "5") {
+      this.migrateSchemaVersionFive();
+      schemaVersion = "6";
+    }
+    if (schemaVersion === "6") {
+      this.migrateSchemaVersionSix();
+      schemaVersion = "7";
     }
     if (schemaVersion !== String(SQLITE_SCHEMA_VERSION)) {
       throw new Error(`不支持的 SQLite schema 版本: ${schemaVersion}`);
@@ -855,6 +990,105 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
       this.database
         .prepare("UPDATE schema_metadata SET value = ? WHERE key = ?")
         .run("4", "schema_version");
+    });
+  }
+
+  private migrateSchemaVersionFour(): void {
+    this.transaction(() => {
+      this.database.exec(`
+        INSERT OR IGNORE INTO daily_asset_trend_observations (
+          day, captured_at, complete, status, total_usd, total_cny, total_hkd,
+          exchange_rates_json
+        )
+        SELECT day, captured_at, complete,
+          CASE WHEN complete = 1 THEN 'complete' ELSE 'incomplete' END,
+          total_usd, total_cny, NULL, '[]'
+        FROM daily_asset_snapshots;
+        INSERT OR IGNORE INTO daily_asset_source_trend_observations (
+          day, source_id, label, kind, captured_at, complete, status, total_usd, total_cny,
+          total_hkd
+        )
+        SELECT day, source_id, label, kind, captured_at, complete,
+          CASE WHEN complete = 1 THEN 'complete' ELSE 'incomplete' END,
+          total_usd, total_cny, NULL
+        FROM daily_asset_source_snapshots;
+      `);
+      this.database
+        .prepare("UPDATE schema_metadata SET value = ? WHERE key = ?")
+        .run("5", "schema_version");
+    });
+  }
+
+  private migrateSchemaVersionFive(): void {
+    this.transaction(() => {
+      const tables = [
+        "daily_asset_snapshots",
+        "daily_asset_source_snapshots",
+        "daily_asset_trend_observations",
+        "daily_asset_source_trend_observations",
+      ] as const;
+      for (const table of tables) {
+        const columns = this.database
+          .prepare(`PRAGMA table_info(${table})`)
+          .all() as Array<{ name: string }>;
+        if (!columns.some(({ name }) => name === "status")) {
+          this.database.exec(`
+            ALTER TABLE ${table}
+            ADD COLUMN status TEXT NOT NULL DEFAULT 'incomplete'
+            CHECK (status IN ('complete', 'incomplete', 'expired'));
+          `);
+        }
+      }
+      this.database.exec(`
+        UPDATE daily_asset_snapshots
+        SET status = CASE WHEN complete = 1 THEN 'complete' ELSE 'incomplete' END;
+        UPDATE daily_asset_source_snapshots
+        SET status = CASE WHEN complete = 1 THEN 'complete' ELSE 'incomplete' END;
+        UPDATE daily_asset_trend_observations
+        SET status = CASE WHEN complete = 1 THEN 'complete' ELSE 'incomplete' END;
+        UPDATE daily_asset_source_trend_observations
+        SET status = CASE WHEN complete = 1 THEN 'complete' ELSE 'incomplete' END;
+      `);
+      this.database
+        .prepare("UPDATE schema_metadata SET value = ? WHERE key = ?")
+        .run("6", "schema_version");
+    });
+  }
+
+  private migrateSchemaVersionSix(): void {
+    this.transaction(() => {
+      const tables = [
+        "daily_asset_snapshots",
+        "daily_asset_source_snapshots",
+        "daily_asset_trend_observations",
+        "daily_asset_source_trend_observations",
+      ] as const;
+      for (const table of tables) {
+        const columns = this.database
+          .prepare(`PRAGMA table_info(${table})`)
+          .all() as Array<{ name: string }>;
+        if (!columns.some(({ name }) => name === "total_hkd")) {
+          this.database.exec(`ALTER TABLE ${table} ADD COLUMN total_hkd TEXT;`);
+        }
+      }
+      for (const table of [
+        "daily_asset_snapshots",
+        "daily_asset_trend_observations",
+      ] as const) {
+        const columns = this.database
+          .prepare(`PRAGMA table_info(${table})`)
+          .all() as Array<{ name: string }>;
+        if (!columns.some(({ name }) => name === "exchange_rates_json")) {
+          this.database.exec(`
+            ALTER TABLE ${table}
+            ADD COLUMN exchange_rates_json TEXT NOT NULL DEFAULT '[]'
+            CHECK (json_valid(exchange_rates_json));
+          `);
+        }
+      }
+      this.database
+        .prepare("UPDATE schema_metadata SET value = ? WHERE key = ?")
+        .run("7", "schema_version");
     });
   }
 
@@ -942,6 +1176,8 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
 
   private replaceState(state: DashboardState | BusinessDataState): void {
     this.database.exec(`
+      DELETE FROM daily_asset_source_trend_observations;
+      DELETE FROM daily_asset_trend_observations;
       DELETE FROM daily_asset_source_snapshots;
       DELETE FROM daily_asset_snapshots;
       DELETE FROM asset_cards;
@@ -954,7 +1190,10 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
     );
     state.assetCards.forEach((card, position) => this.insertCard(card, position));
     state.dailyAssetSnapshots.forEach((snapshot) =>
-      this.insertDailySnapshot(snapshot),
+      this.insertDailyBaseline(migrateDailyObservation(snapshot)),
+    );
+    state.dailyAssetTrendObservations.forEach((observation) =>
+      this.upsertDailyTrendObservation(migrateDailyObservation(observation)),
     );
   }
 
@@ -1034,24 +1273,30 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
       );
   }
 
-  private insertDailySnapshot(snapshot: DailyAssetSnapshot): boolean {
+  private insertDailyBaseline(snapshot: DailyAssetSnapshot): boolean {
     const inserted = this.database
       .prepare(`
         INSERT OR IGNORE INTO daily_asset_snapshots (
-          day, captured_at, complete, total_usd, total_cny
-        ) VALUES (?, ?, ?, ?, ?)
+          day, captured_at, complete, status, total_usd, total_cny, total_hkd,
+          exchange_rates_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `)
       .run(
         snapshot.day,
         snapshot.capturedAt,
         Number(snapshot.complete),
+        snapshot.status ?? (snapshot.complete ? "complete" : "incomplete"),
         snapshot.total.USD,
         snapshot.total.CNY,
+        snapshot.total.HKD ?? null,
+        JSON.stringify(snapshot.exchangeRates ?? []),
       ).changes > 0;
+    if (!inserted) return false;
     const statement = this.database.prepare(`
       INSERT OR IGNORE INTO daily_asset_source_snapshots (
-        day, source_id, label, kind, captured_at, complete, total_usd, total_cny
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        day, source_id, label, kind, captured_at, complete, status, total_usd, total_cny,
+        total_hkd
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     for (const source of snapshot.sources) {
       statement.run(
@@ -1061,49 +1306,135 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
         source.kind,
         source.capturedAt,
         Number(source.complete),
+        source.status ?? (source.complete ? "complete" : "incomplete"),
         source.total.USD,
         source.total.CNY,
+        source.total.HKD ?? null,
       );
     }
-    this.recalculateDailySnapshot(snapshot.day);
     return inserted;
   }
 
-  private recalculateDailySnapshot(day: string): void {
-    const sources = this.dailySourceRows(day);
+  private upsertDailyTrendObservation(
+    snapshot: DailyAssetTrendObservation,
+  ): void {
+    this.database
+      .prepare(`
+        INSERT INTO daily_asset_trend_observations (
+          day, captured_at, complete, status, total_usd, total_cny, total_hkd,
+          exchange_rates_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(day) DO UPDATE SET
+          captured_at = excluded.captured_at,
+          complete = excluded.complete,
+          status = excluded.status,
+          total_usd = excluded.total_usd,
+          total_cny = excluded.total_cny,
+          total_hkd = excluded.total_hkd,
+          exchange_rates_json = excluded.exchange_rates_json
+      `)
+      .run(
+        snapshot.day,
+        snapshot.capturedAt,
+        Number(snapshot.complete),
+        snapshot.status ?? (snapshot.complete ? "complete" : "incomplete"),
+        snapshot.total.USD,
+        snapshot.total.CNY,
+        snapshot.total.HKD ?? null,
+        JSON.stringify(snapshot.exchangeRates ?? []),
+      );
+    const statement = this.database.prepare(`
+      INSERT INTO daily_asset_source_trend_observations (
+        day, source_id, label, kind, captured_at, complete, status, total_usd, total_cny,
+        total_hkd
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(day, source_id) DO UPDATE SET
+        label = excluded.label,
+        kind = excluded.kind,
+        captured_at = excluded.captured_at,
+        complete = excluded.complete,
+        status = excluded.status,
+        total_usd = excluded.total_usd,
+        total_cny = excluded.total_cny,
+        total_hkd = excluded.total_hkd
+    `);
+    for (const source of snapshot.sources) {
+      statement.run(
+        snapshot.day,
+        source.sourceId,
+        source.label,
+        source.kind,
+        source.capturedAt,
+        Number(source.complete),
+        source.status ?? (source.complete ? "complete" : "incomplete"),
+        source.total.USD,
+        source.total.CNY,
+        source.total.HKD ?? null,
+      );
+    }
+    this.recalculateDailyTrendObservation(snapshot.day);
+  }
+
+  private recalculateDailySnapshot(
+    day: string,
+    tables: {
+      snapshot: "daily_asset_snapshots" | "daily_asset_trend_observations";
+      source: "daily_asset_source_snapshots" | "daily_asset_source_trend_observations";
+    },
+  ): void {
+    const sources = this.dailySourceRows(day, tables.source);
     if (sources.length === 0) {
-      this.database.prepare("DELETE FROM daily_asset_snapshots WHERE day = ?").run(day);
+      this.database.prepare(`DELETE FROM ${tables.snapshot} WHERE day = ?`).run(day);
       return;
     }
-    const totals = (column: "total_usd" | "total_cny") => {
+    const totals = (column: "total_usd" | "total_cny" | "total_hkd") => {
       const values = sources.flatMap((source) =>
         typeof source[column] === "string" ? [source[column]] : [],
       );
       return values.length > 0 ? decimalAdd(...values) : null;
     };
     const totalUsd = totals("total_usd");
+    const complete =
+      totalUsd !== null &&
+      totals("total_hkd") !== null &&
+      sources.every((source) => source.complete === 1);
+    const status = sources.some((source) => source.status === "expired")
+      ? "expired"
+      : complete
+        ? "complete"
+        : "incomplete";
     this.database
       .prepare(`
-        UPDATE daily_asset_snapshots
-        SET complete = ?, total_usd = ?, total_cny = ?
+        UPDATE ${tables.snapshot}
+        SET complete = ?, status = ?, total_usd = ?, total_cny = ?, total_hkd = ?
         WHERE day = ?
       `)
       .run(
-        Number(
-          totalUsd !== null &&
-            sources.every((source) => source.complete === 1),
-        ),
+        Number(complete),
+        status,
         totalUsd,
         totals("total_cny"),
+        totals("total_hkd"),
         day,
       );
   }
 
-  private dailySourceRows(day: string): SqliteRow[] {
+  private recalculateDailyTrendObservation(day: string): void {
+    this.recalculateDailySnapshot(day, {
+      snapshot: "daily_asset_trend_observations",
+      source: "daily_asset_source_trend_observations",
+    });
+  }
+
+  private dailySourceRows(
+    day: string,
+    table = "daily_asset_source_snapshots",
+  ): SqliteRow[] {
     return this.database
       .prepare(`
-        SELECT source_id, label, kind, captured_at, complete, total_usd, total_cny
-        FROM daily_asset_source_snapshots
+        SELECT source_id, label, kind, captured_at, complete, status, total_usd, total_cny,
+          total_hkd
+        FROM ${table}
         WHERE day = ?
         ORDER BY rowid
       `)
@@ -1179,26 +1510,52 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
   }
 
   private listDailyAssetSnapshotsSync(): DailyAssetSnapshot[] {
+    return this.listDailyObservationsSync(
+      "daily_asset_snapshots",
+      "daily_asset_source_snapshots",
+    );
+  }
+
+  private listDailyAssetTrendObservationsSync(): DailyAssetTrendObservation[] {
+    return this.listDailyObservationsSync(
+      "daily_asset_trend_observations",
+      "daily_asset_source_trend_observations",
+    );
+  }
+
+  private listDailyObservationsSync(
+    snapshotTable: "daily_asset_snapshots" | "daily_asset_trend_observations",
+    sourceTable:
+      | "daily_asset_source_snapshots"
+      | "daily_asset_source_trend_observations",
+  ): DailyAssetSnapshot[] {
     const rows = this.database
-      .prepare("SELECT * FROM daily_asset_snapshots ORDER BY day")
+      .prepare(`SELECT * FROM ${snapshotTable} ORDER BY day`)
       .all() as SqliteRow[];
-    return rows.map((row) => ({
+    return rows.map((row) => migrateDailyObservation({
       day: row.day as string,
       capturedAt: row.captured_at as string,
       complete: row.complete === 1,
+      status: row.status as "complete" | "incomplete" | "expired",
       total: {
         USD: row.total_usd as string | null,
         CNY: row.total_cny as string | null,
+        HKD: row.total_hkd as string | null,
       },
-      sources: this.dailySourceRows(row.day as string).map((source) => ({
+      exchangeRates: JSON.parse(
+        (row.exchange_rates_json as string | null) ?? "[]",
+      ),
+      sources: this.dailySourceRows(row.day as string, sourceTable).map((source) => ({
         sourceId: source.source_id as string,
         label: source.label as string,
         kind: source.kind as string,
         capturedAt: source.captured_at as string,
         complete: source.complete === 1,
+        status: source.status as "complete" | "incomplete" | "expired",
         total: {
           USD: source.total_usd as string | null,
           CNY: source.total_cny as string | null,
+          HKD: source.total_hkd as string | null,
         },
       })),
     }));
@@ -1275,6 +1632,10 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
     return this.listDailyAssetSnapshotsSync();
   }
 
+  async listDailyAssetTrendObservations(): Promise<DailyAssetTrendObservation[]> {
+    return this.listDailyAssetTrendObservationsSync();
+  }
+
   async validateBusinessData(state: BusinessDataState): Promise<void> {
     this.database.exec("BEGIN IMMEDIATE");
     try {
@@ -1301,7 +1662,38 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
   async createDailyAssetSnapshotIfAbsent(
     snapshot: DailyAssetSnapshot,
   ): Promise<boolean> {
-    return this.transaction(() => this.insertDailySnapshot(snapshot));
+    return this.transaction(() => {
+      const inserted = this.insertDailyBaseline(snapshot);
+      if (inserted) this.upsertDailyTrendObservation(snapshot);
+      return inserted;
+    });
+  }
+
+  async recordDailyAssetObservation(
+    snapshot: DailyAssetTrendObservation,
+    createBaseline: boolean,
+  ): Promise<void> {
+    this.transaction(() => {
+      const hasBaseline = this.database
+        .prepare("SELECT day FROM daily_asset_snapshots WHERE day = ?")
+        .get(snapshot.day) !== undefined;
+      if (!hasBaseline && createBaseline) this.insertDailyBaseline(snapshot);
+      const hasTrend = this.database
+        .prepare("SELECT day FROM daily_asset_trend_observations WHERE day = ?")
+        .get(snapshot.day) !== undefined;
+      if (hasTrend || createBaseline) {
+        const existing = hasTrend
+          ? this.listDailyAssetTrendObservationsSync().find(
+              ({ day }) => day === snapshot.day,
+            )
+          : undefined;
+        this.upsertDailyTrendObservation(
+          existing && !createBaseline
+            ? mergeDailyTrendObservation(existing, snapshot, true)
+            : snapshot,
+        );
+      }
+    });
   }
 
   async setAssetCardHidden(sourceId: string, hidden: boolean): Promise<void> {
@@ -1357,9 +1749,14 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
         )
         .get(sourceId) as SqliteRow | undefined;
       if (source === undefined) throw new Error("资产来源不存在");
-      const days = this.database
+      const baselineDays = this.database
         .prepare(
           "SELECT day FROM daily_asset_source_snapshots WHERE source_id = ?",
+        )
+        .all(sourceId) as SqliteRow[];
+      const trendDays = this.database
+        .prepare(
+          "SELECT day FROM daily_asset_source_trend_observations WHERE source_id = ?",
         )
         .all(sourceId) as SqliteRow[];
       this.database
@@ -1368,10 +1765,19 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
       this.database
         .prepare("DELETE FROM daily_asset_source_snapshots WHERE source_id = ?")
         .run(sourceId);
+      this.database
+        .prepare("DELETE FROM daily_asset_source_trend_observations WHERE source_id = ?")
+        .run(sourceId);
       this.database.prepare("DELETE FROM asset_sources WHERE id = ?").run(sourceId);
       this.compactPositions("asset_sources");
       this.compactPositions("asset_cards");
-      for (const { day } of days) this.recalculateDailySnapshot(day as string);
+      for (const { day } of baselineDays) {
+        this.recalculateDailySnapshot(day as string, {
+          snapshot: "daily_asset_snapshots",
+          source: "daily_asset_source_snapshots",
+        });
+      }
+      for (const { day } of trendDays) this.recalculateDailyTrendObservation(day as string);
       return typeof source.credential_reference === "string"
         ? source.credential_reference
         : null;
@@ -1438,9 +1844,15 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
       ).count as number;
       this.insertSource(connected.source, sourcePosition);
       this.insertCard(connected.card, cardPosition);
-      this.insertDailySnapshot(
-        buildDailyAssetSnapshot(this.listSourcesSync(), capturedAt),
+      const observation = buildDailyAssetSnapshot(
+        this.listSourcesSync(),
+        capturedAt,
       );
+      const hasBaseline = this.database
+        .prepare("SELECT day FROM daily_asset_snapshots WHERE day = ?")
+        .get(observation.day) !== undefined;
+      if (!hasBaseline) this.insertDailyBaseline(observation);
+      this.upsertDailyTrendObservation(observation);
     });
   }
 }
@@ -1596,8 +2008,14 @@ class DatabaseAssetSources implements AssetSources {
 class DatabaseDailyAssetSnapshots implements DailyAssetSnapshots {
   constructor(private readonly database: DashboardDatabase) {}
   list() { return this.database.listDailyAssetSnapshots(); }
+  listTrendObservations() {
+    return this.database.listDailyAssetTrendObservations();
+  }
   createIfAbsent(snapshot: DailyAssetSnapshot) {
     return this.database.createDailyAssetSnapshotIfAbsent(snapshot);
+  }
+  record(snapshot: DailyAssetTrendObservation, createBaseline: boolean) {
+    return this.database.recordDailyAssetObservation(snapshot, createBaseline);
   }
 }
 

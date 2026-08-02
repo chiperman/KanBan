@@ -1,4 +1,4 @@
-import { decimalCompare } from "@/domain/decimal";
+import { decimalAdd, decimalCompare } from "@/domain/decimal";
 import {
   buildTotalValuation,
   holdingMakesTotalIncomplete,
@@ -8,6 +8,7 @@ import type {
   AssetSourceSummary,
   DailyAssetSnapshot,
   DailyAssetSourceSnapshot,
+  DailyAssetTrendObservation,
 } from "@/server/ports";
 
 const SHANGHAI_TIME_ZONE = "Asia/Shanghai";
@@ -28,8 +29,15 @@ export function shanghaiDay(value: Date | string): string {
 function sourceValue(
   source: AssetSourceSummary,
   currency: ReportingCurrency,
+  exchangeRates: AssetSourceSummary["snapshot"]["exchangeRates"],
 ): string | null {
-  const valuation = buildTotalValuation([source], currency, "source");
+  const valuation = buildTotalValuation([{
+    ...source,
+    snapshot: {
+      ...source.snapshot,
+      exchangeRates,
+    },
+  }], currency, "source");
   const hasKnownValue = valuation.groups.some(
     (group) => group.key === source.id && group.amount !== null,
   );
@@ -45,27 +53,43 @@ function sourceValue(
 function sourceSnapshot(
   source: AssetSourceSummary,
   capturedAt: string,
+  exchangeRates: AssetSourceSummary["snapshot"]["exchangeRates"],
 ): DailyAssetSourceSnapshot {
-  const unvalued = source.snapshot.holdings.some(
-    holdingMakesTotalIncomplete,
-  );
-  const total = {
-    USD: sourceValue(source, "USD"),
-    CNY: sourceValue(source, "CNY"),
-    HKD: sourceValue(source, "HKD"),
+  const sourceWithSharedRates = {
+    ...source,
+    snapshot: {
+      ...source.snapshot,
+      exchangeRates,
+    },
   };
+  const total = {
+    USD: sourceValue(source, "USD", exchangeRates),
+    CNY: sourceValue(source, "CNY", exchangeRates),
+    HKD: sourceValue(source, "HKD", exchangeRates),
+  };
+  const valuation = buildTotalValuation(
+    [sourceWithSharedRates],
+    "USD",
+    "source",
+  );
+  const complete =
+    source.sync.status === "current" &&
+    !valuation.incomplete &&
+    total.USD !== null &&
+    total.HKD !== null;
   return {
     sourceId: source.id,
     label: source.label,
     kind: source.kind,
-    capturedAt,
-    complete:
-      source.sync.status === "current" &&
-      (source.snapshot.coverage === undefined ||
-        source.snapshot.coverage.status === "complete") &&
-      !unvalued &&
-      total.USD !== null &&
-      total.HKD !== null,
+    capturedAt: source.sync.status === "expired"
+      ? source.snapshot.syncedAt
+      : capturedAt,
+    complete,
+    status: source.sync.status === "expired"
+      ? "expired"
+      : complete
+        ? "complete"
+        : "incomplete",
     total,
   };
 }
@@ -85,23 +109,74 @@ export function buildDailyAssetSnapshot(
   sources: AssetSourceSummary[],
   capturedAt: string,
 ): DailyAssetSnapshot {
+  const exchangeRates = sources.flatMap((source) => source.snapshot.exchangeRates);
   const sourceSnapshots = sources.map((source) =>
-    sourceSnapshot(source, capturedAt),
+    sourceSnapshot(source, capturedAt, exchangeRates),
   );
   const total = {
     USD: totalValue(sources, "USD"),
     CNY: totalValue(sources, "CNY"),
     HKD: totalValue(sources, "HKD"),
   };
+  const complete =
+    sourceSnapshots.length > 0 &&
+    sourceSnapshots.every((source) => source.complete) &&
+    total.USD !== null &&
+    total.HKD !== null;
   return {
     day: shanghaiDay(capturedAt),
     capturedAt,
-    complete:
-      sourceSnapshots.length > 0 &&
-      sourceSnapshots.every((source) => source.complete) &&
-      total.USD !== null &&
-      total.HKD !== null,
+    exchangeRates,
+    complete,
+    status: sourceSnapshots.some((source) => source.status === "expired")
+      ? "expired"
+      : complete
+        ? "complete"
+        : "incomplete",
     total,
     sources: sourceSnapshots,
+  };
+}
+
+export function mergeDailyTrendObservation(
+  previous: DailyAssetTrendObservation,
+  next: DailyAssetTrendObservation,
+  preserveObservationCapturedAt: boolean,
+): DailyAssetTrendObservation {
+  const bySourceId = new Map(
+    previous.sources.map((source) => [source.sourceId, source]),
+  );
+  for (const source of next.sources) {
+    const previousSource = bySourceId.get(source.sourceId);
+    bySourceId.set(
+      source.sourceId,
+      preserveObservationCapturedAt && previousSource
+        ? { ...source, capturedAt: previousSource.capturedAt }
+        : source,
+    );
+  }
+  const sources = [...bySourceId.values()];
+  const sum = (currency: "USD" | "CNY" | "HKD") => {
+    const values = sources.flatMap((source) => source.total[currency] ?? []);
+    return values.length > 0 ? decimalAdd(...values) : null;
+  };
+  const total = { USD: sum("USD"), CNY: sum("CNY"), HKD: sum("HKD") };
+  const complete =
+    total.USD !== null &&
+    total.HKD !== null &&
+    sources.every((source) => source.complete);
+  return {
+    ...next,
+    capturedAt: preserveObservationCapturedAt
+      ? previous.capturedAt
+      : next.capturedAt,
+    sources,
+    total,
+    complete,
+    status: sources.some((source) => source.status === "expired")
+      ? "expired"
+      : complete
+        ? "complete"
+        : "incomplete",
   };
 }

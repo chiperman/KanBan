@@ -9,8 +9,14 @@ import {
 } from "react";
 
 import { assetSourceDefaultDisplayName } from "@/domain/asset-source-display-name";
+import { shanghaiDay } from "@/domain/daily-asset-snapshots";
+import type {
+  Card,
+  CardSpan,
+  DailyAssetSnapshot,
+  DailyAssetTrendObservation,
+} from "@/server/ports";
 import type { ReportingCurrency } from "@/domain/valuation";
-import type { Card, CardSpan, DailyAssetSnapshot } from "@/server/ports";
 import { AssetSourceFlow } from "@/ui/asset-source-flow";
 import { AssetRefreshControls } from "@/ui/asset-refresh-controls";
 import {
@@ -27,7 +33,11 @@ import {
   PROFIT_COLOR_SCHEME_STORAGE_KEY,
   type ProfitColorScheme,
 } from "@/ui/profit-color-scheme";
-import { TotalAssetOverview } from "@/ui/total-asset-overview";
+import {
+  TREND_RANGE_STORAGE_KEY,
+  TotalAssetOverview,
+  type TrendRange,
+} from "@/ui/total-asset-overview";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeDialog } from "@/ui/vibe/vibe-dialog";
 import { VibeField } from "@/ui/vibe/vibe-field";
@@ -140,17 +150,20 @@ export function OwnerDashboard({
   cards,
   assetSources,
   dailyAssetSnapshots,
+  dailyAssetTrendObservations,
   currentDay,
 }: {
   cards: Card[];
   assetSources: AssetSourceView[];
   dailyAssetSnapshots: DailyAssetSnapshot[];
+  dailyAssetTrendObservations: DailyAssetTrendObservation[];
   currentDay: string;
 }) {
   const [error, setError] = useState("");
   const [showSensitiveInfo, setShowSensitiveInfo] = useState(true);
   const [reportingCurrency, setReportingCurrency] =
     useState<ReportingCurrency>("USD");
+  const [trendRange, setTrendRange] = useState<TrendRange>("30d");
   const [profitColorScheme, setProfitColorScheme] =
     useState<ProfitColorScheme>(DEFAULT_PROFIT_COLOR_SCHEME);
   const [displayCards, setDisplayCards] = useState(cards);
@@ -223,9 +236,27 @@ export function OwnerDashboard({
     }
   }, []);
 
+  useEffect(() => {
+    const savedRange = window.localStorage.getItem(TREND_RANGE_STORAGE_KEY);
+    if (
+      savedRange === "7d" ||
+      savedRange === "30d" ||
+      savedRange === "90d" ||
+      savedRange === "1y" ||
+      savedRange === "all"
+    ) {
+      setTrendRange(savedRange);
+    }
+  }, []);
+
   function changeReportingCurrency(currency: ReportingCurrency) {
     setReportingCurrency(currency);
     window.localStorage.setItem("reporting-currency", currency);
+  }
+
+  function changeTrendRange(range: TrendRange) {
+    setTrendRange(range);
+    window.localStorage.setItem(TREND_RANGE_STORAGE_KEY, range);
   }
 
   useEffect(() => {
@@ -506,9 +537,11 @@ export function OwnerDashboard({
     return source ? (
       <AssetSourceCard
         source={source}
-        history={dailyAssetSnapshots}
-        reportingCurrency={reportingCurrency}
+        history={dailyAssetTrendObservations}
         reportingExchangeRates={reportingExchangeRates}
+        reportingCurrency={reportingCurrency}
+        trendRange={trendRange}
+        currentDay={currentDay}
         profitColorScheme={profitColorScheme}
         showSensitiveInfo={showSensitiveInfo}
       />
@@ -713,7 +746,10 @@ export function OwnerDashboard({
             sources={assetSources}
             currency={reportingCurrency}
             onCurrencyChange={changeReportingCurrency}
-            history={dailyAssetSnapshots}
+            trendRange={trendRange}
+            onTrendRangeChange={changeTrendRange}
+            baselines={dailyAssetSnapshots}
+            history={dailyAssetTrendObservations}
             currentDay={currentDay}
             showSensitiveInfo={showSensitiveInfo}
           />

@@ -53,7 +53,7 @@ test("首次启动完整导入 JSON 并保留私有备份", async ({ request }) 
     }),
     dailySnapshot: expect.objectContaining({
       day: "2026-07-27",
-      total: { USD: "12.5", CNY: "90" },
+      total: { USD: "12.5", CNY: "90", HKD: null },
       sourceIds: ["legacy-source"],
     }),
     databaseMode: "0600",
@@ -69,11 +69,77 @@ test("SQLite schema v2 自动迁移并持久化 Binance 覆盖证据", async ({ 
 
   expect(response.ok()).toBeTruthy();
   await expect(response.json()).resolves.toEqual({
-    schemaVersion: "4",
+    schemaVersion: "7",
     coverageColumn: true,
     displayNameColumn: true,
     coverageStatus: "partial",
     unexplainedValue: { amount: "3", currency: "USD" },
+  });
+});
+
+test("SQLite schema v4 升级后分离日初基准与每日趋势观测并跨重启保留", async ({
+  request,
+}) => {
+  const response = await request.post(
+    "/test-doubles/sqlite-business-data-persistence?action=schema-v4-trend-observation-migration",
+  );
+
+  expect(response.ok()).toBeTruthy();
+  await expect(response.json()).resolves.toEqual({
+    schemaVersion: "7",
+    migratedTrend: {
+      capturedAt: "2026-07-28T00:30:00.000Z",
+      complete: false,
+      total: { USD: "10", CNY: "72", HKD: null },
+    },
+    baseline: {
+      capturedAt: "2026-07-28T00:30:00.000Z",
+      complete: false,
+      total: { USD: "10", CNY: "72", HKD: null },
+    },
+    trendAfterSuccess: {
+      capturedAt: "2026-07-28T02:30:00.000Z",
+      complete: false,
+      total: { USD: "20", CNY: "144", HKD: null },
+    },
+    trendAfterFailureAndRestart: {
+      capturedAt: "2026-07-28T02:30:00.000Z",
+      complete: false,
+      total: { USD: "20", CNY: "144", HKD: null },
+      source: {
+        capturedAt: "2026-07-28T02:30:00.000Z",
+        complete: false,
+        total: { USD: "20", CNY: "144", HKD: null },
+      },
+    },
+  });
+});
+
+test("SQLite schema v6 升级后持久化 HKD 金额与观测时汇率", async ({
+  request,
+}) => {
+  const response = await request.post(
+    "/test-doubles/sqlite-business-data-persistence?action=schema-v6-hkd-fx-migration",
+  );
+
+  expect(response.ok()).toBeTruthy();
+  await expect(response.json()).resolves.toEqual({
+    schemaVersion: "8",
+    hkdColumns: true,
+    baseline: {
+      total: { USD: "10", CNY: "72", HKD: "78" },
+      exchangeRates: [
+        { baseCurrency: "USD", quoteCurrency: "CNY", rate: "7.2" },
+        { baseCurrency: "HKD", quoteCurrency: "USD", rate: "0.1282051282051282" },
+      ],
+    },
+    trend: {
+      total: { USD: "11", CNY: "79.2", HKD: "85.8" },
+      exchangeRates: [
+        { baseCurrency: "USD", quoteCurrency: "CNY", rate: "7.2" },
+        { baseCurrency: "USD", quoteCurrency: "HKD", rate: "7.8" },
+      ],
+    },
   });
 });
 
@@ -166,7 +232,8 @@ test("并发连接不会丢失来源且 SQLite 不含凭证正文", async ({ req
     accountIds: ["concurrent-one", "concurrent-two"],
     cardCount: 2,
     dailySnapshotCount: 1,
-    dailySourceCount: 2,
+    dailySourceCount: 1,
+    trendSourceCount: 2,
     lockContentionHandled: true,
     rawSecretLeaked: false,
   });
@@ -181,8 +248,12 @@ test("每日快照按上海日期和来源保持幂等", async ({ request }) => 
   await expect(response.json()).resolves.toEqual({
     results: [true, false, false],
     days: ["2026-07-28"],
-    sourceIds: ["source-one", "source-two"],
-    total: { USD: "30", CNY: "216" },
+    sourceIds: ["source-one"],
+    total: { USD: "10", CNY: "72", HKD: null },
+    trend: {
+      sourceIds: ["source-one", "source-two"],
+      total: { USD: "30", CNY: "216", HKD: null },
+    },
   });
 });
 
@@ -198,12 +269,14 @@ test("断开保留快照，永久删除清理全部来源业务数据", async ({
       hidden: true,
       sourceCount: 1,
       dailySourceCount: 1,
+      trendSourceCount: 1,
       secretRemoved: true,
     },
     deleted: {
       sourceCount: 0,
       cardCount: 0,
       dailySnapshotCount: 0,
+      dailyTrendObservationCount: 0,
     },
   });
 });

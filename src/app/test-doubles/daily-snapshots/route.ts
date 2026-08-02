@@ -48,6 +48,12 @@ function sourceFixture(input: {
         rate: input.rate ?? "7.2",
         source: "每日快照确定性汇率",
         observedAt: INITIAL_AT,
+      }, {
+        baseCurrency: "USD",
+        quoteCurrency: "HKD",
+        rate: "7.8",
+        source: "每日快照确定性港币汇率",
+        observedAt: INITIAL_AT,
       }],
       syncedAt: INITIAL_AT,
     }),
@@ -76,6 +82,7 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as {
     action?: unknown;
     iso?: unknown;
+    rate?: unknown;
   } | null;
   const services = getTestServices();
 
@@ -96,13 +103,36 @@ export async function POST(request: Request) {
           new Date(snapshot.capturedAt).getTime() + 1_000,
         ).toISOString(),
       });
+      const trendCapturedAt = new Date(
+        new Date(snapshot.capturedAt).getTime() + 60_000,
+      ).toISOString();
+      await database.recordDailyAssetObservation(
+        {
+          ...snapshot,
+          capturedAt: trendCapturedAt,
+          total: { ...snapshot.total, USD: "303" },
+          sources: snapshot.sources.map((source, index) => ({
+            ...source,
+            capturedAt: trendCapturedAt,
+            total: {
+              ...source.total,
+              USD: index === 0 ? "101" : "202",
+            },
+          })),
+        },
+        true,
+      );
       const reloaded = new FileDashboardDatabase(dashboardPath, legacyCardsPath);
-      const persisted = await reloaded.listDailyAssetSnapshots();
+      const [baseline] = await reloaded.listDailyAssetSnapshots();
+      const [trend] = await reloaded.listDailyAssetTrendObservations();
       return Response.json({
         first,
         duplicate,
-        count: persisted.length,
-        capturedAt: persisted[0]?.capturedAt,
+        count: (await reloaded.listDailyAssetSnapshots()).length,
+        baselineCapturedAt: baseline?.capturedAt,
+        trendCapturedAt: trend?.capturedAt,
+        baselineUsd: baseline?.total.USD,
+        trendUsd: trend?.total.USD,
       });
     } finally {
       await rm(root, { recursive: true, force: true });
@@ -127,16 +157,280 @@ export async function POST(request: Request) {
     return Response.json({ ok: true });
   }
 
+  if (body?.action === "seed-total-trend-history") {
+    const sourceList = await services.assetSources.list();
+    const observations = [
+      {
+        day: "2026-03-01",
+        capturedAt: "2026-03-01T04:00:00.000Z",
+        totals: [
+          { USD: "30", CNY: "216", HKD: "234" },
+          { USD: "70", CNY: "504", HKD: "546" },
+        ],
+      },
+      {
+        day: "2026-03-02",
+        capturedAt: "2026-03-02T04:00:00.000Z",
+        totals: [
+          { USD: "40", CNY: "288", HKD: "312" },
+          { USD: "80", CNY: "576", HKD: "624" },
+        ],
+      },
+      {
+        day: "2026-03-04",
+        capturedAt: "2026-03-04T04:00:00.000Z",
+        totals: [
+          { USD: "50", CNY: "360", HKD: "390" },
+          { USD: "60", CNY: "432", HKD: "468" },
+        ],
+      },
+    ] as const;
+    for (const observation of observations) {
+      const base = buildDailyAssetSnapshot(sourceList, observation.capturedAt);
+      await services.dailyAssetSnapshots.record(
+        {
+          ...base,
+          day: observation.day,
+          capturedAt: observation.capturedAt,
+          exchangeRates: (base.exchangeRates ?? []).map((rate) => ({
+            ...rate,
+            observedAt: observation.capturedAt,
+          })),
+          total: {
+            USD: String(
+              observation.totals.reduce(
+                (sum, source) => sum + Number(source.USD),
+                0,
+              ),
+            ),
+            CNY: String(
+              observation.totals.reduce(
+                (sum, source) => sum + Number(source.CNY),
+                0,
+              ),
+            ),
+            HKD: String(
+              observation.totals.reduce(
+                (sum, source) => sum + Number(source.HKD),
+                0,
+              ),
+            ),
+          },
+          sources: base.sources.map((source, index) => ({
+            ...source,
+            capturedAt: observation.capturedAt,
+            total: observation.totals[index] ?? source.total,
+          })),
+        },
+        true,
+      );
+    }
+    services.clock.set("2026-03-04T12:00:00.000Z");
+    await services.assetSources.replaceAll(sourceList.map((source) => ({
+      ...source,
+      lifecycle: "disconnected",
+      credentialReference: null,
+    })));
+    services.assetSynchronization.reset("all-failure");
+    return Response.json({ ok: true });
+  }
+
+  if (body?.action === "disable-automatic-refresh") {
+    await services.assetSources.replaceAll(
+      (await services.assetSources.list()).map((source) => ({
+        ...source,
+        lifecycle: "disconnected",
+        credentialReference: null,
+      })),
+    );
+    return Response.json({ ok: true });
+  }
+
+  if (body?.action === "seed-trend-range-history") {
+    const sourceList = await services.assetSources.list();
+    const start = new Date("2026-02-01T04:00:00.000Z");
+    for (let index = 0; index < 35; index += 1) {
+      const capturedAt = new Date(start);
+      capturedAt.setUTCDate(start.getUTCDate() + index);
+      const capturedAtIso = capturedAt.toISOString();
+      const alphaUsd = 40 + index;
+      const betaUsd = 60;
+      const sourceTotals = [
+        {
+          USD: String(alphaUsd),
+          CNY: String(alphaUsd * 7.2),
+          HKD: String(alphaUsd * 7.8),
+        },
+        { USD: String(betaUsd), CNY: "432", HKD: "468" },
+      ];
+      const base = buildDailyAssetSnapshot(sourceList, capturedAtIso);
+      await services.dailyAssetSnapshots.record(
+        {
+          ...base,
+          capturedAt: capturedAtIso,
+          exchangeRates: (base.exchangeRates ?? []).map((rate) => ({
+            ...rate,
+            observedAt: capturedAtIso,
+          })),
+          total: {
+            USD: String(alphaUsd + betaUsd),
+            CNY: String((alphaUsd + betaUsd) * 7.2),
+            HKD: String((alphaUsd + betaUsd) * 7.8),
+          },
+          sources: base.sources.map((source, sourceIndex) => ({
+            ...source,
+            capturedAt: capturedAtIso,
+            total: sourceTotals[sourceIndex] ?? source.total,
+          })),
+        },
+        true,
+      );
+    }
+    services.clock.set("2026-03-07T12:00:00.000Z");
+    await services.assetSources.replaceAll(sourceList.map((source) => ({
+      ...source,
+      lifecycle: "disconnected",
+      credentialReference: null,
+    })));
+    services.assetSynchronization.reset("all-failure");
+    return Response.json({ ok: true });
+  }
+
+  if (body?.action === "seed-source-trend-gap") {
+    const sourceList = await services.assetSources.list();
+    const observations = [
+      { day: "2026-03-01", alpha: 100, beta: 200 },
+      { day: "2026-03-02", alpha: 120, beta: 200 },
+      { day: "2026-03-03", alpha: null, beta: 350 },
+      { day: "2026-03-04", alpha: 110, beta: 250 },
+    ] as const;
+    for (const observation of observations) {
+      const capturedAt = `${observation.day}T04:00:00.000Z`;
+      const base = buildDailyAssetSnapshot(sourceList, capturedAt);
+      const sourceAmounts = [observation.alpha, observation.beta];
+      const sources = base.sources.flatMap((source, index) => {
+        const usd = sourceAmounts[index];
+        if (usd === null || usd === undefined) return [];
+        return [{
+          ...source,
+          capturedAt,
+          total: {
+            USD: String(usd),
+            CNY: String(usd * 7.2),
+            HKD: String(usd * 7.8),
+          },
+        }];
+      });
+      const totalUsd = sources.reduce(
+        (sum, source) => sum + Number(source.total.USD),
+        0,
+      );
+      await services.dailyAssetSnapshots.record(
+        {
+          ...base,
+          day: observation.day,
+          capturedAt,
+          exchangeRates: (base.exchangeRates ?? []).map((rate) => ({
+            ...rate,
+            observedAt: capturedAt,
+          })),
+          total: {
+            USD: String(totalUsd),
+            CNY: String(totalUsd * 7.2),
+            HKD: String(totalUsd * 7.8),
+          },
+          sources,
+        },
+        true,
+      );
+    }
+    services.clock.set("2026-03-04T12:00:00.000Z");
+    await services.assetSources.replaceAll(sourceList.map((source) => ({
+      ...source,
+      lifecycle: "disconnected",
+      credentialReference: null,
+    })));
+    services.assetSynchronization.reset("all-failure");
+    return Response.json({ ok: true });
+  }
+
   if (body?.action === "set-time" && typeof body.iso === "string") {
     services.clock.set(body.iso);
+    return Response.json({ ok: true });
+  }
+  if (body?.action === "remove-beta-cross-currency-rates") {
+    await services.assetSources.replaceAll(
+      (await services.assetSources.list()).map((source) =>
+        source.id !== "source-beta"
+          ? source
+          : {
+              ...source,
+              snapshot: {
+                ...source.snapshot,
+                exchangeRates: [],
+              },
+            }
+      ),
+    );
+    return Response.json({ ok: true });
+  }
+  if (body?.action === "record-current-observation") {
+    const capturedAt = services.clock.now().toISOString();
+    await services.dailyAssetSnapshots.record(
+      buildDailyAssetSnapshot(await services.assetSources.list(), capturedAt),
+      true,
+    );
     return Response.json({ ok: true });
   }
   if (body?.action === "fail-all") {
     services.assetSynchronization.reset("all-failure");
     return Response.json({ ok: true });
   }
+  if (body?.action === "partial-failure") {
+    services.assetSynchronization.reset("partial-failure");
+    return Response.json({ ok: true });
+  }
   if (body?.action === "recover") {
     services.assetSynchronization.reset("schedule");
+    return Response.json({ ok: true });
+  }
+  if (body?.action === "remove-hkd-rate") {
+    await services.assetSources.replaceAll(
+      (await services.assetSources.list()).map((source) => ({
+        ...source,
+        snapshot: {
+          ...source.snapshot,
+          exchangeRates: source.snapshot.exchangeRates.filter(
+            (rate) =>
+              !(
+                (rate.baseCurrency === "USD" && rate.quoteCurrency === "HKD") ||
+                (rate.baseCurrency === "HKD" && rate.quoteCurrency === "USD")
+              ),
+          ),
+        },
+      })),
+    );
+    return Response.json({ ok: true });
+  }
+  if (body?.action === "set-hkd-rate" && typeof body.rate === "string") {
+    const hkdRate = body.rate;
+    await services.assetSources.replaceAll(
+      (await services.assetSources.list()).map((source) => ({
+        ...source,
+        snapshot: {
+          ...source.snapshot,
+          exchangeRates: source.snapshot.exchangeRates.map((rate) =>
+            rate.baseCurrency === "USD" && rate.quoteCurrency === "HKD"
+              ? {
+                  ...rate,
+                  rate: hkdRate,
+                  observedAt: services.clock.now().toISOString(),
+                }
+              : rate,
+          ),
+        },
+      })),
+    );
     return Response.json({ ok: true });
   }
   if (body?.action === "add-unvalued-source") {
@@ -167,6 +461,12 @@ export async function POST(request: Request) {
           quoteCurrency: "CNY",
           rate: "7.2",
           source: "每日快照确定性汇率",
+          observedAt: INITIAL_AT,
+        }, {
+          baseCurrency: "USD",
+          quoteCurrency: "HKD",
+          rate: "7.8",
+          source: "每日快照确定性港币汇率",
           observedAt: INITIAL_AT,
         }],
         syncedAt: INITIAL_AT,
@@ -254,5 +554,12 @@ export async function POST(request: Request) {
 
 export async function GET() {
   if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
-  return Response.json({ days: await getTestServices().dailyAssetSnapshots.list() });
+  const dailySnapshots = getTestServices().dailyAssetSnapshots;
+  const baselines = await dailySnapshots.list();
+  return Response.json({
+    /** 兼容旧测试与既有日初基准读取方。 */
+    days: baselines,
+    baselines,
+    trendObservations: await dailySnapshots.listTrendObservations(),
+  });
 }

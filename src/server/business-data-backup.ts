@@ -6,6 +6,7 @@ import type {
   Card,
   Clock,
   DailyAssetSnapshot,
+  DailyAssetTrendObservation,
 } from "@/server/ports";
 import {
   atomicWritePrivateFile,
@@ -46,6 +47,7 @@ export interface BusinessDataState {
   assetCards: Card[];
   assetSources: AssetSourceSummary[];
   dailyAssetSnapshots: DailyAssetSnapshot[];
+  dailyAssetTrendObservations: DailyAssetTrendObservation[];
 }
 
 export interface BackupRestorePreview {
@@ -74,6 +76,7 @@ export interface BusinessDataBackupStore {
   listAssetCards(): Promise<Card[]>;
   listSources(): Promise<AssetSourceSummary[]>;
   listDailyAssetSnapshots(): Promise<DailyAssetSnapshot[]>;
+  listDailyAssetTrendObservations(): Promise<DailyAssetTrendObservation[]>;
   validateBusinessData(state: BusinessDataState): Promise<void>;
   replaceBusinessData(state: BusinessDataState): Promise<void>;
 }
@@ -82,6 +85,7 @@ type BackupPayload = {
   assetCards: Card[];
   assetSources: Array<Omit<AssetSourceSummary, "credentialReference">>;
   dailyAssetSnapshots: DailyAssetSnapshot[];
+  dailyAssetTrendObservations: DailyAssetTrendObservation[];
 };
 
 type BackupDocument = {
@@ -188,7 +192,11 @@ function assertUnique(values: string[], label: string): void {
 function validateReferences(state: BusinessDataState): void {
   assertUnique(state.assetSources.map(({ id }) => id), "资产来源 ID 重复");
   assertUnique(state.assetCards.map(({ id }) => id), "资产卡片 ID 重复");
-  assertUnique(state.dailyAssetSnapshots.map(({ day }) => day), "资产快照日期重复");
+  assertUnique(state.dailyAssetSnapshots.map(({ day }) => day), "日初基准日期重复");
+  assertUnique(
+    state.dailyAssetTrendObservations.map(({ day }) => day),
+    "每日趋势观测日期重复",
+  );
   const sourceIds = new Set(state.assetSources.map(({ id }) => id));
   for (const card of state.assetCards) {
     if (card.sourceId !== undefined && !sourceIds.has(card.sourceId)) {
@@ -204,6 +212,19 @@ function validateReferences(state: BusinessDataState): void {
       if (!sourceIds.has(source.sourceId)) {
         throw new Error(
           `备份引用完整性失败: ${snapshot.day} 引用了不存在的来源 ${source.sourceId}`,
+        );
+      }
+    }
+  }
+  for (const observation of state.dailyAssetTrendObservations) {
+    assertUnique(
+      observation.sources.map(({ sourceId }) => sourceId),
+      `${observation.day} 的趋势来源观测重复`,
+    );
+    for (const source of observation.sources) {
+      if (!sourceIds.has(source.sourceId)) {
+        throw new Error(
+          `备份引用完整性失败: ${observation.day} 的趋势观测引用了不存在的来源 ${source.sourceId}`,
         );
       }
     }
@@ -250,6 +271,7 @@ function parseDocument(contents: string): BackupDocument {
         assetCards: legacy.data.cards,
         assetSources: legacy.data.sources,
         dailyAssetSnapshots: legacy.data.snapshots,
+        dailyAssetTrendObservations: legacy.data.snapshots,
       },
     };
   }
@@ -257,7 +279,13 @@ function parseDocument(contents: string): BackupDocument {
   assertArray(value.payload.assetCards, "payload.assetCards");
   assertArray(value.payload.assetSources, "payload.assetSources");
   assertArray(value.payload.dailyAssetSnapshots, "payload.dailyAssetSnapshots");
-  return value as unknown as BackupDocument;
+  const document = value as unknown as BackupDocument;
+  if (!Array.isArray(document.payload.dailyAssetTrendObservations)) {
+    document.payload.dailyAssetTrendObservations = structuredClone(
+      document.payload.dailyAssetSnapshots,
+    );
+  }
+  return document;
 }
 
 function restoredState(document: BackupDocument): BusinessDataState {
@@ -287,6 +315,7 @@ function restoredState(document: BackupDocument): BusinessDataState {
     assetCards: document.payload.assetCards,
     assetSources: sources,
     dailyAssetSnapshots: document.payload.dailyAssetSnapshots,
+    dailyAssetTrendObservations: document.payload.dailyAssetTrendObservations,
   };
   validateReferences(state);
   return state;
@@ -342,10 +371,11 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
   async exportBackup(fileName?: string) {
     const createdAt = this.clock.now().toISOString();
     const resolvedFileName = fileName ?? `asset-dashboard-${createdAt.replace(/[:.]/g, "-")}.json`;
-    const [assetCards, sources, dailyAssetSnapshots] = await Promise.all([
+    const [assetCards, sources, dailyAssetSnapshots, dailyAssetTrendObservations] = await Promise.all([
       this.store.listAssetCards(),
       this.store.listSources(),
       this.store.listDailyAssetSnapshots(),
+      this.store.listDailyAssetTrendObservations(),
     ]);
     const assetSources = sources.map(
       ({ credentialReference: _credentialReference, ...source }) => source,
@@ -354,7 +384,12 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
       format: BACKUP_FORMAT,
       formatVersion: BACKUP_FORMAT_VERSION,
       createdAt,
-      payload: { assetCards, assetSources, dailyAssetSnapshots },
+      payload: {
+        assetCards,
+        assetSources,
+        dailyAssetSnapshots,
+        dailyAssetTrendObservations,
+      },
     } satisfies Pick<BackupDocument, "format" | "formatVersion" | "createdAt" | "payload">;
     const checksum = checksumFor(base);
     const document: BackupDocument = {

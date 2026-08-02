@@ -213,6 +213,30 @@ function dailySnapshot(
   };
 }
 
+function dailyTrendObservation(
+  usd: string,
+  cny: string,
+  capturedAt: string,
+  complete: boolean,
+): DailyAssetSnapshot {
+  return {
+    day: "2026-07-28",
+    capturedAt,
+    complete,
+    total: { USD: usd, CNY: cny },
+    sources: [
+      {
+        sourceId: "trend-source",
+        label: "趋势来源",
+        kind: "test",
+        capturedAt,
+        complete,
+        total: { USD: usd, CNY: cny },
+      },
+    ],
+  };
+}
+
 function twoPartyBarrier(): () => Promise<void> {
   let arrivals = 0;
   let release!: () => void;
@@ -358,6 +382,8 @@ export async function POST(request: Request) {
     action !== "delete-middle-source" &&
     action !== "startup-failures" &&
     action !== "schema-v2-migration" &&
+    action !== "schema-v4-trend-observation-migration" &&
+    action !== "schema-v6-hkd-fx-migration" &&
     action !== "display-name-persistence" &&
     action !== "longbridge-option-read-upgrade"
   ) {
@@ -425,6 +451,93 @@ export async function POST(request: Request) {
       });
     }
 
+    if (action === "schema-v4-trend-observation-migration") {
+      await mkdir(dataDirectory, { recursive: true });
+      const databasePath = path.join(dataDirectory, "dashboard.sqlite");
+      const legacyDashboardPath = path.join(dataDirectory, "dashboard.json");
+      const legacyCardsPath = path.join(dataDirectory, "cards.json");
+      const first = new SqliteDashboardDatabase(
+        databasePath,
+        legacyDashboardPath,
+        legacyCardsPath,
+      );
+      const initial = dailyTrendObservation(
+        "10",
+        "72",
+        "2026-07-28T00:30:00.000Z",
+        true,
+      );
+      await first.createDailyAssetSnapshotIfAbsent(initial);
+
+      const downgrade = new DatabaseSync(databasePath);
+      downgrade.exec(`
+        DROP TABLE daily_asset_source_trend_observations;
+        DROP TABLE daily_asset_trend_observations;
+        UPDATE schema_metadata SET value = '4' WHERE key = 'schema_version';
+      `);
+      downgrade.close();
+
+      const migrated = new SqliteDashboardDatabase(
+        databasePath,
+        legacyDashboardPath,
+        legacyCardsPath,
+      );
+      const [migratedTrend] = await migrated.listDailyAssetTrendObservations();
+      await migrated.recordDailyAssetObservation(
+        dailyTrendObservation(
+          "20",
+          "144",
+          "2026-07-28T02:30:00.000Z",
+          true,
+        ),
+        true,
+      );
+      const [baseline] = await migrated.listDailyAssetSnapshots();
+      const [trendAfterSuccess] = await migrated.listDailyAssetTrendObservations();
+      await migrated.recordDailyAssetObservation(
+        dailyTrendObservation(
+          "20",
+          "144",
+          "2026-07-28T03:30:00.000Z",
+          false,
+        ),
+        false,
+      );
+
+      const restarted = new SqliteDashboardDatabase(
+        databasePath,
+        legacyDashboardPath,
+        legacyCardsPath,
+      );
+      const [trendAfterFailureAndRestart] =
+        await restarted.listDailyAssetTrendObservations();
+      const inspection = new DatabaseSync(databasePath, { readOnly: true });
+      const schemaVersion = inspection
+        .prepare("SELECT value FROM schema_metadata WHERE key = 'schema_version'")
+        .get() as { value: string };
+      inspection.close();
+      const observation = (snapshot: DailyAssetSnapshot) => ({
+        capturedAt: snapshot.capturedAt,
+        complete: snapshot.complete,
+        total: snapshot.total,
+      });
+      return Response.json({
+        schemaVersion: schemaVersion.value,
+        migratedTrend: observation(migratedTrend),
+        baseline: observation(baseline),
+        trendAfterSuccess: observation(trendAfterSuccess),
+        trendAfterFailureAndRestart: {
+          ...observation(trendAfterFailureAndRestart),
+          source: observation({
+            ...trendAfterFailureAndRestart,
+            total: trendAfterFailureAndRestart.sources[0].total,
+            capturedAt: trendAfterFailureAndRestart.sources[0].capturedAt,
+            complete: trendAfterFailureAndRestart.sources[0].complete,
+          }),
+        },
+      });
+    }
+
     if (action === "display-name-persistence") {
       const first = createProductionServices(dataDirectory);
       await first.secrets.get("startup-ready");
@@ -488,6 +601,127 @@ export async function POST(request: Request) {
         rawStatus: JSON.parse(raw.holdings_json)[0].valuation.status,
         readStatus: source.snapshot.holdings[0].valuation.status,
         total: source.snapshot.total,
+      });
+    }
+
+    if (action === "schema-v6-hkd-fx-migration") {
+      await mkdir(dataDirectory, { recursive: true });
+      const databasePath = path.join(dataDirectory, "dashboard.sqlite");
+      const legacyDashboardPath = path.join(dataDirectory, "dashboard.json");
+      const legacyCardsPath = path.join(dataDirectory, "cards.json");
+      new SqliteDashboardDatabase(
+        databasePath,
+        legacyDashboardPath,
+        legacyCardsPath,
+      );
+      const downgrade = new DatabaseSync(databasePath);
+      downgrade.exec(`
+        ALTER TABLE daily_asset_snapshots DROP COLUMN exchange_rates_json;
+        ALTER TABLE daily_asset_snapshots DROP COLUMN total_hkd;
+        ALTER TABLE daily_asset_source_snapshots DROP COLUMN total_hkd;
+        ALTER TABLE daily_asset_trend_observations DROP COLUMN exchange_rates_json;
+        ALTER TABLE daily_asset_trend_observations DROP COLUMN total_hkd;
+        ALTER TABLE daily_asset_source_trend_observations DROP COLUMN total_hkd;
+        UPDATE schema_metadata SET value = '6' WHERE key = 'schema_version';
+      `);
+      downgrade.close();
+
+      const database = new SqliteDashboardDatabase(
+        databasePath,
+        legacyDashboardPath,
+        legacyCardsPath,
+      );
+      const baseline = {
+        ...dailySnapshot("source-one", "10", "72"),
+        total: { USD: "10", CNY: "72", HKD: "78" },
+        exchangeRates: [{
+          baseCurrency: "USD",
+          quoteCurrency: "CNY",
+          rate: "7.2",
+          source: "基准人民币汇率",
+          observedAt: "2026-07-28T02:00:00.000Z",
+        }, {
+          baseCurrency: "HKD",
+          quoteCurrency: "USD",
+          rate: "0.1282051282051282",
+          source: "基准港币汇率",
+          observedAt: "2026-07-28T02:00:00.000Z",
+        }],
+        sources: [{
+          ...dailySnapshot("source-one", "10", "72").sources[0],
+          total: { USD: "10", CNY: "72", HKD: "78" },
+        }],
+      };
+      await database.createDailyAssetSnapshotIfAbsent(baseline);
+      const trend = {
+        ...baseline,
+        capturedAt: "2026-07-28T03:00:00.000Z",
+        total: { USD: "11", CNY: "79.2", HKD: "85.8" },
+        exchangeRates: [{
+          baseCurrency: "USD",
+          quoteCurrency: "CNY",
+          rate: "7.2",
+          source: "趋势人民币汇率",
+          observedAt: "2026-07-28T03:00:00.000Z",
+        }, {
+          baseCurrency: "USD",
+          quoteCurrency: "HKD",
+          rate: "7.8",
+          source: "趋势港币汇率",
+          observedAt: "2026-07-28T03:00:00.000Z",
+        }],
+        sources: [{
+          ...baseline.sources[0],
+          capturedAt: "2026-07-28T03:00:00.000Z",
+          total: { USD: "11", CNY: "79.2", HKD: "85.8" },
+        }],
+      };
+      await database.recordDailyAssetObservation(trend, true);
+      const reloaded = new SqliteDashboardDatabase(
+        databasePath,
+        legacyDashboardPath,
+        legacyCardsPath,
+      );
+      const inspection = new DatabaseSync(databasePath, { readOnly: true });
+      const hkdColumns = [
+        "daily_asset_snapshots",
+        "daily_asset_source_snapshots",
+        "daily_asset_trend_observations",
+        "daily_asset_source_trend_observations",
+      ].every((table) =>
+        (inspection.prepare(`PRAGMA table_info(${table})`).all() as Array<{
+          name: string;
+        }>).some(({ name }) => name === "total_hkd"),
+      );
+      const schemaVersion = inspection
+        .prepare("SELECT value FROM schema_metadata WHERE key = 'schema_version'")
+        .get() as { value: string };
+      inspection.close();
+      const [reloadedBaseline] = await reloaded.listDailyAssetSnapshots();
+      const [reloadedTrend] = await reloaded.listDailyAssetTrendObservations();
+      return Response.json({
+        schemaVersion: schemaVersion.value,
+        hkdColumns,
+        baseline: {
+          total: reloadedBaseline.total,
+          exchangeRates: reloadedBaseline.exchangeRates?.map(
+            ({ baseCurrency, quoteCurrency, rate }) => ({
+              baseCurrency,
+              quoteCurrency,
+              rate,
+            }),
+          ),
+        },
+        trend: {
+          total: reloadedTrend.total,
+          exchangeRates: reloadedTrend.exchangeRates?.map(
+            ({ baseCurrency, quoteCurrency, rate }) => ({
+              baseCurrency,
+              quoteCurrency,
+              rate,
+            }),
+          ),
+        },
       });
     }
 
@@ -686,11 +920,14 @@ export async function POST(request: Request) {
       const sources = await databases[0].listSources();
       const cards = await databases[0].listAssetCards();
       const dailySnapshots = await databases[0].listDailyAssetSnapshots();
+      const trendObservations =
+        await databases[0].listDailyAssetTrendObservations();
       return Response.json({
         accountIds: sources.map(({ accountId }) => accountId).sort(),
         cardCount: cards.length,
         dailySnapshotCount: dailySnapshots.length,
         dailySourceCount: dailySnapshots[0]?.sources.length ?? 0,
+        trendSourceCount: trendObservations[0]?.sources.length ?? 0,
         lockContentionHandled: await exerciseSqliteLockContention(databasePath),
         rawSecretLeaked: await sqliteFilesContain(dataDirectory, credentials),
       });
@@ -710,12 +947,22 @@ export async function POST(request: Request) {
           dailySnapshot("source-two", "20", "144"),
         ),
       ];
+      await services.dailyAssetSnapshots.record(
+        dailySnapshot("source-two", "20", "144"),
+        true,
+      );
       const snapshots = await services.dailyAssetSnapshots.list();
+      const trendObservations =
+        await services.dailyAssetSnapshots.listTrendObservations();
       return Response.json({
         results,
         days: snapshots.map(({ day }) => day),
         sourceIds: snapshots[0].sources.map(({ sourceId }) => sourceId),
         total: snapshots[0].total,
+        trend: {
+          sourceIds: trendObservations[0].sources.map(({ sourceId }) => sourceId),
+          total: trendObservations[0].total,
+        },
       });
     }
 
@@ -731,11 +978,14 @@ export async function POST(request: Request) {
       const [disconnectedSource] = await services.assetSources.list();
       const [disconnectedCard] = await services.assetCards.list();
       const [retainedDailySnapshot] = await services.dailyAssetSnapshots.list();
+      const [retainedTrendObservation] =
+        await services.dailyAssetSnapshots.listTrendObservations();
       const disconnected = {
         lifecycle: disconnectedSource.lifecycle,
         hidden: disconnectedCard.hidden,
         sourceCount: (await services.assetSources.list()).length,
         dailySourceCount: retainedDailySnapshot.sources.length,
+        trendSourceCount: retainedTrendObservation.sources.length,
         secretRemoved:
           connected.credentialReference !== null &&
           (await services.secrets.get(connected.credentialReference)) === null,
@@ -747,6 +997,9 @@ export async function POST(request: Request) {
           sourceCount: (await services.assetSources.list()).length,
           cardCount: (await services.assetCards.list()).length,
           dailySnapshotCount: (await services.dailyAssetSnapshots.list()).length,
+          dailyTrendObservationCount: (
+            await services.dailyAssetSnapshots.listTrendObservations()
+          ).length,
         },
       });
     }
