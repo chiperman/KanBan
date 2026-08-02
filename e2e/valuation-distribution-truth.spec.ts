@@ -164,6 +164,15 @@ test("总资产使用来源原生价格与显式汇率，保留原值并正确�
     "3,998.65 CNY",
   );
 
+  await chooseOverviewOption(overview, "计价货币", "HKD");
+  await expect(overview).toContainText("4,385.47 HKD");
+  await expect(overview).toContainText("USD/CNY 7.1234");
+  await expect(overview).toContainText("USD/HKD 7.8125");
+  await page.reload();
+  await expect(page.getByTestId("total-asset-overview")).toContainText(
+    "4,385.47 HKD",
+  );
+
   await chooseOverviewOption(overview, "计价货币", "USD");
   await chooseOverviewOption(overview, "分布维度", "资产来源");
   await expect(overview).toContainText("Alpha Securities");
@@ -194,12 +203,15 @@ test("未认证首页只显示登录入口，不含估值、来源或持仓信�
   for (const value of [
     "561.34",
     "3998.65",
+    "4385.47",
     "Alpha Securities",
     "Beta Crypto",
     "AAPL.US",
     "USDT",
     "MYST",
     "7.1234",
+    "7.8125",
+    "USD/HKD",
     "2026-04-01",
   ]) {
     expect(exposed).not.toContain(value);
