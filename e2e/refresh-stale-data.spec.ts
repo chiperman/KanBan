@@ -221,8 +221,16 @@ test("部分失败保留最后成功数据并标记过期，手动刷新可见�
   });
   const refresh = page.getByRole("button", { name: "立即刷新资产" });
   const refreshStatus = page.getByTestId("asset-refresh-status");
+  const alphaRefresh = alpha.getByRole("button", {
+    name: "刷新 Alpha Securities",
+  });
+  const betaRefresh = beta.getByRole("button", {
+    name: "刷新 Beta Crypto",
+  });
   await refresh.click();
   await expect(refresh).toBeDisabled();
+  await expect(alphaRefresh).toBeDisabled();
+  await expect(betaRefresh).toBeDisabled();
   await expect(refresh).toContainText("正在刷新资产");
   await expect(refreshStatus).toContainText(
     "正在刷新余额与持仓",
@@ -235,6 +243,8 @@ test("部分失败保留最后成功数据并标记过期，手动刷新可见�
   await expect(refreshStatus).toHaveCSS("clip-path", "none");
   await expect(refreshStatus).toHaveAttribute("data-vibe-tone", "success");
   await expect(refresh).toContainText("立即刷新资产");
+  await expect(alphaRefresh).toBeEnabled();
+  await expect(betaRefresh).toBeEnabled();
   const refreshLayout = await page.locator(".asset-refresh-controls").evaluate(
     (element) => {
       const button = element.querySelector("button");

@@ -1,7 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import type {
   AssetRefreshMode,
@@ -36,9 +41,11 @@ async function requestAssetRefresh(input: {
 }
 
 export function AssetSourceRefreshButton({
+  disabled = false,
   sourceId,
   sourceName,
 }: {
+  disabled?: boolean;
   sourceId: string;
   sourceName: string;
 }) {
@@ -57,7 +64,7 @@ export function AssetSourceRefreshButton({
   }, []);
 
   const refreshSource = useCallback(async () => {
-    if (inFlight.current) return;
+    if (inFlight.current || disabled) return;
     if (completionReset.current !== null) {
       window.clearTimeout(completionReset.current);
       completionReset.current = null;
@@ -89,7 +96,7 @@ export function AssetSourceRefreshButton({
     } finally {
       inFlight.current = false;
     }
-  }, [router, sourceId]);
+  }, [disabled, router, sourceId]);
 
   const buttonLabel =
     state === "pending"
@@ -109,8 +116,8 @@ export function AssetSourceRefreshButton({
         type="button"
         className="asset-source-refresh-button"
         aria-label={`刷新 ${sourceName}`}
-        aria-busy={state === "pending"}
-        disabled={state === "pending"}
+        aria-busy={state === "pending" || disabled}
+        disabled={state === "pending" || disabled}
         onClick={() => void refreshSource()}
         variant="text"
       >
@@ -142,11 +149,13 @@ export function AssetRefreshControls({
   hasEvmSources,
   hasNonEvmSources,
   needsDailyEvmPriceRefresh,
+  onPendingChange,
 }: {
   enabled: boolean;
   hasEvmSources: boolean;
   hasNonEvmSources: boolean;
   needsDailyEvmPriceRefresh: boolean;
+  onPendingChange?: (pending: boolean) => void;
 }) {
   const router = useRouter();
   const inFlight = useRef(false);
@@ -169,6 +178,7 @@ export function AssetRefreshControls({
   ): Promise<boolean> => {
     if (inFlight.current) return false;
     inFlight.current = true;
+    onPendingChange?.(true);
     setPending(true);
     setShowStatus(true);
     setStatus(
@@ -192,8 +202,9 @@ export function AssetRefreshControls({
     } finally {
       inFlight.current = false;
       setPending(false);
+      onPendingChange?.(false);
     }
-  }, [router]);
+  }, [onPendingChange, router]);
 
   const runAndMark = useCallback(async (
     mode: AssetRefreshMode,

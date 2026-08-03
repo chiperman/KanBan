@@ -351,6 +351,7 @@ export function OwnerDashboard({
   const [manualDeleteTarget, setManualDeleteTarget] =
     useState<{ source: AssetSourceView; record: ManualAssetRecord } | null>(null);
   const [lifecyclePending, setLifecyclePending] = useState(false);
+  const [assetRefreshPending, setAssetRefreshPending] = useState(false);
   const hasEvmSources = assetSources.some(
     (source) =>
       source.lifecycle !== "disconnected" &&
@@ -802,6 +803,7 @@ export function OwnerDashboard({
     );
     return source ? (
       <AssetSourceCard
+        refreshDisabled={assetRefreshPending}
         source={source}
         history={dailyAssetTrendObservations}
         reportingExchangeRates={reportingExchangeRates}
@@ -1075,6 +1077,7 @@ export function OwnerDashboard({
           hasEvmSources={hasEvmSources}
           hasNonEvmSources={hasNonEvmSources}
           needsDailyEvmPriceRefresh={needsDailyEvmPriceRefresh}
+          onPendingChange={setAssetRefreshPending}
         />
       </div>
       {error ? (

@@ -432,6 +432,7 @@ function HoldingDetailRow({
 }
 
 export function AssetSourceCard({
+  refreshDisabled = false,
   source,
   history,
   reportingExchangeRates,
@@ -443,6 +444,7 @@ export function AssetSourceCard({
   profitColorScheme,
   showSensitiveInfo,
 }: {
+  refreshDisabled?: boolean;
   source: AssetSourceView;
   history: DailyAssetTrendObservation[];
   reportingExchangeRates: AssetExchangeRate[];
@@ -695,6 +697,7 @@ export function AssetSourceCard({
               </VibeButton>
             ) : !isManual && source.lifecycle !== "disconnected" ? (
               <AssetSourceRefreshButton
+                disabled={refreshDisabled}
                 sourceId={source.id}
                 sourceName={heading.title}
               />
