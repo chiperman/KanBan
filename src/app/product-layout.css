@@ -3962,19 +3962,17 @@ body {
 .page-locked {
   display: grid;
   grid-template-rows: auto 1fr;
-  width: min(100%, 1360px);
   min-height: 100dvh;
-  padding: 0 40px;
+  padding-block: var(--vibe-space-2) 0;
 }
 
 .page-locked .locked-header {
   display: flex;
-  min-height: 88px;
   flex-wrap: nowrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--vibe-space-8);
-  padding: 0;
+  padding: var(--vibe-space-6) 0 var(--vibe-space-5);
 }
 
 .locked-brand {
@@ -4552,7 +4550,7 @@ body {
 
 @media (max-width: 639px) {
   .page-locked {
-    padding: 0 14px;
+    padding-block: 0;
   }
 
   .page-locked .locked-header {
@@ -4647,7 +4645,8 @@ body {
 }
 
 @media (min-width: 1440px) {
-  .page.page-dashboard {
+  .page.page-dashboard,
+  .page.page-locked {
     width: min(100%, 1600px);
   }
 }

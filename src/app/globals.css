@@ -2,6 +2,11 @@
   box-sizing: border-box;
 }
 
+html {
+  background: var(--bg);
+  scrollbar-gutter: stable;
+}
+
 html,
 body {
   margin: 0;
