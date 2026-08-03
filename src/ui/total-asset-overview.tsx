@@ -209,23 +209,21 @@ export function TotalAssetOverview({
     valuation.coverageIssues.length > 0
       ? `来源覆盖：不完整 · ${valuation.coverageIssues.length} 个来源`
       : null,
-    valuation.aggregateOnlySourceCount > 0
-      ? `产品明细：部分仅汇总 · ${valuation.aggregateOnlySourceCount} 个来源`
-      : null,
     valuation.expiredCount > 0
       ? `包含 ${valuation.expiredCount} 个过期来源`
       : null,
   ]
     .filter(Boolean)
     .join(" · ");
+  const valuationDetailHint = valuation.aggregateOnlySourceCount > 0
+    ? `产品明细：部分仅汇总 · ${valuation.aggregateOnlySourceCount} 个来源`
+    : null;
   const valuationStatusTone =
-    valuation.incomplete || valuation.expiredCount > 0
+    valuation.incomplete ||
+    valuation.expiredCount > 0 ||
+    valuation.coverageIssues.length > 0
       ? "error"
-      : valuation.coverageIssues.length > 0
-        ? "warning"
-        : valuation.aggregateOnlySourceCount > 0
-          ? "warning"
-        : "success";
+      : "success";
   const firstTrendDay = useMemo(
     () => history.reduce<string | undefined>(
       (earliest, observation) =>
@@ -337,12 +335,23 @@ export function TotalAssetOverview({
                 ? amount(valuation.amount)
                 : "••••••"}
           />
-          <VibeStatusTag
-            className={`total-status${valuation.incomplete ? " incomplete" : ""}${valuation.expiredCount > 0 ? " expired" : ""}`}
-            tone={valuationStatusTone}
-          >
-            {valuationStatus}
-          </VibeStatusTag>
+          <div className="total-statuses" aria-label="估值状态">
+            <VibeStatusTag
+              className={`total-status${valuation.incomplete ? " incomplete" : ""}${valuation.expiredCount > 0 ? " expired" : ""}`}
+              tone={valuationStatusTone}
+            >
+              {valuationStatus}
+            </VibeStatusTag>
+            {valuationDetailHint ? (
+              <VibeStatusTag
+                className="total-status-hint"
+                data-testid="valuation-detail-hint"
+                tone="warning"
+              >
+                {valuationDetailHint}
+              </VibeStatusTag>
+            ) : null}
+          </div>
           <div className="allocation-instrument" aria-label="分配比例仪表">
             <div className="allocation-instrument-head">
               <span>ALLOCATION / {dimension.toUpperCase()}</span>

@@ -413,6 +413,12 @@ test("只有持仓明细覆盖不足时当前估值保持完整并单独提示�
   await expect(overview).not.toContainText("0 项未估值");
   await expect(overview.locator(".total-status")).toHaveAttribute(
     "data-vibe-tone",
+    "success",
+  );
+  await expect(
+    overview.getByTestId("valuation-detail-hint"),
+  ).toHaveAttribute(
+    "data-vibe-tone",
     "warning",
   );
   await expect(

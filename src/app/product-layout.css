@@ -603,6 +603,7 @@ a {
 }
 
 .total-status,
+.total-status-hint,
 .conversion-observation,
 .asset-refresh-controls p,
 .asset-sync-status,
@@ -626,8 +627,12 @@ a {
   color: var(--accent-text);
 }
 
+.total-status.vibe-status-tag--success {
+  color: var(--success);
+}
+
 .total-status.vibe-status-tag--error {
-  color: var(--secondary);
+  color: var(--error);
 }
 
 .total-status.vibe-status-tag--error > i {
@@ -1326,13 +1331,21 @@ body {
   margin-left: var(--vibe-space-2);
 }
 
-.total-status {
+.total-statuses {
   position: absolute;
   z-index: 2;
   top: 0;
   right: 0;
+  display: flex;
+  max-width: min(100%, 540px);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--vibe-space-2);
+}
+
+.total-status,
+.total-status-hint {
   margin: 0;
-  color: var(--secondary);
 }
 
 .asset-trend {
@@ -2215,9 +2228,10 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .total-status {
+  .total-statuses {
     position: static;
     margin-top: var(--vibe-space-3);
+    justify-content: flex-start;
   }
 
   .valuation-controls {
