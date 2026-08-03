@@ -484,7 +484,12 @@ a {
 }
 
 .card-grid[data-drag-active="true"] {
+  align-content: start;
   overflow-anchor: none;
+}
+
+.card-grid[data-drag-active="true"] > .card:not(.card-dragging) {
+  will-change: transform;
 }
 
 .card-drop-candidate {
@@ -524,6 +529,23 @@ a {
 
 .card-drop-candidate > span {
   display: none;
+}
+
+.card-drop-candidate.is-new-row {
+  border-color: var(--line-2);
+  border-style: dashed;
+  background: color-mix(in srgb, var(--display) 3%, transparent);
+  color: var(--secondary);
+}
+
+.card-drop-candidate.is-new-row > span {
+  display: block;
+}
+
+.card-drop-candidate.is-new-row.is-active {
+  border-color: var(--display);
+  background: color-mix(in srgb, var(--display) 6%, transparent);
+  color: var(--display);
 }
 
 .card-drag-overlay {

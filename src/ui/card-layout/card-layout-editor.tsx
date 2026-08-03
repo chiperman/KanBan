@@ -52,6 +52,26 @@ type DragSession = {
   activeCandidateId: string | null;
 };
 
+export function updateActiveDropCandidate<
+  T extends Pick<DragSession, "plan" | "activeCandidateId">,
+>(
+  session: T,
+  overId: string | number | null | undefined,
+): T {
+  if (overId === null || overId === undefined) return session;
+  const activeCandidateId = String(overId);
+  if (
+    !session.plan.candidates.some(({ id }) => id === activeCandidateId) ||
+    session.activeCandidateId === activeCandidateId
+  ) {
+    return session;
+  }
+  return {
+    ...session,
+    activeCandidateId,
+  };
+}
+
 function sameCardIds(left: Card[], right: Card[]): boolean {
   if (left.length !== right.length) return false;
   const rightIds = new Set(right.map(({ id }) => id));
@@ -344,7 +364,9 @@ export function CardLayoutEditor({
       if (!next) return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      setSession((value) => value ? { ...value, activeCandidateId: next.id } : null);
+      setSession((value) => value
+        ? updateActiveDropCandidate(value, next.id)
+        : null);
     };
     window.addEventListener("keydown", navigate, true);
     return () => window.removeEventListener("keydown", navigate, true);
@@ -442,14 +464,7 @@ export function CardLayoutEditor({
       onDragOver={({ over }) => {
         setSession((current) => {
           if (!current) return null;
-          return {
-            ...current,
-            activeCandidateId:
-              over &&
-              current.plan.candidates.some(({ id }) => id === over.id)
-                ? String(over.id)
-                : null,
-          };
+          return updateActiveDropCandidate(current, over?.id);
         });
       }}
       onDragCancel={() => {

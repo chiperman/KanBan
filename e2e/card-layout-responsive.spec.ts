@@ -492,7 +492,7 @@ test("向左拖动首次进入左侧插入位置时兄弟卡片平滑向右让�
     const box = element.getBoundingClientRect();
     return {
       left: box.left,
-      offsetLeft: element.offsetLeft,
+      offsetLeft: (element as HTMLElement).offsetLeft,
       transform: window.getComputedStyle(element).transform,
       animations: element.getAnimations().map((animation) => ({
         playState: animation.playState,
@@ -838,6 +838,10 @@ test("资产卡片调整为三格并移动时激活预览框覆盖完整占用�
   expect(Math.abs(resizedCardBox!.width - gridBox!.width)).toBeLessThanOrEqual(2);
 
   const dragHandle = card.getByRole("button", { name: /拖动.*调整排序/ });
+  await dragHandle.evaluate((element) =>
+    element.scrollIntoView({ block: "center" }),
+  );
+  await expect(dragHandle).toBeEnabled();
   const dragHandleBox = await dragHandle.boundingBox();
   const target = page.getByTestId("binance-card").locator("..");
   const targetBox = await target.boundingBox();
@@ -848,6 +852,13 @@ test("资产卡片调整为三格并移动时激活预览框覆盖完整占用�
     dragHandleBox!.y + dragHandleBox!.height / 2,
   );
   await page.mouse.down();
+  await page.mouse.move(
+    dragHandleBox!.x + dragHandleBox!.width / 2 + 6,
+    dragHandleBox!.y + dragHandleBox!.height / 2,
+  );
+  await expect(
+    page.locator("[data-layout-card-id].card-dragging"),
+  ).toHaveCount(1);
   await page.mouse.move(targetBox!.x + 4, targetBox!.y + targetBox!.height / 2, {
     steps: 8,
   });
@@ -894,6 +905,224 @@ test("所有者拖至末尾会强制从新行开始并在刷新后保留", async
   await expect(fifth).toHaveClass(/span-3/);
   expect(Math.abs((await fifth.boundingBox())!.width - gridBox!.width)).toBeLessThanOrEqual(2);
   expect((await fifth.boundingBox())!.y).toBeGreaterThan((await fourth.boundingBox())!.y);
+});
+
+test("拖动末尾 Web3 ETH 卡片时新行预览紧接最后一张可见卡片", async ({
+  page,
+  request,
+}) => {
+  const fixture = await request.post("/test-doubles/asset-cards", {
+    data: {
+      assetCards: [
+        { id: "cash", kind: "asset", title: "现金", body: "短卡片", span: 1 },
+        {
+          id: "stocks",
+          kind: "asset",
+          title: "证券",
+          body:
+            "较高卡片包含更多持仓明细，用于形成真实的不等高布局。" +
+            "这段内容会在一格宽度内自然换行，不依赖测试直接改写元素高度。" +
+            "持仓覆盖美国市场、香港市场、现金与期权观察项，并保留同步时间、估值来源与完整性说明。" +
+            "继续增加可见内容，确保第一行轨道显著高于后续仅含摘要的新行。",
+          span: 1,
+        },
+        { id: "funds", kind: "asset", title: "基金", body: "中等卡片", span: 1 },
+        {
+          id: "web3-btc",
+          kind: "asset",
+          title: "Web3 BTC",
+          body: "最后一张非拖动卡片",
+          span: 3,
+        },
+        {
+          id: "web3-eth",
+          kind: "asset",
+          title: "Web3 ETH",
+          body: "已经独占新行",
+          span: 3,
+        },
+      ],
+    },
+  });
+  expect(fixture.ok()).toBeTruthy();
+  await page.setViewportSize({ width: 1280, height: 1400 });
+  await loginAsOwner(page);
+
+  const grid = page.getByTestId("card-grid");
+  const cards = page.locator("[data-layout-card-id]");
+  await expect.poll(async () =>
+    new Set(
+      await cards.evaluateAll((elements) =>
+        elements.map((element) => element.getBoundingClientRect().height),
+      ),
+    ).size
+  ).toBeGreaterThan(1);
+
+  const dragged = page.locator('[data-layout-card-id="web3-eth"]');
+  const lastVisible = page.locator('[data-layout-card-id="web3-btc"]');
+  const handle = dragged.getByRole("button", {
+    name: /拖动Web3 ETH调整排序/,
+  });
+  const before = await grid.evaluate((element) => {
+    const style = window.getComputedStyle(element);
+    const gridBox = element.getBoundingClientRect();
+    const draggedBox = element
+      .querySelector<HTMLElement>('[data-layout-card-id="web3-eth"]')!
+      .getBoundingClientRect();
+    const lastVisibleBox = element
+      .querySelector<HTMLElement>('[data-layout-card-id="web3-btc"]')!
+      .getBoundingClientRect();
+    return {
+      grid: {
+        height: gridBox.height,
+        minHeight: style.minHeight,
+        gridAutoRows: style.gridAutoRows,
+        gridTemplateColumns: style.gridTemplateColumns,
+        gridTemplateRows: style.gridTemplateRows,
+        rowGap: Number.parseFloat(style.rowGap),
+      },
+      dragged: {
+        top: draggedBox.top,
+        bottom: draggedBox.bottom,
+        height: draggedBox.height,
+      },
+      lastVisible: {
+        top: lastVisibleBox.top,
+        bottom: lastVisibleBox.bottom,
+        height: lastVisibleBox.height,
+      },
+    };
+  });
+  const handleBox = await handle.boundingBox();
+  expect(handleBox).not.toBeNull();
+  await page.mouse.move(
+    handleBox!.x + handleBox!.width / 2,
+    handleBox!.y + handleBox!.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    handleBox!.x + handleBox!.width / 2 + 6,
+    handleBox!.y + handleBox!.height / 2,
+  );
+  await expect(dragged).toHaveClass(/card-dragging/);
+
+  const newRowTarget = page.locator(
+    '[data-testid="card-drop-candidate"][data-candidate-kind="new-row"]',
+  );
+  await expect(newRowTarget).toHaveCount(1);
+  const targetBox = await newRowTarget.boundingBox();
+  expect(targetBox).not.toBeNull();
+  const dragStart = await grid.evaluate((element) => {
+    const style = window.getComputedStyle(element);
+    const gridBox = element.getBoundingClientRect();
+    const draggedBox = element
+      .querySelector<HTMLElement>('[data-layout-card-id="web3-eth"]')!
+      .getBoundingClientRect();
+    const lastVisibleBox = element
+      .querySelector<HTMLElement>('[data-layout-card-id="web3-btc"]')!
+      .getBoundingClientRect();
+    const targetBox = element
+      .querySelector<HTMLElement>(
+        '[data-testid="card-drop-candidate"][data-candidate-kind="new-row"]',
+      )!
+      .getBoundingClientRect();
+    return {
+      grid: {
+        height: gridBox.height,
+        inlineMinHeight: (element as HTMLElement).style.minHeight,
+        minHeight: style.minHeight,
+        gridAutoRows: style.gridAutoRows,
+        gridTemplateRows: style.gridTemplateRows,
+        rowGap: Number.parseFloat(style.rowGap),
+      },
+      dragged: {
+        top: draggedBox.top,
+        bottom: draggedBox.bottom,
+        height: draggedBox.height,
+      },
+      lastVisible: {
+        top: lastVisibleBox.top,
+        bottom: lastVisibleBox.bottom,
+        height: lastVisibleBox.height,
+      },
+      target: {
+        top: targetBox.top,
+        bottom: targetBox.bottom,
+        height: targetBox.height,
+      },
+    };
+  });
+  await page.mouse.move(
+    targetBox!.x + targetBox!.width / 2,
+    targetBox!.y + targetBox!.height / 2,
+  );
+  const preview = page.getByTestId("layout-drop-slot");
+  await expect(preview).toHaveAttribute("data-candidate-kind", "new-row");
+
+  const after = await grid.evaluate((element) => {
+    const style = window.getComputedStyle(element);
+    const gridBox = element.getBoundingClientRect();
+    const draggedBox = element
+      .querySelector<HTMLElement>('[data-layout-card-id="web3-eth"]')!
+      .getBoundingClientRect();
+    const lastVisibleBox = element
+      .querySelector<HTMLElement>('[data-layout-card-id="web3-btc"]')!
+      .getBoundingClientRect();
+    const targetBox = element
+      .querySelector<HTMLElement>(
+        '[data-testid="card-drop-candidate"][data-candidate-kind="new-row"]',
+      )!
+      .getBoundingClientRect();
+    const previewBox = element
+      .querySelector<HTMLElement>('[data-testid="layout-drop-slot"]')!
+      .getBoundingClientRect();
+    return {
+      grid: {
+        height: gridBox.height,
+        inlineMinHeight: (element as HTMLElement).style.minHeight,
+        minHeight: style.minHeight,
+        gridAutoRows: style.gridAutoRows,
+        gridTemplateRows: style.gridTemplateRows,
+        rowGap: Number.parseFloat(style.rowGap),
+      },
+      dragged: {
+        top: draggedBox.top,
+        bottom: draggedBox.bottom,
+        height: draggedBox.height,
+      },
+      lastVisible: {
+        top: lastVisibleBox.top,
+        bottom: lastVisibleBox.bottom,
+        height: lastVisibleBox.height,
+      },
+      target: {
+        top: targetBox.top,
+        bottom: targetBox.bottom,
+        height: targetBox.height,
+      },
+      preview: {
+        top: previewBox.top,
+        bottom: previewBox.bottom,
+        height: previewBox.height,
+      },
+    };
+  });
+  const expectedTop = after.lastVisible.bottom + after.grid.rowGap;
+  expect(before.grid.gridTemplateColumns.trim().split(/\s+/)).toHaveLength(3);
+  expect(
+    new Set(before.grid.gridTemplateRows.trim().split(/\s+/)).size,
+  ).toBeGreaterThan(1);
+  expect(before.dragged.top - before.lastVisible.bottom).toBeCloseTo(
+    before.grid.rowGap,
+    1,
+  );
+  expect(before.grid.rowGap).toBe(12);
+  expect(Math.abs(dragStart.target.top - (dragStart.lastVisible.bottom + dragStart.grid.rowGap))).toBeLessThanOrEqual(2);
+  expect(Math.abs(after.target.top - expectedTop)).toBeLessThanOrEqual(2);
+  expect(Math.abs(after.preview.top - expectedTop)).toBeLessThanOrEqual(2);
+
+  await page.keyboard.press("Escape");
+  await expect(dragged).not.toHaveClass(/card-dragging/);
 });
 
 test("卡片较多时可从视口顶部拖到页面底部新行", async ({ page, request }) => {

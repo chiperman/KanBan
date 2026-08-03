@@ -11,17 +11,67 @@ import {
 
 import type { DropCandidate } from "@/ui/card-layout/card-layout-planner";
 
-type DropZoneGeometry = {
+export type DropZoneGeometry = {
   left: number;
   top: number;
   width: number;
   height: number;
 };
 
-type CandidateGeometry = {
+export type CandidateGeometry = {
   target: DropZoneGeometry;
   preview: DropZoneGeometry;
 };
+
+export function calculateDropCandidateGeometries(
+  candidates: DropCandidate[],
+  {
+    columns,
+    contentBottom,
+    gap,
+    gridWidth,
+    rows,
+  }: {
+    columns: number;
+    contentBottom: number;
+    gap: number;
+    gridWidth: number;
+    rows: Array<{ top: number; height: number }>;
+  },
+  activeHeight: number | null,
+): Map<string, CandidateGeometry> {
+  const columnWidth = (gridWidth - gap * (columns - 1)) / columns;
+  const nextRowTop = contentBottom + gap;
+  const newRowHeight = Math.max(72, activeHeight ?? 0);
+  const geometries = new Map<string, CandidateGeometry>();
+
+  for (const candidate of candidates) {
+    const row = rows[candidate.row];
+    const visualSpan = Math.min(candidate.span, columns);
+    const newRow = candidate.kind === "new-row";
+    const top = newRow ? nextRowTop : row?.top ?? nextRowTop;
+    const height = newRow ? newRowHeight : row?.height ?? 72;
+    const previewWidth =
+      visualSpan * columnWidth +
+      Math.max(0, visualSpan - 1) * gap;
+    geometries.set(candidate.id, {
+      target: {
+        left: newRow ? 0 : candidate.columnStart * (columnWidth + gap),
+        top,
+        width: newRow ? gridWidth : columnWidth,
+        height,
+      },
+      preview: {
+        left: candidate.columnStart * (columnWidth + gap),
+        top,
+        width: previewWidth,
+        height,
+      },
+    });
+  }
+
+  return geometries;
+}
 
 function CandidateDropZone({
   candidate,
@@ -43,14 +93,18 @@ function CandidateDropZone({
     : `SPAN ${candidate.previousSpan} → ${candidate.span}`;
 
   const label = candidate.kind === "new-row"
-    ? `${spanChange} · 新起一行`
+    ? `${spanChange} · 松开后另起一行`
     : `${spanChange} · COL ${candidate.columnStart + 1}`;
 
   return (
     <>
       <div
         ref={setNodeRef}
-        className={`card-drop-candidate${active ? " is-active" : ""}`}
+        className={[
+          "card-drop-candidate",
+          candidate.kind === "new-row" ? "is-new-row" : "",
+          active ? "is-active" : "",
+        ].filter(Boolean).join(" ")}
         data-testid="card-drop-candidate"
         data-vibe-state="drop-candidate"
         data-candidate-id={candidate.id}
@@ -107,10 +161,13 @@ export function CardDropZoneLayer({
     const style = window.getComputedStyle(grid);
     const columns = style.gridTemplateColumns.trim().split(/\s+/).length;
     const gap = Number.parseFloat(style.columnGap) || 0;
-    const columnWidth = (gridBox.width - gap * (columns - 1)) / columns;
-    const cardBoxes = [
+    const measuredCards = [
       ...grid.querySelectorAll<HTMLElement>("[data-layout-card-id]"),
-    ].map((element) => element.getBoundingClientRect());
+    ].map((element) => ({
+      dragging: element.classList.contains("card-dragging"),
+      box: element.getBoundingClientRect(),
+    }));
+    const cardBoxes = measuredCards.map(({ box }) => box);
     const rowTops = [...new Set(cardBoxes.map((box) => Math.round(box.top)))].sort(
       (left, right) => left - right,
     );
@@ -121,40 +178,23 @@ export function CardDropZoneLayer({
         height: Math.max(72, ...boxes.map((box) => box.height)),
       };
     });
-    const contentBottom = cardBoxes.reduce(
-      (bottom, box) => Math.max(bottom, box.bottom - gridBox.top),
+    const contentBottom = measuredCards.reduce(
+      (bottom, { box, dragging }) =>
+        dragging ? bottom : Math.max(bottom, box.bottom - gridBox.top),
       0,
     );
-    const nextRowTop = contentBottom + gap;
-    const next = new Map<string, CandidateGeometry>();
-
-    for (const candidate of candidates) {
-      const row = rows[candidate.row];
-      const visualSpan = Math.min(candidate.span, columns);
-      const top = row?.top ?? nextRowTop;
-      const rowHeight = row?.height ?? 72;
-      const previewWidth =
-        visualSpan * columnWidth +
-        Math.max(0, visualSpan - 1) * gap;
-      next.set(candidate.id, {
-        target: {
-          left: candidate.kind === "new-row"
-            ? 0
-            : candidate.columnStart * (columnWidth + gap),
-          top,
-          width: candidate.kind === "new-row" ? gridBox.width : columnWidth,
-          height: rowHeight,
-        },
-        preview: {
-          left: candidate.columnStart * (columnWidth + gap),
-          top,
-          width: previewWidth,
-          height: rowHeight,
-        },
-      });
-    }
-    setGeometries(next);
-  }, [candidates, gridRef]);
+    setGeometries(calculateDropCandidateGeometries(
+      candidates,
+      {
+        columns,
+        contentBottom,
+        gap,
+        gridWidth: gridBox.width,
+        rows,
+      },
+      activeHeight,
+    ));
+  }, [activeHeight, candidates, gridRef]);
 
   const measureIfWidthChanged = useCallback(() => {
     const grid = gridRef.current;
