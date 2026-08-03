@@ -817,14 +817,10 @@ export function AssetSourceCard({
                   className="vibe-data-row"
                   key={`${balance.currency}:${balance.amount}`}
                 >
-                  <span>
-                    {cashBalances.length === 1
-                      ? "CASH"
-                      : `CASH ${String(index + 1).padStart(2, "0")}`}
-                  </span>
+                  <span>{balance.currency} CASH</span>
                   <strong>
                     {showSensitiveInfo
-                      ? formatDisplayMoney(balance.amount, balance.currency) ?? "无法折算"
+                      ? `${moneyAmount(balance.amount)} ${balance.currency}`
                       : "••••••"}
                   </strong>
                 </li>
