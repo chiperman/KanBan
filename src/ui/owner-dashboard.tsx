@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type KeyboardEvent,
@@ -62,6 +63,125 @@ function sourceName(source: AssetSourceView): string {
   if (source.kind === "evm-watch-bsc") return "BNB Smart Chain 观察钱包";
   if (source.kind === "manual") return source.label;
   return source.label;
+}
+
+type CardNavigationTarget = {
+  id: string;
+  label: string;
+};
+
+function CardIndex({
+  targets,
+}: {
+  targets: CardNavigationTarget[];
+}) {
+  const [activeTargetId, setActiveTargetId] = useState(targets[0]?.id ?? "");
+  const jumpTargetId = useRef<string | null>(null);
+
+  useEffect(() => {
+    const firstTargetId = targets[0]?.id ?? "";
+    setActiveTargetId((current) =>
+      targets.some(({ id }) => id === current) ? current : firstTargetId,
+    );
+
+    const observedTargets = targets.flatMap(({ id }) => {
+      const element = document.querySelector<HTMLElement>(
+        `[data-command-target="${CSS.escape(id)}"]`,
+      );
+      return element ? [{ element, id }] : [];
+    });
+    if (observedTargets.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (jumpTargetId.current !== null) return;
+        const next = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort(
+            (left, right) =>
+              Math.abs(left.boundingClientRect.top) -
+              Math.abs(right.boundingClientRect.top),
+          )[0];
+        const target = next?.target as HTMLElement | undefined;
+        if (target?.dataset.commandTarget) {
+          setActiveTargetId(target.dataset.commandTarget);
+        }
+      },
+      {
+        rootMargin: "-18% 0px -64%",
+        threshold: 0,
+      },
+    );
+    observedTargets.forEach(({ element }) => observer.observe(element));
+    return () => observer.disconnect();
+  }, [targets]);
+
+  if (targets.length < 2) return null;
+
+  function jumpTo(targetId: string) {
+    const target = document.querySelector<HTMLElement>(
+      `[data-command-target="${CSS.escape(targetId)}"]`,
+    );
+    if (!target) return;
+
+    jumpTargetId.current = targetId;
+    setActiveTargetId(targetId);
+    const reducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    const navigation = document.querySelector<HTMLElement>(
+      '[data-testid="card-index"]',
+    );
+    const navigationStyle = navigation ? window.getComputedStyle(navigation) : null;
+    const navigationOffset = navigation
+      ? navigation.getBoundingClientRect().height +
+        (Number.parseFloat(navigationStyle?.top ?? "") || 0) +
+        (Number.parseFloat(navigationStyle?.marginBottom ?? "") || 0)
+      : 0;
+    target.style.scrollMarginBlockStart = `${navigationOffset}px`;
+    target.scrollIntoView({
+      behavior: reducedMotion ? "auto" : "smooth",
+      block: "start",
+    });
+    target.focus({ preventScroll: true });
+    target.dataset.commandHighlight = "true";
+    window.setTimeout(() => {
+      if (jumpTargetId.current === targetId) {
+        jumpTargetId.current = null;
+      }
+      delete target.dataset.commandHighlight;
+    }, 900);
+  }
+
+  return (
+    <nav
+      className="card-index"
+      aria-label="卡片快速跳转"
+      data-testid="card-index"
+      data-vibe-module="card-index"
+    >
+      <span className="card-index-label">CARD INDEX</span>
+      <div className="card-index-targets">
+        {targets.map((target, index) => (
+          <button
+            key={target.id}
+            type="button"
+            className="card-index-target"
+            aria-current={
+              activeTargetId === target.id ? "location" : undefined
+            }
+            aria-label={`定位 ${target.label}`}
+            onClick={() => jumpTo(target.id)}
+          >
+            <span className="card-index-number" aria-hidden="true">
+              {String(index + 1).padStart(2, "0")}
+            </span>
+            <span>{target.label}</span>
+          </button>
+        ))}
+      </div>
+    </nav>
+  );
 }
 
 function groupedAmount(value: string): string {
@@ -635,6 +755,25 @@ export function OwnerDashboard({
       : undefined;
   }
 
+  const navigationTargets = useMemo(() => {
+    const sourcesById = new Map(assetSources.map((source) => [source.id, source]));
+    return [
+      ...(assetSources.length > 0
+        ? [{ id: "total-overview", label: "总资产概览" }]
+        : []),
+      ...displayCards.flatMap((card) => {
+        if (card.hidden) return [];
+        const source = card.sourceId
+          ? sourcesById.get(card.sourceId)
+          : undefined;
+        return [{
+          id: card.id,
+          label: source ? sourceName(source) : cardName(card),
+        }];
+      }),
+    ];
+  }, [assetSources, displayCards]);
+
   function toggleMobileCard(cardId: string) {
     setExpandedMobileCardIds((current) => {
       const next = new Set(current);
@@ -859,6 +998,7 @@ export function OwnerDashboard({
 
   return (
     <>
+      <CardIndex targets={navigationTargets} />
       {assetSources.length > 0 ? (
         <article
           className="card vibe-data-card total-overview-card"

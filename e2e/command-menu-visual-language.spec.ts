@@ -181,6 +181,22 @@ test("未认证状态无命令菜单，所有者可用 Command-K 与 Ctrl-K 搜�
   await expect(page.locator('[data-command-label="XiaoX 资产概览"]')).toBeFocused();
 });
 
+test("卡片索引可直接跳转并标记当前卡片", async ({ page }) => {
+  await loginAsOwner(page);
+
+  const index = page.getByTestId("card-index");
+  await expect(index).toBeVisible();
+  await expect(index).toContainText("CARD INDEX");
+  await expect(index).not.toContainText("⌘K 搜索");
+
+  const researchTarget = index.getByRole("button", {
+    name: "定位 研究日志",
+  });
+  await researchTarget.click();
+  await expect(page.locator('[data-command-label="研究日志"]')).toBeFocused();
+  await expect(researchTarget).toHaveAttribute("aria-current", "location");
+});
+
 test("鼠标可打开菜单、刷新资产并锁定，隐藏卡片不会进入导航结果", async ({ page }) => {
   await loginAsOwner(page);
   await connectEthereum(page);
