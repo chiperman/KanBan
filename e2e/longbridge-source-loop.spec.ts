@@ -258,6 +258,15 @@ test("长桥 OAuth 先预览后原子保存，并展示总额与紧凑持仓", a
   await saveAsThree;
   await expect(topHoldings).toHaveCount(0);
   await expect(holdingDetails).toBeVisible();
+  const holdingsDetailToggle = card.getByTestId("asset-holdings-detail-toggle");
+  await expect(holdingsDetailToggle).toHaveAttribute("aria-expanded", "true");
+  await expect(holdingsDetailToggle).toHaveAccessibleName("收起证券持仓明细");
+  await holdingsDetailToggle.click();
+  await expect(holdingDetails).toBeHidden();
+  await expect(holdingsDetailToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(holdingsDetailToggle).toHaveAccessibleName("展开证券持仓明细");
+  await holdingsDetailToggle.click();
+  await expect(holdingDetails).toBeVisible();
   await expect(holdingDetails.getByRole("row")).toHaveCount(8);
   await expect(holdingDetails.getByRole("columnheader")).toHaveText([
     "名称",

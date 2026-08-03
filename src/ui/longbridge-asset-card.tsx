@@ -455,6 +455,7 @@ export function AssetSourceCard({
   showSensitiveInfo: boolean;
 }) {
   const [hideSmallCryptoHoldings, setHideSmallCryptoHoldings] = useState(true);
+  const [holdingsDetailExpanded, setHoldingsDetailExpanded] = useState(true);
   const isManual = source.kind === "manual";
   const hasManualRecord = !isManual || source.hasManualRecord !== false;
   const manualRecords = source.manualRecords ?? [];
@@ -877,56 +878,78 @@ export function AssetSourceCard({
           ))}
         </ol>
         <section
-          className="asset-holdings-detail"
-          data-testid="asset-holdings-detail"
           aria-label={`${source.label} ${
             source.kind === "longbridge" ? "证券持仓明细" : "持仓明细"
           }`}
+          className="asset-holdings-disclosure"
         >
-          <p className="card-label">
-            {source.kind === "longbridge" ? "证券持仓明细" : "持仓明细"}
-          </p>
-          <div className="asset-table-wrap">
-            <table className="asset-table vibe-data-table" data-vibe-component="data-table">
-              <thead>
-                <tr>
-                  <th>名称</th>
-                  {compactProfitColumns ? (
-                    <>
-                      <th>市值/数量</th>
-                      <th>现价</th>
-                      <th>平均成本价</th>
-                      <th>当日盈亏</th>
-                      <th>持仓盈亏</th>
-                    </>
-                  ) : (
-                    <>
-                      <th>数量</th>
-                      <th>现价</th>
-                      <th>持仓市值</th>
-                      <th>平均成本价</th>
-                      {showPlatformProfit ? <th>平台盈亏（来源提供）</th> : null}
-                      <th>浮动盈亏</th>
-                      <th>持仓盈亏率</th>
-                    </>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {visibleHoldings.map((holding) => (
-                  <HoldingDetailRow
-                    key={assetHoldingKey(holding)}
-                    holding={holding}
-                    profitColorScheme={profitColorScheme}
-                    showPlatformProfit={showPlatformProfit}
-                    compactProfitColumns={compactProfitColumns}
-                    showSensitiveInfo={showSensitiveInfo}
-                    formatDisplayMoney={formatDisplayMoney}
-                    formatDisplayPrice={formatDisplayPrice}
-                  />
-                ))}
-              </tbody>
-            </table>
+          <VibeButton
+            aria-controls={`asset-holdings-detail-${source.id}`}
+            aria-expanded={holdingsDetailExpanded}
+            aria-label={`${holdingsDetailExpanded ? "收起" : "展开"}${
+              source.kind === "longbridge" ? "证券持仓明细" : "持仓明细"
+            }`}
+            className="asset-holdings-detail-toggle"
+            data-testid="asset-holdings-detail-toggle"
+            onClick={() => setHoldingsDetailExpanded((current) => !current)}
+            type="button"
+            variant="text"
+          >
+            <span className="asset-holdings-detail-toggle__title">
+              {source.kind === "longbridge" ? "证券持仓明细" : "持仓明细"}
+            </span>
+            <span className="asset-holdings-detail-toggle__action">
+              {holdingsDetailExpanded ? "收起" : "展开"}
+            </span>
+          </VibeButton>
+          <div
+            className="asset-holdings-detail"
+            data-expanded={holdingsDetailExpanded}
+            data-testid="asset-holdings-detail"
+            id={`asset-holdings-detail-${source.id}`}
+          >
+            <div className="asset-table-wrap">
+              <table className="asset-table vibe-data-table" data-vibe-component="data-table">
+                <thead>
+                  <tr>
+                    <th>名称</th>
+                    {compactProfitColumns ? (
+                      <>
+                        <th>市值/数量</th>
+                        <th>现价</th>
+                        <th>平均成本价</th>
+                        <th>当日盈亏</th>
+                        <th>持仓盈亏</th>
+                      </>
+                    ) : (
+                      <>
+                        <th>数量</th>
+                        <th>现价</th>
+                        <th>持仓市值</th>
+                        <th>平均成本价</th>
+                        {showPlatformProfit ? <th>平台盈亏（来源提供）</th> : null}
+                        <th>浮动盈亏</th>
+                        <th>持仓盈亏率</th>
+                      </>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleHoldings.map((holding) => (
+                    <HoldingDetailRow
+                      key={assetHoldingKey(holding)}
+                      holding={holding}
+                      profitColorScheme={profitColorScheme}
+                      showPlatformProfit={showPlatformProfit}
+                      compactProfitColumns={compactProfitColumns}
+                      showSensitiveInfo={showSensitiveInfo}
+                      formatDisplayMoney={formatDisplayMoney}
+                      formatDisplayPrice={formatDisplayPrice}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </section>
         {unvaluedCount > 0 ? (

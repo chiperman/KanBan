@@ -657,14 +657,59 @@ body {
   display: none;
 }
 
-.asset-holdings-detail {
+.asset-holdings-disclosure {
   display: none;
   margin-top: 18px;
-  padding-top: 18px;
   border-top: 1px solid var(--line);
 }
 
-.span-3 .asset-source-card .asset-holdings-detail {
+.asset-source-card .asset-holdings-detail-toggle.vibe-button {
+  display: flex;
+  width: 100%;
+  min-height: 52px;
+  justify-content: space-between;
+  padding-inline: 2px;
+  border-radius: 0;
+  color: var(--secondary);
+}
+
+.asset-holdings-detail-toggle__title {
+  color: var(--primary);
+}
+
+.asset-holdings-detail-toggle__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--secondary);
+  font-size: 10px;
+}
+
+.asset-holdings-detail-toggle__action::after {
+  width: 6px;
+  height: 6px;
+  border-right: 1px solid currentcolor;
+  border-bottom: 1px solid currentcolor;
+  content: "";
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform var(--dur, 0.2s) var(--ease);
+}
+
+.asset-holdings-detail-toggle[aria-expanded="true"]
+  .asset-holdings-detail-toggle__action::after {
+  transform: translateY(2px) rotate(225deg);
+}
+
+.asset-holdings-detail-toggle[aria-expanded="false"] {
+  border-bottom: 1px solid var(--line);
+}
+
+.asset-holdings-detail {
+  display: none;
+}
+
+.span-3 .asset-source-card .asset-holdings-disclosure,
+.span-3 .asset-source-card .asset-holdings-detail[data-expanded="true"] {
   display: block;
 }
 
