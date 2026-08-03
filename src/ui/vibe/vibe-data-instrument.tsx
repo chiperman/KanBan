@@ -90,11 +90,13 @@ export function VibeSegmentedBar({
 }
 
 interface VibeMetricProps extends HTMLAttributes<HTMLDivElement> {
+  animate?: boolean;
   unit: string;
   value: string;
 }
 
 export function VibeMetric({
+  animate = true,
   className,
   unit,
   value,
@@ -107,7 +109,7 @@ export function VibeMetric({
       {...props}
     >
       <span className="vibe-metric__value">
-        <VibeLiveCounter resetKey={unit} value={value} />
+        <VibeLiveCounter animate={animate} resetKey={unit} value={value} />
       </span>{" "}
       <span className="vibe-metric__unit">{unit}</span>
     </div>

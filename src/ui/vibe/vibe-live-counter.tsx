@@ -63,9 +63,11 @@ function zeroValue(style: ParsedCounterValue): ParsedCounterValue {
 }
 
 export function VibeLiveCounter({
+  animate = true,
   resetKey,
   value,
 }: {
+  animate?: boolean;
   resetKey?: string;
   value: string;
 }) {
@@ -89,7 +91,7 @@ export function VibeLiveCounter({
     const reducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
-    if (reducedMotion) {
+    if (!animate || reducedMotion) {
       counter.textContent = value;
       counter.dataset.counterState = "complete";
       renderedValueRef.current = target;
@@ -174,7 +176,7 @@ export function VibeLiveCounter({
       observer?.disconnect();
       window.cancelAnimationFrame(animationFrame);
     };
-  }, [resetKey, value]);
+  }, [animate, resetKey, value]);
 
   return (
     <span

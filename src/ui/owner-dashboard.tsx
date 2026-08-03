@@ -794,7 +794,7 @@ export function OwnerDashboard({
     void persistLayout(nextCards, previousCards);
   }
 
-  function renderCardBody(card: Card) {
+  function renderCardBody(card: Card, animateTotal = true) {
     const source = sourceForCard(card);
     const reportingExchangeRates = assetSources.flatMap((assetSource) =>
       assetSource.kind === "longbridge"
@@ -803,6 +803,7 @@ export function OwnerDashboard({
     );
     return source ? (
       <AssetSourceCard
+        animateTotal={animateTotal}
         refreshDisabled={assetRefreshPending}
         source={source}
         history={dailyAssetTrendObservations}
@@ -980,7 +981,7 @@ export function OwnerDashboard({
     }
     return (
       <>
-        {renderCardBody(card)}
+        {renderCardBody(card, false)}
         <div className="card-actions">
           <span className="source-status">SOURCE / CONTROL</span>
           {source ? (
