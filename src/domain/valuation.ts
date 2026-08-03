@@ -12,6 +12,7 @@ import {
   activeSourceHoldings,
   portfolioSourceTotal,
 } from "@/domain/evm-token-preferences";
+import { hasManualAssetRecord } from "@/domain/manual-asset-records";
 import type {
   AssetExchangeRate,
   AssetHolding,
@@ -29,6 +30,8 @@ export type ValuationSource = Pick<
   | "snapshot"
   | "sync"
   | "ignoredAssetKeys"
+  | "hasManualRecord"
+  | "manualAssetClass"
 >;
 
 export type ReportingCurrency = "USD" | "CNY" | "HKD";
@@ -257,12 +260,13 @@ export function buildTotalValuation(
   currency: ReportingCurrency,
   dimension: DistributionDimension,
 ): TotalValuation {
-  const longbridgeRates = sources.flatMap((source) =>
+  const recordedSources = sources.filter(hasManualAssetRecord);
+  const longbridgeRates = recordedSources.flatMap((source) =>
     source.kind === "longbridge" ? source.snapshot.exchangeRates : [],
   );
   const allRates = [
     ...longbridgeRates,
-    ...sources.flatMap((source) => source.snapshot.exchangeRates),
+    ...recordedSources.flatMap((source) => source.snapshot.exchangeRates),
   ];
   const displayRate = (quoteCurrency: "CNY" | "HKD") => {
     const observation = rateFor(allRates, "USD", quoteCurrency);
@@ -284,7 +288,7 @@ export function buildTotalValuation(
     },
   );
   const conversion = currency === "USD" ? null : displayRate(currency);
-  let totalUsd = "0";
+  let totalInReportingCurrency = "0";
   let incomplete = false;
   let unvaluedCount = 0;
   let expiredCount = 0;
@@ -293,7 +297,7 @@ export function buildTotalValuation(
   const sourceTotals = new Map<string, string>();
   const coverageIssues: ValuationCoverageIssue[] = [];
 
-  for (const source of sources) {
+  for (const source of recordedSources) {
     const activeHoldings = activeSourceHoldings(source);
     if (source.sync.status === "expired") expiredCount += 1;
     if (
@@ -327,14 +331,14 @@ export function buildTotalValuation(
     const total = convertCurrencyAmount(
       portfolioTotal.amount,
       portfolioTotal.currency,
-      "USD",
+      currency,
       sourceRates,
     );
     if (total === null) {
       incomplete = true;
     } else {
       convertedSourceCount += 1;
-      totalUsd = decimalAdd(totalUsd, total);
+      totalInReportingCurrency = decimalAdd(totalInReportingCurrency, total);
       sourceTotals.set(source.id, total);
     }
     if (source.snapshot.coverage?.status !== "complete") {
@@ -345,10 +349,10 @@ export function buildTotalValuation(
   }
   incomplete ||= unvaluedCount > 0;
 
-  const groupsUsd = new Map<string, ValuationGroup>();
-  const reconciliationIssuesUsd: ValuationReconciliationIssue[] = [];
+  const groupsInReportingCurrency = new Map<string, ValuationGroup>();
+  const reconciliationIssuesInReportingCurrency: ValuationReconciliationIssue[] = [];
   let hasNonAuthoritativePositiveResidual = false;
-  for (const source of sources) {
+  for (const source of recordedSources) {
     const activeHoldings = activeSourceHoldings(source);
     const sourceTotal = sourceTotals.get(source.id);
     const sourceRates = [
@@ -359,7 +363,7 @@ export function buildTotalValuation(
       (holding) => holding.valuation.status === "quote-unavailable",
     ).length;
     if (quoteUnavailableCount > 0) {
-      reconciliationIssuesUsd.push({
+      reconciliationIssuesInReportingCurrency.push({
         kind: "quote-unavailable",
         sourceId: source.id,
         sourceLabel: assetSourceDisplayName(source),
@@ -375,14 +379,14 @@ export function buildTotalValuation(
       coverageResidual != null &&
       decimalCompare(coverageResidual.amount, "0") !== 0
     ) {
-      reconciliationIssuesUsd.push({
+      reconciliationIssuesInReportingCurrency.push({
         kind: "mismatch",
         sourceId: source.id,
         sourceLabel: assetSourceDisplayName(source),
         amount: convertCurrencyAmount(
           coverageResidual.amount,
           coverageResidual.currency,
-          "USD",
+          currency,
           sourceRates,
         ),
         unvaluedCount: 0,
@@ -391,31 +395,61 @@ export function buildTotalValuation(
     }
     if (dimension === "source" && sourceTotal) {
       addGroup(
-        groupsUsd,
+        groupsInReportingCurrency,
         source.id,
         assetSourceDisplayName(source),
         sourceTotal,
       );
     }
+    if (source.kind === "manual") {
+      if (sourceTotal && dimension === "class") {
+        const assetClass = source.manualAssetClass ?? "unclassified";
+        addGroup(
+          groupsInReportingCurrency,
+          assetClass,
+          assetClass === "securities"
+            ? "证券"
+            : assetClass === "crypto"
+              ? "加密资产"
+              : assetClass === "cash"
+                ? "现金"
+                : assetClass === "other"
+                  ? "其他投资资产"
+                  : "待分类",
+          sourceTotal,
+        );
+      } else if (sourceTotal && dimension === "currency") {
+        addGroup(
+          groupsInReportingCurrency,
+          source.snapshot.total.currency,
+          source.snapshot.total.currency,
+          sourceTotal,
+        );
+      }
+      continue;
+    }
 
-    let holdingTotalUsd = "0";
+    let holdingTotalInReportingCurrency = "0";
     for (const holding of activeHoldings) {
       if (holding.sourceMarketValue === null) continue;
       const amount = convertCurrencyAmount(
         holding.sourceMarketValue.amount,
         holding.sourceMarketValue.currency,
-        "USD",
+        currency,
         sourceRates,
       );
       if (amount === null) {
         incomplete = true;
         continue;
       }
-      holdingTotalUsd = decimalAdd(holdingTotalUsd, amount);
+      holdingTotalInReportingCurrency = decimalAdd(
+        holdingTotalInReportingCurrency,
+        amount,
+      );
       if (dimension === "source") continue;
       if (dimension === "class") {
         addGroup(
-          groupsUsd,
+          groupsInReportingCurrency,
           holding.assetClass,
           holding.assetClass === "securities"
             ? "证券"
@@ -425,11 +459,19 @@ export function buildTotalValuation(
           amount,
         );
       } else {
-        addGroup(groupsUsd, holding.currency, holding.currency, amount);
+        addGroup(
+          groupsInReportingCurrency,
+          holding.currency,
+          holding.currency,
+          amount,
+        );
       }
     }
     if (sourceTotal) {
-      const residual = decimalAdd(sourceTotal, `-${holdingTotalUsd}`);
+      const residual = decimalAdd(
+        sourceTotal,
+        `-${holdingTotalInReportingCurrency}`,
+      );
       if (
         dimension !== "source" &&
         decimalCompare(residual, "0") > 0 &&
@@ -442,7 +484,7 @@ export function buildTotalValuation(
           hasNonAuthoritativePositiveResidual = true;
         }
         addGroup(
-          groupsUsd,
+          groupsInReportingCurrency,
           dimension === "class" ? "other" : source.snapshot.total.currency,
           dimension === "class" ? "现金及其他" : source.snapshot.total.currency,
           residual,
@@ -452,25 +494,20 @@ export function buildTotalValuation(
   }
   if (
     dimension === "class" &&
-    groupsUsd.has("cash") &&
-    groupsUsd.has("other") &&
+    groupsInReportingCurrency.has("cash") &&
+    groupsInReportingCurrency.has("other") &&
     hasNonAuthoritativePositiveResidual
   ) {
-    const other = groupsUsd.get("other")!;
-    groupsUsd.set("other", { ...other, label: "未解释差额" });
+    const other = groupsInReportingCurrency.get("other")!;
+    groupsInReportingCurrency.set("other", { ...other, label: "未解释差额" });
     incomplete = true;
   }
 
-  const displayAmount = sources.length > 0 && convertedSourceCount === 0
-    ? null
-    : convertCurrencyAmount(totalUsd, "USD", currency, allRates);
-  if (currency !== "USD" && !conversion) incomplete = true;
-  let groups = [...groupsUsd.values()].map((group) => ({
-    ...group,
-    amount: group.amount === null
+  const displayAmount =
+    recordedSources.length === 0 || convertedSourceCount === 0
       ? null
-      : convertCurrencyAmount(group.amount, "USD", currency, allRates),
-  }));
+      : totalInReportingCurrency;
+  let groups = [...groupsInReportingCurrency.values()];
   if (dimension === "class") {
     const rank = (key: string) =>
       key === "securities"
@@ -481,7 +518,9 @@ export function buildTotalValuation(
             ? 2
             : key === "other"
               ? 3
-              : 4;
+              : key === "unclassified"
+                ? 4
+                : 5;
     groups.sort((left, right) => rank(left.key) - rank(right.key));
   }
   if (
@@ -526,12 +565,7 @@ export function buildTotalValuation(
   groups = groups.toSorted((left, right) =>
     compareNullableDecimalDescending(left.amount, right.amount),
   );
-  const reconciliationIssues = reconciliationIssuesUsd.map((issue) => ({
-    ...issue,
-    amount: issue.amount === null
-      ? null
-      : convertCurrencyAmount(issue.amount, "USD", currency, allRates),
-  }));
+  const reconciliationIssues = reconciliationIssuesInReportingCurrency;
   return {
     amount: displayAmount,
     currency,

@@ -4,6 +4,7 @@ import type {
   AssetSources,
   AssetPermission,
   AssetSourceConnections,
+  CreateManualAssetSourceInput,
   AssetRefreshMode,
   AssetRefreshReport,
   AssetRefreshScope,
@@ -37,6 +38,9 @@ import type {
   PriceQuote,
   SecretStore,
   LongbridgeOAuth,
+  ManualAssetRecordInput,
+  ManualAssetRecord,
+  ManualAssetRecords,
 } from "@/server/ports";
 import type { AppServices } from "@/server/composition";
 import { SessionOwnerAuth } from "@/server/auth/session-auth";
@@ -49,6 +53,7 @@ import { SourceIsolatedAssetSynchronization } from "@/server/asset-synchronizati
 import {
   buildDailyAssetSnapshot,
   mergeDailyTrendObservation,
+  shanghaiDay,
 } from "@/domain/daily-asset-snapshots";
 import { decimalAdd } from "@/domain/decimal";
 import { normalizeAssetSourceDisplayName } from "@/domain/asset-source-display-name";
@@ -151,6 +156,75 @@ export class InMemoryDailyAssetSnapshots implements DailyAssetSnapshots {
     );
   }
 
+  async recordManual(
+    snapshot: DailyAssetSnapshot,
+    sourceId: string,
+  ): Promise<void> {
+    const source = snapshot.sources.find(
+      (item) => item.sourceId === sourceId,
+    );
+    if (!source) throw new Error("手工资产来源不存在");
+    const replaceManualSource = (
+      previous: DailyAssetSnapshot,
+    ): DailyAssetSnapshot => {
+      const sources = [
+        ...previous.sources.filter((item) => item.sourceId !== sourceId),
+        source,
+      ];
+      const total = {
+        USD: sources.some((item) => item.total.USD !== null)
+          ? decimalAdd(...sources.flatMap((item) => item.total.USD ?? []))
+          : null,
+        CNY: sources.some((item) => item.total.CNY !== null)
+          ? decimalAdd(...sources.flatMap((item) => item.total.CNY ?? []))
+          : null,
+        HKD: sources.some((item) => item.total.HKD !== null)
+          ? decimalAdd(...sources.flatMap((item) => item.total.HKD ?? []))
+          : null,
+      };
+      const complete =
+        total.USD !== null &&
+        total.HKD !== null &&
+        sources.every((item) => item.complete);
+      return {
+        ...previous,
+        sources,
+        total,
+        complete,
+        status: sources.some((item) => item.status === "expired")
+          ? "expired"
+          : complete
+            ? "complete"
+            : "incomplete",
+      };
+    };
+    const baselineIndex = this.snapshots.findIndex(
+      ({ day }) => day === snapshot.day,
+    );
+    if (baselineIndex === -1) {
+      this.snapshots = [...this.snapshots, structuredClone(snapshot)].sort(
+        (left, right) => left.day.localeCompare(right.day),
+      );
+    } else {
+      this.snapshots[baselineIndex] = replaceManualSource(
+        this.snapshots[baselineIndex],
+      );
+    }
+    const trendIndex = this.trendObservations.findIndex(
+      ({ day }) => day === snapshot.day,
+    );
+    if (trendIndex === -1) {
+      this.trendObservations = [
+        ...this.trendObservations,
+        structuredClone(snapshot),
+      ].sort((left, right) => left.day.localeCompare(right.day));
+    } else {
+      this.trendObservations[trendIndex] = replaceManualSource(
+        this.trendObservations[trendIndex],
+      );
+    }
+  }
+
   removeSource(sourceId: string): void {
     const remove = (snapshot: DailyAssetSnapshot): DailyAssetSnapshot | null => {
       const sources = snapshot.sources.filter((source) => source.sourceId !== sourceId);
@@ -184,6 +258,130 @@ export class InMemoryDailyAssetSnapshots implements DailyAssetSnapshots {
       const updated = remove(snapshot);
       return updated ? [updated] : [];
     });
+  }
+}
+
+export class InMemoryManualAssetRecords implements ManualAssetRecords {
+  private records: ManualAssetRecord[] = [];
+  constructor(
+    private readonly sources: FakeAssetSources,
+    private readonly cards: InMemoryAssetCardStore,
+    private readonly dailySnapshots: InMemoryDailyAssetSnapshots,
+    private readonly clock: Clock,
+  ) {}
+
+  async create(input: CreateManualAssetSourceInput): Promise<void> {
+    const sourceId = `test-manual-source-${(await this.sources.list()).length + 1}`;
+    const capturedAt = this.clock.now().toISOString();
+    const source: AssetSourceSummary = {
+      id: sourceId,
+      kind: "manual",
+      label: input.label,
+      hasManualRecord: false,
+      accountId: `manual:${sourceId}`,
+      permissions: [],
+      credentialReference: null,
+      snapshot: {
+        total: { amount: "0", currency: "CNY" },
+        holdings: [],
+        exchangeRates: [],
+        syncedAt: capturedAt,
+      },
+      sync: {
+        status: "current",
+        lastSuccessfulAt: capturedAt,
+        lastAttemptAt: capturedAt,
+        error: null,
+      },
+    };
+    const sources = [...(await this.sources.list()), source];
+    await this.sources.replaceAll(sources);
+    await this.cards.replaceAll([
+      ...(await this.cards.list()),
+      {
+        id: `test-manual-card-${sourceId}`,
+        kind: "asset",
+        title: "手工资产记录",
+        body: "每日记录资产总额",
+        sourceId,
+        span: 1,
+      },
+    ]);
+  }
+
+  async record(
+    sourceId: string,
+    input: ManualAssetRecordInput,
+  ): Promise<void> {
+    const capturedAt = this.clock.now().toISOString();
+    if (input.day > shanghaiDay(capturedAt)) {
+      throw new Error("记录日期不能晚于今天");
+    }
+    const sources = await this.sources.list();
+    const source = sources.find((item) => item.id === sourceId);
+    if (!source) throw new Error("资产来源不存在");
+    if (source.kind !== "manual") {
+      throw new Error("只有手工资产记录可以编辑今日总额");
+    }
+    this.records = [
+      ...this.records.filter(
+        (record) => record.sourceId !== sourceId || record.day !== input.day,
+      ),
+      { sourceId, ...input, recordedAt: capturedAt },
+    ];
+    const latest = this.records
+      .filter((record) => record.sourceId === sourceId)
+      .toSorted((left, right) => right.day.localeCompare(left.day))[0]!;
+    const updatedSources = sources.map((item) =>
+      item.id !== sourceId
+        ? item
+        : {
+            ...item,
+            hasManualRecord: true,
+            snapshot: {
+              ...item.snapshot,
+              total: { amount: latest.amount, currency: latest.currency },
+              syncedAt: latest.recordedAt,
+            },
+            sync: {
+              status: "current" as const,
+              lastSuccessfulAt: capturedAt,
+              lastAttemptAt: capturedAt,
+              error: null,
+              failedMode: null,
+            },
+          },
+    );
+    await this.sources.replaceAll(updatedSources);
+    await this.dailySnapshots.recordManual(
+      buildDailyAssetSnapshot(updatedSources, capturedAt),
+      sourceId,
+    );
+  }
+
+  async list(): Promise<ManualAssetRecord[]> {
+    return this.records.toSorted((left, right) =>
+      left.sourceId.localeCompare(right.sourceId) || right.day.localeCompare(left.day),
+    );
+  }
+
+  async delete(sourceId: string, day: string): Promise<void> {
+    const index = this.records.findIndex(
+      (record) => record.sourceId === sourceId && record.day === day,
+    );
+    if (index === -1) throw new Error("指定日期没有手工资产记录");
+    this.records.splice(index, 1);
+    const sources = await this.sources.list();
+    const source = sources.find((item) => item.id === sourceId);
+    if (!source || source.kind !== "manual") throw new Error("只有手工资产记录可以删除");
+    const latest = this.records
+      .filter((record) => record.sourceId === sourceId)
+      .toSorted((left, right) => right.day.localeCompare(left.day))[0];
+    await this.sources.replaceAll(sources.map((item) => item.id !== sourceId ? item : {
+      ...item,
+      hasManualRecord: latest !== undefined,
+      snapshot: { ...item.snapshot, total: latest ? { amount: latest.amount, currency: latest.currency } : { amount: "0", currency: "CNY" } },
+    }));
   }
 }
 
@@ -1060,6 +1258,24 @@ export class InMemoryAssetSourceLifecycle implements AssetSourceLifecycle {
     await this.sources.update({ ...source, displayName: normalized });
   }
 
+  async setManualAssetClass(
+    sourceId: string,
+    assetClass: import("@/server/ports").ManualAssetClass | null,
+  ): Promise<void> {
+    const sources = await this.sources.list();
+    const source = sources.find((item) => item.id === sourceId);
+    if (!source) throw new Error("资产来源不存在");
+    if (source.kind !== "manual") {
+      throw new Error("只有手工资产来源可以设置资产类别");
+    }
+    if (assetClass === null) {
+      const { manualAssetClass: _manualAssetClass, ...rest } = source;
+      await this.sources.update(rest);
+      return;
+    }
+    await this.sources.update({ ...source, manualAssetClass: assetClass });
+  }
+
   async setEvmTokenPreference(
     sourceId: string,
     assetKeys: string[],
@@ -1093,6 +1309,9 @@ export class InMemoryAssetSourceLifecycle implements AssetSourceLifecycle {
     const sources = await this.sources.list();
     const source = sources.find((item) => item.id === sourceId);
     if (!source) throw new Error("资产来源不存在");
+    if (source.kind === "manual") {
+      throw new Error("手工资产记录不支持断开");
+    }
     await this.sources.update({ ...source, lifecycle: "disconnected" });
     if (source.credentialReference !== null) {
       await this.secrets.remove(source.credentialReference);
@@ -1135,6 +1354,7 @@ export interface TestServices extends AppServices {
   bitget: FakeBitgetReadOnly;
   evm: FakeEvmWatchWallet;
   assetSourceConnections: InMemoryAssetSourceConnections;
+  manualAssetRecords: InMemoryManualAssetRecords;
   assetSourceOnboarding: AssetSourceOnboarding;
   assetSourceLifecycle: InMemoryAssetSourceLifecycle;
 }
@@ -1177,6 +1397,12 @@ export function createTestServices(): TestServices {
     dailyAssetSnapshots,
     clock,
   );
+  const manualAssetRecords = new InMemoryManualAssetRecords(
+    assetSources,
+    assetCards,
+    dailyAssetSnapshots,
+    clock,
+  );
   const assetSourceOnboarding = new AssetSourceOnboarding(
     createAssetSourceProviderAdapters({
       longbridge,
@@ -1191,6 +1417,7 @@ export function createTestServices(): TestServices {
     clock,
     assetCards,
     assetSources,
+    manualAssetRecords,
     assetSourceLifecycle,
     dailyAssetSnapshots,
     externalServices,

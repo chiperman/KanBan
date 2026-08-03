@@ -54,13 +54,22 @@ const EVM_WATCH_WALLET = {
   fieldHelp: "默认同步 Ethereum 与 BNB Smart Chain；相同地址会按两条链分别读取。",
 };
 
-type ProviderSelectionId = AssetSourceProviderId | typeof EVM_WATCH_WALLET.id;
+const MANUAL_ASSET_SOURCE = {
+  id: "manual" as const,
+  label: "手工记录资产",
+};
+
+type ProviderSelectionId =
+  | AssetSourceProviderId
+  | typeof EVM_WATCH_WALLET.id
+  | typeof MANUAL_ASSET_SOURCE.id;
 
 const PROVIDER_OPTIONS = [
   ...ASSET_SOURCE_PROVIDERS.filter(
     ({ id }) => id !== "ethereum" && id !== "bsc",
   ),
   EVM_WATCH_WALLET,
+  MANUAL_ASSET_SOURCE,
 ];
 
 function formatAmount(amount: string, fixed = false): string {
@@ -81,10 +90,13 @@ export function AssetSourceFlow() {
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const [fields, setFields] = useState(initialAssetSourceFields);
+  const [manualLabel, setManualLabel] = useState("");
   const [evmServiceStatus, setEvmServiceStatus] =
     useState<ExternalServiceConfigurationStatus | null>(null);
   const provider =
-    providerId && providerId !== "evm" ? assetSourceProvider(providerId) : null;
+    providerId && providerId !== "evm" && providerId !== "manual"
+      ? assetSourceProvider(providerId)
+      : null;
   const selectedProvider =
     provider ?? (providerId === "evm" ? EVM_WATCH_WALLET : null);
   const preview = previews[0] ?? null;
@@ -150,6 +162,7 @@ export function AssetSourceFlow() {
   function cancelChoosing() {
     setFields(initialAssetSourceFields());
     setEvmChains([...EVM_CHAINS]);
+    setManualLabel("");
     setProviderId("");
     setStep("choose");
     setChoosing(false);
@@ -212,6 +225,10 @@ export function AssetSourceFlow() {
   }
 
   async function start() {
+    if (providerId === "manual") {
+      await saveManualAsset();
+      return;
+    }
     if (providerId === "evm") {
       await startEvm();
       return;
@@ -243,6 +260,27 @@ export function AssetSourceFlow() {
     setChoosing(false);
     setPreviews([body]);
     setPreviewMode("single");
+  }
+
+  async function saveManualAsset() {
+    setPending(true);
+    setError("");
+    const response = await fetch("/api/asset-sources/manual", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        label: manualLabel,
+      }),
+    });
+    const body = (await response.json().catch(() => null)) as
+      | { error?: string }
+      | null;
+    if (!response.ok) {
+      setPending(false);
+      setError(body?.error ?? "手工资产记录保存失败");
+      return;
+    }
+    window.location.reload();
   }
 
   async function startEvm() {
@@ -367,9 +405,13 @@ export function AssetSourceFlow() {
   }
 
   const ready =
-    selectedProvider !== null &&
-    selectedProvider.fields.every((field) => fields[field.id].trim().length > 0) &&
-    (providerId !== "evm" || evmChains.length > 0);
+    providerId === "manual"
+      ? manualLabel.trim() !== ""
+      : selectedProvider !== null &&
+        selectedProvider.fields.every(
+          (field) => fields[field.id].trim().length > 0,
+        ) &&
+        (providerId !== "evm" || evmChains.length > 0);
   const previewDescription = preview
     ? assetSourceProvider(preview.provider)
     : null;
@@ -407,12 +449,18 @@ export function AssetSourceFlow() {
               </VibeButton>
               {step === "configure" ? (
                 <VibeButton
-                  type="button"
+                  type={providerId === "manual" ? "submit" : "button"}
                   disabled={pending || !ready}
-                  onClick={() => void start()}
+                  onClick={
+                    providerId === "manual" ? undefined : () => void start()
+                  }
                   variant="primary"
                 >
-                  {selectedProvider?.startLabel ?? "开始 OAuth 授权"}
+                  {providerId === "manual"
+                    ? pending
+                      ? "正在保存…"
+                      : "添加资产来源"
+                    : selectedProvider?.startLabel ?? "开始 OAuth 授权"}
                 </VibeButton>
               ) : null}
             </>
@@ -421,12 +469,32 @@ export function AssetSourceFlow() {
           className="source-dialog"
           description={
             step === "choose"
-              ? "先选择只读账户或观察钱包，再填写对应的连接信息。"
-              : "连接成功前不会保存凭证或来源。"
+              ? "选择可连接的账户、观察钱包，或手工记录的资产总额。"
+              : providerId === "manual"
+                ? "先创建独立资产来源；之后在对应卡片内添加或编辑每日总额。"
+                : "连接成功前不会保存凭证或来源。"
           }
-          eyebrow="ASSET SOURCE / READ ONLY"
+          eyebrow={
+            providerId === "manual"
+              ? "MANUAL ASSET / DAILY TOTAL"
+              : "ASSET SOURCE / READ ONLY"
+          }
           onClose={cancelChoosing}
-          title={step === "choose" ? "选择来源类型" : selectedProvider?.label ?? "配置来源"}
+          onSubmit={
+            providerId === "manual"
+              ? (event) => {
+                  event.preventDefault();
+                  void saveManualAsset();
+                }
+              : undefined
+          }
+          title={
+            step === "choose"
+              ? "选择来源类型"
+              : providerId === "manual"
+                ? "创建手工资产来源"
+                : selectedProvider?.label ?? "配置来源"
+          }
           titleId="asset-source-dialog-title"
         >
           {step === "configure" ? (
@@ -473,7 +541,21 @@ export function AssetSourceFlow() {
               ))}
             </div>
           ) : null}
-          {step === "configure" && selectedProvider?.fields.length ? (
+          {step === "configure" && providerId === "manual" ? (
+            <div className="source-credential-fields">
+              <VibeField
+                autoComplete="off"
+                autoFocus
+                disabled={pending}
+                fieldId="manual-asset-label"
+                label="资产名称"
+                maxLength={40}
+                onChange={(event) => setManualLabel(event.currentTarget.value)}
+                placeholder="例如：A股"
+                value={manualLabel}
+              />
+            </div>
+          ) : step === "configure" && selectedProvider?.fields.length ? (
             <div className="source-credential-fields">
               {providerId === "evm" &&
               evmServiceStatus !== null &&

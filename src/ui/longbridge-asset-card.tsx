@@ -25,6 +25,8 @@ import type {
   AssetSnapshot,
   AssetSourceSyncState,
   DailyAssetTrendObservation,
+  ManualAssetClass,
+  ManualAssetRecord,
 } from "@/server/ports";
 import {
   assetHoldingKey,
@@ -37,6 +39,7 @@ import {
   VibeSegmentedBar,
   VibeStatusTag,
 } from "@/ui/vibe/vibe-data-instrument";
+import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
 import {
   daysForTrendRange,
@@ -59,6 +62,9 @@ export interface AssetSourceView {
   sync: AssetSourceSyncState;
   ignoredAssetKeys?: string[];
   includedAssetKeys?: string[];
+  hasManualRecord?: boolean;
+  manualAssetClass?: ManualAssetClass;
+  manualRecords?: ManualAssetRecord[];
   lifecycle?: "connected" | "disconnected";
 }
 
@@ -69,6 +75,7 @@ function providerCardLabel(source: AssetSourceView): string {
   if (source.kind === "bitget") return "Bitget 资产";
   if (source.kind === "evm-watch-ethereum") return "Ethereum 观察钱包";
   if (source.kind === "evm-watch-bsc") return "BNB Smart Chain 观察钱包";
+  if (source.kind === "manual") return "手工资产记录";
   return "资产来源";
 }
 
@@ -79,6 +86,7 @@ function providerCode(source: AssetSourceView): string {
   if (source.kind === "bitget") return "BG";
   if (source.kind === "evm-watch-ethereum") return "ETH";
   if (source.kind === "evm-watch-bsc") return "BSC";
+  if (source.kind === "manual") return "MANUAL";
   return "SRC";
 }
 
@@ -430,6 +438,8 @@ export function AssetSourceCard({
   reportingCurrency,
   trendRange,
   currentDay,
+  onManualAssetRecord,
+  onManualAssetRecordDelete,
   profitColorScheme,
   showSensitiveInfo,
 }: {
@@ -439,11 +449,18 @@ export function AssetSourceCard({
   reportingCurrency: ReportingCurrency;
   trendRange: TrendRange;
   currentDay: string;
+  onManualAssetRecord?: (source: AssetSourceView, record?: ManualAssetRecord) => void;
+  onManualAssetRecordDelete?: (source: AssetSourceView, record: ManualAssetRecord) => void;
   profitColorScheme: ProfitColorScheme;
   showSensitiveInfo: boolean;
 }) {
   const [hideSmallCryptoHoldings, setHideSmallCryptoHoldings] = useState(true);
-  const supportsSmallHoldingFilter = source.kind !== "longbridge";
+  const isManual = source.kind === "manual";
+  const hasManualRecord = !isManual || source.hasManualRecord !== false;
+  const manualRecords = source.manualRecords ?? [];
+  const currentManualRecord = manualRecords.find(({ day }) => day === currentDay);
+  const supportsSmallHoldingFilter =
+    !isManual && source.kind !== "longbridge";
   const supportsEvmTokenPreferences = source.kind.startsWith("evm-watch-");
   const supportsProductCoverage = ["binance", "okx", "bitget"].includes(
     source.kind,
@@ -625,7 +642,9 @@ export function AssetSourceCard({
     effectiveSourceTotal.amount,
     effectiveSourceTotal.currency,
   );
-  const sourceState = source.lifecycle === "disconnected"
+  const sourceState = isManual
+    ? { label: "MANUAL", tone: "muted" as const }
+    : source.lifecycle === "disconnected"
     ? { label: "OFFLINE", tone: "muted" as const }
     : source.sync.error
       ? { label: "ERROR", tone: "error" as const }
@@ -650,6 +669,8 @@ export function AssetSourceCard({
                     ? "ethereum-watch-card"
                     : source.kind === "evm-watch-bsc"
                       ? "bsc-watch-card"
+                      : source.kind === "manual"
+                        ? "manual-asset-card"
               : `asset-source-card-${source.id}`
         }
       >
@@ -662,7 +683,16 @@ export function AssetSourceCard({
             >
               {providerCode(source)} / {sourceState.label}
             </VibeStatusTag>
-            {source.lifecycle !== "disconnected" ? (
+            {isManual && onManualAssetRecord ? (
+              <VibeButton
+                className="manual-asset-record-button"
+                onClick={() => onManualAssetRecord(source)}
+                type="button"
+                variant="outline"
+              >
+                {currentManualRecord ? "更新今日数据" : "添加数据"}
+              </VibeButton>
+            ) : !isManual && source.lifecycle !== "disconnected" ? (
               <AssetSourceRefreshButton
                 sourceId={source.id}
                 sourceName={heading.title}
@@ -674,12 +704,21 @@ export function AssetSourceCard({
         {heading.metadata ? (
           <p className="asset-source-meta">{heading.metadata}</p>
         ) : null}
-        <VibeMetric
-          className="asset-total"
-          data-testid="asset-source-total"
-          unit={reportingCurrency}
-          value={showSensitiveInfo ? sourceTotal ?? "无法折算" : "••••••"}
-        />
+        {hasManualRecord ? (
+          <VibeMetric
+            className="asset-total"
+            data-testid="asset-source-total"
+            unit={reportingCurrency}
+            value={showSensitiveInfo ? sourceTotal ?? "无法折算" : "••••••"}
+          />
+        ) : (
+          <p
+            className="asset-total manual-asset-unrecorded"
+            data-testid="manual-asset-unrecorded"
+          >
+            0 <span className="vibe-metric__unit">{reportingCurrency}</span>
+          </p>
+        )}
         <section
           className="asset-trend source-trend"
           data-testid={`asset-source-trend-${source.id}`}
@@ -699,7 +738,9 @@ export function AssetSourceCard({
               variant="source"
             />
           ) : sourceHistory.length === 0 ? (
-            <p className="trend-empty">首次成功同步后开始记录</p>
+            <p className="trend-empty">
+              {isManual ? "添加首条数据后开始记录" : "首次成功同步后开始记录"}
+            </p>
           ) : (
             <AssetTrendChart
               ariaLabel={`${heading.title}来源总额趋势`}
@@ -717,6 +758,40 @@ export function AssetSourceCard({
             <p className="trend-note">{sourceTrendNotice}</p>
           ) : null}
         </section>
+        {isManual ? (
+          <>
+            <VibeStatusTag className="asset-sync-status" tone="muted">
+              {hasManualRecord
+                ? "仅记录资产总额 · 每日一条，可在下方管理历史数据"
+                : "尚未添加数据 · 添加后才会计入总资产"}
+            </VibeStatusTag>
+            {hasManualRecord ? (
+              <p className="asset-updated">
+                最近记录日期：{manualRecords[0]?.day ?? formatShanghaiDateTime(source.snapshot.syncedAt)}
+              </p>
+            ) : null}
+            <section className="manual-asset-history" aria-label={`${heading.title}历史记录`}>
+              <p className="card-label">历史记录</p>
+              {manualRecords.length === 0 ? (
+                <p className="trend-empty">尚无历史记录</p>
+              ) : (
+                <ol className="manual-asset-history-list">
+                  {manualRecords.map((record) => (
+                    <li key={record.day}>
+                      <span>{record.day}</span>
+                      <strong>{showSensitiveInfo ? `${moneyAmount(record.amount)} ${record.currency}` : "••••••"}</strong>
+                      <span className="manual-asset-history-actions">
+                        <VibeButton type="button" variant="text" onClick={() => onManualAssetRecord?.(source, record)}>编辑</VibeButton>
+                        <VibeButton type="button" variant="text" onClick={() => onManualAssetRecordDelete?.(source, record)}>删除</VibeButton>
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </section>
+          </>
+        ) : (
+          <>
         {supportsProductCoverage ? (
           <AssetProductCoverage
             coverage={source.snapshot.coverage}
@@ -882,6 +957,8 @@ export function AssetSourceCard({
             {source.label} 同步失败：{source.sync.error}
           </VibeNotice>
         ) : null}
+          </>
+        )}
       </div>
     </>
   );

@@ -23,6 +23,7 @@ import { decimalAdd, decimalCompare, decimalDivide } from "@/domain/decimal";
 import {
   buildDailyAssetSnapshot,
   mergeDailyTrendObservation,
+  shanghaiDay,
 } from "@/domain/daily-asset-snapshots";
 import { normalizeAssetSourceDisplayName } from "@/domain/asset-source-display-name";
 import {
@@ -39,6 +40,8 @@ import type {
   AssetSnapshot,
   AssetSourceConnections,
   AssetSources,
+  CreateManualAssetSourceInput,
+  DailyAssetSourceSnapshot,
   BinanceAuthorizationResult,
   BitgetAuthorizationResult,
   EvmWatchAuthorizationResult,
@@ -46,6 +49,10 @@ import type {
   DailyAssetSnapshot,
   DailyAssetTrendObservation,
   DailyAssetSnapshots,
+  ManualAssetRecord,
+  ManualAssetClass,
+  ManualAssetRecordInput,
+  ManualAssetRecords,
   AssetCardStore,
   Clock,
   OwnerAuth,
@@ -104,15 +111,16 @@ class SystemClock implements Clock {
 }
 
 interface DashboardState {
-  schemaVersion: 8;
+  schemaVersion: 9;
   assetCards: Card[];
   assetSources: AssetSourceSummary[];
+  manualAssetRecords: ManualAssetRecord[];
   dailyAssetSnapshots: DailyAssetSnapshot[];
   dailyAssetTrendObservations: DailyAssetTrendObservation[];
 }
 
-const DASHBOARD_SCHEMA_VERSION = 8 as const;
-const SQLITE_SCHEMA_VERSION = 8;
+const DASHBOARD_SCHEMA_VERSION = 9 as const;
+const SQLITE_SCHEMA_VERSION = 11;
 
 type SourceConnectionKind = "longbridge" | "binance" | "okx" | "bitget" | "evm";
 type SourceAuthorizationResult =
@@ -214,10 +222,29 @@ interface DashboardDatabase {
     sourceId: string,
     displayName: string | null,
   ): Promise<void>;
+  setAssetSourceManualClass(
+    sourceId: string,
+    assetClass: ManualAssetClass | null,
+  ): Promise<void>;
   setAssetSourceEvmTokenPreferences(
     sourceId: string,
     ignoredAssetKeys: string[],
     includedAssetKeys: string[],
+  ): Promise<void>;
+  createManualAssetSource(
+    input: CreateManualAssetSourceInput,
+    capturedAt: string,
+  ): Promise<void>;
+  listManualAssetRecords(): Promise<ManualAssetRecord[]>;
+  recordManualAssetSource(
+    sourceId: string,
+    input: ManualAssetRecordInput,
+    capturedAt: string,
+  ): Promise<void>;
+  deleteManualAssetSourceRecord(
+    sourceId: string,
+    day: string,
+    capturedAt: string,
   ): Promise<void>;
   disconnectAssetSource(sourceId: string): Promise<string | null>;
   deleteAssetSourceData(sourceId: string): Promise<string | null>;
@@ -273,6 +300,107 @@ function withoutSnapshotSource(
       sources.every((source) => source.complete) &&
       total.USD !== null &&
       total.HKD !== null,
+  };
+}
+
+function manualDailySource(
+  source: Pick<AssetSourceSummary, "id" | "label" | "kind">,
+  record: ManualAssetRecord,
+): DailyAssetSourceSnapshot {
+  return {
+    sourceId: source.id,
+    label: source.label,
+    kind: source.kind,
+    capturedAt: record.recordedAt,
+    complete: false,
+    status: "incomplete",
+    total: {
+      USD: record.currency === "USD" ? record.amount : null,
+      CNY: record.currency === "CNY" ? record.amount : null,
+      HKD: record.currency === "HKD" ? record.amount : null,
+    },
+  };
+}
+
+function latestManualAssetRecord(
+  records: ManualAssetRecord[],
+): ManualAssetRecord | null {
+  return records.toSorted((left, right) => right.day.localeCompare(left.day))[0] ?? null;
+}
+
+function applyLatestManualAssetRecord(
+  source: AssetSourceSummary,
+  record: ManualAssetRecord | null,
+  changedAt: string,
+): AssetSourceSummary {
+  return {
+    ...source,
+    hasManualRecord: record !== null,
+    snapshot: {
+      ...source.snapshot,
+      total: record === null
+        ? { amount: "0", currency: "CNY" }
+        : { amount: record.amount, currency: record.currency },
+      syncedAt: record?.recordedAt ?? changedAt,
+    },
+    sync: {
+      status: "current",
+      lastSuccessfulAt: record?.recordedAt ?? changedAt,
+      lastAttemptAt: changedAt,
+      error: null,
+      failedMode: null,
+    },
+  };
+}
+
+function mergeManualSourceObservation(
+  previous: DailyAssetSnapshot,
+  source: DailyAssetSourceSnapshot,
+): DailyAssetSnapshot {
+  const sources = [
+    ...previous.sources.filter((item) => item.sourceId !== source.sourceId),
+    source,
+  ];
+  const total = {
+    USD: sources.some((item) => item.total.USD !== null)
+      ? decimalAdd(...sources.flatMap((item) => item.total.USD ?? []))
+      : null,
+    CNY: sources.some((item) => item.total.CNY !== null)
+      ? decimalAdd(...sources.flatMap((item) => item.total.CNY ?? []))
+      : null,
+    HKD: sources.some((item) => item.total.HKD !== null)
+      ? decimalAdd(...sources.flatMap((item) => item.total.HKD ?? []))
+      : null,
+  };
+  const complete =
+    total.USD !== null &&
+    total.HKD !== null &&
+    sources.every((item) => item.complete);
+  return {
+    ...previous,
+    sources,
+    total,
+    complete,
+    status: sources.some((item) => item.status === "expired")
+      ? "expired"
+      : complete
+        ? "complete"
+        : "incomplete",
+  };
+}
+
+function manualOnlyTrendObservation(
+  day: string,
+  source: DailyAssetSourceSnapshot,
+): DailyAssetTrendObservation {
+  return {
+    day,
+    capturedAt: source.capturedAt,
+    exchangeRates: [],
+    complete: false,
+    status: "incomplete",
+    total: source.total,
+    sources: [source],
   };
 }
 
@@ -399,6 +527,9 @@ function migrateAssetSource(raw: unknown): AssetSourceSummary {
     ...source,
     ...(ignoredAssetKeys.length === 0 ? {} : { ignoredAssetKeys }),
     ...(includedAssetKeys.length === 0 ? {} : { includedAssetKeys }),
+    ...(source.kind === "manual"
+      ? { hasManualRecord: source.hasManualRecord !== false }
+      : {}),
     snapshot: {
       ...snapshot,
       total,
@@ -461,6 +592,57 @@ function migrateDailyObservation<T extends DailyAssetSnapshot>(
   };
 }
 
+function migrateManualAssetRecord(raw: unknown): ManualAssetRecord {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new Error("手工资产记录格式无效");
+  }
+  const record = raw as Partial<ManualAssetRecord>;
+  if (
+    typeof record.sourceId !== "string" ||
+    typeof record.day !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(record.day) ||
+    typeof record.amount !== "string" ||
+    (record.currency !== "USD" &&
+      record.currency !== "CNY" &&
+      record.currency !== "HKD") ||
+    typeof record.recordedAt !== "string" ||
+    Number.isNaN(new Date(record.recordedAt).getTime())
+  ) {
+    throw new Error("手工资产记录格式无效");
+  }
+  return {
+    sourceId: record.sourceId,
+    day: record.day,
+    amount: record.amount,
+    currency: record.currency,
+    recordedAt: record.recordedAt,
+  };
+}
+
+function uniqueManualAssetRecords(
+  records: ManualAssetRecord[],
+): ManualAssetRecord[] {
+  return [...new Map(
+    records.map((record) => [`${record.sourceId}:${record.day}`, record]),
+  ).values()];
+}
+
+function legacyManualAssetRecords(
+  sources: AssetSourceSummary[],
+): ManualAssetRecord[] {
+  return sources.flatMap((source) =>
+    source.kind === "manual" && source.hasManualRecord !== false
+      ? [{
+          sourceId: source.id,
+          day: shanghaiDay(source.snapshot.syncedAt),
+          amount: source.snapshot.total.amount,
+          currency: source.snapshot.total.currency as ManualAssetRecord["currency"],
+          recordedAt: source.snapshot.syncedAt,
+        }]
+      : [],
+  );
+}
+
 /** 普通 Dashboard 数据只保存不透明凭证引用，不保存凭证或密文。 */
 export class FileDashboardDatabase {
   private queue: Promise<void> = Promise.resolve();
@@ -490,6 +672,7 @@ export class FileDashboardDatabase {
         schemaVersion: DASHBOARD_SCHEMA_VERSION,
         assetCards,
         assetSources: [],
+        manualAssetRecords: [],
         dailyAssetSnapshots: [],
         dailyAssetTrendObservations: [],
       };
@@ -504,10 +687,20 @@ export class FileDashboardDatabase {
     ) {
       throw new Error(`Dashboard 数据文件格式无效: ${this.filePath}`);
     }
+    const assetSources = value.assetSources.map(migrateAssetSource);
+    const sourceById = new Map(assetSources.map((source) => [source.id, source]));
+    const manualAssetRecords = uniqueManualAssetRecords(
+      Array.isArray(value.manualAssetRecords)
+        ? value.manualAssetRecords
+          .map(migrateManualAssetRecord)
+          .filter((record) => sourceById.get(record.sourceId)?.kind === "manual")
+        : legacyManualAssetRecords(assetSources),
+    );
     return {
       schemaVersion: DASHBOARD_SCHEMA_VERSION,
       assetCards,
-      assetSources: value.assetSources.map(migrateAssetSource),
+      assetSources,
+      manualAssetRecords,
       dailyAssetSnapshots: Array.isArray(value.dailyAssetSnapshots)
         ? value.dailyAssetSnapshots.map(migrateDailyObservation)
         : [],
@@ -559,6 +752,10 @@ export class FileDashboardDatabase {
   async replaceSources(sources: AssetSourceSummary[]): Promise<void> {
     await this.mutate((state) => {
       state.assetSources = sources;
+      const sourceIds = new Set(sources.map((source) => source.id));
+      state.manualAssetRecords = state.manualAssetRecords.filter((record) =>
+        sourceIds.has(record.sourceId),
+      );
     });
   }
 
@@ -577,6 +774,15 @@ export class FileDashboardDatabase {
   async listDailyAssetTrendObservations(): Promise<DailyAssetTrendObservation[]> {
     await this.queue;
     return (await this.load()).dailyAssetTrendObservations;
+  }
+
+  async listManualAssetRecords(): Promise<ManualAssetRecord[]> {
+    await this.queue;
+    return (await this.load()).manualAssetRecords.toSorted(
+      (left, right) =>
+        left.sourceId.localeCompare(right.sourceId) ||
+        right.day.localeCompare(left.day),
+    );
   }
 
   async createDailyAssetSnapshotIfAbsent(
@@ -653,6 +859,21 @@ export class FileDashboardDatabase {
     });
   }
 
+  async setAssetSourceManualClass(
+    sourceId: string,
+    assetClass: ManualAssetClass | null,
+  ): Promise<void> {
+    await this.mutate((state) => {
+      const source = state.assetSources.find((item) => item.id === sourceId);
+      if (!source) throw new Error("资产来源不存在");
+      if (source.kind !== "manual") {
+        throw new Error("只有手工资产来源可以设置资产类别");
+      }
+      if (assetClass === null) delete source.manualAssetClass;
+      else source.manualAssetClass = assetClass;
+    });
+  }
+
   async setAssetSourceEvmTokenPreferences(
     sourceId: string,
     ignoredAssetKeys: string[],
@@ -668,10 +889,185 @@ export class FileDashboardDatabase {
     });
   }
 
+  private recordManualDailyObservation(
+    state: DashboardState,
+    source: AssetSourceSummary,
+    record: ManualAssetRecord,
+    capturedAt: string,
+  ): void {
+    const manualSource = manualDailySource(source, record);
+    const isCurrentDay = record.day === shanghaiDay(capturedAt);
+    const currentObservation = isCurrentDay
+      ? buildDailyAssetSnapshot(state.assetSources, capturedAt)
+      : null;
+    const baselineIndex = state.dailyAssetSnapshots.findIndex(
+      ({ day }) => day === record.day,
+    );
+    if (baselineIndex === -1 && currentObservation !== null) {
+      state.dailyAssetSnapshots.push(structuredClone(currentObservation));
+    } else if (baselineIndex !== -1) {
+      state.dailyAssetSnapshots[baselineIndex] = mergeManualSourceObservation(
+        state.dailyAssetSnapshots[baselineIndex],
+        manualSource,
+      );
+    }
+    const trendIndex = state.dailyAssetTrendObservations.findIndex(
+      ({ day }) => day === record.day,
+    );
+    if (trendIndex === -1 && currentObservation !== null) {
+      state.dailyAssetTrendObservations.push(structuredClone(currentObservation));
+    } else if (trendIndex === -1) {
+      state.dailyAssetTrendObservations.push(
+        manualOnlyTrendObservation(record.day, manualSource),
+      );
+    } else {
+      state.dailyAssetTrendObservations[trendIndex] = mergeManualSourceObservation(
+        state.dailyAssetTrendObservations[trendIndex],
+        manualSource,
+      );
+    }
+    state.dailyAssetSnapshots.sort((left, right) => left.day.localeCompare(right.day));
+    state.dailyAssetTrendObservations.sort((left, right) =>
+      left.day.localeCompare(right.day),
+    );
+  }
+
+  private removeManualDailyObservation(
+    state: DashboardState,
+    sourceId: string,
+    day: string,
+  ): void {
+    const remove = (snapshot: DailyAssetSnapshot): DailyAssetSnapshot | null =>
+      withoutSnapshotSource(snapshot, sourceId);
+    const baselineIndex = state.dailyAssetSnapshots.findIndex(
+      (snapshot) => snapshot.day === day,
+    );
+    if (baselineIndex !== -1) {
+      const next = remove(state.dailyAssetSnapshots[baselineIndex]);
+      if (next === null) state.dailyAssetSnapshots.splice(baselineIndex, 1);
+      else state.dailyAssetSnapshots[baselineIndex] = next;
+    }
+    const trendIndex = state.dailyAssetTrendObservations.findIndex(
+      (snapshot) => snapshot.day === day,
+    );
+    if (trendIndex !== -1) {
+      const next = remove(state.dailyAssetTrendObservations[trendIndex]);
+      if (next === null) state.dailyAssetTrendObservations.splice(trendIndex, 1);
+      else state.dailyAssetTrendObservations[trendIndex] = next;
+    }
+  }
+
+  async createManualAssetSource(
+    input: CreateManualAssetSourceInput,
+    capturedAt: string,
+  ): Promise<void> {
+    await this.mutate((state) => {
+      const sourceId = randomUUID();
+      state.assetSources.push({
+        id: sourceId,
+        kind: "manual",
+        label: input.label,
+        hasManualRecord: false,
+        accountId: `manual:${sourceId}`,
+        permissions: [],
+        credentialReference: null,
+        snapshot: {
+          total: { amount: "0", currency: "CNY" },
+          holdings: [],
+          exchangeRates: [],
+          syncedAt: capturedAt,
+        },
+        sync: {
+          status: "current",
+          lastSuccessfulAt: capturedAt,
+          lastAttemptAt: capturedAt,
+          error: null,
+        },
+      });
+      state.assetCards.push({
+        id: randomUUID(),
+        kind: "asset",
+        title: "手工资产记录",
+        body: "每日记录资产总额",
+        sourceId,
+        span: 1,
+      });
+    });
+  }
+
+  async recordManualAssetSource(
+    sourceId: string,
+    input: ManualAssetRecordInput,
+    capturedAt: string,
+  ): Promise<void> {
+    await this.mutate((state) => {
+      if (input.day > shanghaiDay(capturedAt)) {
+        throw new Error("记录日期不能晚于今天");
+      }
+      const source = state.assetSources.find((item) => item.id === sourceId);
+      if (!source) throw new Error("资产来源不存在");
+      if (source.kind !== "manual") {
+        throw new Error("只有手工资产记录可以编辑今日总额");
+      }
+      const record: ManualAssetRecord = {
+        sourceId,
+        ...input,
+        recordedAt: capturedAt,
+      };
+      state.manualAssetRecords = [
+        ...state.manualAssetRecords.filter(
+          (item) => item.sourceId !== sourceId || item.day !== input.day,
+        ),
+        record,
+      ];
+      const latest = latestManualAssetRecord(
+        state.manualAssetRecords.filter((item) => item.sourceId === sourceId),
+      );
+      const updated = applyLatestManualAssetRecord(source, latest, capturedAt);
+      state.assetSources = state.assetSources.map((item) =>
+        item.id === sourceId ? updated : item,
+      );
+      this.recordManualDailyObservation(state, updated, record, capturedAt);
+    });
+  }
+
+  async deleteManualAssetSourceRecord(
+    sourceId: string,
+    day: string,
+    capturedAt: string,
+  ): Promise<void> {
+    await this.mutate((state) => {
+      const source = state.assetSources.find((item) => item.id === sourceId);
+      if (!source) throw new Error("资产来源不存在");
+      if (source.kind !== "manual") {
+        throw new Error("只有手工资产记录可以删除");
+      }
+      const recordExists = state.manualAssetRecords.some(
+        (record) => record.sourceId === sourceId && record.day === day,
+      );
+      if (!recordExists) throw new Error("指定日期没有手工资产记录");
+      state.manualAssetRecords = state.manualAssetRecords.filter(
+        (record) => record.sourceId !== sourceId || record.day !== day,
+      );
+      const latest = latestManualAssetRecord(
+        state.manualAssetRecords.filter((record) => record.sourceId === sourceId),
+      );
+      state.assetSources = state.assetSources.map((item) =>
+        item.id === sourceId
+          ? applyLatestManualAssetRecord(item, latest, capturedAt)
+          : item,
+      );
+      this.removeManualDailyObservation(state, sourceId, day);
+    });
+  }
+
   async disconnectAssetSource(sourceId: string): Promise<string | null> {
     return this.mutate((state) => {
       const source = state.assetSources.find((item) => item.id === sourceId);
       if (!source) throw new Error("资产来源不存在");
+      if (source.kind === "manual") {
+        throw new Error("手工资产记录不支持断开");
+      }
       source.lifecycle = "disconnected";
       return source.credentialReference;
     });
@@ -682,6 +1078,9 @@ export class FileDashboardDatabase {
       const source = state.assetSources.find((item) => item.id === sourceId);
       if (!source) throw new Error("资产来源不存在");
       state.assetSources = state.assetSources.filter((item) => item.id !== sourceId);
+      state.manualAssetRecords = state.manualAssetRecords.filter(
+        (record) => record.sourceId !== sourceId,
+      );
       state.assetCards = state.assetCards.filter(
         (card) => card.kind !== "asset" || card.sourceId !== sourceId,
       );
@@ -787,6 +1186,7 @@ function parseLegacyDashboardStateSync(
         schemaVersion: DASHBOARD_SCHEMA_VERSION,
         assetCards: [],
         assetSources: [],
+        manualAssetRecords: [],
         dailyAssetSnapshots: [],
         dailyAssetTrendObservations: [],
       };
@@ -799,6 +1199,7 @@ function parseLegacyDashboardStateSync(
       schemaVersion: DASHBOARD_SCHEMA_VERSION,
       assetCards,
       assetSources: [],
+      manualAssetRecords: [],
       dailyAssetSnapshots: [],
       dailyAssetTrendObservations: [],
     };
@@ -810,10 +1211,20 @@ function parseLegacyDashboardStateSync(
   if (assetCards === null || !Array.isArray(value.assetSources)) {
     throw new Error(`Dashboard 数据文件格式无效: ${dashboardPath}`);
   }
+  const assetSources = value.assetSources.map(migrateAssetSource);
+  const sourceById = new Map(assetSources.map((source) => [source.id, source]));
+  const manualAssetRecords = uniqueManualAssetRecords(
+    Array.isArray(value.manualAssetRecords)
+      ? value.manualAssetRecords
+        .map(migrateManualAssetRecord)
+        .filter((record) => sourceById.get(record.sourceId)?.kind === "manual")
+      : legacyManualAssetRecords(assetSources),
+  );
   return {
     schemaVersion: DASHBOARD_SCHEMA_VERSION,
     assetCards,
-    assetSources: value.assetSources.map(migrateAssetSource),
+    assetSources,
+    manualAssetRecords,
     dailyAssetSnapshots: Array.isArray(value.dailyAssetSnapshots)
       ? value.dailyAssetSnapshots.map(migrateDailyObservation)
       : [],
@@ -878,6 +1289,13 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
           CHECK (json_valid(ignored_asset_keys_json)),
         included_asset_keys_json TEXT NOT NULL DEFAULT '[]'
           CHECK (json_valid(included_asset_keys_json)),
+        has_manual_record INTEGER NOT NULL DEFAULT 1
+          CHECK (has_manual_record IN (0, 1)),
+        manual_asset_class TEXT
+          CHECK (
+            manual_asset_class IS NULL OR
+            manual_asset_class IN ('securities', 'crypto', 'cash', 'other')
+          ),
         lifecycle TEXT CHECK (lifecycle IS NULL OR lifecycle IN ('connected', 'disconnected'))
       ) STRICT;
       CREATE TABLE IF NOT EXISTS asset_source_snapshots (
@@ -896,6 +1314,14 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
         last_attempt_at TEXT NOT NULL,
         error TEXT,
         failed_mode TEXT CHECK (failed_mode IS NULL OR failed_mode IN ('all', 'prices', 'holdings'))
+      ) STRICT;
+      CREATE TABLE IF NOT EXISTS manual_asset_records (
+        source_id TEXT NOT NULL REFERENCES asset_sources(id) ON DELETE CASCADE,
+        day TEXT NOT NULL,
+        amount TEXT NOT NULL,
+        currency TEXT NOT NULL CHECK (currency IN ('USD', 'CNY', 'HKD')),
+        recorded_at TEXT NOT NULL,
+        PRIMARY KEY (source_id, day)
       ) STRICT;
       CREATE TABLE IF NOT EXISTS asset_cards (
         id TEXT PRIMARY KEY,
@@ -988,6 +1414,18 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
     if (schemaVersion === "7") {
       this.migrateSchemaVersionSeven();
       schemaVersion = "8";
+    }
+    if (schemaVersion === "8") {
+      this.migrateSchemaVersionEight();
+      schemaVersion = "9";
+    }
+    if (schemaVersion === "9") {
+      this.migrateSchemaVersionNine();
+      schemaVersion = "10";
+    }
+    if (schemaVersion === "10") {
+      this.migrateSchemaVersionTen();
+      schemaVersion = "11";
     }
     if (schemaVersion !== String(SQLITE_SCHEMA_VERSION)) {
       throw new Error(`不支持的 SQLite schema 版本: ${schemaVersion}`);
@@ -1155,6 +1593,76 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
     });
   }
 
+  private migrateSchemaVersionEight(): void {
+    this.transaction(() => {
+      const columns = this.database
+        .prepare("PRAGMA table_info(asset_sources)")
+        .all() as Array<{ name: string }>;
+      if (!columns.some(({ name }) => name === "has_manual_record")) {
+        this.database.exec(`
+          ALTER TABLE asset_sources
+          ADD COLUMN has_manual_record INTEGER NOT NULL DEFAULT 1
+            CHECK (has_manual_record IN (0, 1));
+        `);
+      }
+      this.database
+        .prepare("UPDATE schema_metadata SET value = ? WHERE key = ?")
+        .run("9", "schema_version");
+    });
+  }
+
+  private migrateSchemaVersionNine(): void {
+    this.transaction(() => {
+      const rows = this.database
+        .prepare(`
+          SELECT sources.id, snapshots.total_amount, snapshots.total_currency,
+            snapshots.synced_at
+          FROM asset_sources AS sources
+          JOIN asset_source_snapshots AS snapshots ON snapshots.source_id = sources.id
+          WHERE sources.kind = 'manual' AND sources.has_manual_record = 1
+        `)
+        .all() as SqliteRow[];
+      const insert = this.database.prepare(`
+        INSERT OR IGNORE INTO manual_asset_records (
+          source_id, day, amount, currency, recorded_at
+        ) VALUES (?, ?, ?, ?, ?)
+      `);
+      for (const row of rows) {
+        insert.run(
+          row.id as string,
+          shanghaiDay(row.synced_at as string),
+          row.total_amount as string,
+          row.total_currency as string,
+          row.synced_at as string,
+        );
+      }
+      this.database
+        .prepare("UPDATE schema_metadata SET value = ? WHERE key = ?")
+        .run("10", "schema_version");
+    });
+  }
+
+  private migrateSchemaVersionTen(): void {
+    this.transaction(() => {
+      const columns = this.database
+        .prepare("PRAGMA table_info(asset_sources)")
+        .all() as Array<{ name: string }>;
+      if (!columns.some(({ name }) => name === "manual_asset_class")) {
+        this.database.exec(`
+          ALTER TABLE asset_sources
+          ADD COLUMN manual_asset_class TEXT
+            CHECK (
+              manual_asset_class IS NULL OR
+              manual_asset_class IN ('securities', 'crypto', 'cash', 'other')
+            );
+        `);
+      }
+      this.database
+        .prepare("UPDATE schema_metadata SET value = ? WHERE key = ?")
+        .run("11", "schema_version");
+    });
+  }
+
   private initializeLegacyData(): void {
     if (this.metadata("json_import_complete") === "1") return;
     const state = parseLegacyDashboardStateSync(
@@ -1266,8 +1774,8 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
         INSERT INTO asset_sources (
           id, position, kind, label, display_name, account_id, permissions_json,
           credential_reference, ignored_asset_keys_json, included_asset_keys_json,
-          lifecycle
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          has_manual_record, manual_asset_class, lifecycle
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
       .run(
         source.id,
@@ -1280,12 +1788,24 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
         source.credentialReference,
         JSON.stringify(source.ignoredAssetKeys ?? []),
         JSON.stringify(source.includedAssetKeys ?? []),
+        source.kind === "manual" && source.hasManualRecord === false ? 0 : 1,
+        source.kind === "manual" ? source.manualAssetClass ?? null : null,
         source.lifecycle ?? null,
       );
     this.upsertSourceDetails(source);
   }
 
   private upsertSourceDetails(source: AssetSourceSummary): void {
+    this.database
+      .prepare(`
+        UPDATE asset_sources
+        SET has_manual_record = ?
+        WHERE id = ?
+      `)
+      .run(
+        source.kind === "manual" && source.hasManualRecord === false ? 0 : 1,
+        source.id,
+      );
     this.database
       .prepare(`
         INSERT OR REPLACE INTO asset_source_snapshots (
@@ -1441,6 +1961,113 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
     this.recalculateDailyTrendObservation(snapshot.day);
   }
 
+  private upsertDailySourceObservation(
+    table:
+      | "daily_asset_source_snapshots"
+      | "daily_asset_source_trend_observations",
+    day: string,
+    source: DailyAssetSourceSnapshot,
+  ): void {
+    this.database
+      .prepare(`
+        INSERT INTO ${table} (
+          day, source_id, label, kind, captured_at, complete, status, total_usd, total_cny,
+          total_hkd
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(day, source_id) DO UPDATE SET
+          label = excluded.label,
+          kind = excluded.kind,
+          captured_at = excluded.captured_at,
+          complete = excluded.complete,
+          status = excluded.status,
+          total_usd = excluded.total_usd,
+          total_cny = excluded.total_cny,
+          total_hkd = excluded.total_hkd
+      `)
+      .run(
+        day,
+        source.sourceId,
+        source.label,
+        source.kind,
+        source.capturedAt,
+        Number(source.complete),
+        source.status ?? (source.complete ? "complete" : "incomplete"),
+        source.total.USD,
+        source.total.CNY,
+        source.total.HKD ?? null,
+      );
+  }
+
+  /**
+   * 手工记录是按上海自然日覆盖写入：同一来源当天只有一条，编辑会替换该来源的日值，
+   * 而不会覆盖同日外部来源的观测。
+   */
+  private recordManualDailyObservation(
+    source: AssetSourceSummary,
+    record: ManualAssetRecord,
+    capturedAt: string,
+  ): void {
+    const manualSource = manualDailySource(source, record);
+    const isCurrentDay = record.day === shanghaiDay(capturedAt);
+    const currentObservation = isCurrentDay
+      ? buildDailyAssetSnapshot(this.listSourcesSync(), capturedAt)
+      : null;
+
+    const hasBaseline = this.database
+      .prepare("SELECT day FROM daily_asset_snapshots WHERE day = ?")
+      .get(record.day) !== undefined;
+    if (!hasBaseline && currentObservation !== null) {
+      this.insertDailyBaseline(currentObservation);
+    } else if (hasBaseline) {
+      this.upsertDailySourceObservation(
+        "daily_asset_source_snapshots",
+        record.day,
+        manualSource,
+      );
+      this.recalculateDailySnapshot(record.day, {
+        snapshot: "daily_asset_snapshots",
+        source: "daily_asset_source_snapshots",
+      });
+    }
+
+    const hasTrend = this.database
+      .prepare("SELECT day FROM daily_asset_trend_observations WHERE day = ?")
+      .get(record.day) !== undefined;
+    if (!hasTrend && currentObservation !== null) {
+      this.upsertDailyTrendObservation(currentObservation);
+    } else if (!hasTrend) {
+      this.database
+        .prepare(`
+          INSERT INTO daily_asset_trend_observations (
+            day, captured_at, complete, status, total_usd, total_cny, total_hkd,
+            exchange_rates_json
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `)
+        .run(
+          record.day,
+          manualSource.capturedAt,
+          Number(manualSource.complete),
+          manualSource.status ?? "incomplete",
+          manualSource.total.USD,
+          manualSource.total.CNY,
+          manualSource.total.HKD ?? null,
+          "[]",
+        );
+      this.upsertDailySourceObservation(
+        "daily_asset_source_trend_observations",
+        record.day,
+        manualSource,
+      );
+    } else {
+      this.upsertDailySourceObservation(
+        "daily_asset_source_trend_observations",
+        record.day,
+        manualSource,
+      );
+      this.recalculateDailyTrendObservation(record.day);
+    }
+  }
+
   private recalculateDailySnapshot(
     day: string,
     tables: {
@@ -1555,6 +2182,17 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
             (row.included_asset_keys_json as string | null) ?? "[]",
           ),
         ),
+        ...(row.kind === "manual"
+          ? {
+              hasManualRecord: row.has_manual_record !== 0,
+              ...(typeof row.manual_asset_class === "string"
+                ? {
+                    manualAssetClass:
+                      row.manual_asset_class as ManualAssetClass,
+                  }
+                : {}),
+            }
+          : {}),
         snapshot: {
           total: {
             amount: snapshot.total_amount as string,
@@ -1583,6 +2221,23 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
           : { lifecycle: row.lifecycle as "connected" | "disconnected" }),
       });
     });
+  }
+
+  private listManualAssetRecordsSync(): ManualAssetRecord[] {
+    const rows = this.database
+      .prepare(`
+        SELECT source_id, day, amount, currency, recorded_at
+        FROM manual_asset_records
+        ORDER BY source_id, day DESC
+      `)
+      .all() as SqliteRow[];
+    return rows.map((row) => ({
+      sourceId: row.source_id as string,
+      day: row.day as string,
+      amount: row.amount as string,
+      currency: row.currency as ManualAssetRecord["currency"],
+      recordedAt: row.recorded_at as string,
+    }));
   }
 
   private listDailyAssetSnapshotsSync(): DailyAssetSnapshot[] {
@@ -1689,7 +2344,7 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
           SET kind = ?, label = ?, display_name = ?, account_id = ?,
               permissions_json = ?, credential_reference = ?,
               ignored_asset_keys_json = ?, included_asset_keys_json = ?,
-              lifecycle = ?
+              manual_asset_class = ?, lifecycle = ?
           WHERE id = ?
         `)
         .run(
@@ -1701,6 +2356,7 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
           source.credentialReference,
           JSON.stringify(source.ignoredAssetKeys ?? []),
           JSON.stringify(source.includedAssetKeys ?? []),
+          source.kind === "manual" ? source.manualAssetClass ?? null : null,
           source.lifecycle ?? null,
           source.id,
         );
@@ -1714,6 +2370,10 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
 
   async listDailyAssetTrendObservations(): Promise<DailyAssetTrendObservation[]> {
     return this.listDailyAssetTrendObservationsSync();
+  }
+
+  async listManualAssetRecords(): Promise<ManualAssetRecord[]> {
+    return this.listManualAssetRecordsSync();
   }
 
   async validateBusinessData(state: BusinessDataState): Promise<void> {
@@ -1804,6 +2464,26 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
     });
   }
 
+  async setAssetSourceManualClass(
+    sourceId: string,
+    assetClass: ManualAssetClass | null,
+  ): Promise<void> {
+    this.transaction(() => {
+      const source = this.database
+        .prepare("SELECT kind FROM asset_sources WHERE id = ?")
+        .get(sourceId) as { kind: string } | undefined;
+      if (!source) throw new Error("资产来源不存在");
+      if (source.kind !== "manual") {
+        throw new Error("只有手工资产来源可以设置资产类别");
+      }
+      this.database
+        .prepare(
+          "UPDATE asset_sources SET manual_asset_class = ? WHERE id = ?",
+        )
+        .run(assetClass, sourceId);
+    });
+  }
+
   async setAssetSourceEvmTokenPreferences(
     sourceId: string,
     ignoredAssetKeys: string[],
@@ -1825,14 +2505,149 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
     });
   }
 
+  async createManualAssetSource(
+    input: CreateManualAssetSourceInput,
+    capturedAt: string,
+  ): Promise<void> {
+    this.transaction(() => {
+      const sourceId = randomUUID();
+      const source: AssetSourceSummary = {
+        id: sourceId,
+        kind: "manual",
+        label: input.label,
+        hasManualRecord: false,
+        accountId: `manual:${sourceId}`,
+        permissions: [],
+        credentialReference: null,
+        snapshot: {
+          total: { amount: "0", currency: "CNY" },
+          holdings: [],
+          exchangeRates: [],
+          syncedAt: capturedAt,
+        },
+        sync: {
+          status: "current",
+          lastSuccessfulAt: capturedAt,
+          lastAttemptAt: capturedAt,
+          error: null,
+        },
+      };
+      const sourcePosition = (
+        this.database.prepare("SELECT COUNT(*) AS count FROM asset_sources").get() as SqliteRow
+      ).count as number;
+      const cardPosition = (
+        this.database.prepare("SELECT COUNT(*) AS count FROM asset_cards").get() as SqliteRow
+      ).count as number;
+      this.insertSource(source, sourcePosition);
+      this.insertCard(
+        {
+          id: randomUUID(),
+          kind: "asset",
+          title: "手工资产记录",
+          body: "每日记录资产总额",
+          sourceId,
+          span: 1,
+        },
+        cardPosition,
+      );
+    });
+  }
+
+  async recordManualAssetSource(
+    sourceId: string,
+    input: ManualAssetRecordInput,
+    capturedAt: string,
+  ): Promise<void> {
+    this.transaction(() => {
+      if (input.day > shanghaiDay(capturedAt)) {
+        throw new Error("记录日期不能晚于今天");
+      }
+      const source = this.listSourcesSync().find(
+        (item) => item.id === sourceId,
+      );
+      if (!source) throw new Error("资产来源不存在");
+      if (source.kind !== "manual") {
+        throw new Error("只有手工资产记录可以编辑今日总额");
+      }
+      this.database
+        .prepare(`
+          INSERT INTO manual_asset_records (
+            source_id, day, amount, currency, recorded_at
+          ) VALUES (?, ?, ?, ?, ?)
+          ON CONFLICT(source_id, day) DO UPDATE SET
+            amount = excluded.amount,
+            currency = excluded.currency,
+            recorded_at = excluded.recorded_at
+        `)
+        .run(sourceId, input.day, input.amount, input.currency, capturedAt);
+      const record = this.listManualAssetRecordsSync().find(
+        (item) => item.sourceId === sourceId && item.day === input.day,
+      );
+      if (!record) throw new Error("手工资产记录保存失败");
+      const latest = latestManualAssetRecord(
+        this.listManualAssetRecordsSync().filter(
+          (item) => item.sourceId === sourceId,
+        ),
+      );
+      const updated = applyLatestManualAssetRecord(source, latest, capturedAt);
+      this.upsertSourceDetails(updated);
+      this.recordManualDailyObservation(updated, record, capturedAt);
+    });
+  }
+
+  async deleteManualAssetSourceRecord(
+    sourceId: string,
+    day: string,
+    capturedAt: string,
+  ): Promise<void> {
+    this.transaction(() => {
+      const source = this.listSourcesSync().find(
+        (item) => item.id === sourceId,
+      );
+      if (!source) throw new Error("资产来源不存在");
+      if (source.kind !== "manual") {
+        throw new Error("只有手工资产记录可以删除");
+      }
+      const result = this.database
+        .prepare(
+          "DELETE FROM manual_asset_records WHERE source_id = ? AND day = ?",
+        )
+        .run(sourceId, day);
+      if (result.changes === 0) throw new Error("指定日期没有手工资产记录");
+      const latest = latestManualAssetRecord(
+        this.listManualAssetRecordsSync().filter(
+          (item) => item.sourceId === sourceId,
+        ),
+      );
+      this.upsertSourceDetails(
+        applyLatestManualAssetRecord(source, latest, capturedAt),
+      );
+      for (const [snapshot, sourceTable] of [
+        ["daily_asset_snapshots", "daily_asset_source_snapshots"],
+        ["daily_asset_trend_observations", "daily_asset_source_trend_observations"],
+      ] as const) {
+        this.database
+          .prepare(`DELETE FROM ${sourceTable} WHERE day = ? AND source_id = ?`)
+          .run(day, sourceId);
+        this.recalculateDailySnapshot(day, {
+          snapshot,
+          source: sourceTable,
+        });
+      }
+    });
+  }
+
   async disconnectAssetSource(sourceId: string): Promise<string | null> {
     return this.transaction(() => {
       const source = this.database
         .prepare(
-          "SELECT credential_reference FROM asset_sources WHERE id = ?",
+          "SELECT kind, credential_reference FROM asset_sources WHERE id = ?",
         )
         .get(sourceId) as SqliteRow | undefined;
       if (source === undefined) throw new Error("资产来源不存在");
+      if (source.kind === "manual") {
+        throw new Error("手工资产记录不支持断开");
+      }
       this.database
         .prepare("UPDATE asset_sources SET lifecycle = 'disconnected' WHERE id = ?")
         .run(sourceId);
@@ -2106,6 +2921,43 @@ class DatabaseAssetSources implements AssetSources {
   update(source: AssetSourceSummary) { return this.database.updateSource(source); }
 }
 
+class DatabaseManualAssetRecords implements ManualAssetRecords {
+  constructor(
+    private readonly database: DashboardDatabase,
+    private readonly clock: Clock,
+  ) {}
+
+  create(input: CreateManualAssetSourceInput): Promise<void> {
+    return this.database.createManualAssetSource(
+      input,
+      this.clock.now().toISOString(),
+    );
+  }
+
+  list(): Promise<ManualAssetRecord[]> {
+    return this.database.listManualAssetRecords();
+  }
+
+  record(
+    sourceId: string,
+    input: ManualAssetRecordInput,
+  ): Promise<void> {
+    return this.database.recordManualAssetSource(
+      sourceId,
+      input,
+      this.clock.now().toISOString(),
+    );
+  }
+
+  delete(sourceId: string, day: string): Promise<void> {
+    return this.database.deleteManualAssetSourceRecord(
+      sourceId,
+      day,
+      this.clock.now().toISOString(),
+    );
+  }
+}
+
 class DatabaseDailyAssetSnapshots implements DailyAssetSnapshots {
   constructor(private readonly database: DashboardDatabase) {}
   list() { return this.database.listDailyAssetSnapshots(); }
@@ -2137,6 +2989,13 @@ class DatabaseAssetSourceLifecycle implements AssetSourceLifecycle {
     );
   }
 
+  setManualAssetClass(
+    sourceId: string,
+    assetClass: ManualAssetClass | null,
+  ): Promise<void> {
+    return this.database.setAssetSourceManualClass(sourceId, assetClass);
+  }
+
   async setEvmTokenPreference(
     sourceId: string,
     assetKeys: string[],
@@ -2159,6 +3018,13 @@ class DatabaseAssetSourceLifecycle implements AssetSourceLifecycle {
   }
 
   async disconnect(sourceId: string): Promise<void> {
+    const source = (await this.database.listSources()).find(
+      (item) => item.id === sourceId,
+    );
+    if (!source) throw new Error("资产来源不存在");
+    if (source.kind === "manual") {
+      throw new Error("手工资产记录不支持断开");
+    }
     const reference = await this.database.disconnectAssetSource(sourceId);
     if (reference !== null) await this.secrets.remove(reference);
   }
@@ -2426,6 +3292,7 @@ export function createProductionServices(
   });
   void secretRecovery.catch(() => undefined);
   const assetSources = new DatabaseAssetSources(database);
+  const manualAssetRecords = new DatabaseManualAssetRecords(database, clock);
   const dailyAssetSnapshots = new DatabaseDailyAssetSnapshots(database);
   const readySecrets = new ReadySecretStore(secrets, secretRecovery);
   const externalServices: ExternalServiceConfiguration =
@@ -2460,6 +3327,7 @@ export function createProductionServices(
     clock,
     assetCards: new DatabaseAssetCardStore(database),
     assetSources,
+    manualAssetRecords,
     assetSourceLifecycle: new DatabaseAssetSourceLifecycle(
       database,
       readySecrets,

@@ -446,9 +446,11 @@ export async function POST(request: Request) {
     action !== "schema-v2-migration" &&
     action !== "schema-v4-trend-observation-migration" &&
     action !== "schema-v6-hkd-fx-migration" &&
+    action !== "schema-v8-manual-source-migration" &&
     action !== "display-name-persistence" &&
     action !== "evm-token-preference-persistence" &&
-    action !== "longbridge-option-read-upgrade"
+    action !== "longbridge-option-read-upgrade" &&
+    action !== "manual-source-record-persistence"
   ) {
     return Response.json({ error: "unknown action" }, { status: 400 });
   }
@@ -458,6 +460,122 @@ export async function POST(request: Request) {
   const previousKey = process.env.PAD_SECRET_ENCRYPTION_KEY;
   process.env.PAD_SECRET_ENCRYPTION_KEY = Buffer.alloc(32, 21).toString("base64");
   try {
+    if (action === "manual-source-record-persistence") {
+      await mkdir(dataDirectory, { recursive: true });
+      const databasePath = path.join(dataDirectory, "dashboard.sqlite");
+      const database = new SqliteDashboardDatabase(
+        databasePath,
+        path.join(dataDirectory, "dashboard.json"),
+        path.join(dataDirectory, "cards.json"),
+      );
+      await database.createManualAssetSource(
+        { label: "A股" },
+        "2026-08-03T01:00:00.000Z",
+      );
+      const [unrecorded] = await database.listSources();
+      const unrecordedBaselines = await database.listDailyAssetSnapshots();
+      await database.recordManualAssetSource(
+        unrecorded.id,
+        { day: "2026-08-03", amount: "108000", currency: "CNY" },
+        "2026-08-03T08:00:00.000Z",
+      );
+      await database.setAssetSourceManualClass(unrecorded.id, "securities");
+      await database.createManualAssetSource(
+        { label: "场外基金" },
+        "2026-08-03T09:00:00.000Z",
+      );
+      const reloaded = new SqliteDashboardDatabase(
+        databasePath,
+        path.join(dataDirectory, "dashboard.json"),
+        path.join(dataDirectory, "cards.json"),
+      );
+      const sources = await reloaded.listSources();
+      const baselines = await reloaded.listDailyAssetSnapshots();
+      const trend = await reloaded.listDailyAssetTrendObservations();
+      return Response.json({
+        unrecorded: {
+          hasManualRecord: unrecorded.hasManualRecord,
+          dailySnapshots: unrecordedBaselines.length,
+        },
+        sources: sources.map((source) => ({
+          label: source.label,
+          hasManualRecord: source.hasManualRecord,
+          manualAssetClass: source.manualAssetClass,
+          total: source.snapshot.total,
+        })),
+        cards: (await reloaded.listAssetCards()).length,
+        baselines: baselines.map((snapshot) => ({
+          sources: snapshot.sources.map((source) => source.label),
+          total: snapshot.total,
+        })),
+        trend: trend.map((snapshot) => ({
+          sources: snapshot.sources.map((source) => source.label),
+          total: snapshot.total,
+        })),
+      });
+    }
+    if (action === "schema-v8-manual-source-migration") {
+      await mkdir(dataDirectory, { recursive: true });
+      const databasePath = path.join(dataDirectory, "dashboard.sqlite");
+      const legacyDashboardPath = path.join(dataDirectory, "dashboard.json");
+      const legacyCardsPath = path.join(dataDirectory, "cards.json");
+      const first = new SqliteDashboardDatabase(
+        databasePath,
+        legacyDashboardPath,
+        legacyCardsPath,
+      );
+      await first.connectBinance(
+        authorization("schema-v8", "not-persisted-here"),
+        "opaque-v8-reference",
+        "2026-08-03T01:00:00.000Z",
+      );
+      const downgrade = new DatabaseSync(databasePath);
+      downgrade.exec(`
+        ALTER TABLE asset_sources DROP COLUMN has_manual_record;
+        UPDATE schema_metadata SET value = '8' WHERE key = 'schema_version';
+      `);
+      downgrade.close();
+
+      const migrated = new SqliteDashboardDatabase(
+        databasePath,
+        legacyDashboardPath,
+        legacyCardsPath,
+      );
+      await migrated.createManualAssetSource(
+        { label: "A股" },
+        "2026-08-03T02:00:00.000Z",
+      );
+      const [existing, manual] = await migrated.listSources();
+      await migrated.recordManualAssetSource(
+        manual.id,
+        { day: "2026-08-03", amount: "108000", currency: "CNY" },
+        "2026-08-03T08:00:00.000Z",
+      );
+      await migrated.setAssetSourceManualClass(manual.id, "securities");
+      const inspection = new DatabaseSync(databasePath, { readOnly: true });
+      const schemaVersion = inspection
+        .prepare("SELECT value FROM schema_metadata WHERE key = 'schema_version'")
+        .get() as { value: string };
+      const columns = inspection
+        .prepare("PRAGMA table_info(asset_sources)")
+        .all() as Array<{ name: string }>;
+      inspection.close();
+      const sources = await migrated.listSources();
+      return Response.json({
+        schemaVersion: schemaVersion.value,
+        hasManualRecordColumn: columns.some(
+          ({ name }) => name === "has_manual_record",
+        ),
+        manualAssetClassColumn: columns.some(
+          ({ name }) => name === "manual_asset_class",
+        ),
+        existing: {
+          id: existing.id,
+          label: existing.label,
+        },
+        manual: sources.find((source) => source.id === manual.id),
+      });
+    }
     if (action === "schema-v2-migration") {
       await mkdir(dataDirectory, { recursive: true });
       new SqliteDashboardDatabase(

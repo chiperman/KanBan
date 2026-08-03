@@ -3,6 +3,7 @@ import type {
   AssetSourceLifecycle,
   AssetSynchronization,
   AssetSourceConnections,
+  ManualAssetRecords,
   BinanceReadOnly,
   BitgetReadOnly,
   EvmWatchWalletReadOnly,
@@ -51,6 +52,7 @@ export interface AppServices {
   bitget: BitgetReadOnly;
   evm: EvmWatchWalletReadOnly;
   assetSourceConnections: AssetSourceConnections;
+  manualAssetRecords: ManualAssetRecords;
   assetSourceOnboarding: AssetSourceOnboarding;
   businessDataBackups: BusinessDataBackup;
 }
@@ -78,7 +80,8 @@ function hasCurrentServices(
   return (
     services !== null &&
     services.externalServices !== undefined &&
-    typeof services.assetSourceLifecycle.setEvmTokenPreference === "function"
+    typeof services.assetSourceLifecycle.setEvmTokenPreference === "function" &&
+    typeof services.manualAssetRecords.record === "function"
   );
 }
 

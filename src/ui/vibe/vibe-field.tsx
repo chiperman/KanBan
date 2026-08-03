@@ -6,6 +6,7 @@ import type {
   Ref,
   TextareaHTMLAttributes,
 } from "react";
+import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
 
 interface VibeFieldProps
@@ -56,7 +57,10 @@ export function VibeSelect<Value extends string>({
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const optionsRef = useRef<HTMLDivElement>(null);
   const selectedOptionRef = useRef<HTMLButtonElement>(null);
+  const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
+  const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
   const labelId = `${fieldId}-label`;
   const listboxId = `${fieldId}-options`;
   const selected = options.find((option) => option.value === value) ?? options[0];
@@ -69,12 +73,72 @@ export function VibeSelect<Value extends string>({
     .join(" ");
 
   useEffect(() => {
+    setPortalRoot(
+      rootRef.current?.closest<HTMLElement>(".vibe-dialog-overlay") ??
+        document.body,
+    );
+  }, []);
+
+  useEffect(() => {
     if (!open) return;
+    const updatePosition = () => {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      const viewportPadding = 12;
+      const gap = 4;
+      const menuHeight = Math.min(options.length * 42 + 8, 280);
+      const width = Math.min(
+        rect.width,
+        window.innerWidth - viewportPadding * 2,
+      );
+      const left = Math.min(
+        Math.max(viewportPadding, rect.left),
+        window.innerWidth - width - viewportPadding,
+      );
+      const preferredTop = rect.bottom + gap;
+      setPosition({
+        top: preferredTop + menuHeight > window.innerHeight - viewportPadding
+          ? Math.max(viewportPadding, rect.top - menuHeight - gap)
+          : preferredTop,
+        left,
+        width,
+      });
+    };
+    updatePosition();
     const frame = window.requestAnimationFrame(() => {
       selectedOptionRef.current?.focus();
     });
-    return () => window.cancelAnimationFrame(frame);
-  }, [open]);
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (
+        !rootRef.current?.contains(target) &&
+        !optionsRef.current?.contains(target)
+      ) {
+        setOpen(false);
+      }
+    };
+    const onFocusIn = (event: FocusEvent) => {
+      const target = event.target as Node;
+      if (
+        !rootRef.current?.contains(target) &&
+        !optionsRef.current?.contains(target)
+      ) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("focusin", onFocusIn);
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("focusin", onFocusIn);
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [open, options.length]);
 
   function closeAndFocusTrigger() {
     setOpen(false);
@@ -91,7 +155,7 @@ export function VibeSelect<Value extends string>({
     destination: "next" | "previous" | "first" | "last",
   ) {
     const optionElements = Array.from(
-      rootRef.current?.querySelectorAll<HTMLButtonElement>('[role="option"]') ?? [],
+      optionsRef.current?.querySelectorAll<HTMLButtonElement>('[role="option"]') ?? [],
     );
     if (optionElements.length === 0) return;
     const currentIndex = optionElements.indexOf(event.currentTarget);
@@ -107,21 +171,60 @@ export function VibeSelect<Value extends string>({
     optionElements[nextIndex]?.focus();
   }
 
+  const optionList = open && portalRoot ? createPortal(
+    <div
+      className="vibe-select vibe-select__portal"
+      data-vibe-component="select-options"
+      data-vibe-variant={variant}
+      style={position}
+    >
+      <div
+        ref={optionsRef}
+        aria-labelledby={labelId}
+        className="vibe-select__options"
+        id={listboxId}
+        role="listbox"
+      >
+        {options.map((option) => (
+          <button
+            key={option.value}
+            ref={option.value === value ? selectedOptionRef : undefined}
+            type="button"
+            aria-selected={option.value === value}
+            className="vibe-select__option"
+            onClick={() => chooseOption(option.value)}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowDown") moveOptionFocus(event, "next");
+              else if (event.key === "ArrowUp") moveOptionFocus(event, "previous");
+              else if (event.key === "Home") moveOptionFocus(event, "first");
+              else if (event.key === "End") moveOptionFocus(event, "last");
+              else if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                chooseOption(option.value);
+              } else if (event.key === "Escape") {
+                event.preventDefault();
+                closeAndFocusTrigger();
+              }
+            }}
+            role="option"
+          >
+            <span>{option.label}</span>
+            {option.value === value ? (
+              <span className="vibe-select__selected-mark" aria-hidden="true" />
+            ) : null}
+          </button>
+        ))}
+      </div>
+    </div>,
+    portalRoot,
+  ) : null;
+
   return (
     <div
       ref={rootRef}
       className={rootClassName}
       data-vibe-component="select"
       data-vibe-variant={variant}
-      onBlur={(event) => {
-        const nextTarget = event.relatedTarget;
-        if (
-          !(nextTarget instanceof Node) ||
-          !event.currentTarget.contains(nextTarget)
-        ) {
-          setOpen(false);
-        }
-      }}
     >
       <span className="vibe-field__label" id={labelId}>
         {label}
@@ -150,44 +253,7 @@ export function VibeSelect<Value extends string>({
         <span>{selected?.label ?? "请选择"}</span>
         <span className="vibe-select__chevron" aria-hidden="true" />
       </button>
-      {open ? (
-        <div
-          aria-labelledby={labelId}
-          className="vibe-select__options"
-          id={listboxId}
-          role="listbox"
-        >
-          {options.map((option) => (
-            <button
-              key={option.value}
-              ref={option.value === value ? selectedOptionRef : undefined}
-              type="button"
-              aria-selected={option.value === value}
-              className="vibe-select__option"
-              onClick={() => chooseOption(option.value)}
-              onKeyDown={(event) => {
-                if (event.key === "ArrowDown") moveOptionFocus(event, "next");
-                else if (event.key === "ArrowUp") moveOptionFocus(event, "previous");
-                else if (event.key === "Home") moveOptionFocus(event, "first");
-                else if (event.key === "End") moveOptionFocus(event, "last");
-                else if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  chooseOption(option.value);
-                } else if (event.key === "Escape") {
-                  event.preventDefault();
-                  closeAndFocusTrigger();
-                }
-              }}
-              role="option"
-            >
-              <span>{option.label}</span>
-              {option.value === value ? (
-                <span className="vibe-select__selected-mark" aria-hidden="true" />
-              ) : null}
-            </button>
-          ))}
-        </div>
-      ) : null}
+      {optionList}
     </div>
   );
 }

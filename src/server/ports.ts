@@ -44,6 +44,10 @@ export interface AssetSourceSummary {
   ignoredAssetKeys?: string[];
   /** 所有者确认属于投资资产、即使暂时缺价也应正常展示的 EVM 资产标识。 */
   includedAssetKeys?: string[];
+  /** 手工来源创建后尚未添加首条数据时为 false；不得将占位快照计入资产。 */
+  hasManualRecord?: boolean;
+  /** 手工来源在资产类别分布中的归类；旧数据缺省为待分类。 */
+  manualAssetClass?: ManualAssetClass;
   /** 旧数据缺省为 connected；断开后仅保留历史身份与快照。 */
   lifecycle?: "connected" | "disconnected";
 }
@@ -167,6 +171,7 @@ export interface AssetCashBalance {
 }
 
 export type AssetClass = "securities" | "crypto" | "cash";
+export type ManualAssetClass = AssetClass | "other";
 
 export type AssetPositionState =
   | "active"
@@ -423,6 +428,34 @@ export interface AssetSourceConnections {
   connectEvm(result: EvmWatchAuthorizationResult): Promise<void>;
 }
 
+export interface ManualAssetRecordInput {
+  /** 按 Asia/Shanghai 解释的自然日，格式 YYYY-MM-DD。 */
+  day: string;
+  amount: string;
+  currency: "USD" | "CNY" | "HKD";
+}
+
+export interface ManualAssetRecord extends ManualAssetRecordInput {
+  sourceId: string;
+  /** 本次新增或编辑的实际保存时间。 */
+  recordedAt: string;
+}
+
+export interface CreateManualAssetSourceInput {
+  label: string;
+}
+
+/**
+ * 所有者创建无法接入的资产来源，并维护各自的每日总额记录；
+ * 每个来源在一个上海自然日只有一条记录。
+ */
+export interface ManualAssetRecords {
+  create(input: CreateManualAssetSourceInput): Promise<void>;
+  list(): Promise<ManualAssetRecord[]>;
+  record(sourceId: string, input: ManualAssetRecordInput): Promise<void>;
+  delete(sourceId: string, day: string): Promise<void>;
+}
+
 /** 外部资产来源仅保存服务端凭证引用；凭证正文只能进入 SecretStore。 */
 export interface AssetSources {
   list(): Promise<AssetSourceSummary[]>;
@@ -433,6 +466,10 @@ export interface AssetSources {
 export interface AssetSourceLifecycle {
   setHidden(sourceId: string, hidden: boolean): Promise<void>;
   setDisplayName(sourceId: string, displayName: string): Promise<void>;
+  setManualAssetClass(
+    sourceId: string,
+    assetClass: ManualAssetClass | null,
+  ): Promise<void>;
   setEvmTokenPreference(
     sourceId: string,
     assetKeys: string[],

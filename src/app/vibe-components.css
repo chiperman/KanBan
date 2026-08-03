@@ -45,6 +45,177 @@
   border-color: var(--primary);
 }
 
+.vibe-date-field {
+  position: relative;
+  width: min(100%, 500px);
+  margin: 18px 0 0;
+}
+
+.vibe-date-field__trigger {
+  display: grid;
+  width: 100%;
+  min-height: 48px;
+  grid-template-columns: minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--primary);
+  cursor: pointer;
+  font-family: var(--f-display);
+  font-size: 17px;
+  font-variation-settings: "ROND" 100;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-align: left;
+}
+
+.vibe-date-field__trigger:focus-visible,
+.vibe-date-field__trigger[aria-expanded="true"] {
+  border-color: var(--primary);
+  outline: 0;
+}
+
+.vibe-date-field__trigger:disabled {
+  cursor: default;
+  opacity: 0.3;
+}
+
+.vibe-date-field__calendar-icon {
+  position: relative;
+  width: 15px;
+  height: 14px;
+  justify-self: end;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+}
+
+.vibe-date-field__calendar-icon::before {
+  position: absolute;
+  top: 3px;
+  right: -1.5px;
+  left: -1.5px;
+  height: 1.5px;
+  background: currentColor;
+  content: "";
+}
+
+.vibe-date-field__calendar {
+  position: fixed;
+  z-index: 101;
+  max-width: calc(100vw - 24px);
+  padding: 16px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.vibe-date-field__calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.vibe-date-field__calendar-head strong {
+  color: var(--display);
+  font-family: var(--f-ui);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.vibe-date-field__calendar-head > span {
+  display: flex;
+  gap: 4px;
+}
+
+.vibe-date-field__month-button {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  cursor: pointer;
+}
+
+.vibe-date-field__month-button::before {
+  position: absolute;
+  top: 11px;
+  width: 10px;
+  height: 10px;
+  border-top: 1px solid currentColor;
+  border-right: 1px solid currentColor;
+  content: "";
+}
+
+.vibe-date-field__month-button.is-previous::before {
+  right: 10px;
+  transform: rotate(-135deg);
+}
+
+.vibe-date-field__month-button.is-next::before {
+  left: 10px;
+  transform: rotate(45deg);
+}
+
+.vibe-date-field__month-button:disabled {
+  cursor: default;
+  color: var(--muted);
+}
+
+.vibe-date-field__weekday-row,
+.vibe-date-field__day-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  text-align: center;
+}
+
+.vibe-date-field__weekday-row {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-family: var(--f-mono);
+  font-size: 9px;
+}
+
+.vibe-date-field__day {
+  min-height: 34px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--secondary);
+  cursor: pointer;
+  font-family: var(--f-display);
+  font-size: 13px;
+  font-variation-settings: "ROND" 100;
+  font-weight: 500;
+}
+
+.vibe-date-field__day:hover:not(:disabled),
+.vibe-date-field__day:focus-visible {
+  border-color: var(--line-2);
+  outline: 0;
+}
+
+.vibe-date-field__day.is-today {
+  background: var(--display);
+  color: var(--bg);
+}
+
+.vibe-date-field__day.is-selected:not(.is-today) {
+  border-color: var(--display);
+  color: var(--display);
+}
+
+.vibe-date-field__day:disabled {
+  cursor: default;
+  color: var(--muted);
+  opacity: 0.45;
+}
+
 .vibe-verification-code {
   width: fit-content;
   max-width: 100%;
@@ -218,6 +389,19 @@ textarea.vibe-field__input {
   border-radius: var(--r-sm);
   background: var(--surface);
   box-shadow: none;
+}
+
+.vibe-select__portal {
+  position: fixed;
+  z-index: 101;
+  display: block;
+}
+
+.vibe-select__portal .vibe-select__options {
+  position: static;
+  width: 100%;
+  max-height: min(280px, calc(100dvh - 24px));
+  overflow-y: auto;
 }
 
 .vibe-select .vibe-select__option {

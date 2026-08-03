@@ -1,5 +1,6 @@
 import { decimalAdd, decimalCompare } from "@/domain/decimal";
 import { activeSourceHoldings } from "@/domain/evm-token-preferences";
+import { hasManualAssetRecord } from "@/domain/manual-asset-records";
 import {
   buildTotalValuation,
   holdingMakesTotalIncomplete,
@@ -111,14 +112,17 @@ export function buildDailyAssetSnapshot(
   sources: AssetSourceSummary[],
   capturedAt: string,
 ): DailyAssetSnapshot {
-  const exchangeRates = sources.flatMap((source) => source.snapshot.exchangeRates);
-  const sourceSnapshots = sources.map((source) =>
+  const recordedSources = sources.filter(hasManualAssetRecord);
+  const exchangeRates = recordedSources.flatMap(
+    (source) => source.snapshot.exchangeRates,
+  );
+  const sourceSnapshots = recordedSources.map((source) =>
     sourceSnapshot(source, capturedAt, exchangeRates),
   );
   const total = {
-    USD: totalValue(sources, "USD"),
-    CNY: totalValue(sources, "CNY"),
-    HKD: totalValue(sources, "HKD"),
+    USD: totalValue(recordedSources, "USD"),
+    CNY: totalValue(recordedSources, "CNY"),
+    HKD: totalValue(recordedSources, "HKD"),
   };
   const complete =
     sourceSnapshots.length > 0 &&

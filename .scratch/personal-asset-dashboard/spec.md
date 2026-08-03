@@ -16,7 +16,7 @@ Status: ready-for-human
 - 所有者验证身份后查看总资产、今日资产变动、资产分布、各来源持仓、数据状态和历史趋势。
 - 页面只存在资产卡片；卡片可以排序、调整一格/两格/三格宽度和隐藏，高度始终随内容自适应；卡片不能发布，也没有公开/私密访问级别。
 - 产品不执行交易、划转、提现、签名、调仓或任何资产写操作。
-- 首版资产来源为长桥、Binance、OKX、Bitget、Ethereum 与 BNB Smart Chain 观察钱包。
+- 首版资产来源为长桥、Binance、OKX、Bitget、Ethereum 与 BNB Smart Chain 观察钱包；无法接入的资产组可先创建手工资产来源，再在各自卡片内记录当前总额。
 - 资产按来源原生定价，默认折算为 USD，可切换为 CNY 或 HKD；系统分别保存不可改写的日初基准和可随成功刷新更新的每日趋势观测，并明确区分今日资产变动、区间资产变动、平台盈亏、过期数据和未估值资产。
 
 实现、自动化验收与待人工确认事项见 [`docs/current-baseline.md`](../../docs/current-baseline.md)。
@@ -47,52 +47,54 @@ Status: ready-for-human
 17. As an 所有者, I want one consistent onboarding flow: choose source, provide read-only authorization, validate permission, preview scope, and confirm.
 18. As an 所有者, I want failed validation to save no source or credential.
 19. As an 所有者, I want source credentials kept outside browser-readable storage.
+20. As an 所有者, I want to manually record daily totals for an inaccessible asset group, so that it contributes to my assets without inventing holdings or credentials.
+21. As an 所有者, I want to create, edit, and delete a manual asset group's record for any past or current Shanghai day while retaining at most one record per day.
 
 ### 估值与数据真实性
 
-20. As an 所有者, I want platform assets to use source-native valuation.
-21. As an 所有者, I want observation-wallet assets to use an identified independent reference price.
-22. As an 所有者, I want stablecoins valued at actual market prices rather than a fixed peg.
-23. As an 所有者, I want the same asset on different sources to retain small native-price differences.
-24. As an 所有者, I want unvalued assets to preserve identity and quantity while staying outside numeric totals.
-25. As an 所有者, I want totals to state when they contain expired data or exclude unvalued assets.
-26. As an 所有者, I want platform profit shown only when the source explicitly provides it.
+22. As an 所有者, I want platform assets to use source-native valuation.
+23. As an 所有者, I want observation-wallet assets to use an identified independent reference price.
+24. As an 所有者, I want stablecoins valued at actual market prices rather than a fixed peg.
+25. As an 所有者, I want the same asset on different sources to retain small native-price differences.
+26. As an 所有者, I want unvalued assets to preserve identity and quantity while staying outside numeric totals.
+27. As an 所有者, I want totals to state when they contain expired data or exclude unvalued assets.
+28. As an 所有者, I want platform profit shown only when the source explicitly provides it.
 
 ### 刷新与历史
 
-27. As an 所有者, I want an immediate refresh when entering the authenticated dashboard.
-28. As an 所有者, I want visible-page price refresh every 30 seconds and holdings refresh every five minutes.
-29. As an 所有者, I want scheduled refresh paused while the page is hidden.
-30. As an 所有者, I want a manual refresh action.
-31. As an 所有者, I want each source failure isolated from successful sources.
-32. As an 所有者, I want the last successful data preserved and marked expired after failure.
-33. As an 所有者, I want an immutable daily baseline and an updatable daily trend observation using Asia/Shanghai as the canonical day boundary.
-34. As an 所有者, I want history to start from the first successful synchronization without automatic backfill.
-35. As an 所有者, I want snapshot difference called today asset change rather than investment profit.
+29. As an 所有者, I want an immediate refresh when entering the authenticated dashboard.
+30. As an 所有者, I want visible-page price refresh every 30 seconds and holdings refresh every five minutes.
+31. As an 所有者, I want scheduled refresh paused while the page is hidden.
+32. As an 所有者, I want a manual refresh action.
+33. As an 所有者, I want each source failure isolated from successful sources.
+34. As an 所有者, I want the last successful data preserved and marked expired after failure.
+35. As an 所有者, I want an immutable daily baseline and an updatable daily trend observation using Asia/Shanghai as the canonical day boundary, except that a manual asset group may maintain its own source value for any recorded day without fabricating other sources' past values.
+36. As an 所有者, I want history to start from the first successful synchronization or manual save without automatic backfill.
+37. As an 所有者, I want snapshot difference called today asset change rather than investment profit.
 
 ### 私有访问与会话
 
-36. As an 所有者, I want the locked homepage to show only an authentication entry.
-37. As an 所有者, I want Passkey as the primary login method.
-38. As an 所有者, I want TOTP-only as the backup login method when Passkey is unavailable.
-39. As an 所有者, I want public registration, social login, SMS login, and additional owners disabled.
-40. As an 所有者, I want all asset authorization enforced by the server and data layer.
-41. As an 所有者, I want no asset values, holdings, sources, addresses, snapshots, or credentials in unauthenticated HTML, page state, APIs, or network traffic.
-42. As an 所有者, I want automatic lock after 30 minutes without activity.
-43. As an 所有者, I want browser-session termination and manual lock to return to the owner login page.
+38. As an 所有者, I want the locked homepage to show only an authentication entry.
+39. As an 所有者, I want Passkey as the primary login method.
+40. As an 所有者, I want TOTP-only as the backup login method when Passkey is unavailable.
+41. As an 所有者, I want public registration, social login, SMS login, and additional owners disabled.
+42. As an 所有者, I want all asset authorization enforced by the server and data layer.
+43. As an 所有者, I want no asset values, holdings, sources, addresses, snapshots, or credentials in unauthenticated HTML, page state, APIs, or network traffic.
+44. As an 所有者, I want automatic lock after 30 minutes without activity.
+45. As an 所有者, I want browser-session termination and manual lock to return to the owner login page.
 
 ### 资产布局与生命周期
 
-44. As an 所有者, I want asset cards reordered and resized to one, two, or three columns.
-45. As an 所有者, I want one desktop order to reflow into two columns and one column on narrower screens.
-46. As an 所有者, I want asset-card height to always follow its content.
-47. As an 所有者, I want a hidden source to keep synchronizing and contributing to totals.
-48. As an 所有者, I want disconnecting a source to delete its credential and stop future synchronization while retaining snapshots.
-49. As an 所有者, I want permanent source-data deletion separate from disconnect and protected by a second confirmation.
-50. As an 所有者, I want Command-K for asset navigation, refresh, and lock, with equivalent pointer controls.
-51. As an 所有者, I want unrecognized ERC-20 and BEP-20 balances collapsed until I review them.
-52. As an 所有者, I want to ignore or restore an EVM token by chain and contract address without any on-chain action.
-53. As an 所有者, I want ignored tokens excluded from holding counts and valuation completeness while ordinary unvalued assets remain truthful.
+46. As an 所有者, I want asset cards reordered and resized to one, two, or three columns.
+47. As an 所有者, I want one desktop order to reflow into two columns and one column on narrower screens.
+48. As an 所有者, I want asset-card height to always follow its content.
+49. As an 所有者, I want a hidden source to keep synchronizing and contributing to totals.
+50. As an 所有者, I want disconnecting a source to delete its credential and stop future synchronization while retaining snapshots.
+51. As an 所有者, I want permanent source-data deletion separate from disconnect and protected by a second confirmation.
+52. As an 所有者, I want Command-K for asset navigation, refresh, and lock, with equivalent pointer controls.
+53. As an 所有者, I want unrecognized ERC-20 and BEP-20 balances collapsed until I review them.
+54. As an 所有者, I want to ignore or restore an EVM token by chain and contract address without any on-chain action.
+55. As an 所有者, I want ignored tokens excluded from holding counts and valuation completeness while ordinary unvalued assets remain truthful.
 
 ## Implementation Decisions
 
@@ -113,7 +115,8 @@ Status: ready-for-human
 - Treat an unpriced EVM token as unrecognized until the owner classifies it. Persist ignored-token rules by chain and contract address, keep them reversible, and exclude only owner-ignored tokens from portfolio counts and valuation completeness.
 - Fetch immediately after authentication. While visible, refresh prices every 30 seconds and holdings every five minutes; pause scheduled refresh while hidden and allow manual refresh.
 - Preserve last successful source data on failure, mark it expired, and propagate incomplete status to the total.
-- Persist an immutable daily baseline for today asset change and an updatable daily trend observation for historical trends, both using Asia/Shanghai day boundaries. Do not import transactions or backfill historical data.
+- Persist an immutable daily baseline for today asset change and an updatable daily trend observation for historical trends, both using Asia/Shanghai day boundaries. A hand-recorded asset group maintains one editable value per day; it only rewrites or removes its own source observation, never fabricates other sources' past values or an absent past baseline.
+- A hand-recorded asset group stores only a label and USD/CNY/HKD daily totals. Its current card total comes from the latest recorded day. It has no credential, no holdings detail, no refresh or disconnect action, and is never treated as a fabricated exchange-rate source.
 - Separate visibility from lifecycle: hiding changes layout only; disconnect removes credentials and stops sync; permanent deletion removes source history after a second confirmation.
 - Keep theme, responsive asset layout, Nothing accents, Bloomberg-style financial typography, and Command-K navigation.
 - Future remote persistence remains owner-private. Credentials are configured separately in server-side secret storage and are never synchronized through ordinary data.
@@ -129,7 +132,7 @@ Status: ready-for-human
 - Verify onboarding rejects write-capable or ambiguous permissions and leaves no partial source or secret.
 - Verify source-native prices, CNY and HKD conversion, stablecoin market prices, unvalued holdings, expired data, and distribution conservation.
 - Verify source-isolated refresh, refresh cadence, hidden-page pause, manual refresh, and concurrent source connection.
-- Verify daily baseline and trend-observation day boundaries, idempotency, first-success start, same-day trend updates, no backfill, and today asset change semantics.
+- Verify daily baseline and trend-observation day boundaries, idempotency, first-success start, same-day trend updates, no backfill, and today asset change semantics; verify that a hand-recorded asset group has at most one editable source observation per Shanghai day, supports past/current-day edit and deletion, and does not fabricate other sources' past data.
 - Perform real-source acceptance only with owner-confirmed minimum read-only credentials or public addresses.
 - Perform manual visual acceptance separately on desktop, medium, and phone widths in light and dark themes.
 

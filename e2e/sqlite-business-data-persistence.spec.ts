@@ -69,7 +69,7 @@ test("SQLite schema v2 自动迁移并持久化 Binance 覆盖证据", async ({ 
 
   expect(response.ok()).toBeTruthy();
   await expect(response.json()).resolves.toEqual({
-    schemaVersion: "8",
+    schemaVersion: "11",
     coverageColumn: true,
     displayNameColumn: true,
     coverageStatus: "partial",
@@ -86,7 +86,7 @@ test("SQLite schema v4 升级后分离日初基准与每日趋势观测并跨重
 
   expect(response.ok()).toBeTruthy();
   await expect(response.json()).resolves.toEqual({
-    schemaVersion: "8",
+    schemaVersion: "11",
     migratedTrend: {
       capturedAt: "2026-07-28T00:30:00.000Z",
       complete: false,
@@ -124,7 +124,7 @@ test("SQLite schema v6 升级后持久化 HKD 金额与观测时汇率", async (
 
   expect(response.ok()).toBeTruthy();
   await expect(response.json()).resolves.toEqual({
-    schemaVersion: "8",
+    schemaVersion: "11",
     hkdColumns: true,
     baseline: {
       total: { USD: "10", CNY: "72", HKD: "78" },
@@ -140,6 +140,72 @@ test("SQLite schema v6 升级后持久化 HKD 金额与观测时汇率", async (
         { baseCurrency: "USD", quoteCurrency: "HKD", rate: "7.8" },
       ],
     },
+  });
+});
+
+test("SQLite 手工来源先建卡片，再记录数据且未记录来源不进入观测", async ({
+  request,
+}) => {
+  const response = await request.post(
+    "/test-doubles/sqlite-business-data-persistence?action=manual-source-record-persistence",
+  );
+
+  expect(response.ok()).toBeTruthy();
+  await expect(response.json()).resolves.toEqual({
+    unrecorded: {
+      hasManualRecord: false,
+      dailySnapshots: 0,
+    },
+    sources: [
+      {
+        label: "A股",
+        hasManualRecord: true,
+        manualAssetClass: "securities",
+        total: { amount: "108000", currency: "CNY" },
+      },
+      {
+        label: "场外基金",
+        hasManualRecord: false,
+        total: { amount: "0", currency: "CNY" },
+      },
+    ],
+    cards: 2,
+    baselines: [{
+      sources: ["A股"],
+      total: { USD: null, CNY: "108000", HKD: null },
+    }],
+    trend: [{
+      sources: ["A股"],
+      total: { USD: null, CNY: "108000", HKD: null },
+    }],
+  });
+});
+
+test("SQLite schema v8 升级后可创建并记录手工资产来源", async ({
+  request,
+}) => {
+  const response = await request.post(
+    "/test-doubles/sqlite-business-data-persistence?action=schema-v8-manual-source-migration",
+  );
+
+  expect(response.ok()).toBeTruthy();
+  await expect(response.json()).resolves.toEqual({
+    schemaVersion: "11",
+    hasManualRecordColumn: true,
+    manualAssetClassColumn: true,
+    existing: {
+      id: expect.any(String),
+      label: "Binance schema-v8",
+    },
+    manual: expect.objectContaining({
+      kind: "manual",
+      label: "A股",
+      hasManualRecord: true,
+      manualAssetClass: "securities",
+      snapshot: expect.objectContaining({
+        total: { amount: "108000", currency: "CNY" },
+      }),
+    }),
   });
 });
 

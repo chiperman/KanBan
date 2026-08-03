@@ -52,8 +52,24 @@ export default async function AssetDashboardPage({
 
   const now = services.clock.now()
   const assetCards = await services.assetCards.list()
-  const assetSources = (await services.assetSources.list()).map(
-    ({ credentialReference: _credentialReference, permissions: _permissions, ...source }) => source
+  const [storedSources, manualRecords] = await Promise.all([
+    services.assetSources.list(),
+    services.manualAssetRecords.list(),
+  ])
+  const recordsBySource = new Map<string, typeof manualRecords>()
+  for (const record of manualRecords) {
+    recordsBySource.set(record.sourceId, [
+      ...(recordsBySource.get(record.sourceId) ?? []),
+      record,
+    ])
+  }
+  const assetSources = storedSources.map(
+    ({ credentialReference: _credentialReference, permissions: _permissions, ...source }) => ({
+      ...source,
+      ...(source.kind === "manual"
+        ? { manualRecords: recordsBySource.get(source.id) ?? [] }
+        : {}),
+    })
   )
   const dailyAssetSnapshots = await services.dailyAssetSnapshots.list()
   const dailyAssetTrendObservations =
@@ -83,7 +99,11 @@ export default async function AssetDashboardPage({
             <span className="header-system">EXTERNAL ACCESS / READ ONLY</span>
             <LocalClock initialTime={now.toISOString()} compact />
             <HeaderUtilities
-              refreshEnabled={assetSources.some((source) => source.lifecycle !== "disconnected")}
+              refreshEnabled={assetSources.some(
+                (source) =>
+                  source.lifecycle !== "disconnected" &&
+                  source.kind !== "manual",
+              )}
             />
             <LogoutButton />
             <ThemeSwitcher />

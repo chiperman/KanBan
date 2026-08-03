@@ -16,6 +16,8 @@ import type {
   CardSpan,
   DailyAssetSnapshot,
   DailyAssetTrendObservation,
+  ManualAssetClass,
+  ManualAssetRecord,
 } from "@/server/ports";
 import type { ReportingCurrency } from "@/domain/valuation";
 import { AssetSourceFlow } from "@/ui/asset-source-flow";
@@ -41,7 +43,8 @@ import {
 } from "@/ui/total-asset-overview";
 import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
 import { VibeDialog } from "@/ui/vibe/vibe-dialog";
-import { VibeField } from "@/ui/vibe/vibe-field";
+import { VibeField, VibeSelectField } from "@/ui/vibe/vibe-field";
+import { VibeDateField } from "@/ui/vibe/vibe-date-field";
 import { VibeMenu } from "@/ui/vibe/vibe-menu";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
 
@@ -57,6 +60,7 @@ function sourceName(source: AssetSourceView): string {
   if (source.kind === "bitget") return "Bitget 资产";
   if (source.kind === "evm-watch-ethereum") return "Ethereum 观察钱包";
   if (source.kind === "evm-watch-bsc") return "BNB Smart Chain 观察钱包";
+  if (source.kind === "manual") return source.label;
   return source.label;
 }
 
@@ -96,10 +100,16 @@ function MobileCardIdentity({
         <strong>{source ? sourceName(source) : cardName(card)}</strong>
         {source ? (
           <span>
-            {showSensitiveInfo
-              ? groupedAmount(sourceTotal!.amount)
-              : "••••••"}{" "}
-            {sourceTotal!.currency}
+            {source.kind === "manual" && source.hasManualRecord === false
+              ? "尚未记录"
+              : (
+                <>
+                  {showSensitiveInfo
+                    ? groupedAmount(sourceTotal!.amount)
+                    : "••••••"}{" "}
+                  {sourceTotal!.currency}
+                </>
+              )}
           </span>
         ) : null}
       </span>
@@ -206,7 +216,20 @@ export function OwnerDashboard({
   const [managementTarget, setManagementTarget] =
     useState<AssetSourceView | null>(null);
   const [displayNameDraft, setDisplayNameDraft] = useState("");
+  const [manualAssetClassDraft, setManualAssetClassDraft] = useState<
+    ManualAssetClass | ""
+  >("");
   const [displayNamePending, setDisplayNamePending] = useState(false);
+  const [manualAmountDraft, setManualAmountDraft] = useState("");
+  const [manualCurrencyDraft, setManualCurrencyDraft] = useState<
+    "USD" | "CNY" | "HKD"
+  >("CNY");
+  const [manualRecordPending, setManualRecordPending] = useState(false);
+  const [manualRecordTarget, setManualRecordTarget] =
+    useState<{ source: AssetSourceView; record?: ManualAssetRecord } | null>(null);
+  const [manualDayDraft, setManualDayDraft] = useState(currentDay);
+  const [manualDeleteTarget, setManualDeleteTarget] =
+    useState<{ source: AssetSourceView; record: ManualAssetRecord } | null>(null);
   const [lifecyclePending, setLifecyclePending] = useState(false);
   const hasEvmSources = assetSources.some(
     (source) =>
@@ -216,6 +239,7 @@ export function OwnerDashboard({
   const hasNonEvmSources = assetSources.some(
     (source) =>
       source.lifecycle !== "disconnected" &&
+      source.kind !== "manual" &&
       !source.kind.startsWith("evm-watch-"),
   );
   const needsDailyEvmPriceRefresh = assetSources.some(
@@ -227,7 +251,10 @@ export function OwnerDashboard({
   const displayNameChanged =
     managementTarget !== null &&
     displayNameDraft.trim() !== (managementTarget.displayName ?? "");
-
+  const manualAssetClassChanged =
+    managementTarget?.kind === "manual" &&
+    manualAssetClassDraft !== (managementTarget.manualAssetClass ?? "");
+  const managementChanged = displayNameChanged || manualAssetClassChanged;
   useEffect(() => {
     setDisplayCards(cards);
   }, [cards]);
@@ -458,26 +485,108 @@ export function OwnerDashboard({
 
   function openSourceManagement(source: AssetSourceView) {
     setDisplayNameDraft(source.displayName ?? "");
+    setManualAssetClassDraft(source.manualAssetClass ?? "");
     setDisplayNamePending(false);
     setManagementTarget(source);
+  }
+
+  function openManualAssetRecord(source: AssetSourceView, record?: ManualAssetRecord) {
+    setManualAmountDraft(
+      record?.amount ?? "",
+    );
+    setManualCurrencyDraft(
+      record !== undefined &&
+        (
+          record.currency === "USD" ||
+          record.currency === "CNY" ||
+          record.currency === "HKD"
+        )
+        ? record.currency
+        : "CNY",
+    );
+    setManualDayDraft(record?.day ?? currentDay);
+    setManualRecordPending(false);
+    setManualRecordTarget({ source, record });
   }
 
   function closeSourceManagement() {
     setManagementTarget(null);
     setDisplayNameDraft("");
+    setManualAssetClassDraft("");
+    setDisplayNamePending(false);
   }
 
-  async function saveSourceDisplayName(source: AssetSourceView) {
-    setDisplayNamePending(true);
+  function closeManualAssetRecord() {
+    setManualRecordTarget(null);
+    setManualAmountDraft("");
+    setManualDayDraft(currentDay);
+    setManualRecordPending(false);
+  }
+
+  async function saveManualAssetRecord(source: AssetSourceView) {
+    setManualRecordPending(true);
     setError("");
     try {
       await cardRequest(`/api/asset-sources/${encodeURIComponent(source.id)}`, "PATCH", {
-        action: "rename",
-        displayName: displayNameDraft,
+        action: "manual-record",
+        day: manualDayDraft,
+        amount: manualAmountDraft,
+        currency: manualCurrencyDraft,
       });
       window.location.reload();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "名称保存失败，请重试");
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "今日手工资产记录保存失败，请重试",
+      );
+      setManualRecordPending(false);
+    }
+  }
+
+  async function deleteManualAssetRecord(source: AssetSourceView, record: ManualAssetRecord) {
+    setManualRecordPending(true);
+    try {
+      await cardRequest(`/api/asset-sources/${encodeURIComponent(source.id)}`, "DELETE", {
+        action: "manual-record",
+        day: record.day,
+      });
+      window.location.reload();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "删除手工资产记录失败");
+      setManualRecordPending(false);
+    }
+  }
+
+  async function saveSourceSettings(source: AssetSourceView) {
+    setDisplayNamePending(true);
+    setError("");
+    try {
+      await Promise.all([
+        displayNameChanged
+          ? cardRequest(
+              `/api/asset-sources/${encodeURIComponent(source.id)}`,
+              "PATCH",
+              {
+                action: "rename",
+                displayName: displayNameDraft,
+              },
+            )
+          : Promise.resolve(),
+        manualAssetClassChanged
+          ? cardRequest(
+              `/api/asset-sources/${encodeURIComponent(source.id)}`,
+              "PATCH",
+              {
+                action: "manual-asset-class",
+                manualAssetClass: manualAssetClassDraft || null,
+              },
+            )
+          : Promise.resolve(),
+      ]);
+      window.location.reload();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "来源设置保存失败，请重试");
       setDisplayNamePending(false);
     }
   }
@@ -560,6 +669,8 @@ export function OwnerDashboard({
         reportingCurrency={reportingCurrency}
         trendRange={trendRange}
         currentDay={currentDay}
+        onManualAssetRecord={openManualAssetRecord}
+        onManualAssetRecordDelete={(source, record) => setManualDeleteTarget({ source, record })}
         profitColorScheme={profitColorScheme}
         showSensitiveInfo={showSensitiveInfo}
       />
@@ -816,7 +927,11 @@ export function OwnerDashboard({
           </VibeButton>
         </div>
         <AssetRefreshControls
-          enabled={assetSources.some((source) => source.lifecycle !== "disconnected")}
+          enabled={assetSources.some(
+            (source) =>
+              source.lifecycle !== "disconnected" &&
+              source.kind !== "manual",
+          )}
           hasEvmSources={hasEvmSources}
           hasNonEvmSources={hasNonEvmSources}
           needsDailyEvmPriceRefresh={needsDailyEvmPriceRefresh}
@@ -850,7 +965,7 @@ export function OwnerDashboard({
             {visibleCards.length === 0 && assetSources.length === 0 ? (
               <div className="empty-state" data-testid="empty-state">
                 <p className="empty-title">暂无资产来源</p>
-                <p className="empty-hint">使用上方“添加资产来源”接入只读账户或观察钱包。</p>
+                <p className="empty-hint">接入只读账户或观察钱包，也可手工记录无法接入的资产总额。</p>
               </div>
             ) : null}
           </>
@@ -865,7 +980,11 @@ export function OwnerDashboard({
           <h2 id="hidden-source-title">已隐藏的资产来源</h2>
           {hiddenAssetCards.map(({ card, source }) => (
             <div className="card-actions" key={card.id}>
-              <span>{sourceName(source)} · 仍在同步并计入总资产</span>
+              <span>
+                {sourceName(source)} · {source.kind === "manual"
+                  ? "手工记录仍计入总资产"
+                  : "仍在同步并计入总资产"}
+              </span>
               <button type="button" className="text-button" onClick={() => void setSourceHidden(source, false)}>
                 重新显示 {sourceName(source)}
               </button>
@@ -885,21 +1004,26 @@ export function OwnerDashboard({
               </VibeButton>
               <VibeButton
                 type="submit"
-                disabled={displayNamePending || !displayNameChanged}
+                disabled={displayNamePending || !managementChanged}
                 variant="primary"
               >
-                保存名称
+                {managementTarget.kind === "manual" ? "保存设置" : "保存名称"}
               </VibeButton>
             </>
           }
           aria-label={`管理 ${sourceName(managementTarget)}`}
           className="source-management-dialog"
-          description="仅修改本看板中的显示名称。清空后恢复默认名称。"
+          description={
+            managementTarget.kind === "manual"
+              ? "仅修改本看板中的显示名称与资产类别。名称清空后恢复默认名称。"
+              : "仅修改本看板中的显示名称。清空后恢复默认名称。"
+          }
           eyebrow="SOURCE / CONTROL"
           headerActions={
             <VibeMenu
               items={[
-                ...(managementTarget.lifecycle !== "disconnected"
+                ...(managementTarget.kind !== "manual" &&
+                managementTarget.lifecycle !== "disconnected"
                   ? [{
                       key: "disconnect",
                       label: "断开来源",
@@ -922,7 +1046,7 @@ export function OwnerDashboard({
           onClose={closeSourceManagement}
           onSubmit={(event) => {
             event.preventDefault();
-            void saveSourceDisplayName(managementTarget);
+            void saveSourceSettings(managementTarget);
           }}
           title={sourceName(managementTarget)}
           titleId="source-management-title"
@@ -938,6 +1062,24 @@ export function OwnerDashboard({
             placeholder={assetSourceDefaultDisplayName(managementTarget)}
             value={displayNameDraft}
           />
+          {managementTarget.kind === "manual" ? (
+            <VibeSelectField
+              disabled={displayNamePending}
+              fieldId="manual-asset-class"
+              label="资产类别"
+              onValueChange={(value) =>
+                setManualAssetClassDraft(value as ManualAssetClass | "")
+              }
+              options={[
+                { value: "", label: "待分类" },
+                { value: "securities", label: "证券" },
+                { value: "crypto", label: "加密资产" },
+                { value: "cash", label: "现金" },
+                { value: "other", label: "其他投资资产" },
+              ]}
+              value={manualAssetClassDraft}
+            />
+          ) : null}
           {managementTarget.kind.startsWith("evm-watch-") ? (
             <VibeLink
               className="source-management-scope-link"
@@ -948,6 +1090,87 @@ export function OwnerDashboard({
             </VibeLink>
           ) : null}
         </VibeDialog>
+      ) : null}
+      {manualRecordTarget ? (
+        <VibeDialog
+          actions={
+            <>
+              <VibeButton
+                type="button"
+                disabled={manualRecordPending}
+                onClick={closeManualAssetRecord}
+                variant="text"
+              >
+                取消
+              </VibeButton>
+              <VibeButton
+                type="submit"
+                disabled={manualRecordPending || manualAmountDraft.trim() === ""}
+                variant="primary"
+              >
+                {manualRecordPending ? "正在保存…" : "保存数据"}
+              </VibeButton>
+            </>
+          }
+          aria-label={`记录 ${sourceName(manualRecordTarget.source)} 数据`}
+          className="source-management-dialog"
+          description="同一资产来源在同一上海自然日只保留一条数据；可按日期新增、编辑或删除历史总额。"
+          eyebrow="MANUAL ASSET / DAILY RECORD"
+          onClose={closeManualAssetRecord}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void saveManualAssetRecord(manualRecordTarget.source);
+          }}
+          title={manualRecordTarget.record === undefined
+            ? `添加 ${sourceName(manualRecordTarget.source)} 数据`
+            : `更新 ${sourceName(manualRecordTarget.source)} 数据`}
+          titleId="manual-asset-record-title"
+        >
+          <VibeDateField
+            disabled={manualRecordPending}
+            fieldId="manual-asset-record-day"
+            label="记录日期"
+            max={currentDay}
+            onValueChange={setManualDayDraft}
+            value={manualDayDraft}
+          />
+          <VibeField
+            autoFocus
+            disabled={manualRecordPending}
+            fieldId="manual-asset-record-amount"
+            inputMode="decimal"
+            label="资产总额"
+            maxLength={21}
+            onChange={(event) => setManualAmountDraft(event.currentTarget.value)}
+            placeholder="例如：128500.00"
+            value={manualAmountDraft}
+          />
+          <VibeSelectField
+            disabled={manualRecordPending}
+            fieldId="manual-asset-record-currency"
+            label="币种"
+            onValueChange={(value) =>
+              setManualCurrencyDraft(value as "USD" | "CNY" | "HKD")
+            }
+            options={[
+              { value: "USD", label: "USD" },
+              { value: "CNY", label: "CNY" },
+              { value: "HKD", label: "HKD" },
+            ]}
+            value={manualCurrencyDraft}
+          />
+        </VibeDialog>
+      ) : null}
+      {manualDeleteTarget ? (
+        <VibeDialog
+          actions={<><VibeButton type="button" variant="text" onClick={() => setManualDeleteTarget(null)}>取消</VibeButton><VibeButton type="button" variant="primary" disabled={manualRecordPending} onClick={() => void deleteManualAssetRecord(manualDeleteTarget.source, manualDeleteTarget.record)}>删除数据</VibeButton></>}
+          aria-label={`删除 ${sourceName(manualDeleteTarget.source)} ${manualDeleteTarget.record.day} 数据`}
+          description={`删除 ${manualDeleteTarget.record.day} 的记录后不可恢复；若它是最新记录，卡片会回退到上一条。`}
+          eyebrow="MANUAL ASSET / DELETE RECORD"
+          onClose={() => setManualDeleteTarget(null)}
+          title="删除历史数据"
+          titleId="manual-asset-delete-title"
+        />
       ) : null}
       {deleteTarget ? (
         <VibeDialog
