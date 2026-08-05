@@ -1,5 +1,3 @@
-"use client";
-
 import {
   cloneElement,
   useId,
@@ -21,7 +19,7 @@ export function VibeTooltip({
 }) {
   const tooltipId = useId();
   const describedBy = [
-    children.props["aria-describedby"],
+    children.props?.["aria-describedby"],
     tooltipId,
   ]
     .filter(Boolean)
