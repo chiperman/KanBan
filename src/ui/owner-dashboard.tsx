@@ -293,6 +293,7 @@ export function OwnerDashboard({
 }) {
   const [error, setError] = useState("");
   const [showSensitiveInfo, setShowSensitiveInfo] = useState(true);
+  const [holdingsSearchQuery, setHoldingsSearchQuery] = useState("");
   const [reportingCurrency, setReportingCurrency] =
     useState<ReportingCurrency>("USD");
   const [trendRange, setTrendRange] = useState<TrendRange>("30d");
@@ -811,6 +812,7 @@ export function OwnerDashboard({
         reportingCurrency={reportingCurrency}
         trendRange={trendRange}
         currentDay={currentDay}
+        holdingsSearchQuery={holdingsSearchQuery}
         onManualAssetRecord={openManualAssetRecord}
         onManualAssetRecordDelete={(source, record) => setManualDeleteTarget({ source, record })}
         profitColorScheme={profitColorScheme}
@@ -1068,6 +1070,18 @@ export function OwnerDashboard({
           >
             {mobileLayoutMode ? "完成调整" : "调整卡片顺序"}
           </VibeButton>
+        </div>
+        <div className="global-holdings-search">
+          <VibeField
+            fieldId="global-holdings-search"
+            label="搜索全部持仓"
+            type="search"
+            role="searchbox"
+            autoComplete="off"
+            onChange={(event) => setHoldingsSearchQuery(event.target.value)}
+            placeholder="代码、名称、来源或产品"
+            value={holdingsSearchQuery}
+          />
         </div>
         <AssetRefreshControls
           enabled={assetSources.some(

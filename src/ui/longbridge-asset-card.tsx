@@ -179,6 +179,24 @@ function signedDisplayAmount(value: string, formatted: string): string {
   return decimalCompare(value, "0") > 0 ? `+${formatted}` : formatted;
 }
 
+function holdingMatchesSearch(
+  source: AssetSourceView,
+  holding: AssetHolding,
+  query: string,
+): boolean {
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  if (normalizedQuery.length === 0) return true;
+  return [
+    source.label,
+    source.displayName,
+    assetHoldingDisplayName(holding),
+    holding.symbol,
+    holding.sourceAsset,
+    holding.sourceAccount,
+    holding.sourceProduct,
+  ].some((value) => value?.toLocaleLowerCase().includes(normalizedQuery));
+}
+
 function profitDirection(
   value: string,
   showSensitiveInfo: boolean,
@@ -440,6 +458,7 @@ export function AssetSourceCard({
   reportingCurrency,
   trendRange,
   currentDay,
+  holdingsSearchQuery,
   onManualAssetRecord,
   onManualAssetRecordDelete,
   profitColorScheme,
@@ -453,6 +472,7 @@ export function AssetSourceCard({
   reportingCurrency: ReportingCurrency;
   trendRange: TrendRange;
   currentDay: string;
+  holdingsSearchQuery: string;
   onManualAssetRecord?: (source: AssetSourceView, record?: ManualAssetRecord) => void;
   onManualAssetRecordDelete?: (source: AssetSourceView, record: ManualAssetRecord) => void;
   profitColorScheme: ProfitColorScheme;
@@ -530,6 +550,11 @@ export function AssetSourceCard({
         decimalCompare(holding.marketValue, "1") >= 0,
       )
     : reviewedPositionHoldings;
+  const searchedHoldings = visibleHoldings.filter((holding) =>
+    holdingMatchesSearch(source, holding, holdingsSearchQuery)
+  );
+  const hasHoldingsSearchQuery =
+    !isManual && holdingsSearchQuery.trim().length > 0;
   const showPlatformProfit = visibleHoldings.some(
     (holding) => holding.platformProfit !== null,
   );
@@ -860,7 +885,7 @@ export function AssetSourceCard({
           </label>
         ) : null}
         <ol className="holding-top-list" data-testid="holding-top-list">
-          {visibleHoldings.map((holding) => (
+          {searchedHoldings.map((holding) => (
             <li
               className={`vibe-data-row${holding.valuation.status === "unvalued" ? " is-unvalued" : ""}`}
               data-holding-key={assetHoldingKey(holding)}
@@ -879,6 +904,11 @@ export function AssetSourceCard({
             </li>
           ))}
         </ol>
+        {hasHoldingsSearchQuery && searchedHoldings.length === 0 ? (
+          <p className="asset-holdings-search-empty" role="status">
+            无匹配持仓
+          </p>
+        ) : null}
         <section
           aria-label={`${source.label} ${
             source.kind === "longbridge" ? "证券持仓明细" : "持仓明细"
@@ -937,7 +967,7 @@ export function AssetSourceCard({
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleHoldings.map((holding) => (
+                  {searchedHoldings.map((holding) => (
                     <HoldingDetailRow
                       key={assetHoldingKey(holding)}
                       holding={holding}

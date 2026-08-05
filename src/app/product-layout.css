@@ -2488,7 +2488,12 @@ body {
 .dashboard-control-deck {
   position: relative;
   display: grid;
+  grid-template-areas:
+    "toolbar refresh"
+    "search search";
   grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--vibe-space-4);
+  row-gap: var(--vibe-space-4);
   margin: var(--vibe-space-8) 0 var(--vibe-space-8);
   padding-top: var(--vibe-space-10);
   border-top: 0;
@@ -2512,6 +2517,26 @@ body {
 .login-primary,
 .login-cancel {
   text-transform: uppercase;
+}
+
+.global-holdings-search {
+  grid-area: search;
+  min-width: 0;
+  width: min(100%, 480px);
+}
+
+.global-holdings-search .vibe-field {
+  width: 100%;
+  margin: 0;
+}
+
+.dashboard-control-deck > .owner-toolbar {
+  grid-area: toolbar;
+}
+
+.dashboard-control-deck > .asset-refresh-controls,
+.dashboard-control-deck > .asset-refresh-demo-button {
+  grid-area: refresh;
 }
 
 .owner-toolbar button,
@@ -3667,7 +3692,6 @@ body {
 
 @media (max-width: 1023px) {
   .dashboard-control-deck {
-    grid-template-columns: minmax(0, 1fr) auto;
     align-items: start;
   }
 
@@ -3705,8 +3729,16 @@ body {
   }
 
   .dashboard-control-deck {
+    grid-template-areas:
+      "toolbar"
+      "refresh"
+      "search";
     grid-template-columns: 1fr;
     padding-top: var(--vibe-space-10);
+  }
+
+  .global-holdings-search {
+    width: 100%;
   }
 
   .owner-toolbar {
