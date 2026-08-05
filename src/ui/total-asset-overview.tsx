@@ -7,6 +7,7 @@ import {
 } from "react";
 
 import {
+  decimalAdd,
   decimalCompare,
   decimalDivide,
   decimalMultiply,
@@ -21,8 +22,8 @@ import {
   type ValuationSource,
 } from "@/domain/valuation";
 import type {
-  DailyAssetSnapshot,
   DailyAssetTrendObservation,
+  ManualAssetRecord,
 } from "@/server/ports";
 import {
   VibeMetric,
@@ -71,8 +72,13 @@ type TotalTrendPoint = {
   index: number;
   amount: string | null;
   complete: boolean;
+  manualRecordDay?: string;
   observed: boolean;
   status: "complete" | "incomplete" | "expired";
+};
+
+type TrendValuationSource = ValuationSource & {
+  manualRecords?: ManualAssetRecord[];
 };
 
 function sourceGroupTitle(source: ValuationSource): string {
@@ -142,26 +148,28 @@ export function TotalAssetOverview({
   onCurrencyChange,
   trendRange,
   onTrendRangeChange,
-  baselines,
   history,
   currentDay,
   showSensitiveInfo,
+  storageNamespace = "owner",
 }: {
-  sources: ValuationSource[];
+  sources: TrendValuationSource[];
   currency: ReportingCurrency;
   onCurrencyChange(value: ReportingCurrency): void;
   trendRange: TrendRange;
   onTrendRangeChange(value: TrendRange): void;
-  baselines: DailyAssetSnapshot[];
   history: DailyAssetTrendObservation[];
   currentDay: string;
   showSensitiveInfo: boolean;
+  storageNamespace?: "demo" | "owner";
 }) {
   const [dimension, setDimension] = useState<DistributionDimension>("class");
   const [detailPage, setDetailPage] = useState(1);
 
   useEffect(() => {
-    const savedDimension = window.localStorage.getItem("distribution-dimension");
+    const savedDimension = window.localStorage.getItem(
+      `${storageNamespace}-distribution-dimension`,
+    );
     if (
       savedDimension === "class" ||
       savedDimension === "source" ||
@@ -169,30 +177,12 @@ export function TotalAssetOverview({
     ) {
       setDimension(savedDimension);
     }
-  }, []);
+  }, [storageNamespace]);
 
   const valuation = useMemo(
     () => buildTotalValuation(sources, currency, dimension),
     [currency, dimension, sources],
   );
-  const todayBaseline = baselines.find((snapshot) => snapshot.day === currentDay);
-  const baselineAmount = todayBaseline?.total[currency] ?? null;
-  const todayChange =
-    valuation.amount === null || baselineAmount === null
-      ? null
-      : decimalSubtract(valuation.amount, baselineAmount);
-  const changeIncomplete =
-    valuation.incomplete ||
-    valuation.expiredCount > 0 ||
-    todayBaseline?.complete === false;
-  const todayChangeStatus =
-    todayBaseline?.complete === false
-      ? "今日变动：基准不完整"
-      : valuation.incomplete
-        ? "今日变动：当前估值不完整"
-        : valuation.expiredCount > 0
-          ? "今日变动：包含过期来源"
-          : null;
   const allocationGroups = valuation.groups.filter(
     (group) => group.amount !== null && decimalCompare(group.amount, "0") > 0,
   );
@@ -242,21 +232,121 @@ export function TotalAssetOverview({
     () => new Map(history.map((observation) => [observation.day, observation])),
     [history],
   );
+  const manualSources = useMemo(
+    () => sources.filter(
+      (source) => source.kind === "manual" && source.hasManualRecord !== false,
+    ),
+    [sources],
+  );
+  const hasAutomatedSources = sources.some((source) => source.kind !== "manual");
   const totalTrendPoints = useMemo<TotalTrendPoint[]>(
     () => totalTrendDays.map((day, index) => {
       const observation = observationsByDay.get(day);
+      if (observation !== undefined) {
+        const automatedSources = observation.sources.filter(
+          (source) => source.kind !== "manual",
+        );
+        const status = automatedSources.some(
+          (source) => source.status === "expired",
+        )
+          ? "expired"
+          : automatedSources.some((source) => source.status !== "complete")
+            ? "incomplete"
+            : "complete";
+        return {
+          day,
+          index,
+          amount: observation.total[currency] ?? null,
+          complete: status === "complete",
+          observed: true,
+          status,
+        };
+      }
+      if (hasAutomatedSources || manualSources.length === 0) {
+        return {
+          day,
+          index,
+          amount: null,
+          complete: false,
+          observed: false,
+          status: "incomplete",
+        };
+      }
+      const manualValues = manualSources.map((source) => {
+        const record = (source.manualRecords ?? [])
+          .filter((item) => item.day <= day)
+          .toSorted((left, right) => right.day.localeCompare(left.day))[0];
+        if (record === undefined) return null;
+        const recordedObservation = observationsByDay.get(record.day);
+        const recordedSource = recordedObservation?.sources.find(
+          (item) => item.sourceId === source.id,
+        );
+        const amount = recordedSource?.total[currency] ??
+          (record.currency === currency ? record.amount : null);
+        return amount === null ? null : { amount, recordDay: record.day };
+      });
+      if (manualValues.some((value) => value === null)) {
+        return {
+          day,
+          index,
+          amount: null,
+          complete: false,
+          observed: false,
+          status: "incomplete",
+        };
+      }
+      const values = manualValues as Array<{ amount: string; recordDay: string }>;
       return {
         day,
         index,
-        amount: observation?.total[currency] ?? null,
-        complete: observation?.complete ?? false,
-        observed: observation !== undefined,
-        status: observation?.status ??
-          (observation?.complete ? "complete" : "incomplete"),
+        amount: values.length === 0
+          ? null
+          : decimalAdd(...values.map((value) => value.amount)),
+        complete: true,
+        manualRecordDay: values.length === 1 ? values[0]?.recordDay : undefined,
+        observed: false,
+        status: "complete",
       };
     }),
-    [currency, observationsByDay, totalTrendDays],
+    [
+      currency,
+      hasAutomatedSources,
+      manualSources,
+      observationsByDay,
+      totalTrendDays,
+    ],
   );
+  const trendToday = totalTrendPoints.at(-1);
+  const trendYesterday = totalTrendPoints.at(-2);
+  const yesterdayChange =
+    trendToday !== undefined &&
+    trendYesterday !== undefined &&
+    trendToday.amount !== null &&
+    trendYesterday.amount !== null &&
+    trendToday.status === "complete" &&
+    trendYesterday.status === "complete"
+      ? decimalSubtract(trendToday.amount, trendYesterday.amount)
+      : null;
+  const comparisonIssue = (
+    point: TotalTrendPoint | undefined,
+    fallback: string,
+  ) => {
+    if (point?.manualRecordDay) {
+      return `${formatShanghaiDayLabel(point.day)}沿用 ${formatShanghaiDayLabel(point.manualRecordDay)}手工记录`;
+    }
+    if (!point?.observed) return `${fallback}缺少观测`;
+    if (point.amount === null) return `${formatShanghaiDayLabel(point.day)}未估值`;
+    if (point.status === "expired") return `${formatShanghaiDayLabel(point.day)}过期`;
+    if (point.status === "incomplete") return `${formatShanghaiDayLabel(point.day)}不完整`;
+    return null;
+  };
+  const yesterdayComparisonReason = yesterdayChange === null
+    ? [
+      comparisonIssue(trendToday, "今日"),
+      comparisonIssue(trendYesterday, "昨日"),
+    ].filter((reason): reason is string => reason !== null).join("；") ||
+      "昨日缺少观测"
+    : null;
   const validTrendPoints = totalTrendPoints.filter(
     (point) => point.amount !== null,
   );
@@ -304,7 +394,10 @@ export function TotalAssetOverview({
 
   function changeDimension(value: DistributionDimension) {
     setDimension(value);
-    window.localStorage.setItem("distribution-dimension", value);
+    window.localStorage.setItem(
+      `${storageNamespace}-distribution-dimension`,
+      value,
+    );
   }
 
   function changeTrendRange(value: TrendRange) {
@@ -439,24 +532,32 @@ export function TotalAssetOverview({
           })}
         </VibeNotice>
       ) : null}
-      <section className="today-asset-change" data-testid="today-asset-change">
-        <p className="card-label">今日资产变动</p>
-        {todayChange === null ? (
-          <p className="trend-empty">
-            {todayBaseline
-              ? "当前值或今日基准无法可靠折算"
-              : "首次成功同步后建立今日基准"}
+      {trendToday?.observed && trendToday.status === "complete" ? (
+        <section
+          className="today-asset-change"
+          data-testid="total-asset-yesterday-change"
+        >
+          <p className="card-label">
+            较昨日{trendYesterday ? ` · ${formatShanghaiDayLabel(trendYesterday.day)}` : ""}
           </p>
-        ) : (
-          <p className="today-change-amount">
-            {showSensitiveInfo ? signedAmount(todayChange) : "••••••"}{" "}
-            <span className="amount-unit">{currency}</span>
-            {changeIncomplete && todayChangeStatus ? (
-              <span className="today-change-note"> · {todayChangeStatus}</span>
-            ) : null}
-          </p>
-        )}
-      </section>
+          {yesterdayChange === null ? (
+            <p className="trend-empty">{yesterdayComparisonReason}</p>
+          ) : (
+            <>
+              <p className="today-change-amount">
+                {showSensitiveInfo ? signedAmount(yesterdayChange) : "••••••"}{" "}
+                <span className="amount-unit">{currency}</span>
+              </p>
+              <p className="trend-empty">
+                {showSensitiveInfo
+                  ? `昨日总资产 ${amount(trendYesterday?.amount ?? "0")}`
+                  : "昨日总资产 ••••••"}{" "}
+                {currency}
+              </p>
+            </>
+          )}
+        </section>
+      ) : null}
       <div className="distribution-list" aria-label="资产分布">
         {valuation.groups.map((group, index) => (
           <div key={group.key} className="distribution-item vibe-data-row">
@@ -515,6 +616,7 @@ export function TotalAssetOverview({
               formatAmount={amount}
               formatDay={formatShanghaiDayLabel}
               incompleteCount={abnormalTrendPoints.length}
+              lineType={hasAutomatedSources ? "linear" : "stepAfter"}
               points={totalTrendPoints}
               showCurrency={false}
               unavailableCount={unavailableTrendPoints.length}

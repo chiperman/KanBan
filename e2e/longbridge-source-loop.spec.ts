@@ -271,8 +271,7 @@ test("长桥 OAuth 先预览后原子保存，并展示总额与紧凑持仓", a
   await expect(holdingDetails.getByRole("columnheader")).toHaveText([
     "名称",
     /市值\s*\/\s*数量/,
-    "现价",
-    "平均成本价",
+    /现价\s*\/\s*成本/,
     "当日盈亏",
     "持仓盈亏",
   ]);
@@ -290,8 +289,7 @@ test("长桥 OAuth 先预览后原子保存，并展示总额与紧凑持仓", a
   await expect(fundHolding.getByRole("cell")).toHaveText([
     /高腾微金美元货币基金A.*HK0000038064.*Longbridge 基金净值 · 2022-04-14 00:00/,
     /152.20.*10/,
-    "15.220",
-    "14.500",
+    /15.220.*14.500/,
     /—.*—/,
     /\+7.20.*\+4.97%/,
   ]);

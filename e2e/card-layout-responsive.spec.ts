@@ -1410,7 +1410,7 @@ test("手机端总资产默认保留摘要并可展开全部详情", async ({ pa
   const overview = page.getByTestId("total-overview-card");
   await expect(overview).toHaveAttribute("data-mobile-expanded", "false");
   await expect(page.getByTestId("total-asset-amount")).toBeVisible();
-  await expect(page.getByTestId("today-asset-change")).toBeVisible();
+  await expect(page.getByTestId("total-asset-yesterday-change")).toBeVisible();
   await expect(page.getByTestId("total-asset-trend")).toBeHidden();
 
   await page.getByRole("button", { name: "展开总资产详情" }).click();

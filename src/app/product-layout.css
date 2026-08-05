@@ -944,6 +944,15 @@ body {
   padding: 0;
 }
 
+.header-demo-link {
+  min-height: 40px;
+  white-space: nowrap;
+}
+
+.demo-mode-indicator {
+  color: var(--warning);
+}
+
 .header-system,
 .header-time {
   color: var(--muted);
@@ -1073,6 +1082,21 @@ body {
   color: var(--accent-text);
   font-family: var(--f-mono);
   font-size: var(--vibe-type-caption);
+}
+
+.demo-mode-notice {
+  margin: 0 0 var(--vibe-space-3);
+}
+
+.demo-disabled-action,
+[data-demo-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.demo-disabled-action:hover,
+[data-demo-disabled="true"]:hover {
+  opacity: 0.42;
 }
 
 .login-primary,
@@ -1290,6 +1314,22 @@ body {
 .card-index-target[aria-current="location"] {
   background: var(--display);
   color: var(--bg);
+}
+
+.card-index-target[data-source-state="error"] {
+  color: var(--error);
+}
+
+.card-index-target[data-source-state="error"]:hover,
+.card-index-target[data-source-state="error"]:focus-visible {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+.card-index-target[data-source-state="error"][aria-current="location"] {
+  background: var(--error);
+  border-color: var(--error);
+  color: var(--accent-ink);
 }
 
 .card-index-number {
@@ -1712,14 +1752,21 @@ body {
 }
 
 .daily-trend-details > summary::after {
-  content: "+";
+  width: 7px;
+  height: 7px;
+  border-right: 1px solid currentcolor;
+  border-bottom: 1px solid currentcolor;
+  content: "";
   color: var(--secondary);
-  font-size: var(--vibe-type-body);
-  line-height: 1;
+  transform: rotate(-45deg);
+  transition:
+    color var(--vibe-duration-fast) var(--ease),
+    transform var(--vibe-duration-fast) var(--ease);
 }
 
 .daily-trend-details[open] > summary::after {
-  content: "−";
+  color: var(--display);
+  transform: rotate(45deg);
 }
 
 .daily-trend-details > summary:focus-visible {
@@ -1731,6 +1778,11 @@ body {
   display: grid;
   gap: var(--vibe-space-2);
   padding-top: var(--vibe-space-2);
+}
+
+.source-daily-trend-details .daily-trend-detail-list {
+  max-height: 260px;
+  overflow-y: auto;
 }
 
 .daily-trend-detail-list {
@@ -3085,16 +3137,25 @@ body {
 
 .vibe-coverage-summary-toggle {
   width: 18px;
+  height: 18px;
   min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   justify-self: end;
   color: var(--muted);
-  font-size: 16px;
-  text-align: center;
-  transition: color 160ms ease;
+  transition: color var(--vibe-duration-fast) var(--ease);
 }
 
 .vibe-coverage-summary-toggle::before {
-  content: "+";
+  display: block;
+  width: 7px;
+  height: 7px;
+  border-right: 1px solid currentcolor;
+  border-bottom: 1px solid currentcolor;
+  content: "";
+  transform: rotate(-45deg);
+  transition: transform var(--vibe-duration-fast) var(--ease);
 }
 
 .vibe-coverage[open] .vibe-coverage-summary-toggle {
@@ -3102,7 +3163,7 @@ body {
 }
 
 .vibe-coverage[open] .vibe-coverage-summary-toggle::before {
-  content: "×";
+  transform: rotate(45deg);
 }
 
 .vibe-coverage-panel {

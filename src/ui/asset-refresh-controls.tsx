@@ -42,10 +42,12 @@ async function requestAssetRefresh(input: {
 
 export function AssetSourceRefreshButton({
   disabled = false,
+  onDisabledClick,
   sourceId,
   sourceName,
 }: {
   disabled?: boolean;
+  onDisabledClick?: () => void;
   sourceId: string;
   sourceName: string;
 }) {
@@ -115,10 +117,17 @@ export function AssetSourceRefreshButton({
       <VibeButton
         type="button"
         className="asset-source-refresh-button"
+        data-demo-disabled={disabled && onDisabledClick ? "true" : undefined}
         aria-label={`刷新 ${sourceName}`}
-        aria-busy={state === "pending" || disabled}
-        disabled={state === "pending" || disabled}
-        onClick={() => void refreshSource()}
+        aria-busy={state === "pending"}
+        disabled={state === "pending" || (disabled && !onDisabledClick)}
+        onClick={() => {
+          if (disabled) {
+            onDisabledClick?.();
+            return;
+          }
+          void refreshSource();
+        }}
         variant="text"
       >
         <svg

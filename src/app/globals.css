@@ -662,6 +662,20 @@ body {
   display: none;
 }
 
+.asset-source-card[data-holdings-search-active="true"]
+  .holding-top-list
+  li:nth-child(n) {
+  display: grid;
+}
+
+.asset-holdings-search-empty {
+  margin: 12px 0 0;
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
 .asset-holdings-disclosure {
   display: none;
   margin-top: 18px;
@@ -684,25 +698,27 @@ body {
 
 .asset-holdings-detail-toggle__action {
   display: inline-flex;
+  width: 18px;
+  height: 18px;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
   color: var(--secondary);
-  font-size: 10px;
 }
 
 .asset-holdings-detail-toggle__action::after {
-  width: 6px;
-  height: 6px;
+  display: block;
+  width: 7px;
+  height: 7px;
   border-right: 1px solid currentcolor;
   border-bottom: 1px solid currentcolor;
   content: "";
-  transform: translateY(-2px) rotate(45deg);
+  transform: rotate(-45deg);
   transition: transform var(--dur, 0.2s) var(--ease);
 }
 
 .asset-holdings-detail-toggle[aria-expanded="true"]
   .asset-holdings-detail-toggle__action::after {
-  transform: translateY(2px) rotate(225deg);
+  transform: rotate(45deg);
 }
 
 .asset-holdings-detail-toggle[aria-expanded="false"] {
@@ -786,14 +802,21 @@ body {
 .holding-market-value-summary strong,
 .holding-market-value-summary span,
 .holding-profit-summary strong,
-.holding-profit-summary span {
+.holding-profit-summary span,
+.holding-current-cost-price > strong,
+.holding-current-cost-price > span {
   display: block;
 }
 
 .holding-market-value-summary span,
-.holding-profit-summary span {
+.holding-profit-summary span,
+.holding-current-cost-price > span {
   margin-top: 3px;
   font-size: 11px;
+}
+
+.holding-current-cost-price > span {
+  color: var(--secondary);
 }
 
 .asset-updated {

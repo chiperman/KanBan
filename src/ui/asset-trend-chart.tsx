@@ -15,6 +15,7 @@ import {
 export type AssetTrendChartPoint = {
   amount: string | null;
   day: string;
+  manualRecordDay?: string;
   observed: boolean;
   status: "complete" | "incomplete" | "expired";
 };
@@ -58,7 +59,9 @@ function TrendTooltip({
   const point = payload?.[0]?.payload as ChartDatum | undefined;
   if (!active || !point) return null;
   const quality = point.amount === null
-    ? `未估值 · ${point.status === "expired" ? "过期" : "不完整"}`
+    ? point.status === "complete"
+      ? "未估值"
+      : `未估值 · ${point.status === "expired" ? "过期" : "不完整"}`
     : point.status === "expired"
       ? "过期"
       : point.status === "incomplete"
@@ -74,6 +77,9 @@ function TrendTooltip({
           : `${formatAmount(point.amount)}${showCurrency ? ` ${currency}` : ""}`}
       </strong>
       {quality ? <small>{quality}</small> : null}
+      {point.manualRecordDay && point.manualRecordDay !== point.day ? (
+        <small>手工数据沿用 {formatDay(point.manualRecordDay)} 记录</small>
+      ) : null}
     </div>
   );
 }
@@ -107,6 +113,7 @@ export function AssetTrendChart({
   isSensitiveHidden = false,
   points,
   showCurrency = true,
+  lineType = "linear",
   unavailableCount,
   variant = "total",
 }: {
@@ -118,6 +125,7 @@ export function AssetTrendChart({
   isSensitiveHidden?: boolean;
   points: AssetTrendChartPoint[];
   showCurrency?: boolean;
+  lineType?: "linear" | "stepAfter";
   unavailableCount: number;
   variant?: "source" | "total";
 }) {
@@ -131,32 +139,6 @@ export function AssetTrendChart({
   }));
   const observed = data.filter((point) => point.amount !== null).length;
   const today = data.at(-1);
-  const yesterday = data.at(-2);
-  let yesterdayChange: number | null = null;
-  if (
-    today?.amount != null &&
-    yesterday?.amount != null &&
-    today.status === "complete" &&
-    yesterday.status === "complete" &&
-    today.value !== null &&
-    yesterday.value !== null
-  ) {
-    yesterdayChange = today.value - yesterday.value;
-  }
-  const comparisonIssue = (point: ChartDatum | undefined, fallback: string) => {
-    if (!point?.observed) return `${fallback}缺少观测`;
-    if (point.amount === null) return `${formatDay(point.day)}未估值`;
-    if (point.status === "expired") return `${formatDay(point.day)}过期`;
-    if (point.status === "incomplete") return `${formatDay(point.day)}不完整`;
-    return null;
-  };
-  const yesterdayComparisonReason = yesterdayChange === null
-    ? [
-      comparisonIssue(today, "今日"),
-      comparisonIssue(yesterday, "昨日"),
-    ].filter((reason): reason is string => reason !== null).join("；") ||
-      "昨日缺少观测"
-    : null;
   const values = data.flatMap((point) => point.value === null ? [] : [point.value]);
   const comparisonHeader = variant === "total" ? (
     <header className="asset-trend-comparison-header">
@@ -166,24 +148,6 @@ export function AssetTrendChart({
         total={points.length}
         unavailableCount={unavailableCount}
       />
-      <div className="asset-trend-yesterday">
-        <span>
-          较昨日{yesterday ? ` · ${formatDay(yesterday.day)}` : ""}
-        </span>
-        <strong
-          className={yesterdayChange === null
-            ? "asset-trend-yesterday-unavailable"
-            : undefined}
-        >
-          {yesterdayChange === null
-            ? "昨日变化未计算"
-            : `${yesterdayChange >= 0 ? "+" : ""}${formatAmount(String(yesterdayChange))} ${currency}`}
-        </strong>
-        <small>{yesterdayChange === null
-          ? yesterdayComparisonReason
-          : `昨日总资产 ${formatAmount(yesterday?.amount ?? "0")} ${currency}`}
-        </small>
-      </div>
     </header>
   ) : null;
 
@@ -286,7 +250,7 @@ export function AssetTrendChart({
               stroke="var(--display)"
               strokeLinecap="square"
               strokeWidth={2}
-              type="linear"
+              type={lineType}
             />
           </LineChart>
         </ResponsiveContainer>

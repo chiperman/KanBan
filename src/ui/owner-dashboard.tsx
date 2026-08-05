@@ -15,7 +15,6 @@ import { shanghaiDay } from "@/domain/daily-asset-snapshots";
 import type {
   Card,
   CardSpan,
-  DailyAssetSnapshot,
   DailyAssetTrendObservation,
   ManualAssetClass,
   ManualAssetRecord,
@@ -59,15 +58,30 @@ function sourceName(source: AssetSourceView): string {
   if (source.kind === "binance") return "Binance 资产";
   if (source.kind === "okx") return "OKX 资产";
   if (source.kind === "bitget") return "Bitget 资产";
+  if (source.kind === "bit") return "BIT / Matrixport 资产";
   if (source.kind === "evm-watch-ethereum") return "Ethereum 观察钱包";
   if (source.kind === "evm-watch-bsc") return "BNB Smart Chain 观察钱包";
   if (source.kind === "manual") return source.label;
   return source.label;
 }
 
+function sourceHasNavigationIssue(source: AssetSourceView): boolean {
+  if (source.lifecycle === "disconnected") return false;
+  return (
+    source.sync.error !== null ||
+    source.sync.status === "expired" ||
+    source.snapshot.coverage?.status === "partial" ||
+    source.snapshot.coverage?.status === "unknown" ||
+    source.snapshot.coverage?.products.some(
+      ({ freshness }) => freshness === "expired",
+    ) === true
+  );
+}
+
 type CardNavigationTarget = {
   id: string;
   label: string;
+  sourceState?: "error";
 };
 
 function CardIndex({
@@ -167,10 +181,11 @@ function CardIndex({
             key={target.id}
             type="button"
             className="card-index-target"
+            data-source-state={target.sourceState}
             aria-current={
               activeTargetId === target.id ? "location" : undefined
             }
-            aria-label={`定位 ${target.label}`}
+            aria-label={`定位 ${target.label}${target.sourceState === "error" ? "（数据异常）" : ""}`}
             onClick={() => jumpTo(target.id)}
           >
             <span className="card-index-number" aria-hidden="true">
@@ -278,20 +293,47 @@ async function cardRequest(url: string, method: string, body?: unknown) {
   }
 }
 
+function DemoActionButton({
+  children,
+  className,
+  onClick,
+  variant = "outline",
+}: {
+  children: string;
+  className?: string;
+  onClick(): void;
+  variant?: "primary" | "outline" | "text";
+}) {
+  return (
+    <VibeButton
+      aria-label={`${children}（演示模式下不可操作）`}
+      className={["demo-disabled-action", className].filter(Boolean).join(" ")}
+      data-demo-disabled="true"
+      onClick={onClick}
+      type="button"
+      variant={variant}
+    >
+      {children}
+    </VibeButton>
+  );
+}
+
 export function OwnerDashboard({
   cards,
   assetSources,
-  dailyAssetSnapshots,
   dailyAssetTrendObservations,
   currentDay,
+  mode = "owner",
 }: {
   cards: Card[];
   assetSources: AssetSourceView[];
-  dailyAssetSnapshots: DailyAssetSnapshot[];
   dailyAssetTrendObservations: DailyAssetTrendObservation[];
   currentDay: string;
+  mode?: "demo" | "owner";
 }) {
+  const demoMode = mode === "demo";
   const [error, setError] = useState("");
+  const [demoNotice, setDemoNotice] = useState("");
   const [showSensitiveInfo, setShowSensitiveInfo] = useState(true);
   const [holdingsSearchQuery, setHoldingsSearchQuery] = useState("");
   const [reportingCurrency, setReportingCurrency] =
@@ -353,6 +395,16 @@ export function OwnerDashboard({
     useState<{ source: AssetSourceView; record: ManualAssetRecord } | null>(null);
   const [lifecyclePending, setLifecyclePending] = useState(false);
   const [assetRefreshPending, setAssetRefreshPending] = useState(false);
+  const demoNoticeReset = useRef<number | null>(null);
+  const reportingCurrencyStorageKey = demoMode
+    ? "demo-reporting-currency"
+    : "reporting-currency";
+  const trendRangeStorageKey = demoMode
+    ? "demo-asset-trend-range"
+    : TREND_RANGE_STORAGE_KEY;
+  const profitColorSchemeStorageKey = demoMode
+    ? "demo-profit-color-scheme"
+    : PROFIT_COLOR_SCHEME_STORAGE_KEY;
   const hasEvmSources = assetSources.some(
     (source) =>
       source.lifecycle !== "disconnected" &&
@@ -384,16 +436,16 @@ export function OwnerDashboard({
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem(
-        PROFIT_COLOR_SCHEME_STORAGE_KEY,
+        profitColorSchemeStorageKey,
       );
       if (isProfitColorScheme(saved)) setProfitColorScheme(saved);
     } catch {
       // The current page can still use the default scheme when storage is unavailable.
     }
-  }, []);
+  }, [profitColorSchemeStorageKey]);
 
   useEffect(() => {
-    const savedCurrency = window.localStorage.getItem("reporting-currency");
+    const savedCurrency = window.localStorage.getItem(reportingCurrencyStorageKey);
     if (
       savedCurrency === "USD" ||
       savedCurrency === "CNY" ||
@@ -401,10 +453,10 @@ export function OwnerDashboard({
     ) {
       setReportingCurrency(savedCurrency);
     }
-  }, []);
+  }, [reportingCurrencyStorageKey]);
 
   useEffect(() => {
-    const savedRange = window.localStorage.getItem(TREND_RANGE_STORAGE_KEY);
+    const savedRange = window.localStorage.getItem(trendRangeStorageKey);
     if (
       savedRange === "7d" ||
       savedRange === "30d" ||
@@ -414,16 +466,33 @@ export function OwnerDashboard({
     ) {
       setTrendRange(savedRange);
     }
+  }, [trendRangeStorageKey]);
+
+  useEffect(() => () => {
+    if (demoNoticeReset.current !== null) {
+      window.clearTimeout(demoNoticeReset.current);
+    }
   }, []);
 
   function changeReportingCurrency(currency: ReportingCurrency) {
     setReportingCurrency(currency);
-    window.localStorage.setItem("reporting-currency", currency);
+    window.localStorage.setItem(reportingCurrencyStorageKey, currency);
   }
 
   function changeTrendRange(range: TrendRange) {
     setTrendRange(range);
-    window.localStorage.setItem(TREND_RANGE_STORAGE_KEY, range);
+    window.localStorage.setItem(trendRangeStorageKey, range);
+  }
+
+  function announceDemoModeRestriction() {
+    if (demoNoticeReset.current !== null) {
+      window.clearTimeout(demoNoticeReset.current);
+    }
+    setDemoNotice("演示模式下不可操作，数据不会保存");
+    demoNoticeReset.current = window.setTimeout(() => {
+      setDemoNotice("");
+      demoNoticeReset.current = null;
+    }, 2_600);
   }
 
   useEffect(() => {
@@ -448,6 +517,7 @@ export function OwnerDashboard({
   async function persistLayout(nextCards: Card[], previousCards: Card[]) {
     setDisplayCards(nextCards);
     setError("");
+    if (demoMode) return;
     try {
       await cardRequest("/api/asset-cards/layout", "PUT", {
         cards: nextCards.map(({ id, span, startsNewRow }) => ({ id, span, startsNewRow })),
@@ -771,6 +841,9 @@ export function OwnerDashboard({
         return [{
           id: card.id,
           label: source ? sourceName(source) : cardName(card),
+          sourceState: source && sourceHasNavigationIssue(source)
+            ? ("error" as const)
+            : undefined,
         }];
       }),
     ];
@@ -805,7 +878,7 @@ export function OwnerDashboard({
     return source ? (
       <AssetSourceCard
         animateTotal={animateTotal}
-        refreshDisabled={assetRefreshPending}
+        refreshDisabled={demoMode || assetRefreshPending}
         source={source}
         history={dailyAssetTrendObservations}
         reportingExchangeRates={reportingExchangeRates}
@@ -813,8 +886,13 @@ export function OwnerDashboard({
         trendRange={trendRange}
         currentDay={currentDay}
         holdingsSearchQuery={holdingsSearchQuery}
-        onManualAssetRecord={openManualAssetRecord}
-        onManualAssetRecordDelete={(source, record) => setManualDeleteTarget({ source, record })}
+        onManualAssetRecord={demoMode
+          ? announceDemoModeRestriction
+          : openManualAssetRecord}
+        onManualAssetRecordDelete={demoMode
+          ? announceDemoModeRestriction
+          : (source, record) => setManualDeleteTarget({ source, record })}
+        onReadOnlyAction={demoMode ? announceDemoModeRestriction : undefined}
         profitColorScheme={profitColorScheme}
         showSensitiveInfo={showSensitiveInfo}
       />
@@ -927,14 +1005,33 @@ export function OwnerDashboard({
         <div className="card-actions">
           <span className="source-status">SOURCE / CONTROL</span>
           {source ? (
-            <>
-              <button type="button" className="text-button" onClick={() => void setSourceHidden(source, true)}>
-                隐藏 {sourceName(source)}
-              </button>
-              <button type="button" className="text-button" onClick={() => openSourceManagement(source)}>
-                管理 {sourceName(source)}
-              </button>
-            </>
+            demoMode ? (
+              <>
+                <DemoActionButton
+                  className="text-button"
+                  onClick={announceDemoModeRestriction}
+                  variant="text"
+                >
+                  {`隐藏 ${sourceName(source)}`}
+                </DemoActionButton>
+                <DemoActionButton
+                  className="text-button"
+                  onClick={announceDemoModeRestriction}
+                  variant="text"
+                >
+                  {`管理 ${sourceName(source)}`}
+                </DemoActionButton>
+              </>
+            ) : (
+              <>
+                <button type="button" className="text-button" onClick={() => void setSourceHidden(source, true)}>
+                  隐藏 {sourceName(source)}
+                </button>
+                <button type="button" className="text-button" onClick={() => openSourceManagement(source)}>
+                  管理 {sourceName(source)}
+                </button>
+              </>
+            )
           ) : null}
         </div>
         <button
@@ -1003,6 +1100,16 @@ export function OwnerDashboard({
 
   return (
     <>
+      {demoNotice ? (
+        <VibeNotice
+          aria-live="polite"
+          className="demo-mode-notice"
+          role="status"
+          tone="info"
+        >
+          {demoNotice}
+        </VibeNotice>
+      ) : null}
       <CardIndex targets={navigationTargets} />
       {assetSources.length > 0 ? (
         <article
@@ -1022,10 +1129,10 @@ export function OwnerDashboard({
             onCurrencyChange={changeReportingCurrency}
             trendRange={trendRange}
             onTrendRangeChange={changeTrendRange}
-            baselines={dailyAssetSnapshots}
             history={dailyAssetTrendObservations}
             currentDay={currentDay}
             showSensitiveInfo={showSensitiveInfo}
+            storageNamespace={demoMode ? "demo" : "owner"}
           />
           <button
             type="button"
@@ -1052,7 +1159,13 @@ export function OwnerDashboard({
           >
             {showSensitiveInfo ? "隐藏关键信息" : "显示关键信息"}
           </VibeButton>
-          <AssetSourceFlow />
+          {demoMode ? (
+            <DemoActionButton onClick={announceDemoModeRestriction}>
+              添加资产来源
+            </DemoActionButton>
+          ) : (
+            <AssetSourceFlow />
+          )}
           <VibeButton
             type="button"
             className="mobile-card-layout-toggle"
@@ -1083,17 +1196,27 @@ export function OwnerDashboard({
             value={holdingsSearchQuery}
           />
         </div>
-        <AssetRefreshControls
-          enabled={assetSources.some(
-            (source) =>
-              source.lifecycle !== "disconnected" &&
-              source.kind !== "manual",
-          )}
-          hasEvmSources={hasEvmSources}
-          hasNonEvmSources={hasNonEvmSources}
-          needsDailyEvmPriceRefresh={needsDailyEvmPriceRefresh}
-          onPendingChange={setAssetRefreshPending}
-        />
+        {demoMode ? (
+          <DemoActionButton
+            className="asset-refresh-demo-button"
+            onClick={announceDemoModeRestriction}
+            variant="primary"
+          >
+            立即刷新资产
+          </DemoActionButton>
+        ) : (
+          <AssetRefreshControls
+            enabled={assetSources.some(
+              (source) =>
+                source.lifecycle !== "disconnected" &&
+                source.kind !== "manual",
+            )}
+            hasEvmSources={hasEvmSources}
+            hasNonEvmSources={hasNonEvmSources}
+            needsDailyEvmPriceRefresh={needsDailyEvmPriceRefresh}
+            onPendingChange={setAssetRefreshPending}
+          />
+        )}
       </div>
       {error ? (
         <VibeNotice className="content-error" role="alert" tone="error">

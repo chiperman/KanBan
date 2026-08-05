@@ -27,8 +27,13 @@ async function manualState(page: Page) {
       }>;
     }>;
     trendObservations: Array<{
+      day: string;
+      complete: boolean;
+      status: "complete" | "incomplete" | "expired";
       sources: Array<{
         sourceId: string;
+        complete: boolean;
+        status: "complete" | "incomplete" | "expired";
         total: { USD: string | null; CNY: string | null; HKD: string | null };
       }>;
     }>;
@@ -125,7 +130,7 @@ test("手工资产来源在卡片内按上海自然日保存一条，并可在�
     create.getByRole("heading", { name: "创建手工资产来源" }),
   ).toBeVisible();
   await create.getByLabel("资产名称").fill("A股");
-  await expect(create.getByLabel("今日总额")).toHaveCount(0);
+  await expect(create.getByLabel("资产总额")).toHaveCount(0);
   await create.getByRole("button", { name: "添加资产来源" }).click();
 
   const card = page.getByTestId("manual-asset-card");
@@ -149,30 +154,30 @@ test("手工资产来源在卡片内按上海自然日保存一条，并可在�
   expect(addRecordBox!.y).toBeLessThan(totalBox!.y);
   await addRecord.click();
   const record = page.getByRole("dialog", { name: "记录 A股 数据" });
-  await record.getByLabel("今日总额").fill("100000");
+  await record.getByLabel("资产总额").fill("100000");
   await expect(record.getByLabel("币种")).toHaveText("CNY");
-  await record.getByRole("button", { name: "保存今日数据" }).click();
+  await record.getByRole("button", { name: "保存数据" }).click();
 
   await expect(card).toContainText("无法折算 USD");
   await chooseOverviewOption(page, "计价货币", "CNY");
   await expect(card).toContainText("100,000.00");
-  await expect(card).toContainText("仅记录资产总额 · 每日一条，可在卡片内更新今日数据");
+  await expect(card).toContainText("仅记录资产总额 · 每日一条，可在下方管理历史数据");
   await expect(card.getByRole("button", { name: /刷新/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "立即刷新资产" })).toHaveCount(0);
 
   const management = page.getByRole("dialog", { name: "管理 A股" });
   await page.getByRole("button", { name: "管理 A股" }).click();
   await expect(management).toContainText("仅修改本看板中的显示名称");
-  await expect(management.getByLabel("今日总额")).toHaveCount(0);
+  await expect(management.getByLabel("资产总额")).toHaveCount(0);
   await expect(
     management.getByRole("menuitem", { name: "断开来源" }),
   ).toHaveCount(0);
   await management.getByRole("button", { name: "关闭" }).click();
 
-  await card.getByRole("button", { name: "更新数据" }).click();
+  await card.getByRole("button", { name: "更新今日数据" }).click();
   const update = page.getByRole("dialog", { name: "记录 A股 数据" });
-  await update.getByLabel("今日总额").fill("108000");
-  await update.getByLabel("今日总额").press("Enter");
+  await update.getByLabel("资产总额").fill("108000");
+  await update.getByLabel("资产总额").press("Enter");
 
   await expect(card).toContainText("108,000.00");
   await page.getByRole("button", { name: "添加资产来源" }).click();
@@ -219,6 +224,81 @@ test("手工资产来源在卡片内按上海自然日保存一条，并可在�
   });
 });
 
+test("低频手工记录不降低完整性，并按最近记录延用趋势金额", async ({
+  page,
+  request,
+}) => {
+  await request.post("/test-doubles/clock", {
+    data: { now: "2026-01-04T04:00:00.000Z" },
+  });
+  await loginAsOwner(page);
+  const created = await page.request.post("/api/asset-sources/manual", {
+    data: { label: "私募基金" },
+  });
+  expect(created.ok()).toBeTruthy();
+  const [manualSource] = (await manualState(page)).sources.filter(
+    ({ kind }) => kind === "manual",
+  );
+
+  const firstRecord = await page.request.patch(
+    `/api/asset-sources/${encodeURIComponent(manualSource.id)}`,
+    {
+      data: {
+        action: "manual-record",
+        day: "2026-01-01",
+        amount: "100000",
+        currency: "CNY",
+      },
+    },
+  );
+  expect(firstRecord.ok()).toBeTruthy();
+
+  const secondRecord = await page.request.patch(
+    `/api/asset-sources/${encodeURIComponent(manualSource.id)}`,
+    {
+      data: {
+        action: "manual-record",
+        day: "2026-01-04",
+        amount: "108000",
+        currency: "CNY",
+      },
+    },
+  );
+  expect(secondRecord.ok()).toBeTruthy();
+
+  const state = await manualState(page);
+  expect(
+    state.trendObservations.flatMap(({ sources }) =>
+      sources.filter(({ sourceId }) => sourceId === manualSource.id),
+    ),
+  ).toEqual([
+    expect.objectContaining({
+      complete: true,
+      status: "complete",
+      total: { USD: null, CNY: "100000", HKD: null },
+    }),
+    expect.objectContaining({
+      complete: true,
+      status: "complete",
+      total: { USD: null, CNY: "108000", HKD: null },
+    }),
+  ]);
+
+  await page.goto("/");
+  await chooseOverviewOption(page, "计价货币", "CNY");
+  await chooseOverviewOption(page, "趋势区间", "全部");
+
+  const totalTrend = page.getByTestId("total-asset-trend");
+  const sourceTrend = page.getByTestId(
+    `asset-source-trend-${manualSource.id}`,
+  );
+  await expect(totalTrend).toContainText("可绘制 4 / 4 天");
+  await expect(sourceTrend).toContainText(
+    "手工数据按最近记录延用，不影响同步完整性",
+  );
+  await expect(sourceTrend).not.toContainText("缺少 2 天观测，折线已断开");
+});
+
 test("手工记录拒绝非法金额和非手工来源编辑，并在文件存储中覆盖当天记录", async ({
   page,
   request,
@@ -233,7 +313,14 @@ test("手工记录拒绝非法金额和非手工来源编辑，并在文件存�
   );
   const invalid = await page.request.patch(
     `/api/asset-sources/${encodeURIComponent(manualSource.id)}`,
-    { data: { action: "manual-record", amount: "-1", currency: "CNY" } },
+    {
+      data: {
+        action: "manual-record",
+        day: "2026-01-01",
+        amount: "-1",
+        currency: "CNY",
+      },
+    },
   );
   expect(invalid.status()).toBe(400);
   await expect(invalid.json()).resolves.toEqual({
@@ -266,8 +353,8 @@ test("手工记录拒绝非法金额和非手工来源编辑，并在文件存�
       label: "A股",
       kind: "manual",
       capturedAt: "2026-01-01T08:00:00.000Z",
-      complete: false,
-      status: "incomplete",
+      complete: true,
+      status: "complete",
       total: { USD: null, CNY: "108000", HKD: null },
     }],
     trend: [{
@@ -275,8 +362,8 @@ test("手工记录拒绝非法金额和非手工来源编辑，并在文件存�
       label: "A股",
       kind: "manual",
       capturedAt: "2026-01-01T08:00:00.000Z",
-      complete: false,
-      status: "incomplete",
+      complete: true,
+      status: "complete",
       total: { USD: null, CNY: "108000", HKD: null },
     }],
   });

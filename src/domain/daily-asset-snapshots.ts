@@ -149,6 +149,14 @@ export function mergeDailyTrendObservation(
   next: DailyAssetTrendObservation,
   preserveObservationCapturedAt: boolean,
 ): DailyAssetTrendObservation {
+  const sourceIdsUnchanged =
+    previous.sources.length === next.sources.length &&
+    previous.sources.every((source) =>
+      next.sources.some(({ sourceId }) => sourceId === source.sourceId),
+    );
+  if (previous.complete && !next.complete && sourceIdsUnchanged) {
+    return previous;
+  }
   const bySourceId = new Map(
     previous.sources.map((source) => [source.sourceId, source]),
   );

@@ -115,6 +115,26 @@ test("SQLite schema v4 升级后分离日初基准与每日趋势观测并跨重
   });
 });
 
+test("完整每日趋势观测不会被同日后续不完整刷新降级", async ({ request }) => {
+  const response = await request.post(
+    "/test-doubles/sqlite-business-data-persistence?action=complete-trend-survives-incomplete-refresh",
+  );
+
+  expect(response.ok()).toBeTruthy();
+  await expect(response.json()).resolves.toEqual({
+    capturedAt: "2026-07-28T02:30:00.000Z",
+    complete: true,
+    status: "complete",
+    total: { USD: "100", CNY: "720", HKD: "780" },
+    source: {
+      capturedAt: "2026-07-28T02:30:00.000Z",
+      complete: true,
+      status: "complete",
+      total: { USD: "100", CNY: "720", HKD: "780" },
+    },
+  });
+});
+
 test("SQLite schema v6 升级后持久化 HKD 金额与观测时汇率", async ({
   request,
 }) => {

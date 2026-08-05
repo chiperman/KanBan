@@ -196,20 +196,6 @@ test("北京时间日界线建立唯一基准，同日幂等且跨日不回填",
     "同步完成",
   );
 
-  await expect(page.getByTestId("today-asset-change")).toContainText(
-    "今日资产变动",
-  );
-  await expect(page.getByTestId("today-asset-change")).toContainText(
-    "+0.00 USD",
-  );
-  const todayChange = page
-    .getByTestId("today-asset-change")
-    .locator(".today-change-amount");
-  await expect(todayChange).toHaveCSS("font-family", /Doto/);
-  await expect(todayChange.locator(".amount-unit")).toHaveCSS(
-    "font-family",
-    /Geist Mono/,
-  );
   await expect(page.getByTestId("total-asset-trend")).toContainText(
     "04月01日",
   );
@@ -223,13 +209,7 @@ test("北京时间日界线建立唯一基准，同日幂等且跨日不回填",
   expect((await history(request)).days[0].total.CNY).toBe("2174.4");
   expect((await history(request)).trendObservations[0].total.HKD).toBe("2355.6");
   await chooseOverviewOption(page, "计价货币", "CNY");
-  await expect(page.getByTestId("today-asset-change")).toContainText(
-    "+0.00 CNY",
-  );
   await chooseOverviewOption(page, "计价货币", "HKD");
-  await expect(page.getByTestId("today-asset-change")).toContainText(
-    "+0.00 HKD",
-  );
   await expect(page.getByTestId("total-asset-trend")).toContainText(
     "2,355.60 HKD",
   );
@@ -252,16 +232,10 @@ test("北京时间日界线建立唯一基准，同日幂等且跨日不回填",
   });
 
   await manualRefresh(page);
-  await expect(page.getByTestId("today-asset-change")).toContainText(
-    "+2.00 USD",
-  );
   expect((await history(request)).days).toHaveLength(1);
 
   await setServerTime(request, "2026-04-01T16:00:00.000Z");
   await manualRefresh(page);
-  await expect(page.getByTestId("today-asset-change")).toContainText(
-    "+0.00 USD",
-  );
   await expect(page.getByTestId("total-asset-trend")).toContainText(
     "04月02日",
   );
@@ -271,9 +245,6 @@ test("北京时间日界线建立唯一基准，同日幂等且跨日不回填",
   ]);
 
   await manualRefresh(page);
-  await expect(page.getByTestId("today-asset-change")).toContainText(
-    "+2.00 USD",
-  );
   expect((await history(request)).days).toHaveLength(2);
 
   await setServerTime(request, "2026-04-03T16:00:00.000Z");
@@ -301,7 +272,7 @@ test("北京时间日界线建立唯一基准，同日幂等且跨日不回填",
   ]);
 
   const content = await page.locator("body").innerText();
-  expect(content).toContain("今日资产变动");
+  expect(content).not.toContain("今日资产变动");
   expect(content).not.toContain("当日盈亏");
   expect(content).not.toContain("投资收益");
 });
@@ -551,12 +522,6 @@ test("来源确认的首次可信快照先建基准，随后刷新全失败也�
   await expect(page.getByTestId("asset-refresh-status")).toContainText(
     "同步完成 · 1 个来源失败",
   );
-  await expect(page.getByTestId("today-asset-change")).toContainText(
-    "+0.00 USD",
-  );
-  await expect(page.getByTestId("today-asset-change")).toContainText(
-    "今日变动：包含过期来源",
-  );
   expect((await history(request)).days).toHaveLength(1);
 });
 
@@ -591,12 +556,11 @@ test("同日新增来源从首次成功同步开始加入来源趋势但不改�
   });
 });
 
-test("未认证状态收不到日快照、今日变动或来源趋势", async ({ page, request }) => {
+test("未认证状态收不到日快照或来源趋势", async ({ page, request }) => {
   await configure(request);
   await page.goto("/");
   const content = await page.locator("body").innerText();
   for (const privateText of [
-    "今日资产变动",
     "资产趋势",
     "04月01日",
     "Alpha Securities",
@@ -641,6 +605,19 @@ test("总资产趋势默认展示 30 日直线、断点与区间资产变动", a
   await expect(
     betaTrend.getByRole("img", { name: "Beta Crypto来源总额趋势" }),
   ).toHaveCount(1);
+  const alphaDailyDetails = alphaTrend.getByTestId(
+    "asset-source-daily-details-source-alpha",
+  );
+  const alphaDailyRows = alphaTrend.getByTestId(
+    "asset-source-daily-detail-source-alpha",
+  );
+  await expect(alphaDailyDetails.getByText("每日总额（3）")).toBeVisible();
+  await expect(alphaDailyRows).toHaveCount(3);
+  await expect(alphaDailyRows.first()).toBeHidden();
+  await alphaDailyDetails.getByText("每日总额（3）").click();
+  await expect(alphaDailyRows.first()).toBeVisible();
+  await expect(alphaDailyDetails).toContainText("03月04日");
+  await expect(alphaDailyDetails).toContainText("50.00 USD");
   await expect(
     trend.locator(".recharts-line-curve"),
   ).toHaveCount(1);
@@ -674,8 +651,12 @@ test("趋势区间会记忆，且每日明细分页独立于图表区间", async
   ).toBeVisible();
   await expect(trend).toContainText("02月06日 至 03月07日");
   await expect(trend).toContainText("可绘制 30 / 30 天");
-  await expect(trend).toContainText("较昨日 · 03月06日");
-  await expect(trend).toContainText("+1.00 USD");
+  const yesterdayChange = page.getByTestId("total-asset-yesterday-change");
+  await expect(yesterdayChange).toContainText("较昨日 · 03月06日");
+  await expect(yesterdayChange).toContainText("+1.00 USD");
+  await expect(yesterdayChange).toContainText("昨日总资产 133.00 USD");
+  await expect(trend).not.toContainText("较昨日");
+  await expect(page.locator("body")).not.toContainText("今日资产变动");
   await expect(trend.locator(".total-trend-point-dot")).toHaveCount(0);
   await trend.getByText("观测明细（35）").click();
   await expect(trend.getByTestId("daily-trend-detail")).toHaveCount(30);
@@ -742,6 +723,41 @@ test("来源趋势独立断点且跟随全局趋势区间", async ({ page, reque
   ).toHaveCount(1);
   await expect(alphaTrend).toContainText("缺少 1 天观测，折线已断开");
   await expect(betaTrend).not.toContainText("缺少 1 天观测，折线已断开");
+});
+
+test("移动端可查看来源每日总额明细且不产生横向溢出", async ({
+  page,
+  request,
+}) => {
+  await configure(request);
+  const seeded = await request.post("/test-doubles/daily-snapshots", {
+    data: { action: "seed-total-trend-history" },
+  });
+  expect(seeded.ok()).toBeTruthy();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await loginAsOwner(page);
+
+  const alphaTrend = page.getByTestId("asset-source-trend-source-alpha");
+  const alphaCard = alphaTrend.locator("xpath=ancestor::article");
+  await alphaCard.getByRole("button", { name: "展开Alpha Securities" }).click();
+  await expect(alphaCard).toHaveAttribute("data-mobile-expanded", "true");
+
+  const sourceDailyDetails = alphaTrend.getByTestId(
+    "asset-source-daily-details-source-alpha",
+  );
+  await sourceDailyDetails.getByText("每日总额（3）").click();
+  await expect(
+    alphaTrend.getByTestId("asset-source-daily-detail-source-alpha").first(),
+  ).toBeVisible();
+  await expect(sourceDailyDetails).toContainText("03月04日");
+  await expect(sourceDailyDetails).toContainText("50.00 USD");
+
+  const viewport = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(viewport.scrollWidth).toBeLessThanOrEqual(viewport.clientWidth);
 });
 
 test("移动端趋势入口、键盘操作与窄屏来源图保持可访问", async ({

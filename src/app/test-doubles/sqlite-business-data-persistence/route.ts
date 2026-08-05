@@ -445,6 +445,7 @@ export async function POST(request: Request) {
     action !== "startup-failures" &&
     action !== "schema-v2-migration" &&
     action !== "schema-v4-trend-observation-migration" &&
+    action !== "complete-trend-survives-incomplete-refresh" &&
     action !== "schema-v6-hkd-fx-migration" &&
     action !== "schema-v8-manual-source-migration" &&
     action !== "display-name-persistence" &&
@@ -719,6 +720,54 @@ export async function POST(request: Request) {
             capturedAt: trendAfterFailureAndRestart.sources[0].capturedAt,
             complete: trendAfterFailureAndRestart.sources[0].complete,
           }),
+        },
+      });
+    }
+
+    if (action === "complete-trend-survives-incomplete-refresh") {
+      await mkdir(dataDirectory, { recursive: true });
+      const databasePath = path.join(dataDirectory, "dashboard.sqlite");
+      const database = new SqliteDashboardDatabase(
+        databasePath,
+        path.join(dataDirectory, "dashboard.json"),
+        path.join(dataDirectory, "cards.json"),
+      );
+      const complete = dailyTrendObservation(
+        "100",
+        "720",
+        "2026-07-28T02:30:00.000Z",
+        true,
+      );
+      complete.total.HKD = "780";
+      complete.sources[0].total.HKD = "780";
+      await database.recordDailyAssetObservation(complete, true);
+
+      const incomplete = dailyTrendObservation(
+        "80",
+        "576",
+        "2026-07-28T03:30:00.000Z",
+        false,
+      );
+      incomplete.total.HKD = "624";
+      incomplete.sources[0].total.HKD = "624";
+      await database.recordDailyAssetObservation(incomplete, true);
+
+      const restarted = new SqliteDashboardDatabase(
+        databasePath,
+        path.join(dataDirectory, "dashboard.json"),
+        path.join(dataDirectory, "cards.json"),
+      );
+      const [trend] = await restarted.listDailyAssetTrendObservations();
+      return Response.json({
+        capturedAt: trend.capturedAt,
+        complete: trend.complete,
+        status: trend.status,
+        total: trend.total,
+        source: {
+          capturedAt: trend.sources[0].capturedAt,
+          complete: trend.sources[0].complete,
+          status: trend.sources[0].status,
+          total: trend.sources[0].total,
         },
       });
     }

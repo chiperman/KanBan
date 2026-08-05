@@ -73,6 +73,7 @@ function providerCardLabel(source: AssetSourceView): string {
   if (source.kind === "binance") return "Binance 资产";
   if (source.kind === "okx") return "OKX 资产";
   if (source.kind === "bitget") return "Bitget 资产";
+  if (source.kind === "bit") return "BIT / Matrixport 资产";
   if (source.kind === "evm-watch-ethereum") return "Ethereum 观察钱包";
   if (source.kind === "evm-watch-bsc") return "BNB Smart Chain 观察钱包";
   if (source.kind === "manual") return "手工资产记录";
@@ -84,6 +85,7 @@ function providerCode(source: AssetSourceView): string {
   if (source.kind === "binance") return "BN";
   if (source.kind === "okx") return "OKX";
   if (source.kind === "bitget") return "BG";
+  if (source.kind === "bit") return "BIT";
   if (source.kind === "evm-watch-ethereum") return "ETH";
   if (source.kind === "evm-watch-bsc") return "BSC";
   if (source.kind === "manual") return "MANUAL";
@@ -105,6 +107,16 @@ function amount(value: string): string {
 
 function moneyAmount(value: string): string {
   return amount(decimalToFixed(value, 2));
+}
+
+function sourceTrendStatusLabel(
+  status: "complete" | "incomplete" | "expired",
+): string {
+  return status === "expired"
+    ? "过期"
+    : status === "incomplete"
+      ? "不完整"
+      : "完整";
 }
 
 function holdingProfit(holding: AssetHolding): {
@@ -286,6 +298,67 @@ function HoldingMarketValueQuantityCell({
   );
 }
 
+function HoldingCostPrice({
+  holding,
+  showSensitiveInfo,
+  formatDisplayPrice,
+}: {
+  holding: AssetHolding;
+  showSensitiveInfo: boolean;
+  formatDisplayPrice: (value: string, currency: string) => string | null;
+}) {
+  if (holding.costPrice === null) return "—";
+  if (!showSensitiveInfo) return "••••••";
+  const price = formatDisplayPrice(holding.costPrice, holding.currency);
+  if (price === null) return "无法折算";
+  return (
+    <>
+      {price}
+      {holding.costPriceSource ? (
+        <span className="holding-price-source"> · {holding.costPriceSource}</span>
+      ) : null}
+    </>
+  );
+}
+
+function HoldingCurrentCostPriceCell({
+  holding,
+  quoteUnavailable,
+  showSensitiveInfo,
+  formatDisplayPrice,
+}: {
+  holding: AssetHolding;
+  quoteUnavailable: boolean;
+  showSensitiveInfo: boolean;
+  formatDisplayPrice: (value: string, currency: string) => string | null;
+}) {
+  const masked = "••••••";
+  const currentPrice = holding.currentPrice
+    ? !showSensitiveInfo
+      ? masked
+      : formatDisplayPrice(
+        holding.currentPrice.amount,
+        holding.currentPrice.currency,
+      ) ?? "无法折算"
+    : quoteUnavailable
+      ? "现价不可用"
+      : holding.valuation.status === "unvalued"
+        ? "未估值"
+        : "—";
+  return (
+    <td className="holding-current-cost-price">
+      <strong>{currentPrice}</strong>
+      <span>
+        <HoldingCostPrice
+          formatDisplayPrice={formatDisplayPrice}
+          holding={holding}
+          showSensitiveInfo={showSensitiveInfo}
+        />
+      </span>
+    </td>
+  );
+}
+
 function HoldingDetailRow({
   holding,
   profitColorScheme,
@@ -328,27 +401,12 @@ function HoldingDetailRow({
             quoteUnavailable={quoteUnavailable}
             showSensitiveInfo={showSensitiveInfo}
           />
-          <td>
-            {holding.currentPrice
-              ? !showSensitiveInfo
-                ? masked
-                : formatDisplayPrice(
-                  holding.currentPrice.amount,
-                  holding.currentPrice.currency,
-                ) ?? "无法折算"
-              : quoteUnavailable
-                ? "现价不可用"
-                : holding.valuation.status === "unvalued"
-                  ? "未估值"
-                  : "—"}
-          </td>
-          <td>
-            {holding.costPrice === null
-              ? "—"
-              : !showSensitiveInfo
-                ? masked
-                : formatDisplayPrice(holding.costPrice, holding.currency) ?? "无法折算"}
-          </td>
+          <HoldingCurrentCostPriceCell
+            formatDisplayPrice={formatDisplayPrice}
+            holding={holding}
+            quoteUnavailable={quoteUnavailable}
+            showSensitiveInfo={showSensitiveInfo}
+          />
           <HoldingProfitSummaryCell
             currency={holding.currency}
             formatDisplayMoney={formatDisplayMoney}
@@ -393,11 +451,11 @@ function HoldingDetailRow({
                 : formatDisplayMoney(holding.marketValue, holding.currency) ?? "无法折算"}
           </td>
           <td>
-            {holding.costPrice === null
-              ? "—"
-              : !showSensitiveInfo
-                ? masked
-                : formatDisplayPrice(holding.costPrice, holding.currency) ?? "无法折算"}
+            <HoldingCostPrice
+              formatDisplayPrice={formatDisplayPrice}
+              holding={holding}
+              showSensitiveInfo={showSensitiveInfo}
+            />
           </td>
           {showPlatformProfit ? (
             <td>
@@ -461,6 +519,7 @@ export function AssetSourceCard({
   holdingsSearchQuery,
   onManualAssetRecord,
   onManualAssetRecordDelete,
+  onReadOnlyAction,
   profitColorScheme,
   showSensitiveInfo,
 }: {
@@ -475,6 +534,7 @@ export function AssetSourceCard({
   holdingsSearchQuery: string;
   onManualAssetRecord?: (source: AssetSourceView, record?: ManualAssetRecord) => void;
   onManualAssetRecordDelete?: (source: AssetSourceView, record: ManualAssetRecord) => void;
+  onReadOnlyAction?: () => void;
   profitColorScheme: ProfitColorScheme;
   showSensitiveInfo: boolean;
 }) {
@@ -487,7 +547,7 @@ export function AssetSourceCard({
   const supportsSmallHoldingFilter =
     !isManual && source.kind !== "longbridge";
   const supportsEvmTokenPreferences = source.kind.startsWith("evm-watch-");
-  const supportsProductCoverage = ["binance", "okx", "bitget"].includes(
+  const supportsProductCoverage = ["binance", "okx", "bitget", "bit"].includes(
     source.kind,
   );
   const orderedHoldings = useMemo(
@@ -563,24 +623,58 @@ export function AssetSourceCard({
     const item = snapshot.sources.find(({ sourceId }) => sourceId === source.id);
     return item ? [{ day: snapshot.day, ...item }] : [];
   });
-  const sourceTrendDays = daysForTrendRange(
-    trendRange,
-    currentDay,
-    sourceHistory.reduce<string | undefined>(
+  const firstSourceTrendDay = isManual
+    ? manualRecords.reduce<string | undefined>(
+      (earliest, record) =>
+        earliest === undefined || record.day < earliest ? record.day : earliest,
+      undefined,
+    )
+    : sourceHistory.reduce<string | undefined>(
       (earliest, observation) =>
         earliest === undefined || observation.day < earliest
           ? observation.day
           : earliest,
       undefined,
-    ),
+    );
+  const sourceTrendDays = daysForTrendRange(
+    trendRange,
+    currentDay,
+    firstSourceTrendDay,
   );
   const sourceTrendByDay = new Map(
     sourceHistory.map((observation) => [observation.day, observation]),
   );
-  const missingSourceTrendDayCount = sourceTrendDays.filter(
-    (day) => !sourceTrendByDay.has(day),
-  ).length;
+  const sourceDailyDetails = [...sourceHistory].sort((left, right) =>
+    right.day.localeCompare(left.day)
+  );
+  const missingSourceTrendDayCount = isManual
+    ? 0
+    : sourceTrendDays.filter((day) => !sourceTrendByDay.has(day)).length;
   const sourceTrendPoints = sourceTrendDays.map((day, index) => {
+    if (isManual) {
+      const record = manualRecords
+        .filter((item) => item.day <= day)
+        .toSorted((left, right) => right.day.localeCompare(left.day))[0];
+      if (record === undefined) {
+        return {
+          day,
+          index,
+          amount: null,
+          observed: false,
+          status: "incomplete" as const,
+        };
+      }
+      const recordedObservation = sourceTrendByDay.get(record.day);
+      return {
+        day,
+        index,
+        amount: recordedObservation?.total[reportingCurrency] ??
+          (record.currency === reportingCurrency ? record.amount : null),
+        manualRecordDay: record.day,
+        observed: record.day === day && recordedObservation !== undefined,
+        status: "complete" as const,
+      };
+    }
     const observation = sourceTrendByDay.get(day);
     return {
       day,
@@ -598,7 +692,9 @@ export function AssetSourceCard({
     (point) => point.amount !== null && point.status !== "complete",
   );
   const sourceTrendNotice = [
-    missingSourceTrendDayCount > 0
+    isManual
+      ? "手工数据按最近记录延用，不影响同步完整性"
+      : missingSourceTrendDayCount > 0
       ? `缺少 ${missingSourceTrendDayCount} 天观测，折线已断开`
       : null,
     abnormalSourceTrendPoints.length > 0 || unavailableSourceTrendPoints.length > 0
@@ -685,6 +781,7 @@ export function AssetSourceCard({
     <>
       <div
         className="asset-source-card vibe-data-module"
+        data-holdings-search-active={hasHoldingsSearchQuery ? "true" : undefined}
         data-vibe-module="asset-source"
         data-testid={
           source.kind === "longbridge"
@@ -695,6 +792,8 @@ export function AssetSourceCard({
                 ? "okx-card"
                 : source.kind === "bitget"
                   ? "bitget-card"
+                  : source.kind === "bit"
+                    ? "bit-card"
                   : source.kind === "evm-watch-ethereum"
                     ? "ethereum-watch-card"
                     : source.kind === "evm-watch-bsc"
@@ -716,7 +815,14 @@ export function AssetSourceCard({
             {isManual && onManualAssetRecord ? (
               <VibeButton
                 className="manual-asset-record-button"
-                onClick={() => onManualAssetRecord(source)}
+                data-demo-disabled={onReadOnlyAction ? "true" : undefined}
+                onClick={() => {
+                  if (onReadOnlyAction) {
+                    onReadOnlyAction();
+                    return;
+                  }
+                  onManualAssetRecord(source);
+                }}
                 type="button"
                 variant="outline"
               >
@@ -725,6 +831,7 @@ export function AssetSourceCard({
             ) : !isManual && source.lifecycle !== "disconnected" ? (
               <AssetSourceRefreshButton
                 disabled={refreshDisabled}
+                onDisabledClick={onReadOnlyAction}
                 sourceId={source.id}
                 sourceName={heading.title}
               />
@@ -774,17 +881,63 @@ export function AssetSourceCard({
               {isManual ? "添加首条数据后开始记录" : "首次成功同步后开始记录"}
             </p>
           ) : (
-            <AssetTrendChart
-              ariaLabel={`${heading.title}来源总额趋势`}
-              currency={reportingCurrency}
-              formatAmount={moneyAmount}
-              formatDay={formatShanghaiDayLabel}
-              incompleteCount={abnormalSourceTrendPoints.length}
-              points={sourceTrendPoints}
-              showCurrency={false}
-              unavailableCount={unavailableSourceTrendPoints.length}
-              variant="source"
-            />
+            <>
+              <AssetTrendChart
+                ariaLabel={`${heading.title}来源总额趋势`}
+                currency={reportingCurrency}
+                formatAmount={moneyAmount}
+                formatDay={formatShanghaiDayLabel}
+                incompleteCount={abnormalSourceTrendPoints.length}
+                lineType={isManual ? "stepAfter" : "linear"}
+                points={sourceTrendPoints}
+                showCurrency={false}
+                unavailableCount={unavailableSourceTrendPoints.length}
+                variant="source"
+              />
+              {!isManual ? (
+                <details
+                  className="daily-trend-details source-daily-trend-details"
+                  data-testid={`asset-source-daily-details-${source.id}`}
+                >
+                  <summary>每日总额（{sourceDailyDetails.length}）</summary>
+                  <div className="daily-trend-details-content">
+                    <ol className="daily-trend-detail-list">
+                      {sourceDailyDetails.map((observation) => {
+                        const observationStatus = observation.status ??
+                          (observation.complete ? "complete" : "incomplete");
+                        const observationAmount =
+                          observation.total[reportingCurrency] ?? null;
+                        const abnormal =
+                          observationStatus !== "complete" ||
+                          observationAmount === null;
+                        return (
+                          <li
+                            key={observation.day}
+                            data-testid={`asset-source-daily-detail-${source.id}`}
+                          >
+                            <time dateTime={observation.day}>
+                              {formatShanghaiDayLabel(observation.day)}
+                            </time>
+                            <strong>
+                              {observationAmount === null
+                                ? "未估值"
+                                : `${moneyAmount(observationAmount)} ${reportingCurrency}`}
+                            </strong>
+                            {abnormal ? (
+                              <span>
+                                {observationAmount === null
+                                  ? `未估值 · ${sourceTrendStatusLabel(observationStatus)}`
+                                  : sourceTrendStatusLabel(observationStatus)}
+                              </span>
+                            ) : null}
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  </div>
+                </details>
+              ) : null}
+            </>
           )}
           {showSensitiveInfo && sourceTrendNotice ? (
             <p className="trend-note">{sourceTrendNotice}</p>
@@ -813,8 +966,34 @@ export function AssetSourceCard({
                       <span>{record.day}</span>
                       <strong>{showSensitiveInfo ? `${moneyAmount(record.amount)} ${record.currency}` : "••••••"}</strong>
                       <span className="manual-asset-history-actions">
-                        <VibeButton type="button" variant="text" onClick={() => onManualAssetRecord?.(source, record)}>编辑</VibeButton>
-                        <VibeButton type="button" variant="text" onClick={() => onManualAssetRecordDelete?.(source, record)}>删除</VibeButton>
+                        <VibeButton
+                          data-demo-disabled={onReadOnlyAction ? "true" : undefined}
+                          onClick={() => {
+                            if (onReadOnlyAction) {
+                              onReadOnlyAction();
+                              return;
+                            }
+                            onManualAssetRecord?.(source, record);
+                          }}
+                          type="button"
+                          variant="text"
+                        >
+                          编辑
+                        </VibeButton>
+                        <VibeButton
+                          data-demo-disabled={onReadOnlyAction ? "true" : undefined}
+                          onClick={() => {
+                            if (onReadOnlyAction) {
+                              onReadOnlyAction();
+                              return;
+                            }
+                            onManualAssetRecordDelete?.(source, record);
+                          }}
+                          type="button"
+                          variant="text"
+                        >
+                          删除
+                        </VibeButton>
                       </span>
                     </li>
                   ))}
@@ -930,9 +1109,10 @@ export function AssetSourceCard({
             <span className="asset-holdings-detail-toggle__title">
               {source.kind === "longbridge" ? "证券持仓明细" : "持仓明细"}
             </span>
-            <span className="asset-holdings-detail-toggle__action">
-              {holdingsDetailExpanded ? "收起" : "展开"}
-            </span>
+            <span
+              aria-hidden="true"
+              className="asset-holdings-detail-toggle__action"
+            />
           </VibeButton>
           <div
             className="asset-holdings-detail"
@@ -940,48 +1120,57 @@ export function AssetSourceCard({
             data-testid="asset-holdings-detail"
             id={`asset-holdings-detail-${source.id}`}
           >
-            <div className="asset-table-wrap">
-              <table className="asset-table vibe-data-table" data-vibe-component="data-table">
-                <thead>
-                  <tr>
-                    <th>名称</th>
-                    {compactProfitColumns ? (
-                      <>
-                        <th>市值/数量</th>
-                        <th>现价</th>
-                        <th>平均成本价</th>
-                        <th>当日盈亏</th>
-                        <th>持仓盈亏</th>
-                      </>
-                    ) : (
-                      <>
-                        <th>数量</th>
-                        <th>现价</th>
-                        <th>持仓市值</th>
-                        <th>平均成本价</th>
-                        {showPlatformProfit ? <th>平台盈亏（来源提供）</th> : null}
-                        <th>浮动盈亏</th>
-                        <th>持仓盈亏率</th>
-                      </>
-                    )}
-                  </tr>
-                </thead>
-                <tbody>
-                  {searchedHoldings.map((holding) => (
-                    <HoldingDetailRow
-                      key={assetHoldingKey(holding)}
-                      holding={holding}
-                      profitColorScheme={profitColorScheme}
-                      showPlatformProfit={showPlatformProfit}
-                      compactProfitColumns={compactProfitColumns}
-                      showSensitiveInfo={showSensitiveInfo}
-                      formatDisplayMoney={formatDisplayMoney}
-                      formatDisplayPrice={formatDisplayPrice}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {searchedHoldings.length === 0 ? (
+              <p
+                className="trend-empty"
+                data-testid="asset-holdings-search-empty"
+                role="status"
+              >
+                未找到匹配持仓
+              </p>
+            ) : (
+              <div className="asset-table-wrap">
+                <table className="asset-table vibe-data-table" data-vibe-component="data-table">
+                  <thead>
+                    <tr>
+                      <th>名称</th>
+                      {compactProfitColumns ? (
+                        <>
+                          <th>市值/数量</th>
+                          <th>现价/成本</th>
+                          <th>当日盈亏</th>
+                          <th>持仓盈亏</th>
+                        </>
+                      ) : (
+                        <>
+                          <th>数量</th>
+                          <th>现价</th>
+                          <th>持仓市值</th>
+                          <th>平均成本价</th>
+                          {showPlatformProfit ? <th>平台盈亏（来源提供）</th> : null}
+                          <th>浮动盈亏</th>
+                          <th>持仓盈亏率</th>
+                        </>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {searchedHoldings.map((holding) => (
+                      <HoldingDetailRow
+                        key={assetHoldingKey(holding)}
+                        holding={holding}
+                        profitColorScheme={profitColorScheme}
+                        showPlatformProfit={showPlatformProfit}
+                        compactProfitColumns={compactProfitColumns}
+                        showSensitiveInfo={showSensitiveInfo}
+                        formatDisplayMoney={formatDisplayMoney}
+                        formatDisplayPrice={formatDisplayPrice}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </section>
         {unvaluedCount > 0 ? (
