@@ -6,6 +6,7 @@ import {
 import {
   decimalAdd,
   decimalCompare,
+  decimalDivide,
   decimalSubtract,
   decimalMultiply,
   decimalToFixed,
@@ -161,6 +162,23 @@ interface BinancePosition {
   economicAssetKey: string;
   state: NonNullable<AssetHolding["positionState"]>;
   providerState: string | null;
+}
+
+interface BinanceEquityQuote {
+  symbol: string;
+  bidPrice: string;
+  askPrice: string;
+}
+
+interface BinanceSpotTrade {
+  id: number;
+  symbol: string;
+  price: string;
+  quantity: string;
+  quoteQuantity: string;
+  commission: string;
+  commissionAsset: string;
+  isBuyer: boolean;
 }
 
 function addPosition(
@@ -698,6 +716,168 @@ function eligibleUsdtSymbols(exchangeInfo: unknown): Set<string> {
   );
 }
 
+function spotTrade(value: JsonRecord, symbol: string): BinanceSpotTrade {
+  const returnedSymbol = text(value.symbol, "symbol");
+  if (returnedSymbol !== symbol) {
+    throw new Error(
+      `Binance 现货成交返回的交易对不匹配：期望 ${symbol}，实际 ${returnedSymbol}`,
+    );
+  }
+  if (typeof value.isBuyer !== "boolean") {
+    throw new Error("Binance 现货成交响应缺少 isBuyer");
+  }
+  return {
+    id: integer(value.id, "id"),
+    symbol: returnedSymbol,
+    price: decimal(value.price, "price"),
+    quantity: decimal(value.qty, "qty"),
+    quoteQuantity: decimal(value.quoteQty, "quoteQty"),
+    commission: decimal(value.commission, "commission"),
+    commissionAsset: text(value.commissionAsset, "commissionAsset"),
+    isBuyer: value.isBuyer,
+  };
+}
+
+function spotCostPrice(input: {
+  asset: string;
+  quantity: string;
+  trades: readonly BinanceSpotTrade[];
+}): string | null {
+  if (!positive(input.quantity)) return null;
+
+  let heldQuantity = "0";
+  let heldCost = "0";
+  for (const trade of [...input.trades].sort((left, right) => left.id - right.id)) {
+    const commissionIsBaseAsset = trade.commissionAsset === input.asset;
+    const commissionIsQuoteAsset = trade.commissionAsset === "USDT";
+    if (trade.isBuyer) {
+      if (
+        positive(trade.commission) &&
+        !commissionIsBaseAsset &&
+        !commissionIsQuoteAsset
+      ) {
+        return null;
+      }
+      const acquiredQuantity = commissionIsBaseAsset
+        ? decimalSubtract(trade.quantity, trade.commission)
+        : trade.quantity;
+      if (!positive(acquiredQuantity)) return null;
+      const acquiredCost = commissionIsQuoteAsset
+        ? decimalAdd(trade.quoteQuantity, trade.commission)
+        : trade.quoteQuantity;
+      heldQuantity = decimalAdd(heldQuantity, acquiredQuantity);
+      heldCost = decimalAdd(heldCost, acquiredCost);
+      continue;
+    }
+
+    const disposedQuantity = commissionIsBaseAsset
+      ? decimalAdd(trade.quantity, trade.commission)
+      : trade.quantity;
+    if (decimalCompare(disposedQuantity, heldQuantity) > 0) return null;
+    if (decimalCompare(disposedQuantity, heldQuantity) === 0) {
+      heldQuantity = "0";
+      heldCost = "0";
+      continue;
+    }
+    heldCost = decimalSubtract(
+      heldCost,
+      decimalMultiply(
+        heldCost,
+        decimalDivide(disposedQuantity, heldQuantity),
+      ),
+    );
+    heldQuantity = decimalSubtract(heldQuantity, disposedQuantity);
+  }
+
+  if (decimalCompare(heldQuantity, input.quantity) !== 0 || !positive(heldCost)) {
+    return null;
+  }
+  return decimalDivide(heldCost, heldQuantity);
+}
+
+async function collectSpotTrades(
+  client: BinanceClient,
+  symbol: string,
+): Promise<BinanceSpotTrade[]> {
+  const output: BinanceSpotTrade[] = [];
+  const seenIds = new Set<number>();
+  let fromId = 0;
+  for (let page = 0; page < 100; page += 1) {
+    const rows = list(
+      await client.spotTrades(symbol, fromId),
+      `Binance ${symbol} 现货成交`,
+    ).map((row) => spotTrade(row, symbol));
+    if (rows.length > 1000) {
+      throw new Error(`Binance ${symbol} 现货成交单页数量超过 1000`);
+    }
+    for (const row of rows) {
+      if (row.id < fromId || seenIds.has(row.id)) {
+        throw new Error(`Binance ${symbol} 现货成交分页重复或倒退`);
+      }
+      seenIds.add(row.id);
+      output.push(row);
+    }
+    if (rows.length < 1000) return output;
+    const largestId = rows.reduce(
+      (largest, row) => Math.max(largest, row.id),
+      fromId,
+    );
+    if (largestId === Number.MAX_SAFE_INTEGER) {
+      throw new Error(`Binance ${symbol} 现货成交编号超出安全范围`);
+    }
+    fromId = largestId + 1;
+  }
+  throw new Error(`Binance ${symbol} 现货成交超过安全分页上限`);
+}
+
+async function readSpotCostPrices(input: {
+  client: BinanceClient;
+  positions: readonly BinancePosition[];
+  exchangeInfo: unknown;
+}): Promise<Map<string, string>> {
+  const eligible = eligibleUsdtSymbols(input.exchangeInfo);
+  const assets = new Set(
+    input.positions.flatMap((position) =>
+      position.account === "spot" &&
+      position.asset !== "USDT" &&
+      eligible.has(`${position.asset}USDT`)
+        ? [position.asset]
+        : []
+    ),
+  );
+  const costs = new Map<string, string>();
+  for (const asset of assets) {
+    try {
+      const cost = spotCostPrice({
+        asset,
+        quantity: input.positions.find(
+          (position) => position.account === "spot" && position.asset === asset,
+        )?.quantity ?? "0",
+        trades: await collectSpotTrades(input.client, `${asset}USDT`),
+      });
+      if (cost !== null) costs.set(asset, cost);
+    } catch {
+      // 成交历史不足或无法严格换算时，保留成本价为空而不影响当前资产同步。
+    }
+  }
+  return costs;
+}
+
+function spotCostPriceDetails(
+  position: BinancePosition,
+  spotCostPrices: ReadonlyMap<string, string>,
+): Pick<AssetHolding, "costPrice" | "costPriceSource"> {
+  const costPrice = position.account === "spot"
+    ? spotCostPrices.get(position.asset) ?? null
+    : null;
+  return costPrice === null
+    ? { costPrice: null }
+    : {
+        costPrice,
+        costPriceSource: "Binance 现货成交计算",
+      };
+}
+
 function tickerPrices(
   tickers: unknown,
   neededSymbols: ReadonlySet<string>,
@@ -717,6 +897,32 @@ function tickerPrices(
     prices.set(symbol, price);
   }
   return prices;
+}
+
+function equityQuote(value: unknown, expectedSymbol: string): BinanceEquityQuote {
+  const quote = record(value, "Binance Stocks 报价响应");
+  const symbol = text(quote.symbol, "symbol");
+  if (symbol !== expectedSymbol) {
+    throw new Error(
+      `Binance Stocks 返回的报价标的不匹配：期望 ${expectedSymbol}，实际 ${symbol}`,
+    );
+  }
+  const bidPrice = decimal(quote.bidPrice, "bidPrice");
+  const askPrice = decimal(quote.askPrice, "askPrice");
+  if (!positive(bidPrice) || !positive(askPrice)) {
+    throw new Error("Binance Stocks 返回了非正买卖报价");
+  }
+  return { symbol, bidPrice, askPrice };
+}
+
+function equityMidPrice(quote: BinanceEquityQuote): string {
+  return decimalDivide(decimalAdd(quote.bidPrice, quote.askPrice), "2");
+}
+
+function stocksSymbolForAsset(asset: string): string | null {
+  if (!asset.startsWith("EQ_")) return null;
+  const symbol = asset.slice("EQ_".length);
+  return /^[A-Z][A-Z0-9.-]*$/.test(symbol) ? symbol : null;
 }
 
 function nativeUsdtUsdQuote(
@@ -761,16 +967,46 @@ async function readUsdtUsdQuote(input: {
   return { quote: await input.prices.quote("USDT"), source: null };
 }
 
+async function readBinanceStocksMarketData(input: {
+  client: BinanceClient;
+  positions: readonly BinancePosition[];
+}): Promise<{
+  equityQuotes: Map<string, BinanceEquityQuote>;
+}> {
+  if (!input.positions.some((position) => position.asset.startsWith("EQ_"))) {
+    return { equityQuotes: new Map() };
+  }
+  const symbols = new Set(
+    input.positions.flatMap((position) => {
+      const symbol = stocksSymbolForAsset(position.asset);
+      return symbol === null ? [] : [symbol];
+    }),
+  );
+  const quotes = await Promise.all(
+    [...symbols].map(async (symbol) => [
+      symbol,
+      equityQuote(await input.client.equityQuote(symbol), symbol),
+    ] as const),
+  );
+  return {
+    equityQuotes: new Map(quotes),
+  };
+}
+
 function valuePositions(input: {
   positions: BinancePosition[];
   exchangeInfo: unknown;
   tickers: unknown;
+  equityQuotes?: ReadonlyMap<string, BinanceEquityQuote>;
+  spotCostPrices?: ReadonlyMap<string, string>;
   observedAt: string;
   usdtUsdQuote: PriceQuote | null;
   usdtUsdSource?: string | null;
   coverage?: AssetSnapshot["coverage"];
 }): AssetSnapshot {
   const eligible = eligibleUsdtSymbols(input.exchangeInfo);
+  const equityQuotes = input.equityQuotes ?? new Map<string, BinanceEquityQuote>();
+  const spotCostPrices = input.spotCostPrices ?? new Map<string, string>();
   const neededSymbols = new Set(
     input.positions.flatMap((position) => {
       const symbol = `${position.asset}USDT`;
@@ -837,6 +1073,72 @@ function valuePositions(input: {
         changePercent: null,
       };
     }
+    const stocksSymbol = stocksSymbolForAsset(position.asset);
+    if (position.asset.startsWith("EQ_")) {
+      const base = {
+        symbol: position.asset,
+        name: `${position.asset} · ${scopeLabel(position.account)}`,
+        sourceAsset: position.asset,
+        sourceAccount: position.account,
+        sourceProduct: position.product,
+        ...(position.providerPositionId === null
+          ? {}
+          : { providerPositionId: position.providerPositionId }),
+        ...(position.providerState === null
+          ? {}
+          : { providerPositionState: position.providerState }),
+        economicAssetKey: position.economicAssetKey,
+        positionState: position.state,
+        quantity: position.quantity,
+        currency: "USD",
+        assetClass: "securities" as const,
+        costPrice: null,
+        platformProfit: null,
+        changePercent: null,
+      };
+      if (stocksSymbol === null) {
+        return {
+          ...base,
+          currentPrice: null,
+          marketValue: null,
+          sourceMarketValue: null,
+          valuation: {
+            status: "unvalued" as const,
+            reason: `Binance Stocks 资产代码 ${position.asset} 无法解析为证券代码`,
+          },
+        };
+      }
+      const quote = equityQuotes.get(stocksSymbol) ?? null;
+      if (quote === null) {
+        return {
+          ...base,
+          currentPrice: null,
+          marketValue: null,
+          sourceMarketValue: null,
+          valuation: {
+            status: "unvalued" as const,
+            reason: `Binance Stocks 未返回 ${stocksSymbol} 的可靠报价`,
+          },
+        };
+      }
+      const unitPrice = equityMidPrice(quote);
+      const marketValue = decimalMultiply(position.quantity, unitPrice);
+      total = decimalAdd(
+        total,
+        decimalDivide(marketValue, usdtUsdQuote.price),
+      );
+      return {
+        ...base,
+        currentPrice: { amount: unitPrice, currency: "USD" },
+        marketValue,
+        sourceMarketValue: { amount: marketValue, currency: "USD" },
+        valuation: {
+          status: "valued" as const,
+          priceSource: `Binance Stocks ${stocksSymbol} 买一/卖一中间价`,
+          pricedAt: input.observedAt,
+        },
+      };
+    }
     const symbol = `${position.asset}USDT`;
     const price = eligible.has(symbol) ? prices.get(symbol) ?? null : null;
     if (price === null) {
@@ -864,7 +1166,7 @@ function valuePositions(input: {
           status: "unvalued",
           reason: `Binance 没有可靠的 ${symbol} 现货价格`,
         },
-        costPrice: null,
+        ...spotCostPriceDetails(position, spotCostPrices),
         platformProfit: null,
         changePercent: null,
       };
@@ -896,7 +1198,7 @@ function valuePositions(input: {
         priceSource: `Binance 现货 ${symbol}`,
         pricedAt: input.observedAt,
       },
-      costPrice: null,
+      ...spotCostPriceDetails(position, spotCostPrices),
       platformProfit: null,
       changePercent: null,
     };
@@ -949,6 +1251,8 @@ export function mapBinanceSnapshot(input: {
   lockedPages: unknown[];
   exchangeInfo: unknown;
   tickers: unknown;
+  equityQuotes?: ReadonlyMap<string, BinanceEquityQuote>;
+  spotCostPrices?: ReadonlyMap<string, string>;
   observedAt: string;
   usdtUsdQuote: PriceQuote | null;
 }): AssetSnapshot {
@@ -956,6 +1260,8 @@ export function mapBinanceSnapshot(input: {
     positions: extractPositions(input),
     exchangeInfo: input.exchangeInfo,
     tickers: input.tickers,
+    equityQuotes: input.equityQuotes,
+    spotCostPrices: input.spotCostPrices,
     observedAt: input.observedAt,
     usdtUsdQuote: input.usdtUsdQuote,
     coverage: baselineBinanceCoverage(),
@@ -1076,6 +1382,24 @@ class BinanceClient {
     return body;
   }
 
+  private async apiKey(
+    path: string,
+    parameters: Record<string, string> = {},
+  ): Promise<unknown> {
+    const url = new URL(path, BINANCE_ORIGIN);
+    for (const [key, value] of Object.entries(parameters)) {
+      url.searchParams.set(key, value);
+    }
+    const response = await this.request(url, {
+      method: "GET",
+      headers: { "x-mbx-apikey": this.credentials.apiKey },
+      cache: "no-store",
+      redirect: "error",
+      signal: this.signal,
+    });
+    return this.json(response, "Binance Stocks 行情读取");
+  }
+
   permissions() {
     return this.signed("GET", "/sapi/v1/account/apiRestrictions");
   }
@@ -1167,6 +1491,14 @@ class BinanceClient {
     return this.signed("GET", "/sapi/v1/soft-staking/list");
   }
 
+  spotTrades(symbol: string, fromId: number) {
+    return this.signed("GET", "/api/v3/myTrades", {
+      symbol,
+      fromId: String(fromId),
+      limit: "1000",
+    });
+  }
+
   async exchangeInfo(): Promise<unknown> {
     const response = await this.request(`${BINANCE_ORIGIN}/api/v3/exchangeInfo`, {
       method: "GET",
@@ -1185,6 +1517,10 @@ class BinanceClient {
       signal: this.signal,
     });
     return this.json(response, "Binance 行情读取");
+  }
+
+  equityQuote(symbol: string) {
+    return this.apiKey("/sapi/v1/equity/market/quote", { symbol });
   }
 }
 
@@ -1367,45 +1703,54 @@ async function readFullSnapshot(input: {
     observedAt: input.observedAt,
     prices: input.prices,
   });
+  const investment = addInvestmentPositions(
+    extractPositions({
+      spotAccount,
+      fundingAssets,
+      flexiblePages,
+      lockedPages,
+      exchangeInfo,
+    }),
+    {
+      dualPages: dual.value.pages,
+      discountPages: discount.value.pages,
+      bfusdAccount: bfusd.value,
+      rwusdAccount: rwusd.value,
+      ethStakingAccount: ethStaking.value,
+      solStakingAccount: solStaking.value,
+      onchainAccount: onchain.value.account,
+      onchainPages: onchain.value.pages,
+      softStaking: softStakingResult.value,
+      failures,
+    },
+  );
+  const spotCostPrices = await readSpotCostPrices({
+    client: input.client,
+    positions: investment.positions,
+    exchangeInfo,
+  });
+  const equities = await readBinanceStocksMarketData({
+    client: input.client,
+    positions: investment.positions,
+  });
   return {
     account: record(spotAccount, "Binance 现货账户响应"),
-    snapshot: (() => {
-      const investment = addInvestmentPositions(
-        extractPositions({
-          spotAccount,
-          fundingAssets,
-          flexiblePages,
-          lockedPages,
-          exchangeInfo,
-        }),
-        {
-          dualPages: dual.value.pages,
-          discountPages: discount.value.pages,
-          bfusdAccount: bfusd.value,
-          rwusdAccount: rwusd.value,
-          ethStakingAccount: ethStaking.value,
-          solStakingAccount: solStaking.value,
-          onchainAccount: onchain.value.account,
-          onchainPages: onchain.value.pages,
-          softStaking: softStakingResult.value,
-          failures,
-        },
-      );
-      return reconcileWallet({
-        snapshot: valuePositions({
-          positions: investment.positions,
-          exchangeInfo,
-          tickers,
-          observedAt: input.observedAt,
-          usdtUsdQuote: usdtUsd.quote,
-          usdtUsdSource: usdtUsd.source,
-        }),
-        walletBalances,
+    snapshot: reconcileWallet({
+      snapshot: valuePositions({
+        positions: investment.positions,
+        exchangeInfo,
         tickers,
-        products: investment.products,
-        incomplete: investment.incomplete,
-      });
-    })(),
+        equityQuotes: equities.equityQuotes,
+        spotCostPrices,
+        observedAt: input.observedAt,
+        usdtUsdQuote: usdtUsd.quote,
+        usdtUsdSource: usdtUsd.source,
+      }),
+      walletBalances,
+      tickers,
+      products: investment.products,
+      incomplete: investment.incomplete,
+    }),
   };
 }
 
@@ -1492,27 +1837,43 @@ export class ProductionBinanceSourceRefresher
         observedAt: attemptedAt,
         prices: this.prices,
       });
+      const positions = source.snapshot.holdings.map((holding) => {
+        if (!holding.sourceAsset || !holding.sourceAccount) {
+          throw new Error("Binance 旧快照缺少来源资产分区");
+        }
+        return {
+          asset: holding.sourceAsset,
+          account: holding.sourceAccount,
+          product: holding.sourceProduct ?? holding.sourceAccount,
+          providerPositionId: holding.providerPositionId ?? null,
+          providerState: holding.providerPositionState ?? null,
+          economicAssetKey:
+            holding.economicAssetKey ??
+            `binance:${holding.sourceAccount}:${holding.sourceAsset}`,
+          state: holding.positionState ?? "active",
+          quantity: holding.quantity,
+        };
+      });
+      const equities = await readBinanceStocksMarketData({
+        client,
+        positions,
+      });
+      const spotCostPrices = new Map(
+        source.snapshot.holdings.flatMap((holding) =>
+          holding.sourceAccount === "spot" &&
+          holding.costPrice !== null &&
+          holding.sourceAsset
+            ? [[holding.sourceAsset, holding.costPrice] as const]
+            : []
+        ),
+      );
       return {
         snapshot: valuePositions({
-          positions: source.snapshot.holdings.map((holding) => {
-            if (!holding.sourceAsset || !holding.sourceAccount) {
-              throw new Error("Binance 旧快照缺少来源资产分区");
-            }
-            return {
-              asset: holding.sourceAsset,
-              account: holding.sourceAccount,
-              product: holding.sourceProduct ?? holding.sourceAccount,
-              providerPositionId: holding.providerPositionId ?? null,
-              providerState: holding.providerPositionState ?? null,
-              economicAssetKey:
-                holding.economicAssetKey ??
-                `binance:${holding.sourceAccount}:${holding.sourceAsset}`,
-              state: holding.positionState ?? "active",
-              quantity: holding.quantity,
-            };
-          }),
+          positions,
           exchangeInfo,
           tickers,
+          equityQuotes: equities.equityQuotes,
+          spotCostPrices,
           observedAt: attemptedAt,
           usdtUsdQuote: usdtUsd.quote,
           usdtUsdSource: usdtUsd.source,
@@ -1530,21 +1891,46 @@ export class ProductionBinanceSourceRefresher
   }
 }
 
+const COINGECKO_USD_REFERENCE_IDS = {
+  BTC: "bitcoin",
+  USDT: "tether",
+} as const;
+
 export class CoinGeckoUsdtUsdPrices implements Prices {
+  private inFlightQuotes: Promise<ReadonlyMap<string, PriceQuote>> | null = null;
+
   constructor(
     private readonly services: ExternalServiceConfiguration,
     private readonly request: BinanceFetch = globalThis.fetch,
   ) {}
 
   async quote(symbol: string): Promise<PriceQuote | null> {
-    if (symbol !== "USDT") return null;
+    const normalized = symbol.toUpperCase();
+    if (!(normalized in COINGECKO_USD_REFERENCE_IDS)) return null;
+    return (await this.quotes()).get(normalized) ?? null;
+  }
+
+  private quotes(): Promise<ReadonlyMap<string, PriceQuote>> {
+    if (this.inFlightQuotes !== null) return this.inFlightQuotes;
+    const current = this.readQuotes();
+    this.inFlightQuotes = current;
+    void current.finally(() => {
+      if (this.inFlightQuotes === current) this.inFlightQuotes = null;
+    });
+    return current;
+  }
+
+  private async readQuotes(): Promise<ReadonlyMap<string, PriceQuote>> {
     try {
       const url = new URL("https://api.coingecko.com/api/v3/simple/price");
-      url.searchParams.set("ids", "tether");
+      url.searchParams.set(
+        "ids",
+        Object.values(COINGECKO_USD_REFERENCE_IDS).join(","),
+      );
       url.searchParams.set("vs_currencies", "usd");
       url.searchParams.set("include_last_updated_at", "true");
       const apiKey = await this.services.coinGeckoDemoApiKey();
-      if (!apiKey) return null;
+      if (!apiKey) return new Map();
       const response = await this.request(url, {
         method: "GET",
         headers: apiKey ? { "x-cg-demo-api-key": apiKey } : undefined,
@@ -1552,31 +1938,46 @@ export class CoinGeckoUsdtUsdPrices implements Prices {
         redirect: "error",
         signal: AbortSignal.timeout(5_000),
       });
-      if (!response.ok) return null;
+      if (!response.ok) return new Map();
       const body = record(
         await response.json().catch(() => null),
         "CoinGecko 响应",
       );
-      const tether = record(body.tether, "CoinGecko Tether 响应");
-      const price = typeof tether.usd === "number" && Number.isFinite(tether.usd)
-        ? String(tether.usd)
-        : typeof tether.usd === "string"
-          ? tether.usd
-          : null;
-      const updatedAt = typeof tether.last_updated_at === "number"
-        ? new Date(tether.last_updated_at * 1000)
-        : null;
-      if (
-        !price ||
-        !/^\d+(?:\.\d+)?$/.test(price) ||
-        !updatedAt ||
-        Number.isNaN(updatedAt.getTime())
-      ) {
-        return null;
+      const quotes = new Map<string, PriceQuote>();
+      for (const [symbol, coinId] of Object.entries(
+        COINGECKO_USD_REFERENCE_IDS,
+      )) {
+        try {
+          const coin = record(body[coinId], `CoinGecko ${symbol} 响应`);
+          const price = typeof coin.usd === "number" && Number.isFinite(coin.usd)
+            ? String(coin.usd)
+            : typeof coin.usd === "string"
+              ? coin.usd
+              : null;
+          const updatedAt = typeof coin.last_updated_at === "number"
+            ? new Date(coin.last_updated_at * 1000)
+            : null;
+          if (
+            !price ||
+            !/^\d+(?:\.\d+)?$/.test(price) ||
+            !updatedAt ||
+            Number.isNaN(updatedAt.getTime())
+          ) {
+            continue;
+          }
+          quotes.set(symbol, {
+            symbol,
+            currency: "USD",
+            price,
+            quotedAt: updatedAt,
+          });
+        } catch {
+          // 单一参考币缺价不应掩盖同批其他有效报价。
+        }
       }
-      return { symbol, currency: "USD", price, quotedAt: updatedAt };
+      return quotes;
     } catch {
-      return null;
+      return new Map();
     }
   }
 }

@@ -41,6 +41,7 @@ import type {
   AssetSourceConnections,
   AssetSources,
   CreateManualAssetSourceInput,
+  BitAuthorizationResult,
   DailyAssetSourceSnapshot,
   BinanceAuthorizationResult,
   BitgetAuthorizationResult,
@@ -88,6 +89,10 @@ import {
   ProductionBitgetSourceRefresher,
 } from "@/server/asset-sources/bitget";
 import {
+  ProductionBitReadOnly,
+  ProductionBitSourceRefresher,
+} from "@/server/asset-sources/bit";
+import {
   ProductionEvmWatchSourceRefresher,
   ProductionEvmWatchWallet,
 } from "@/server/asset-sources/ethereum";
@@ -122,12 +127,19 @@ interface DashboardState {
 const DASHBOARD_SCHEMA_VERSION = 9 as const;
 const SQLITE_SCHEMA_VERSION = 11;
 
-type SourceConnectionKind = "longbridge" | "binance" | "okx" | "bitget" | "evm";
+type SourceConnectionKind =
+  | "longbridge"
+  | "binance"
+  | "okx"
+  | "bitget"
+  | "bit"
+  | "evm";
 type SourceAuthorizationResult =
   | LongbridgeAuthorizationResult
   | BinanceAuthorizationResult
   | OkxAuthorizationResult
   | BitgetAuthorizationResult
+  | BitAuthorizationResult
   | EvmWatchAuthorizationResult;
 
 const SOURCE_CARD_DETAILS = {
@@ -150,6 +162,11 @@ const SOURCE_CARD_DETAILS = {
     kind: "bitget",
     title: "Bitget 资产",
     body: "现货、资金与 Earn 只读账户",
+  },
+  bit: {
+    kind: "bit",
+    title: "BIT / Matrixport 资产",
+    body: "Wallet 与理财产品只读账户",
   },
 } as const;
 
@@ -268,6 +285,11 @@ interface DashboardDatabase {
     credentialReference: string,
     capturedAt: string,
   ): Promise<void>;
+  connectBit(
+    result: BitAuthorizationResult,
+    credentialReference: string,
+    capturedAt: string,
+  ): Promise<void>;
   connectEvm(
     result: EvmWatchAuthorizationResult,
     credentialReference: string,
@@ -312,8 +334,8 @@ function manualDailySource(
     label: source.label,
     kind: source.kind,
     capturedAt: record.recordedAt,
-    complete: false,
-    status: "incomplete",
+    complete: true,
+    status: "complete",
     total: {
       USD: record.currency === "USD" ? record.amount : null,
       CNY: record.currency === "CNY" ? record.amount : null,
@@ -562,8 +584,34 @@ function migrateDailyObservation<T extends DailyAssetSnapshot>(
     ...observation.total,
     HKD: observation.total.HKD ?? null,
   };
-  const complete = observation.complete && total.HKD !== null;
-  const status = observation.status === "expired"
+  const sources = observation.sources.map((source) => {
+    const manual = source.kind === "manual";
+    const complete = manual || (
+      source.complete && (source.total.HKD ?? null) !== null
+    );
+    return {
+      ...source,
+      complete,
+      status: manual
+        ? "complete"
+        : source.status === "expired"
+          ? "expired"
+          : complete
+            ? "complete"
+            : "incomplete",
+      total: {
+        ...source.total,
+        HKD: source.total.HKD ?? null,
+      },
+    };
+  });
+  const automatedSources = sources.filter((source) => source.kind !== "manual");
+  const complete = automatedSources.length === 0
+    ? sources.length > 0
+    : automatedSources.every((source) => source.complete) &&
+      total.USD !== null &&
+      total.HKD !== null;
+  const status = automatedSources.some((source) => source.status === "expired")
     ? "expired"
     : complete
       ? "complete"
@@ -576,19 +624,7 @@ function migrateDailyObservation<T extends DailyAssetSnapshot>(
     exchangeRates: Array.isArray(observation.exchangeRates)
       ? observation.exchangeRates
       : [],
-    sources: observation.sources.map((source) => ({
-      ...source,
-      complete: source.complete && (source.total.HKD ?? null) !== null,
-      status: source.status === "expired"
-        ? "expired"
-        : source.complete && (source.total.HKD ?? null) !== null
-          ? "complete"
-          : "incomplete",
-      total: {
-        ...source.total,
-        HKD: source.total.HKD ?? null,
-      },
-    })),
+    sources,
   };
 }
 
@@ -1128,6 +1164,14 @@ export class FileDashboardDatabase {
     capturedAt: string,
   ): Promise<void> {
     return this.connectAssetSource("bitget", result, credentialReference, capturedAt);
+  }
+
+  async connectBit(
+    result: BitAuthorizationResult,
+    credentialReference: string,
+    capturedAt: string,
+  ): Promise<void> {
+    return this.connectAssetSource("bit", result, credentialReference, capturedAt);
   }
 
   async connectEvm(
@@ -2428,8 +2472,8 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
             )
           : undefined;
         this.upsertDailyTrendObservation(
-          existing && !createBaseline
-            ? mergeDailyTrendObservation(existing, snapshot, true)
+          existing
+            ? mergeDailyTrendObservation(existing, snapshot, !createBaseline)
             : snapshot,
         );
       }
@@ -2730,6 +2774,14 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
     capturedAt: string,
   ): Promise<void> {
     this.connectAssetSource("bitget", result, credentialReference, capturedAt);
+  }
+
+  async connectBit(
+    result: BitAuthorizationResult,
+    credentialReference: string,
+    capturedAt: string,
+  ): Promise<void> {
+    this.connectAssetSource("bit", result, credentialReference, capturedAt);
   }
 
   async connectEvm(
@@ -3048,6 +3100,7 @@ export class DatabaseAssetSourceConnections implements AssetSourceConnections {
       | BinanceAuthorizationResult
       | OkxAuthorizationResult
       | BitgetAuthorizationResult
+      | BitAuthorizationResult
       | EvmWatchAuthorizationResult,
     save: (credentialReference: string, capturedAt: string) => Promise<void>,
   ) {
@@ -3103,6 +3156,11 @@ export class DatabaseAssetSourceConnections implements AssetSourceConnections {
   connectBitget(result: BitgetAuthorizationResult) {
     return this.connect(result, (reference, capturedAt) =>
       this.database.connectBitget(result, reference, capturedAt));
+  }
+
+  connectBit(result: BitAuthorizationResult) {
+    return this.connect(result, (reference, capturedAt) =>
+      this.database.connectBit(result, reference, capturedAt));
   }
 
   connectEvm(result: EvmWatchAuthorizationResult) {
@@ -3306,6 +3364,7 @@ export function createProductionServices(
   const binance = new ProductionBinanceReadOnly(prices);
   const okx = new ProductionOkxReadOnly(prices);
   const bitget = new ProductionBitgetReadOnly(prices);
+  const bit = new ProductionBitReadOnly(prices);
   const evm = new ProductionEvmWatchWallet(externalServices);
   const assetSourceConnections = new DatabaseAssetSourceConnections(
     database,
@@ -3319,6 +3378,7 @@ export function createProductionServices(
       binance,
       okx,
       bitget,
+      bit,
       evm,
       connections: assetSourceConnections,
     }),
@@ -3343,6 +3403,7 @@ export function createProductionServices(
         binance: new ProductionBinanceSourceRefresher(prices),
         okx: new ProductionOkxSourceRefresher(prices),
         bitget: new ProductionBitgetSourceRefresher(prices),
+        bit: new ProductionBitSourceRefresher(prices),
         "evm-watch-ethereum": evmRefresher,
         "evm-watch-bsc": evmRefresher,
       }),
@@ -3363,6 +3424,7 @@ export function createProductionServices(
     binance,
     okx,
     bitget,
+    bit,
     evm,
     assetSourceConnections,
     assetSourceOnboarding,

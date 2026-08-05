@@ -5,6 +5,7 @@ export type AssetSourceProviderId =
   | "binance"
   | "okx"
   | "bitget"
+  | "bit"
   | "ethereum"
   | "bsc";
 
@@ -12,6 +13,7 @@ export type AssetSourceFieldId =
   | "apiKey"
   | "apiSecret"
   | "passphrase"
+  | "userId"
   | "region"
   | "accountMode"
   | "addresses";
@@ -33,7 +35,7 @@ export interface AssetSourceFieldDescription {
 export interface AssetSourceProviderDescription {
   id: AssetSourceProviderId;
   label: string;
-  route: "longbridge" | "binance" | "okx" | "bitget" | "evm";
+  route: "longbridge" | "binance" | "okx" | "bitget" | "bit" | "evm";
   authorization: "oauth" | "credentials" | "public-addresses";
   fields: AssetSourceFieldDescription[];
   startLabel: string;
@@ -152,6 +154,39 @@ export const ASSET_SOURCE_PROVIDERS: AssetSourceProviderDescription[] = [
         ? "UTA 纯现金 · 现货、资金、Savings、SharkFin、On-chain Elite（只读）"
         : "Classic Account · 现货、资金、Savings、SharkFin、On-chain Elite、普通 Futures（平台总额已含，不展开仓位）、合约交易机器人（只读）",
     savedMaterial: "只读 API 凭证",
+  },
+  {
+    id: "bit",
+    label: "BIT / Matrixport",
+    route: "bit",
+    authorization: "credentials",
+    fields: [
+      {
+        id: "apiKey",
+        label: "BIT / Matrixport Access Key",
+        control: "text",
+        required: true,
+      },
+      {
+        id: "apiSecret",
+        label: "BIT / Matrixport Secret Key",
+        control: "password",
+        required: true,
+      },
+      {
+        id: "userId",
+        label: "BIT / Matrixport 用户 ID（个人中心 UID）",
+        control: "text",
+        required: true,
+      },
+    ],
+    startLabel: "验证只读凭证",
+    validationError: "BIT / Matrixport 凭证验证失败",
+    dialogLabel: "确认 BIT / Matrixport 资产来源",
+    previewTitle: "BIT / Matrixport 凭证预览",
+    previewScope: () => "Wallet 余额、Balance+、DCP（只读）",
+    savedMaterial: "只读 API 凭证",
+    fieldHelp: "对应 Matrixport 创建成功页的 Access Key、Secret Key 和个人中心 UID。权限勾选“读取、理财”，取消“钱包、交易”；理财权限由 Matrixport 强制绑定公网出口 IP。应用不会调用交易、转账、提现或赎回接口。",
   },
   {
     id: "ethereum",

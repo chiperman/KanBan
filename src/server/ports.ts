@@ -117,7 +117,7 @@ export interface DailyAssetTrendObservation extends DailyAssetObservation {}
 export type DailyAssetSnapshot = DailyAssetBaseline;
 
 export interface DailyAssetSnapshots {
-  /** 日初基准，仅用于今日资产变动。 */
+  /** 日初基准，保留用于历史兼容。 */
   list(): Promise<DailyAssetBaseline[]>;
   /** 每日趋势观测，仅用于历史趋势。 */
   listTrendObservations(): Promise<DailyAssetTrendObservation[]>;
@@ -237,6 +237,7 @@ export interface AssetHolding {
   sourceAsset?: string;
   sourceAccount?:
     | "spot"
+    | "wallet"
     | "trading-bot"
     | "funding"
     | "earn-flexible"
@@ -262,6 +263,8 @@ export interface AssetHolding {
   sourceMarketValue: AssetMoney | null;
   valuation: AssetValuation;
   costPrice: string | null;
+  /** 成本价的计算或来源口径；旧快照可缺省。 */
+  costPriceSource?: string;
   platformProfit: string | null;
   changePercent: string | null;
 }
@@ -303,6 +306,13 @@ export interface BitgetAuthorizationResult {
   permissions: AssetPermission[];
   account: { id: string; label: string };
   scopeFingerprint: string;
+  snapshot: AssetSnapshot;
+}
+
+export interface BitAuthorizationResult {
+  credentials: string;
+  permissions: AssetPermission[];
+  account: { id: string; label: string };
   snapshot: AssetSnapshot;
 }
 
@@ -391,6 +401,20 @@ export interface BitgetReadOnly {
   }): Promise<BitgetAuthorizationResult>;
 }
 
+/** BIT / Matrixport 钱包与理财产品只读访问。 */
+export interface BitReadOnly {
+  preview(input: {
+    apiKey: string;
+    apiSecret: string;
+    userId: string;
+    observedAt: string;
+  }): Promise<BitAuthorizationResult>;
+  revalidate(input: {
+    credentials: string;
+    observedAt: string;
+  }): Promise<BitAuthorizationResult>;
+}
+
 export interface EvmWatchWalletReadOnly {
   preview(input: {
     chain: EvmChain;
@@ -425,6 +449,7 @@ export interface AssetSourceConnections {
   connectBinance(result: BinanceAuthorizationResult): Promise<void>;
   connectOkx(result: OkxAuthorizationResult): Promise<void>;
   connectBitget(result: BitgetAuthorizationResult): Promise<void>;
+  connectBit(result: BitAuthorizationResult): Promise<void>;
   connectEvm(result: EvmWatchAuthorizationResult): Promise<void>;
 }
 

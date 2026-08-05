@@ -132,6 +132,53 @@ test("Binance 只读凭证先预览后原子保存，并展示现货、资金与
   expect(responseBodies.join("\n")).not.toContain(API_SECRET);
 });
 
+test("全局持仓搜索筛选 Binance 明细", async ({ page }) => {
+  await configure(page);
+  await loginAsOwner(page);
+  await startBinanceFlow(page);
+  await page
+    .getByRole("dialog", { name: "确认 Binance 资产来源" })
+    .getByRole("button", { name: "确认并保存" })
+    .click();
+
+  const layout = await page.request.post("/test-doubles/asset-cards", {
+    data: {
+      assetCards: [{
+        id: "test-binance-card-test-binance-source-1",
+        kind: "asset",
+        title: "Binance 资产",
+        body: "投资产品明细、钱包守恒与覆盖状态",
+        sourceId: "test-binance-source-1",
+        span: 3,
+      }],
+    },
+  });
+  expect(layout.ok()).toBeTruthy();
+  await page.goto("/");
+
+  const card = page.getByTestId("binance-card");
+  const details = card.getByTestId("asset-holdings-detail");
+  const search = page.getByRole("searchbox", { name: "搜索全部持仓" });
+  await expect(search).toBeVisible();
+  await expect(card.getByRole("searchbox")).toHaveCount(0);
+  const bitcoin = details.locator("tbody tr").filter({ hasText: "BTC" });
+  await expect(bitcoin).toContainText("49,949.90");
+  await expect(bitcoin).toContainText("现货成交计算");
+  const totalRows = await details.locator("tbody tr").count();
+  expect(totalRows).toBeGreaterThan(1);
+
+  await search.fill("BTC");
+  await expect(details.locator("tbody tr")).toHaveCount(1);
+  await expect(details).toContainText("BTC");
+
+  await search.fill("not-a-holding");
+  await expect(details.getByTestId("asset-holdings-search-empty")).toBeVisible();
+  await expect(details.locator("tbody tr")).toHaveCount(0);
+
+  await search.fill("");
+  await expect(details.locator("tbody tr")).toHaveCount(totalRows);
+});
+
 test("Binance 写权限、缺失权限证明和原子保存失败均不留下来源或凭证", async ({
   page,
 }) => {
@@ -191,6 +238,55 @@ test("Binance 写权限、缺失权限证明和原子保存失败均不留下来
 test("生产 Binance 适配器只调用允许的读取端点并覆盖权限、分页、精度和未估值", async ({
   request,
 }) => {
+  const spotCost = await request.post("/test-doubles/binance/production-start", {
+    data: { action: "preview-spot-cost" },
+  });
+  expect(spotCost.ok()).toBeTruthy();
+  await expect(spotCost.json()).resolves.toMatchObject({
+    snapshot: {
+      holdings: expect.arrayContaining([
+        expect.objectContaining({
+          sourceAsset: "BTC",
+          sourceAccount: "spot",
+          costPrice: "50050",
+          costPriceSource: "Binance 现货成交计算",
+        }),
+        expect.objectContaining({
+          sourceAsset: "USDC",
+          sourceAccount: "spot",
+          costPrice: null,
+        }),
+        expect.objectContaining({
+          sourceAsset: "ETH",
+          sourceAccount: "funding",
+          costPrice: null,
+        }),
+      ]),
+    },
+    privateRequests: expect.arrayContaining([
+      "GET /api/v3/myTrades?symbol=BTCUSDT&fromId=0&limit=1000",
+      "GET /api/v3/myTrades?symbol=USDCUSDT&fromId=0&limit=1000",
+    ]),
+    allRequestsSigned: true,
+  });
+
+  const thirdAssetFee = await request.post(
+    "/test-doubles/binance/production-start",
+    { data: { action: "preview-spot-cost-third-asset-fee" } },
+  );
+  expect(thirdAssetFee.ok()).toBeTruthy();
+  await expect(thirdAssetFee.json()).resolves.toMatchObject({
+    snapshot: {
+      holdings: expect.arrayContaining([
+        expect.objectContaining({
+          sourceAsset: "BTC",
+          sourceAccount: "spot",
+          costPrice: null,
+        }),
+      ]),
+    },
+  });
+
   const valid = await request.post("/test-doubles/binance/production-start", {
     data: { action: "preview-valid" },
   });
@@ -235,7 +331,7 @@ test("生产 Binance 适配器只调用允许的读取端点并覆盖权限、�
     unexplainedValue: null,
     excludedPositiveAccounts: [],
   });
-  expect(body.privateRequests).toHaveLength(20);
+  expect(body.privateRequests).toHaveLength(22);
   expect(body.privateRequests).toEqual(expect.arrayContaining([
     "GET /sapi/v1/account/apiRestrictions",
     "GET /api/v3/account?omitZeroBalances=true",
@@ -273,6 +369,58 @@ test("生产 Binance 适配器只调用允许的读取端点并覆盖权限、�
     privateRequests: [],
     publicRequests: ["GET /api/v3/exchangeInfo", "GET /api/v3/ticker/price"],
     total: { amount: "12849.5", currency: "USDT" },
+  });
+
+  const equity = await request.post("/test-doubles/binance/production-start", {
+    data: { action: "preview-equity" },
+  });
+  expect(equity.ok()).toBeTruthy();
+  await expect(equity.json()).resolves.toMatchObject({
+    snapshot: {
+      total: { amount: "13232.77552755511022044", currency: "USDT" },
+      holdings: expect.arrayContaining([
+        expect.objectContaining({
+          symbol: "EQ_GLD",
+          sourceAsset: "EQ_GLD",
+          sourceAccount: "funding",
+          quantity: "1.0310215",
+          currency: "USD",
+          assetClass: "securities",
+          currentPrice: { amount: "371", currency: "USD" },
+          marketValue: "382.5089765",
+          sourceMarketValue: { amount: "382.5089765", currency: "USD" },
+          valuation: {
+            status: "valued",
+            priceSource: "Binance Stocks GLD 买一/卖一中间价",
+            pricedAt: "2026-01-01T00:00:00.000Z",
+          },
+        }),
+      ]),
+    },
+    stockRequests: [
+      "GET /sapi/v1/equity/market/quote?symbol=GLD",
+    ],
+    stockRequestsAuthenticated: true,
+  });
+
+  const equityRefresh = await request.post(
+    "/test-doubles/binance/production-start",
+    { data: { action: "refresh-equity-prices" } },
+  );
+  expect(equityRefresh.ok()).toBeTruthy();
+  await expect(equityRefresh.json()).resolves.toMatchObject({
+    privateRequests: [],
+    stockRequests: [
+      "GET /sapi/v1/equity/market/quote?symbol=GLD",
+    ],
+    stockRequestsAuthenticated: true,
+    holdings: expect.arrayContaining([
+      expect.objectContaining({
+        sourceAsset: "EQ_GLD",
+        assetClass: "securities",
+        currentPrice: { amount: "371", currency: "USD" },
+      }),
+    ]),
   });
 
   const persistence = await request.post("/test-doubles/binance/persistence");
@@ -340,6 +488,8 @@ test("生产 Binance 适配器只调用允许的读取端点并覆盖权限、�
           sourceAsset: "BTC",
           currentPrice: null,
           sourceMarketValue: null,
+          costPrice: "50050",
+          costPriceSource: "Binance 现货成交计算",
           valuation: expect.objectContaining({ status: "unvalued" }),
         }),
       ]),

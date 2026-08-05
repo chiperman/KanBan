@@ -43,6 +43,7 @@ export function binanceFixture(
   collateralReceipt = false,
   dust = false,
   investmentScenario: "baseline" | "investments" | "wallet-gap" | "unknown-state" | "wrapped-staking" = "baseline",
+  equityHolding = false,
 ) {
   const includesInvestments = investmentScenario !== "baseline";
   const walletGap = investmentScenario === "wallet-gap";
@@ -95,6 +96,16 @@ export function binanceFixture(
         withdrawing: "0",
         btcValuation: "0.0033",
       },
+      ...(equityHolding
+        ? [{
+            asset: "EQ_GLD",
+            free: "1.0310215",
+            locked: "0",
+            freeze: "0",
+            withdrawing: "0",
+            btcValuation: "0.0061",
+          }]
+        : []),
     ],
     flexiblePages: [
       {
@@ -281,6 +292,27 @@ export function binanceFixture(
         : []),
       ...(dust ? [{ symbol: "DUSTUSDT", price: "0.1" }] : []),
     ],
+    spotTrades: {
+      BTCUSDT: [{
+        symbol: "BTCUSDT",
+        id: 1,
+        orderId: 1,
+        price: "50000",
+        qty: "0.1",
+        quoteQty: "5000",
+        commission: "5",
+        commissionAsset: "USDT",
+        time: Date.parse(BINANCE_OBSERVED_AT),
+        isBuyer: true,
+      }],
+    },
+    equityQuotes: new Map([
+      ["GLD", {
+        symbol: "GLD",
+        bidPrice: "370",
+        askPrice: "372",
+      }],
+    ]),
   };
 }
 

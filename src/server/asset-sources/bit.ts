@@ -1,0 +1,657 @@
+import { createHmac } from "node:crypto";
+
+import { decimalAdd, decimalCompare, decimalMultiply } from "@/domain/decimal";
+import type {
+  AssetHolding,
+  AssetPermission,
+  AssetSnapshot,
+  AssetSourceRefresher,
+  AssetSourceRefreshResult,
+  BitAuthorizationResult,
+  BitReadOnly,
+  PriceQuote,
+  Prices,
+} from "@/server/ports";
+
+type JsonRecord = Record<string, unknown>;
+type BitFetch = (
+  input: string | URL | Request,
+  init?: RequestInit,
+) => Promise<Response>;
+
+export interface BitRuntime {
+  now(): number;
+  sleep(milliseconds: number, signal?: AbortSignal): Promise<void>;
+  requestIntervalMs: number;
+}
+
+const BIT_ORIGIN = "https://mapi.matrixport.com";
+const WALLET_BALANCE_PATH = "/mapi/v1/wallet/balance";
+const BALANCE_PLUS_PATH = "/flexible/api/v2/app/homepage";
+const DCP_PATH = "/dcp/api/v1/total-positions";
+const READ_ONLY_PATHS = new Set([
+  WALLET_BALANCE_PATH,
+  BALANCE_PLUS_PATH,
+  DCP_PATH,
+]);
+
+function abortableSleep(milliseconds: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason ?? new Error("BIT 请求已取消"));
+      return;
+    }
+    const timer = setTimeout(done, milliseconds);
+    function done() {
+      signal?.removeEventListener("abort", abort);
+      resolve();
+    }
+    function abort() {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
+      reject(signal?.reason ?? new Error("BIT 请求已取消"));
+    }
+    signal?.addEventListener("abort", abort, { once: true });
+  });
+}
+
+const DEFAULT_RUNTIME: BitRuntime = {
+  now: () => Date.now(),
+  sleep: abortableSleep,
+  // Wallet 私有接口按用户限频 1 rps；预览与完整同步宁可慢一点也不能突发请求。
+  requestIntervalMs: 1_050,
+};
+
+interface StoredBitCredentials {
+  apiKey: string;
+  apiSecret: string;
+  userId: string;
+}
+
+interface ProductRead {
+  value: unknown | null;
+  error: string | null;
+}
+
+function record(value: unknown, context: string): JsonRecord {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`${context}格式无效`);
+  }
+  return value as JsonRecord;
+}
+
+function list(value: unknown, context: string): JsonRecord[] {
+  if (!Array.isArray(value)) throw new Error(`${context}格式无效`);
+  return value.map((item) => record(item, context));
+}
+
+function text(value: unknown, field: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`BIT 响应缺少 ${field}`);
+  }
+  return value;
+}
+
+function decimal(value: unknown, field: string): string {
+  const raw = typeof value === "number" && Number.isFinite(value)
+    ? String(value)
+    : value;
+  if (typeof raw !== "string" || !/^\d+(?:\.\d+)?$/.test(raw)) {
+    throw new Error(`BIT 响应中的 ${field} 不是有效非负十进制数`);
+  }
+  return raw;
+}
+
+function positive(value: string): boolean {
+  return decimalCompare(value, "0") > 0;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "读取失败";
+}
+
+function networkErrorMessage(error: unknown): string {
+  const cause = error instanceof Error ? error.cause : undefined;
+  const code = typeof cause === "object" && cause !== null && "code" in cause &&
+    typeof cause.code === "string"
+    ? cause.code
+    : null;
+  return code ?? (error instanceof Error ? error.message : "未知网络错误");
+}
+
+function parseEnvelope(value: unknown, context: string): JsonRecord {
+  const envelope = record(value, context);
+  if (envelope.code !== 0 && envelope.code !== "0") {
+    const message = typeof envelope.message === "string"
+      ? envelope.message
+      : "未知错误";
+    throw new Error(`BIT ${context}失败（${String(envelope.code)} ${message}）`);
+  }
+  return record(envelope.data, `${context} data`);
+}
+
+function quoteFor(
+  symbol: string,
+  quote: PriceQuote | null,
+): {
+  currentPrice: AssetHolding["currentPrice"];
+  sourceMarketValue: AssetHolding["sourceMarketValue"];
+  marketValue: string | null;
+  valuation: AssetHolding["valuation"];
+} {
+  if (symbol === "USD") {
+    return {
+      currentPrice: { amount: "1", currency: "USD" },
+      sourceMarketValue: null,
+      marketValue: null,
+      valuation: { status: "unvalued", reason: "数量尚未绑定到持仓" },
+    };
+  }
+  if (quote !== null && quote.currency === "USD") {
+    return {
+      currentPrice: { amount: quote.price, currency: "USD" },
+      sourceMarketValue: null,
+      marketValue: null,
+      valuation: {
+        status: "valued",
+        priceSource: `CoinGecko ${symbol}/USD 参考价格`,
+        pricedAt: quote.quotedAt.toISOString(),
+      },
+    };
+  }
+  return {
+    currentPrice: null,
+    sourceMarketValue: null,
+    marketValue: null,
+    valuation: {
+      status: "unvalued",
+      reason: `${symbol} 暂无可靠 USD 参考价格`,
+    },
+  };
+}
+
+function valuedHolding(input: {
+  symbol: string;
+  name: string;
+  quantity: string;
+  sourceAsset: string;
+  sourceAccount: NonNullable<AssetHolding["sourceAccount"]>;
+  sourceProduct: string;
+  quote: PriceQuote | null;
+}): AssetHolding {
+  const quoted = quoteFor(input.symbol, input.quote);
+  if (quoted.currentPrice === null) {
+    return {
+      symbol: input.symbol,
+      name: input.name,
+      quantity: input.quantity,
+      currency: "USD",
+      assetClass: "crypto",
+      sourceAsset: input.sourceAsset,
+      sourceAccount: input.sourceAccount,
+      sourceProduct: input.sourceProduct,
+      currentPrice: null,
+      marketValue: null,
+      sourceMarketValue: null,
+      valuation: quoted.valuation,
+      costPrice: null,
+      platformProfit: null,
+      changePercent: null,
+    };
+  }
+  const marketValue = decimalMultiply(input.quantity, quoted.currentPrice.amount);
+  return {
+    symbol: input.symbol,
+    name: input.name,
+    quantity: input.quantity,
+    currency: "USD",
+    assetClass: input.symbol === "USD" || input.symbol === "USDT" ? "cash" : "crypto",
+    sourceAsset: input.sourceAsset,
+    sourceAccount: input.sourceAccount,
+    sourceProduct: input.sourceProduct,
+    currentPrice: quoted.currentPrice,
+    marketValue,
+    sourceMarketValue: { amount: marketValue, currency: "USD" },
+    valuation: quoted.valuation,
+    costPrice: null,
+    platformProfit: null,
+    changePercent: null,
+  };
+}
+
+function usdAggregateHolding(input: {
+  product: "dcp";
+  value: string;
+  name: string;
+  observedAt: string;
+}): AssetHolding | null {
+  if (!positive(input.value)) return null;
+  return {
+    symbol: "USD",
+    name: input.name,
+    quantity: input.value,
+    currency: "USD",
+    assetClass: "cash",
+    sourceAsset: `bit:${input.product}:aggregate`,
+    sourceAccount: "earn",
+    sourceProduct: input.product,
+    providerPositionId: "aggregate",
+    currentPrice: { amount: "1", currency: "USD" },
+    marketValue: input.value,
+    sourceMarketValue: { amount: input.value, currency: "USD" },
+    valuation: {
+      status: "valued",
+      priceSource: "BIT / Matrixport 产品 USD 汇总",
+      pricedAt: input.observedAt,
+    },
+    costPrice: null,
+    platformProfit: null,
+    changePercent: null,
+  };
+}
+
+function productCoverage(
+  product: string,
+  capability: "detailed" | "aggregate-only",
+  result: ProductRead,
+  message: string | null = null,
+) {
+  return {
+    product,
+    capability,
+    freshness: result.error === null ? "current" as const : "expired" as const,
+    message: result.error === null ? message : `本次未读取：${result.error}`,
+  };
+}
+
+function bitReferenceQuote(
+  symbol: string,
+  btcUsd: PriceQuote | null,
+  usdtUsd: PriceQuote | null,
+): PriceQuote | null {
+  if (symbol === "BTC") return btcUsd;
+  if (symbol === "USDT") return usdtUsd;
+  return null;
+}
+
+function revalueBitHolding(
+  holding: AssetHolding,
+  quote: PriceQuote | null,
+): AssetHolding {
+  const quoted = quoteFor(holding.symbol, quote);
+  if (quoted.currentPrice === null) {
+    return {
+      ...holding,
+      currentPrice: null,
+      marketValue: null,
+      sourceMarketValue: null,
+      valuation: quoted.valuation,
+    };
+  }
+  const marketValue = decimalMultiply(holding.quantity, quoted.currentPrice.amount);
+  return {
+    ...holding,
+    currentPrice: quoted.currentPrice,
+    marketValue,
+    sourceMarketValue: { amount: marketValue, currency: "USD" },
+    valuation: quoted.valuation,
+  };
+}
+
+async function refreshBitReferencePrices(
+  snapshot: AssetSnapshot,
+  prices: Prices,
+  observedAt: string,
+): Promise<AssetSnapshot> {
+  const [btcUsd, usdtUsd] = await Promise.all([
+    prices.quote("BTC"),
+    prices.quote("USDT"),
+  ]);
+  const holdings = snapshot.holdings.map((holding) =>
+    holding.sourceProduct === "wallet" || holding.sourceProduct === "balance-plus"
+      ? revalueBitHolding(
+        holding,
+        bitReferenceQuote(holding.symbol, btcUsd, usdtUsd),
+      )
+      : holding,
+  );
+  const total = decimalAdd(
+    ...holdings.flatMap((holding) =>
+      holding.sourceMarketValue?.currency === "USD"
+        ? [holding.sourceMarketValue.amount]
+        : [],
+    ),
+  );
+  const hasUnvalued = holdings.some(({ valuation }) => valuation.status === "unvalued");
+  const productReadFailed = snapshot.coverage?.products.some(
+    ({ freshness }) => freshness === "expired",
+  ) ?? false;
+  return {
+    ...snapshot,
+    total: { amount: total, currency: "USD" },
+    holdings,
+    syncedAt: observedAt,
+    ...(snapshot.coverage === undefined ? {} : {
+      coverage: {
+        ...snapshot.coverage,
+        status: hasUnvalued || productReadFailed ? "partial" : "unknown",
+      },
+    }),
+  };
+}
+
+export async function mapBitSnapshot(input: {
+  wallet: unknown;
+  balancePlus: ProductRead;
+  dcp: ProductRead;
+  observedAt: string;
+  prices: Prices;
+}): Promise<AssetSnapshot> {
+  const wallet = record(input.wallet, "BIT Wallet balance data");
+  const walletItems = list(wallet.items, "BIT Wallet balance items");
+  const [btcUsd, usdtUsd] = await Promise.all([
+    input.prices.quote("BTC"),
+    input.prices.quote("USDT"),
+  ]);
+  const holdings = walletItems.flatMap((item) => {
+    const currency = text(item.currency, "currency").toUpperCase();
+    const balance = decimal(item.balance, "balance");
+    if (!positive(balance)) return [];
+    const available = decimal(item.available_balance ?? "0", "available_balance");
+    const frozen = decimal(item.frozen_balance ?? "0", "frozen_balance");
+    const unconfirmed = decimal(
+      item.unconfirmed_balance ?? "0",
+      "unconfirmed_balance",
+    );
+    return [valuedHolding({
+      symbol: currency,
+      name: `${currency} · Wallet（可用 ${available}，冻结 ${frozen}，待确认 ${unconfirmed}）`,
+      quantity: balance,
+      sourceAsset: `bit:wallet:${currency}`,
+      sourceAccount: "wallet",
+      sourceProduct: "wallet",
+      quote: bitReferenceQuote(currency, btcUsd, usdtUsd),
+    })];
+  });
+
+  if (input.balancePlus.value !== null) {
+    const balancePlus = record(input.balancePlus.value, "BIT Balance+ homepage data");
+    for (const item of list(balancePlus.currencies, "BIT Balance+ currencies")) {
+      const currency = text(item.currency, "currency").toUpperCase();
+      const balance = decimal(item.balance, "balance");
+      if (!positive(balance)) continue;
+      holdings.push(valuedHolding({
+        symbol: currency,
+        name: `${currency} · Balance+`,
+        quantity: balance,
+        sourceAsset: `bit:balance-plus:${currency}`,
+        sourceAccount: "earn",
+        sourceProduct: "balance-plus",
+        quote: bitReferenceQuote(currency, btcUsd, usdtUsd),
+      }));
+    }
+  }
+
+  let dcpMessage: string | null = "仅读取 USD 总头寸，不读取订单、PnL 或赎回能力";
+  if (input.dcp.value !== null) {
+    const dcp = record(input.dcp.value, "BIT DCP total-positions data");
+    if (dcp.ask_price_status === 1 || dcp.ask_price_status === "1") {
+      dcpMessage = "平台报价失败，DCP 总头寸未计入本次快照";
+    } else {
+      const holding = usdAggregateHolding({
+        product: "dcp",
+        value: decimal(dcp.total_position, "total_position"),
+        name: "DCP（USD 总头寸）",
+        observedAt: input.observedAt,
+      });
+      if (holding) holdings.push(holding);
+    }
+  }
+
+  const total = decimalAdd(
+    ...holdings.flatMap((holding) =>
+      holding.sourceMarketValue?.currency === "USD"
+        ? [holding.sourceMarketValue.amount]
+        : [],
+    ),
+  );
+  const hasUnvalued = holdings.some((holding) => holding.valuation.status === "unvalued");
+  const productReadFailed = [input.balancePlus, input.dcp].some(
+    (result) => result.error !== null,
+  );
+  return {
+    total: { amount: total, currency: "USD" },
+    holdings,
+    exchangeRates: [],
+    syncedAt: input.observedAt,
+    coverage: {
+      status: hasUnvalued || productReadFailed ? "partial" : "complete",
+      totalIsAuthoritative: false,
+      products: [
+        {
+          product: "wallet",
+          capability: "detailed",
+          freshness: "current",
+          message: "余额明细已读取；未估值币种不会按零计入总额",
+        },
+        productCoverage(
+          "balance-plus",
+          "detailed",
+          input.balancePlus,
+          "逐币余额；total_balance_amount 未作为总资产口径",
+        ),
+        productCoverage("dcp", "aggregate-only", input.dcp, dcpMessage),
+      ],
+      unexplainedValue: null,
+      excludedPositiveAccounts: [],
+    },
+  };
+}
+
+function parseCredentials(value: string): StoredBitCredentials {
+  let credentials: unknown;
+  try {
+    credentials = JSON.parse(value);
+  } catch {
+    throw new Error("BIT 只读凭证格式无效");
+  }
+  const input = record(credentials, "BIT 只读凭证");
+  const apiKey = text(input.apiKey, "apiKey").trim();
+  const apiSecret = text(input.apiSecret, "apiSecret").trim();
+  const userId = text(input.userId, "userId").trim();
+  if (!/^\d+$/.test(userId)) {
+    throw new Error("BIT 用户 ID 格式无效");
+  }
+  return { apiKey, apiSecret, userId };
+}
+
+class BitClient {
+  private lastRequestAt: number | null = null;
+
+  constructor(
+    private readonly credentials: StoredBitCredentials,
+    private readonly prices: Prices,
+    private readonly request: BitFetch,
+    private readonly signal?: AbortSignal,
+    private readonly runtime: BitRuntime = DEFAULT_RUNTIME,
+  ) {}
+
+  private async get(
+    apiPath: string,
+    query: URLSearchParams = new URLSearchParams(),
+    extraHeaders: HeadersInit = {},
+  ): Promise<JsonRecord> {
+    if (!READ_ONLY_PATHS.has(apiPath)) {
+      throw new Error(`BIT 只读适配器拒绝未白名单路径：${apiPath}`);
+    }
+    const previous = this.lastRequestAt;
+    const now = this.runtime.now();
+    if (previous !== null) {
+      const delay = this.runtime.requestIntervalMs - (now - previous);
+      if (delay > 0) await this.runtime.sleep(delay, this.signal);
+    }
+    const timestamp = String(this.runtime.now());
+    const queryString = query.toString();
+    const signature = createHmac("sha256", this.credentials.apiSecret)
+      .update(`${timestamp}GET${apiPath}&${queryString}`)
+      .digest("hex");
+    const url = new URL(`${BIT_ORIGIN}${apiPath}`);
+    url.search = queryString;
+    this.lastRequestAt = this.runtime.now();
+    let response: Response;
+    try {
+      response = await this.request(url, {
+        method: "GET",
+        headers: {
+          accept: "application/json",
+          "X-MatrixPort-Access-Key": this.credentials.apiKey,
+          "X-Signature": signature,
+          "X-Timestamp": timestamp,
+          "X-Auth-Version": "v2",
+          ...extraHeaders,
+        },
+        cache: "no-store",
+        redirect: "error",
+        signal: this.signal,
+      });
+    } catch (error) {
+      throw new Error(
+        `BIT ${apiPath} 网络请求失败（${networkErrorMessage(error)}）`,
+      );
+    }
+    const body = await response.json().catch(() => null);
+    if (!response.ok) {
+      const message = body && typeof body === "object" && "message" in body &&
+        typeof body.message === "string"
+        ? body.message
+        : `HTTP ${response.status}`;
+      throw new Error(`BIT ${apiPath}读取失败（${message}）`);
+    }
+    return parseEnvelope(body, apiPath);
+  }
+
+  wallet() {
+    return this.get(WALLET_BALANCE_PATH);
+  }
+
+  balancePlus() {
+    return this.get(
+      BALANCE_PLUS_PATH,
+      new URLSearchParams({
+        product_type: "flexi_saving",
+        subject_type: "flexi_saving",
+      }),
+    );
+  }
+
+  dcp() {
+    return this.get(DCP_PATH);
+  }
+
+  async snapshot(observedAt: string): Promise<AssetSnapshot> {
+    const wallet = await this.wallet();
+    const optional = async (read: () => Promise<JsonRecord>): Promise<ProductRead> => {
+      try {
+        return { value: await read(), error: null };
+      } catch (error) {
+        return { value: null, error: errorMessage(error) };
+      }
+    };
+    const balancePlus = await optional(() => this.balancePlus());
+    const dcp = await optional(() => this.dcp());
+    return mapBitSnapshot({
+      wallet,
+      balancePlus,
+      dcp,
+      observedAt,
+      prices: this.prices,
+    });
+  }
+}
+
+export class ProductionBitReadOnly implements BitReadOnly {
+  constructor(
+    private readonly prices: Prices,
+    private readonly request: BitFetch = globalThis.fetch,
+    private readonly runtime: BitRuntime = DEFAULT_RUNTIME,
+  ) {}
+
+  async preview(input: {
+    apiKey: string;
+    apiSecret: string;
+    userId: string;
+    observedAt: string;
+  }): Promise<BitAuthorizationResult> {
+    const credentials = parseCredentials(JSON.stringify(input));
+    return this.read(credentials, input.observedAt);
+  }
+
+  async revalidate(input: {
+    credentials: string;
+    observedAt: string;
+  }): Promise<BitAuthorizationResult> {
+    return this.read(parseCredentials(input.credentials), input.observedAt);
+  }
+
+  private async read(
+    credentials: StoredBitCredentials,
+    observedAt: string,
+  ): Promise<BitAuthorizationResult> {
+    return {
+      credentials: JSON.stringify(credentials),
+      // 官方未提供 API Key 权限查询接口；此处只声明本应用实际使用的读取能力。
+      permissions: ["account", "positions"],
+      account: {
+        id: `bit:${credentials.userId}`,
+        label: `BIT / Matrixport 账户 · UID ${credentials.userId}`,
+      },
+      snapshot: await new BitClient(
+        credentials,
+        this.prices,
+        this.request,
+        undefined,
+        this.runtime,
+      ).snapshot(observedAt),
+    };
+  }
+}
+
+export class ProductionBitSourceRefresher implements AssetSourceRefresher {
+  constructor(
+    private readonly prices: Prices,
+    private readonly request: BitFetch = globalThis.fetch,
+    private readonly runtime: BitRuntime = DEFAULT_RUNTIME,
+  ) {}
+
+  async refresh(input: Parameters<AssetSourceRefresher["refresh"]>[0]): Promise<AssetSourceRefreshResult> {
+    if (input.source.kind !== "bit") {
+      throw new Error(`BIT 刷新器不支持来源类型：${input.source.kind}`);
+    }
+    // 行情刷新只请求独立参考价格，避免把全局轮询变成 BIT 私有接口调用。
+    if (input.mode === "prices") {
+      return {
+        snapshot: await refreshBitReferencePrices(
+          input.source.snapshot,
+          this.prices,
+          input.attemptedAt,
+        ),
+      };
+    }
+    const credentials = parseCredentials(input.credentials);
+    return {
+      snapshot: await new BitClient(
+        credentials,
+        this.prices,
+        this.request,
+        input.signal,
+        this.runtime,
+      ).snapshot(input.attemptedAt),
+    };
+  }
+}
+
+export const BIT_READ_ONLY_ENDPOINTS = [
+  WALLET_BALANCE_PATH,
+  BALANCE_PLUS_PATH,
+  DCP_PATH,
+] as const;

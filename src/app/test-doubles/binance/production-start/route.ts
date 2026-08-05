@@ -54,6 +54,9 @@ function businessLabel(method: string, url: URL, body: URLSearchParams | null) {
     "size",
     "pageIndex",
     "pageSize",
+    "symbol",
+    "fromId",
+    "limit",
   ];
   const query = new URLSearchParams();
   for (const key of allowed) {
@@ -83,8 +86,12 @@ export async function POST(request: Request) {
     body?.action !== "preview-native-usdt-usd" &&
     body?.action !== "preview-empty-native-usdt-usd" &&
     body?.action !== "preview-usdt-usd-fallback" &&
+    body?.action !== "preview-spot-cost" &&
+    body?.action !== "preview-spot-cost-third-asset-fee" &&
     body?.action !== "refresh-prices" &&
-    body?.action !== "refresh-unrelated-empty-price"
+    body?.action !== "refresh-unrelated-empty-price" &&
+    body?.action !== "preview-equity" &&
+    body?.action !== "refresh-equity-prices"
   ) {
     return Response.json({ error: "Binance 生产测试场景无效" }, { status: 400 });
   }
@@ -105,6 +112,8 @@ export async function POST(request: Request) {
     body.action === "preview-collateral-receipt",
     false,
     investmentScenario,
+    body.action === "preview-equity" ||
+      body.action === "refresh-equity-prices",
   );
   if (body.action === "preview-empty-price") {
     const btc = fixture.tickers.find(({ symbol }) => symbol === "BTCUSDT");
@@ -119,6 +128,9 @@ export async function POST(request: Request) {
       isSpotTradingAllowed: true,
     });
     fixture.tickers.push({ symbol: "BROKENUSDT", price: "" });
+  }
+  if (body.action === "preview-spot-cost-third-asset-fee") {
+    fixture.spotTrades.BTCUSDT[0].commissionAsset = "BNB";
   }
   if (
     body.action === "preview-native-usdt-usd" ||
@@ -138,7 +150,9 @@ export async function POST(request: Request) {
   }
   const privateRequests: string[] = [];
   const publicRequests: string[] = [];
+  const stockRequests: string[] = [];
   const signedChecks: boolean[] = [];
+  const stockAuthenticationChecks: boolean[] = [];
   const hostChecks: boolean[] = [];
   const transport = async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(input instanceof Request ? input.url : input.toString());
@@ -168,6 +182,7 @@ export async function POST(request: Request) {
       "/sapi/v1/onchain-yields/account",
       "/sapi/v1/onchain-yields/locked/position",
       "/sapi/v1/soft-staking/list",
+      "/api/v3/myTrades",
     ].includes(url.pathname);
     if (privatePath) {
       privateRequests.push(businessLabel(method, url, requestBody));
@@ -189,6 +204,15 @@ export async function POST(request: Request) {
       url.pathname === "/api/v3/ticker/price"
     ) {
       publicRequests.push(`${method} ${url.pathname}`);
+    } else if (url.pathname === "/sapi/v1/equity/market/quote") {
+      stockRequests.push(
+        `${method} ${url.pathname}${url.search ? url.search : ""}`,
+      );
+      stockAuthenticationChecks.push(
+        new Headers(init?.headers).get("x-mbx-apikey") === API_KEY &&
+        !url.searchParams.has("signature") &&
+        !url.searchParams.has("timestamp"),
+      );
     }
 
     if (
@@ -249,6 +273,14 @@ export async function POST(request: Request) {
       response = fixture.exchangeInfo;
     } else if (url.pathname === "/api/v3/ticker/price") {
       response = fixture.tickers;
+    } else if (url.pathname === "/api/v3/myTrades") {
+      const symbol = url.searchParams.get("symbol");
+      response = symbol === null
+        ? []
+        : fixture.spotTrades[symbol as keyof typeof fixture.spotTrades] ?? [];
+    } else if (url.pathname === "/sapi/v1/equity/market/quote") {
+      const symbol = url.searchParams.get("symbol");
+      response = symbol === "GLD" ? fixture.equityQuotes.get("GLD") ?? null : null;
     } else {
       return Response.json({ code: -1000, msg: "unexpected endpoint" }, { status: 500 });
     }
@@ -279,7 +311,8 @@ export async function POST(request: Request) {
     });
     if (
       body.action === "refresh-prices" ||
-      body.action === "refresh-unrelated-empty-price"
+      body.action === "refresh-unrelated-empty-price" ||
+      body.action === "refresh-equity-prices"
     ) {
       if (body.action === "refresh-unrelated-empty-price") {
         fixture.exchangeInfo.symbols.push({
@@ -293,6 +326,7 @@ export async function POST(request: Request) {
       }
       privateRequests.length = 0;
       publicRequests.length = 0;
+      stockRequests.length = 0;
       const refreshed = await new ProductionBinanceSourceRefresher(
         prices,
         transport,
@@ -321,7 +355,11 @@ export async function POST(request: Request) {
       return Response.json({
         privateRequests,
         publicRequests,
+        stockRequests,
+        stockRequestsAuthenticated:
+          stockAuthenticationChecks.length === 0 || stockAuthenticationChecks.every(Boolean),
         total: refreshed.snapshot.total,
+        holdings: refreshed.snapshot.holdings,
       });
     }
     return Response.json({
@@ -330,7 +368,10 @@ export async function POST(request: Request) {
       snapshot: result.snapshot,
       referencePriceRequests,
       privateRequests,
+      stockRequests,
       allRequestsSigned: signedChecks.length > 0 && signedChecks.every(Boolean),
+      stockRequestsAuthenticated:
+        stockAuthenticationChecks.length === 0 || stockAuthenticationChecks.every(Boolean),
       allHostsPinned: hostChecks.length > 0 && hostChecks.every(Boolean),
       missingReferencePriceFallsBack:
         (await new CoinGeckoUsdtUsdPrices(

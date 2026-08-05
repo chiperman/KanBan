@@ -4,6 +4,7 @@ import type {
   AssetSynchronization,
   AssetSourceConnections,
   ManualAssetRecords,
+  BitReadOnly,
   BinanceReadOnly,
   BitgetReadOnly,
   EvmWatchWalletReadOnly,
@@ -50,6 +51,7 @@ export interface AppServices {
   binance: BinanceReadOnly;
   okx: OkxReadOnly;
   bitget: BitgetReadOnly;
+  bit: BitReadOnly;
   evm: EvmWatchWalletReadOnly;
   assetSourceConnections: AssetSourceConnections;
   manualAssetRecords: ManualAssetRecords;

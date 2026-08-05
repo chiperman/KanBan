@@ -4,6 +4,8 @@ import type {
   AssetSources,
   AssetPermission,
   AssetSourceConnections,
+  BitAuthorizationResult,
+  BitReadOnly,
   CreateManualAssetSourceInput,
   AssetRefreshMode,
   AssetRefreshReport,
@@ -25,6 +27,7 @@ import type {
   OkxReadOnly,
   OkxRegion,
   DailyAssetSnapshot,
+  DailyAssetSourceSnapshot,
   DailyAssetSnapshots,
   LongbridgeAuthorizationResult,
   Card,
@@ -157,18 +160,15 @@ export class InMemoryDailyAssetSnapshots implements DailyAssetSnapshots {
   }
 
   async recordManual(
-    snapshot: DailyAssetSnapshot,
-    sourceId: string,
+    source: DailyAssetSourceSnapshot,
+    day: string,
+    currentObservation: DailyAssetSnapshot | null,
   ): Promise<void> {
-    const source = snapshot.sources.find(
-      (item) => item.sourceId === sourceId,
-    );
-    if (!source) throw new Error("手工资产来源不存在");
     const replaceManualSource = (
       previous: DailyAssetSnapshot,
     ): DailyAssetSnapshot => {
       const sources = [
-        ...previous.sources.filter((item) => item.sourceId !== sourceId),
+        ...previous.sources.filter((item) => item.sourceId !== source.sourceId),
         source,
       ];
       const total = {
@@ -199,9 +199,20 @@ export class InMemoryDailyAssetSnapshots implements DailyAssetSnapshots {
       };
     };
     const baselineIndex = this.snapshots.findIndex(
-      ({ day }) => day === snapshot.day,
+      (snapshot) => snapshot.day === day,
     );
     if (baselineIndex === -1) {
+      const snapshot = currentObservation === null
+        ? {
+            day,
+            capturedAt: source.capturedAt,
+            exchangeRates: [],
+            complete: false,
+            status: "incomplete" as const,
+            total: source.total,
+            sources: [source],
+          }
+        : replaceManualSource(currentObservation);
       this.snapshots = [...this.snapshots, structuredClone(snapshot)].sort(
         (left, right) => left.day.localeCompare(right.day),
       );
@@ -211,13 +222,22 @@ export class InMemoryDailyAssetSnapshots implements DailyAssetSnapshots {
       );
     }
     const trendIndex = this.trendObservations.findIndex(
-      ({ day }) => day === snapshot.day,
+      (snapshot) => snapshot.day === day,
     );
     if (trendIndex === -1) {
-      this.trendObservations = [
-        ...this.trendObservations,
-        structuredClone(snapshot),
-      ].sort((left, right) => left.day.localeCompare(right.day));
+      const snapshot = currentObservation === null
+        ? {
+            day,
+            capturedAt: source.capturedAt,
+            exchangeRates: [],
+            complete: false,
+            status: "incomplete" as const,
+            total: source.total,
+            sources: [source],
+          }
+        : replaceManualSource(currentObservation);
+      this.trendObservations = [...this.trendObservations, structuredClone(snapshot)]
+        .sort((left, right) => left.day.localeCompare(right.day));
     } else {
       this.trendObservations[trendIndex] = replaceManualSource(
         this.trendObservations[trendIndex],
@@ -323,39 +343,55 @@ export class InMemoryManualAssetRecords implements ManualAssetRecords {
     if (source.kind !== "manual") {
       throw new Error("只有手工资产记录可以编辑今日总额");
     }
+    const record: ManualAssetRecord = { sourceId, ...input, recordedAt: capturedAt };
     this.records = [
       ...this.records.filter(
         (record) => record.sourceId !== sourceId || record.day !== input.day,
       ),
-      { sourceId, ...input, recordedAt: capturedAt },
+      record,
     ];
     const latest = this.records
       .filter((record) => record.sourceId === sourceId)
       .toSorted((left, right) => right.day.localeCompare(left.day))[0]!;
+    const updatedManualSource = {
+      ...source,
+      hasManualRecord: true,
+      snapshot: {
+        ...source.snapshot,
+        total: { amount: latest.amount, currency: latest.currency },
+        syncedAt: latest.recordedAt,
+      },
+      sync: {
+        status: "current" as const,
+        lastSuccessfulAt: capturedAt,
+        lastAttemptAt: capturedAt,
+        error: null,
+        failedMode: null,
+      },
+    };
     const updatedSources = sources.map((item) =>
-      item.id !== sourceId
-        ? item
-        : {
-            ...item,
-            hasManualRecord: true,
-            snapshot: {
-              ...item.snapshot,
-              total: { amount: latest.amount, currency: latest.currency },
-              syncedAt: latest.recordedAt,
-            },
-            sync: {
-              status: "current" as const,
-              lastSuccessfulAt: capturedAt,
-              lastAttemptAt: capturedAt,
-              error: null,
-              failedMode: null,
-            },
-          },
+      item.id === sourceId ? updatedManualSource : item,
     );
     await this.sources.replaceAll(updatedSources);
-    await this.dailySnapshots.recordManual(
-      buildDailyAssetSnapshot(updatedSources, capturedAt),
+    const manualSource: DailyAssetSourceSnapshot = {
       sourceId,
+      label: updatedManualSource.label,
+      kind: "manual",
+      capturedAt: record.recordedAt,
+      complete: true,
+      status: "complete",
+      total: {
+        USD: record.currency === "USD" ? record.amount : null,
+        CNY: record.currency === "CNY" ? record.amount : null,
+        HKD: record.currency === "HKD" ? record.amount : null,
+      },
+    };
+    await this.dailySnapshots.recordManual(
+      manualSource,
+      input.day,
+      input.day === shanghaiDay(capturedAt)
+        ? buildDailyAssetSnapshot(updatedSources, capturedAt)
+        : null,
     );
   }
 
@@ -495,6 +531,7 @@ export class FakeBinanceReadOnly implements BinanceReadOnly {
         ...fixture,
         observedAt: input.observedAt,
         usdtUsdQuote: await this.prices.quote("USDT"),
+        spotCostPrices: new Map([["BTC", "50050"]]),
       }),
     };
   }
@@ -642,6 +679,154 @@ export class FakeBitgetReadOnly implements BitgetReadOnly {
   }
 }
 
+export class FakeBitReadOnly implements BitReadOnly {
+  private scenario = "valid";
+
+  configure(scenario: string): void {
+    this.scenario = scenario;
+  }
+
+  private snapshot(observedAt: string) {
+    return {
+      total: { amount: "160", currency: "USD" },
+      holdings: [
+        {
+          symbol: "USDT",
+          name: "USDT · Wallet",
+          sourceAsset: "bit:wallet:USDT",
+          sourceAccount: "wallet" as const,
+          sourceProduct: "wallet",
+          quantity: "100",
+          currency: "USD",
+          assetClass: "cash" as const,
+          currentPrice: { amount: "1", currency: "USD" },
+          marketValue: "100",
+          sourceMarketValue: { amount: "100", currency: "USD" },
+          valuation: {
+            status: "valued" as const,
+            priceSource: "BIT Wallet USD 计价",
+            pricedAt: observedAt,
+          },
+          costPrice: null,
+          platformProfit: null,
+          changePercent: null,
+        },
+        {
+          symbol: "USDT",
+          name: "USDT · Balance+",
+          sourceAsset: "bit:balance-plus:USDT",
+          sourceAccount: "earn" as const,
+          sourceProduct: "balance-plus",
+          quantity: "30",
+          currency: "USD",
+          assetClass: "cash" as const,
+          currentPrice: { amount: "1", currency: "USD" },
+          marketValue: "30",
+          sourceMarketValue: { amount: "30", currency: "USD" },
+          valuation: {
+            status: "valued" as const,
+            priceSource: "BIT Balance+ USD 计价",
+            pricedAt: observedAt,
+          },
+          costPrice: null,
+          platformProfit: null,
+          changePercent: null,
+        },
+        {
+          symbol: "USD",
+          name: "DCP（USD 总头寸）",
+          sourceAsset: "bit:dcp:aggregate",
+          sourceAccount: "earn" as const,
+          sourceProduct: "dcp",
+          providerPositionId: "aggregate",
+          quantity: "30",
+          currency: "USD",
+          assetClass: "cash" as const,
+          currentPrice: { amount: "1", currency: "USD" },
+          marketValue: "30",
+          sourceMarketValue: { amount: "30", currency: "USD" },
+          valuation: {
+            status: "valued" as const,
+            priceSource: "BIT DCP USD 汇总",
+            pricedAt: observedAt,
+          },
+          costPrice: null,
+          platformProfit: null,
+          changePercent: null,
+        },
+      ],
+      exchangeRates: [],
+      syncedAt: observedAt,
+      coverage: {
+        status: "complete" as const,
+        totalIsAuthoritative: false,
+        products: [
+          {
+            product: "wallet",
+            capability: "detailed" as const,
+            freshness: "current" as const,
+            message: "余额明细已读取；未估值币种不会按零计入总额",
+          },
+          {
+            product: "balance-plus",
+            capability: "detailed" as const,
+            freshness: "current" as const,
+            message: "逐币余额；total_balance_amount 未作为总资产口径",
+          },
+          {
+            product: "dcp",
+            capability: "aggregate-only" as const,
+            freshness: "current" as const,
+            message: "仅读取 USD 总头寸，不读取订单、PnL 或赎回能力",
+          },
+        ],
+        unexplainedValue: null,
+        excludedPositiveAccounts: [],
+      },
+    };
+  }
+
+  preview(input: {
+    apiKey: string;
+    apiSecret: string;
+    userId: string;
+    observedAt: string;
+  }): Promise<BitAuthorizationResult> {
+    if (this.scenario === "failure") {
+      return Promise.reject(new Error("BIT Wallet 暂时不可用"));
+    }
+    if (!/^\d+$/.test(input.userId)) {
+      return Promise.reject(new Error("BIT 用户 ID 格式无效"));
+    }
+    const userId = this.scenario === "identity-changed" ? "609999" : input.userId;
+    return Promise.resolve({
+      credentials: JSON.stringify({
+        apiKey: input.apiKey,
+        apiSecret: input.apiSecret,
+        userId: input.userId,
+      }),
+      permissions: ["account", "positions"],
+      account: {
+        id: `bit:${userId}`,
+        label: `BIT / Matrixport 账户 · UID ${userId}`,
+      },
+      snapshot: this.snapshot(input.observedAt),
+    });
+  }
+
+  revalidate(input: {
+    credentials: string;
+    observedAt: string;
+  }): Promise<BitAuthorizationResult> {
+    const credentials = JSON.parse(input.credentials) as {
+      apiKey: string;
+      apiSecret: string;
+      userId: string;
+    };
+    return this.preview({ ...credentials, observedAt: input.observedAt });
+  }
+}
+
 export class FakeEvmWatchWallet implements EvmWatchWalletReadOnly {
   private scenario = "valid";
 
@@ -754,6 +939,7 @@ export type FakeRefreshScenario =
   | "binance-refresh-failure"
   | "okx-refresh-failure"
   | "bitget-refresh-failure"
+  | "bit-refresh-failure"
   | "evm-ethereum-refresh-failure"
   | "evm-ethereum-price-refresh-failure"
   | "evm-unknown-valued"
@@ -819,6 +1005,12 @@ export class FakeAssetSourceRefresher implements AssetSourceRefresher {
       source.kind === "bitget"
     ) {
       throw new Error("Bitget 同步失败");
+    }
+    if (
+      this.scenario === "bit-refresh-failure" &&
+      source.kind === "bit"
+    ) {
+      throw new Error("BIT 同步失败");
     }
     if (
       this.scenario === "evm-ethereum-refresh-failure" &&
@@ -1130,7 +1322,8 @@ export class InMemoryAssetSourceConnections implements AssetSourceConnections {
       | LongbridgeAuthorizationResult
       | BinanceAuthorizationResult
       | OkxAuthorizationResult
-      | BitgetAuthorizationResult,
+      | BitgetAuthorizationResult
+      | BitAuthorizationResult,
     config: { kind: string; title: string; body: string },
   ): Promise<void> {
     const credentialReference = await this.secrets.put(result.credentials);
@@ -1206,6 +1399,14 @@ export class InMemoryAssetSourceConnections implements AssetSourceConnections {
       kind: "bitget",
       title: "Bitget 资产",
       body: "现货、资金与 Earn 只读账户",
+    });
+  }
+
+  connectBit(result: BitAuthorizationResult): Promise<void> {
+    return this.connect(result, {
+      kind: "bit",
+      title: "BIT / Matrixport 资产",
+      body: "Wallet 与理财产品只读账户",
     });
   }
 
@@ -1352,6 +1553,7 @@ export interface TestServices extends AppServices {
   binance: FakeBinanceReadOnly;
   okx: FakeOkxReadOnly;
   bitget: FakeBitgetReadOnly;
+  bit: FakeBitReadOnly;
   evm: FakeEvmWatchWallet;
   assetSourceConnections: InMemoryAssetSourceConnections;
   manualAssetRecords: InMemoryManualAssetRecords;
@@ -1389,6 +1591,7 @@ export function createTestServices(): TestServices {
   const binance = new FakeBinanceReadOnly(prices);
   const okx = new FakeOkxReadOnly();
   const bitget = new FakeBitgetReadOnly();
+  const bit = new FakeBitReadOnly();
   const evm = new FakeEvmWatchWallet();
   const assetSourceConnections = new InMemoryAssetSourceConnections(
     assetSources,
@@ -1409,6 +1612,7 @@ export function createTestServices(): TestServices {
       binance,
       okx,
       bitget,
+      bit,
       evm,
       connections: assetSourceConnections,
     }),
@@ -1432,6 +1636,7 @@ export function createTestServices(): TestServices {
     binance,
     okx,
     bitget,
+    bit,
     evm,
     assetSourceConnections,
     assetSourceOnboarding,

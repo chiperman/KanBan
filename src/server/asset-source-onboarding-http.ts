@@ -38,6 +38,11 @@ const CONFIRM_MESSAGES: Record<
     unavailable: "Bitget 预览已失效或正在确认，请重新验证",
     failed: "保存 Bitget 来源失败",
   },
+  bit: {
+    invalid: "BIT / Matrixport 预览无效",
+    unavailable: "BIT / Matrixport 预览已失效或正在确认，请重新验证",
+    failed: "保存 BIT / Matrixport 来源失败",
+  },
   ethereum: {
     invalid: "EVM 观察钱包预览无效",
     unavailable: "EVM 观察钱包预览已失效或正在确认，请重新验证",

@@ -1,5 +1,7 @@
 import type {
   AssetSourceConnections,
+  BitAuthorizationResult,
+  BitReadOnly,
   BinanceReadOnly,
   BitgetAccountMode,
   BitgetReadOnly,
@@ -36,6 +38,12 @@ export type AssetSourceAuthorizationInput =
       passphrase: string;
       accountMode: BitgetAccountMode;
     }
+  | {
+      provider: "bit";
+      apiKey: string;
+      apiSecret: string;
+      userId: string;
+    }
   | { provider: "ethereum" | "bsc"; addresses: string[] };
 
 interface ProviderDependencies {
@@ -43,6 +51,7 @@ interface ProviderDependencies {
   binance: BinanceReadOnly;
   okx: OkxReadOnly;
   bitget: BitgetReadOnly;
+  bit: BitReadOnly;
   evm: EvmWatchWalletReadOnly;
   connections: AssetSourceConnections;
 }
@@ -87,6 +96,7 @@ export function createAssetSourceProviderAdapters({
   binance,
   okx,
   bitget,
+  bit,
   evm,
   connections,
 }: ProviderDependencies): AssetSourceProviderAdapter[] {
@@ -192,6 +202,28 @@ export function createAssetSourceProviderAdapters({
           accountMode: authorization.accountMode,
           scopeFingerprint: authorization.scopeFingerprint,
         });
+      },
+    },
+    {
+      provider: "bit",
+      async authorize(raw, observedAt) {
+        const input = inputFor(raw, "bit");
+        return {
+          provider: "bit" as const,
+          ...(await bit.preview({ ...input, observedAt })),
+        };
+      },
+      async revalidate(authorization, observedAt) {
+        return {
+          provider: "bit" as const,
+          ...(await bit.revalidate({
+            credentials: authorization.credentials,
+            observedAt,
+          })),
+        };
+      },
+      async connect(authorization) {
+        await connections.connectBit(authorization as BitAuthorizationResult);
       },
     },
     ...(["ethereum", "bsc"] as const).map(

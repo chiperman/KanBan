@@ -33,6 +33,10 @@ const ASSET_PRODUCT_LABELS: Record<string, string> = {
   "bnb-vault": "BNB Vault",
   launchpool: "Launchpool",
   megadrop: "Megadrop",
+  wallet: "Wallet",
+  "fixed-income": "Fixed Income",
+  "balance-plus": "Balance+",
+  dcp: "DCP",
 };
 
 const HOLDING_PRODUCT_LABELS: Record<string, string> = {
@@ -53,6 +57,10 @@ const HOLDING_PRODUCT_LABELS: Record<string, string> = {
   sharkfin: "SharkFin",
   savings: "Savings",
   "soft-staking": "软质押",
+  wallet: "Wallet",
+  "fixed-income": "Fixed Income",
+  "balance-plus": "Balance+",
+  dcp: "DCP",
 };
 
 const CAPABILITY_LABELS = {
