@@ -29,6 +29,9 @@ import type {
   DailyAssetSnapshot,
   DailyAssetSourceSnapshot,
   DailyAssetSnapshots,
+  FormalDailySettlement,
+  FormalDailySettlementRunner,
+  FormalDailySettlements,
   LongbridgeAuthorizationResult,
   Card,
   AssetCardStore,
@@ -278,6 +281,32 @@ export class InMemoryDailyAssetSnapshots implements DailyAssetSnapshots {
       const updated = remove(snapshot);
       return updated ? [updated] : [];
     });
+  }
+}
+
+export class InMemoryFormalDailySettlements implements FormalDailySettlements {
+  private settlements: FormalDailySettlement[] = [];
+
+  async list(): Promise<FormalDailySettlement[]> {
+    return structuredClone(this.settlements);
+  }
+
+  async recordIfAbsent(settlement: FormalDailySettlement): Promise<boolean> {
+    if (
+      this.settlements.some(
+        (existing) => existing.anchor.key === settlement.anchor.key,
+      )
+    ) {
+      return false;
+    }
+    this.settlements = [structuredClone(settlement), ...this.settlements];
+    return true;
+  }
+}
+
+class NotDueFormalDailySettlementRunner implements FormalDailySettlementRunner {
+  async run() {
+    return { outcome: "not-due" as const };
   }
 }
 
@@ -1541,6 +1570,8 @@ export interface TestServices extends AppServices {
   assetCards: InMemoryAssetCardStore;
   assetSources: FakeAssetSources;
   dailyAssetSnapshots: InMemoryDailyAssetSnapshots;
+  formalDailySettlements: InMemoryFormalDailySettlements;
+  formalDailySettlementRunner: FormalDailySettlementRunner;
   externalServices: InMemoryExternalServiceConfiguration;
   assetSynchronization: FakeAssetSynchronization;
   prices: FakePrices;
@@ -1566,6 +1597,7 @@ export function createTestServices(): TestServices {
   const assetCards = new InMemoryAssetCardStore();
   const assetSources = new FakeAssetSources();
   const dailyAssetSnapshots = new InMemoryDailyAssetSnapshots();
+  const formalDailySettlements = new InMemoryFormalDailySettlements();
   const secrets = new InMemorySecretStore();
   const externalServices = new InMemoryExternalServiceConfiguration(clock);
   const prices = new FakePrices();
@@ -1624,6 +1656,8 @@ export function createTestServices(): TestServices {
     manualAssetRecords,
     assetSourceLifecycle,
     dailyAssetSnapshots,
+    formalDailySettlements,
+    formalDailySettlementRunner: new NotDueFormalDailySettlementRunner(),
     externalServices,
     assetSynchronization,
     prices,

@@ -5,7 +5,10 @@ use std::{
 };
 
 use longbridge::{
-    oauth::OAuthBuilder, quote::QuoteContext, trade::TradeContext, Config, PortfolioContext,
+    oauth::OAuthBuilder,
+    quote::{AdjustType, Period, QuoteContext, TradeSessions},
+    trade::TradeContext,
+    Config, PortfolioContext,
 };
 use longbridge_oauth::{OAuthError, OAuthResult, StoredToken, TokenStorage};
 use napi::bindgen_prelude::{Error as NapiError, Result as NapiResult, Status};
@@ -483,6 +486,53 @@ pub async fn read_quotes(client_id: String, callback_port: u32, symbols: Vec<Str
             })
         })
         .collect();
+    serialize(values)
+}
+
+/// 读取指定标的最新可用的官方日 K 常规盘收盘。盘前、盘后和夜盘不会进入结果。
+#[napi]
+pub async fn read_daily_candles(
+    client_id: String,
+    callback_port: u32,
+    symbols: Vec<String>,
+) -> NapiResult<String> {
+    let callback_port = u16::try_from(callback_port)
+        .map_err(|_| napi_error("长桥 OAuth 回调端口无效"))?;
+    let symbols: Vec<String> = symbols
+        .into_iter()
+        .filter(|symbol| !symbol.trim().is_empty())
+        .collect();
+    if symbols.is_empty() {
+        return serialize(Vec::<serde_json::Value>::new());
+    }
+    let oauth = load_oauth(client_id, callback_port)
+        .await
+        .map_err(napi_error)?;
+    let config = std::sync::Arc::new(Config::from_oauth(oauth));
+    let (quote, _) = QuoteContext::new(config);
+    let mut values = Vec::with_capacity(symbols.len());
+    for symbol in symbols {
+        let candle = quote
+            .candlesticks(
+                symbol.clone(),
+                Period::Day,
+                3,
+                AdjustType::NoAdjust,
+                TradeSessions::Intraday,
+            )
+            .await
+            .map_err(|error| napi_error(format!("长桥日 K 读取失败：{error}")))?
+            .into_iter()
+            .max_by_key(|value| value.timestamp);
+        if let Some(candle) = candle {
+            values.push(serde_json::json!({
+                "symbol": symbol,
+                "close": candle.close.to_string(),
+                "timestamp": candle.timestamp.unix_timestamp(),
+                "tradeSession": "intraday",
+            }));
+        }
+    }
     serialize(values)
 }
 

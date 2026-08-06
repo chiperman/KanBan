@@ -68,6 +68,7 @@ export default async function AssetDashboardPage({
             cards={demo.cards}
             assetSources={demo.assetSources}
             dailyAssetTrendObservations={demo.dailyAssetTrendObservations}
+            formalDailySettlements={[]}
             currentDay={demo.currentDay}
             mode="demo"
           />
@@ -117,9 +118,10 @@ export default async function AssetDashboardPage({
 
   const now = services.clock.now()
   const assetCards = await services.assetCards.list()
-  const [storedSources, manualRecords] = await Promise.all([
+  const [storedSources, manualRecords, formalDailySettlements] = await Promise.all([
     services.assetSources.list(),
     services.manualAssetRecords.list(),
+    services.formalDailySettlements.list(),
   ])
   const recordsBySource = new Map<string, typeof manualRecords>()
   for (const record of manualRecords) {
@@ -188,6 +190,7 @@ export default async function AssetDashboardPage({
             cards={assetCards}
             assetSources={assetSources}
             dailyAssetTrendObservations={dailyAssetTrendObservations}
+            formalDailySettlements={formalDailySettlements}
             currentDay={shanghaiDay(now)}
           />
         </main>

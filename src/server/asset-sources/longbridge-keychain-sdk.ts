@@ -20,6 +20,11 @@ type NativeLongbridgeSdk = {
     callbackPort: number,
     symbols: string[],
   ): Promise<unknown>;
+  readDailyCandles(
+    clientId: string,
+    callbackPort: number,
+    symbols: string[],
+  ): Promise<unknown>;
   forgetAuthorization(clientId: string): void;
 };
 
@@ -45,6 +50,13 @@ export interface LongbridgeSdkQuote {
   lastDone: string;
   prevClose: string;
   timestamp: number;
+}
+
+export interface LongbridgeSdkDailyCandle {
+  symbol: string;
+  close: string;
+  timestamp: number;
+  tradeSession: "intraday";
 }
 
 function requiredClientId(): string {
@@ -162,6 +174,13 @@ export class LongbridgeKeychainSdk {
     return parse(
       await nativeSdk().readQuotes(this.clientId, this.port, symbols),
       "长桥 SDK 报价响应格式无效",
+    );
+  }
+
+  async readDailyCandles(symbols: string[]): Promise<LongbridgeSdkDailyCandle[]> {
+    return parse(
+      await nativeSdk().readDailyCandles(this.clientId, this.port, symbols),
+      "长桥日 K 响应格式无效",
     );
   }
 

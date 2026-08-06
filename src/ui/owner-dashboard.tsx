@@ -16,6 +16,7 @@ import type {
   Card,
   CardSpan,
   DailyAssetTrendObservation,
+  FormalDailySettlement,
   ManualAssetClass,
   ManualAssetRecord,
 } from "@/server/ports";
@@ -322,12 +323,14 @@ export function OwnerDashboard({
   cards,
   assetSources,
   dailyAssetTrendObservations,
+  formalDailySettlements,
   currentDay,
   mode = "owner",
 }: {
   cards: Card[];
   assetSources: AssetSourceView[];
   dailyAssetTrendObservations: DailyAssetTrendObservation[];
+  formalDailySettlements: FormalDailySettlement[];
   currentDay: string;
   mode?: "demo" | "owner";
 }) {
@@ -1130,6 +1133,7 @@ export function OwnerDashboard({
             trendRange={trendRange}
             onTrendRangeChange={changeTrendRange}
             history={dailyAssetTrendObservations}
+            formalDailySettlements={formalDailySettlements}
             currentDay={currentDay}
             showSensitiveInfo={showSensitiveInfo}
             storageNamespace={demoMode ? "demo" : "owner"}

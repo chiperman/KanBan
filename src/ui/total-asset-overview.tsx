@@ -23,6 +23,7 @@ import {
 } from "@/domain/valuation";
 import type {
   DailyAssetTrendObservation,
+  FormalDailySettlement,
   ManualAssetRecord,
 } from "@/server/ports";
 import {
@@ -37,6 +38,7 @@ import {
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { AssetTrendChart } from "@/ui/asset-trend-chart";
+import { FormalDailySettlementSummary } from "@/ui/formal-daily-settlement-summary";
 import {
   formatShanghaiDateTime,
   formatShanghaiDayLabel,
@@ -149,6 +151,7 @@ export function TotalAssetOverview({
   trendRange,
   onTrendRangeChange,
   history,
+  formalDailySettlements,
   currentDay,
   showSensitiveInfo,
   storageNamespace = "owner",
@@ -707,6 +710,11 @@ export function TotalAssetOverview({
           </>
         )}
       </section>
+      <FormalDailySettlementSummary
+        settlements={formalDailySettlements}
+        currency={currency}
+        showSensitiveInfo={showSensitiveInfo}
+      />
     </section>
   );
 }

@@ -13,6 +13,8 @@ import type {
   Clock,
   DailyAssetSnapshots,
   ExternalServiceConfiguration,
+  FormalDailySettlementRunner,
+  FormalDailySettlements,
   LongbridgeOAuth,
   OwnerAuth,
   OwnerCredentialStore,
@@ -40,6 +42,8 @@ export interface AppServices {
   assetSourceLifecycle: AssetSourceLifecycle;
   assetSynchronization: AssetSynchronization;
   dailyAssetSnapshots: DailyAssetSnapshots;
+  formalDailySettlements: FormalDailySettlements;
+  formalDailySettlementRunner: FormalDailySettlementRunner;
   externalServices: ExternalServiceConfiguration;
   prices: Prices;
   auth: OwnerAuth;

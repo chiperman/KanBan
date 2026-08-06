@@ -50,6 +50,8 @@ import type {
   DailyAssetSnapshot,
   DailyAssetTrendObservation,
   DailyAssetSnapshots,
+  FormalDailySettlement,
+  FormalDailySettlements,
   ManualAssetRecord,
   ManualAssetClass,
   ManualAssetRecordInput,
@@ -71,9 +73,14 @@ import {
   isLongbridgeUsOptionSymbol,
   LongbridgeOAuthState,
   KeychainLongbridgeOAuth,
+  KeychainLongbridgeFormalSettlementCandleReader,
   KeychainLongbridgeSourceRefresher,
 } from "@/server/asset-sources/longbridge";
 import { SourceIsolatedAssetSynchronization } from "@/server/asset-synchronization";
+import {
+  MarketCloseFormalDailySettlement,
+  ReadOnlyFormalSettlementSourceCapture,
+} from "@/server/formal-daily-settlement";
 import {
   CoinGeckoUsdtUsdPrices,
   ProductionBinanceReadOnly,
@@ -125,7 +132,7 @@ interface DashboardState {
 }
 
 const DASHBOARD_SCHEMA_VERSION = 9 as const;
-const SQLITE_SCHEMA_VERSION = 11;
+const SQLITE_SCHEMA_VERSION = 12;
 
 type SourceConnectionKind =
   | "longbridge"
@@ -1423,6 +1430,57 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
         total_hkd TEXT,
         PRIMARY KEY (day, source_id)
       ) STRICT;
+      CREATE TABLE IF NOT EXISTS formal_daily_settlements (
+        anchor_key TEXT PRIMARY KEY,
+        anchor_kind TEXT NOT NULL CHECK (anchor_kind IN ('securities-close', 'crypto-cutoff')),
+        anchor_market TEXT,
+        anchor_trading_day TEXT NOT NULL,
+        scheduled_close_at TEXT NOT NULL,
+        captured_at TEXT,
+        status TEXT NOT NULL CHECK (status IN ('complete', 'incomplete', 'missed')),
+        diagnostic TEXT,
+        total_usd TEXT,
+        total_cny TEXT,
+        total_hkd TEXT,
+        exchange_rates_json TEXT NOT NULL CHECK (json_valid(exchange_rates_json))
+      ) STRICT;
+      CREATE TABLE IF NOT EXISTS formal_daily_settlement_sources (
+        anchor_key TEXT NOT NULL
+          REFERENCES formal_daily_settlements(anchor_key) ON DELETE CASCADE,
+        source_id TEXT NOT NULL REFERENCES asset_sources(id) ON DELETE CASCADE,
+        label TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        captured_at TEXT,
+        status TEXT NOT NULL CHECK (status IN ('complete', 'incomplete', 'missed')),
+        diagnostic TEXT,
+        total_usd TEXT,
+        total_cny TEXT,
+        total_hkd TEXT,
+        PRIMARY KEY (anchor_key, source_id)
+      ) STRICT;
+      CREATE TABLE IF NOT EXISTS formal_daily_settlement_holdings (
+        anchor_key TEXT NOT NULL,
+        source_id TEXT NOT NULL,
+        source_identity TEXT NOT NULL,
+        source_asset TEXT,
+        symbol TEXT NOT NULL,
+        name TEXT NOT NULL,
+        quantity TEXT NOT NULL,
+        asset_class TEXT NOT NULL CHECK (asset_class IN ('securities', 'crypto', 'cash')),
+        price_amount TEXT,
+        price_currency TEXT,
+        price_basis TEXT NOT NULL
+          CHECK (price_basis IN ('official-close', 'capture-time', 'unavailable')),
+        price_observed_at TEXT,
+        market TEXT,
+        market_trading_day TEXT,
+        market_value TEXT,
+        diagnostic TEXT,
+        PRIMARY KEY (anchor_key, source_id, source_identity),
+        FOREIGN KEY (anchor_key, source_id)
+          REFERENCES formal_daily_settlement_sources(anchor_key, source_id)
+          ON DELETE CASCADE
+      ) STRICT;
     `);
     let schemaVersion = this.metadata("schema_version");
     if (schemaVersion === null) {
@@ -1470,6 +1528,10 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
     if (schemaVersion === "10") {
       this.migrateSchemaVersionTen();
       schemaVersion = "11";
+    }
+    if (schemaVersion === "11") {
+      this.migrateSchemaVersionEleven();
+      schemaVersion = "12";
     }
     if (schemaVersion !== String(SQLITE_SCHEMA_VERSION)) {
       throw new Error(`不支持的 SQLite schema 版本: ${schemaVersion}`);
@@ -1707,6 +1769,14 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
     });
   }
 
+  private migrateSchemaVersionEleven(): void {
+    this.transaction(() => {
+      this.database
+        .prepare("UPDATE schema_metadata SET value = ? WHERE key = ?")
+        .run("12", "schema_version");
+    });
+  }
+
   private initializeLegacyData(): void {
     if (this.metadata("json_import_complete") === "1") return;
     const state = parseLegacyDashboardStateSync(
@@ -1795,6 +1865,7 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
       DELETE FROM daily_asset_trend_observations;
       DELETE FROM daily_asset_source_snapshots;
       DELETE FROM daily_asset_snapshots;
+      DELETE FROM formal_daily_settlements;
       DELETE FROM asset_cards;
       DELETE FROM asset_source_snapshots;
       DELETE FROM asset_source_sync_states;
@@ -2368,6 +2439,7 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
   async replaceSources(sources: AssetSourceSummary[]): Promise<void> {
     this.transaction(() => {
       this.database.exec(`
+        DELETE FROM formal_daily_settlements;
         DELETE FROM asset_source_snapshots;
         DELETE FROM asset_source_sync_states;
         DELETE FROM asset_sources;
@@ -2418,6 +2490,176 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
 
   async listManualAssetRecords(): Promise<ManualAssetRecord[]> {
     return this.listManualAssetRecordsSync();
+  }
+
+  async listFormalDailySettlements(): Promise<FormalDailySettlement[]> {
+    const rows = this.database
+      .prepare(`
+        SELECT * FROM formal_daily_settlements
+        ORDER BY scheduled_close_at DESC, anchor_key DESC
+      `)
+      .all() as SqliteRow[];
+    return rows.map((row) => {
+      const anchor = row.anchor_kind === "securities-close"
+        ? {
+            key: row.anchor_key as string,
+            kind: "securities-close" as const,
+            market: row.anchor_market as NonNullable<
+              FormalDailySettlement["anchor"] extends { market: infer Market }
+                ? Market
+                : never
+            >,
+            tradingDay: row.anchor_trading_day as string,
+            scheduledCloseAt: row.scheduled_close_at as string,
+          }
+        : {
+            key: row.anchor_key as string,
+            kind: "crypto-cutoff" as const,
+            market: null,
+            tradingDay: row.anchor_trading_day as string,
+            scheduledCloseAt: row.scheduled_close_at as string,
+          };
+      const sources = this.database
+        .prepare(`
+          SELECT * FROM formal_daily_settlement_sources
+          WHERE anchor_key = ?
+          ORDER BY rowid
+        `)
+        .all(row.anchor_key) as SqliteRow[];
+      const holdings = this.database
+        .prepare(`
+          SELECT * FROM formal_daily_settlement_holdings
+          WHERE anchor_key = ?
+          ORDER BY rowid
+        `)
+        .all(row.anchor_key) as SqliteRow[];
+      return {
+        anchor,
+        capturedAt: row.captured_at as string | null,
+        status: row.status as FormalDailySettlement["status"],
+        diagnostic: row.diagnostic as string | null,
+        total: {
+          USD: row.total_usd as string | null,
+          CNY: row.total_cny as string | null,
+          HKD: row.total_hkd as string | null,
+        },
+        exchangeRates: JSON.parse(row.exchange_rates_json as string),
+        sources: sources.map((source) => ({
+          sourceId: source.source_id as string,
+          label: source.label as string,
+          kind: source.kind as string,
+          capturedAt: source.captured_at as string | null,
+          status: source.status as FormalDailySettlement["status"],
+          diagnostic: source.diagnostic as string | null,
+          total: {
+            USD: source.total_usd as string | null,
+            CNY: source.total_cny as string | null,
+            HKD: source.total_hkd as string | null,
+          },
+        })),
+        holdings: holdings.map((holding) => ({
+          sourceId: holding.source_id as string,
+          sourceAsset: holding.source_asset as string | null,
+          symbol: holding.symbol as string,
+          name: holding.name as string,
+          quantity: holding.quantity as string,
+          assetClass: holding.asset_class as "securities" | "crypto" | "cash",
+          price: holding.price_amount === null
+            ? null
+            : {
+                amount: holding.price_amount as string,
+                currency: holding.price_currency as string,
+              },
+          priceBasis: holding.price_basis as
+            | "official-close"
+            | "capture-time"
+            | "unavailable",
+          priceObservedAt: holding.price_observed_at as string | null,
+          market: holding.market as FormalDailySettlement["anchor"]["market"],
+          marketTradingDay: holding.market_trading_day as string | null,
+          marketValue: holding.market_value as string | null,
+          diagnostic: holding.diagnostic as string | null,
+        })),
+      };
+    });
+  }
+
+  async recordFormalDailySettlementIfAbsent(
+    settlement: FormalDailySettlement,
+  ): Promise<boolean> {
+    return this.transaction(() => {
+      const inserted = this.database
+        .prepare(`
+          INSERT OR IGNORE INTO formal_daily_settlements (
+            anchor_key, anchor_kind, anchor_market, anchor_trading_day,
+            scheduled_close_at, captured_at, status, diagnostic,
+            total_usd, total_cny, total_hkd, exchange_rates_json
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `)
+        .run(
+          settlement.anchor.key,
+          settlement.anchor.kind,
+          settlement.anchor.market,
+          settlement.anchor.tradingDay,
+          settlement.anchor.scheduledCloseAt,
+          settlement.capturedAt,
+          settlement.status,
+          settlement.diagnostic,
+          settlement.total.USD,
+          settlement.total.CNY,
+          settlement.total.HKD,
+          JSON.stringify(settlement.exchangeRates),
+        ).changes > 0;
+      if (!inserted) return false;
+      const sourceStatement = this.database.prepare(`
+        INSERT INTO formal_daily_settlement_sources (
+          anchor_key, source_id, label, kind, captured_at, status, diagnostic,
+          total_usd, total_cny, total_hkd
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      for (const source of settlement.sources) {
+        sourceStatement.run(
+          settlement.anchor.key,
+          source.sourceId,
+          source.label,
+          source.kind,
+          source.capturedAt,
+          source.status,
+          source.diagnostic,
+          source.total.USD,
+          source.total.CNY,
+          source.total.HKD,
+        );
+      }
+      const holdingStatement = this.database.prepare(`
+        INSERT INTO formal_daily_settlement_holdings (
+          anchor_key, source_id, source_identity, source_asset, symbol, name,
+          quantity, asset_class, price_amount, price_currency, price_basis,
+          price_observed_at, market, market_trading_day, market_value, diagnostic
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      for (const holding of settlement.holdings) {
+        holdingStatement.run(
+          settlement.anchor.key,
+          holding.sourceId,
+          holding.sourceAsset ?? holding.symbol,
+          holding.sourceAsset,
+          holding.symbol,
+          holding.name,
+          holding.quantity,
+          holding.assetClass,
+          holding.price?.amount ?? null,
+          holding.price?.currency ?? null,
+          holding.priceBasis,
+          holding.priceObservedAt,
+          holding.market,
+          holding.marketTradingDay,
+          holding.marketValue,
+          holding.diagnostic,
+        );
+      }
+      return true;
+    });
   }
 
   async validateBusinessData(state: BusinessDataState): Promise<void> {
@@ -2720,6 +2962,16 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
         )
         .all(sourceId) as SqliteRow[];
       this.database
+        .prepare(`
+          DELETE FROM formal_daily_settlements
+          WHERE anchor_key IN (
+            SELECT anchor_key
+            FROM formal_daily_settlement_sources
+            WHERE source_id = ?
+          )
+        `)
+        .run(sourceId);
+      this.database
         .prepare("DELETE FROM asset_cards WHERE source_id = ?")
         .run(sourceId);
       this.database
@@ -3021,6 +3273,18 @@ class DatabaseDailyAssetSnapshots implements DailyAssetSnapshots {
   }
   record(snapshot: DailyAssetTrendObservation, createBaseline: boolean) {
     return this.database.recordDailyAssetObservation(snapshot, createBaseline);
+  }
+}
+
+export class DatabaseFormalDailySettlements implements FormalDailySettlements {
+  constructor(private readonly database: SqliteDashboardDatabase) {}
+
+  list() {
+    return this.database.listFormalDailySettlements();
+  }
+
+  recordIfAbsent(settlement: FormalDailySettlement) {
+    return this.database.recordFormalDailySettlementIfAbsent(settlement);
   }
 }
 
@@ -3383,6 +3647,16 @@ export function createProductionServices(
       connections: assetSourceConnections,
     }),
   );
+  const sourceRefresher = new RoutedAssetSourceRefresher({
+    longbridge: new KeychainLongbridgeSourceRefresher(),
+    binance: new ProductionBinanceSourceRefresher(prices),
+    okx: new ProductionOkxSourceRefresher(prices),
+    bitget: new ProductionBitgetSourceRefresher(prices),
+    bit: new ProductionBitSourceRefresher(prices),
+    "evm-watch-ethereum": evmRefresher,
+    "evm-watch-bsc": evmRefresher,
+  });
+  const formalDailySettlements = new DatabaseFormalDailySettlements(database);
   return {
     clock,
     assetCards: new DatabaseAssetCardStore(database),
@@ -3393,20 +3667,20 @@ export function createProductionServices(
       readySecrets,
     ),
     dailyAssetSnapshots,
+    formalDailySettlements,
+    formalDailySettlementRunner: new MarketCloseFormalDailySettlement(
+      assetSources,
+      clock,
+      formalDailySettlements,
+      new ReadOnlyFormalSettlementSourceCapture(readySecrets, sourceRefresher),
+      new KeychainLongbridgeFormalSettlementCandleReader(),
+    ),
     externalServices,
     assetSynchronization: new SourceIsolatedAssetSynchronization(
       assetSources,
       readySecrets,
       clock,
-      new RoutedAssetSourceRefresher({
-        longbridge: new KeychainLongbridgeSourceRefresher(),
-        binance: new ProductionBinanceSourceRefresher(prices),
-        okx: new ProductionOkxSourceRefresher(prices),
-        bitget: new ProductionBitgetSourceRefresher(prices),
-        bit: new ProductionBitSourceRefresher(prices),
-        "evm-watch-ethereum": evmRefresher,
-        "evm-watch-bsc": evmRefresher,
-      }),
+      sourceRefresher,
       60_000,
       dailyAssetSnapshots,
     ),

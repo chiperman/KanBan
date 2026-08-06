@@ -1495,6 +1495,48 @@ body {
   border-top: 1px solid var(--line);
 }
 
+.formal-daily-settlement {
+  display: grid;
+  gap: var(--vibe-space-2);
+  margin-top: var(--vibe-space-4);
+  padding-top: var(--vibe-space-4);
+  border-top: 1px solid var(--line);
+}
+
+.formal-daily-settlement-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--vibe-space-3);
+}
+
+.formal-daily-settlement-head > .card-label,
+.formal-daily-settlement-amount,
+.formal-daily-settlement-provenance,
+.formal-daily-settlement-note,
+.formal-daily-settlement-diagnostic {
+  margin: 0;
+}
+
+.formal-daily-settlement-amount {
+  font-family: var(--display);
+  font-size: clamp(1.35rem, 3vw, 1.75rem);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+}
+
+.formal-daily-settlement-provenance,
+.formal-daily-settlement-note,
+.formal-daily-settlement-diagnostic {
+  color: var(--secondary);
+  font-size: var(--vibe-type-label);
+  line-height: 1.55;
+}
+
+.formal-daily-settlement-diagnostic {
+  color: var(--warning);
+}
+
 .asset-trend-heading {
   display: flex;
   align-items: end;

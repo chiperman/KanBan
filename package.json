@@ -5,6 +5,8 @@
   "scripts": {
     "native:longbridge:build": "node scripts/build-longbridge-keychain-sdk.mjs",
     "longbridge:keychain:repair": "node scripts/longbridge-keychain.mjs repair",
+    "daily-settlement:run": "node --experimental-transform-types --import ./scripts/register-ts-alias.mjs ./scripts/run-formal-daily-settlement.ts",
+    "daily-settlement:launchd": "node ./scripts/formal-daily-settlement-launchd.mjs",
     "predev": "pnpm native:longbridge:build",
     "prebuild": "pnpm native:longbridge:build",
     "prestart": "pnpm native:longbridge:build",

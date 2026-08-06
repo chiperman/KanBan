@@ -10,6 +10,8 @@ import type {
   AssetSourceRefresher,
   AssetHolding,
   AssetSnapshot,
+  FormalSettlementCandleReader,
+  FormalSettlementDailyCandle,
   LongbridgeAuthorizationResult,
   LongbridgeOAuth,
 } from "@/server/ports";
@@ -773,6 +775,7 @@ type LongbridgeKeychainReadSdk = Pick<
   | "credentialReference"
   | "readAssets"
   | "readQuotes"
+  | "readDailyCandles"
 >;
 
 const LONGBRIDGE_KEYCHAIN_REPAIR_COMMAND =
@@ -984,5 +987,36 @@ export class KeychainLongbridgeSourceRefresher implements AssetSourceRefresher {
       return { snapshot: snapshotWithQuotes(source.snapshot, quotes, attemptedAt) };
     }
     return { snapshot: await keychainSnapshot(this.sdk, attemptedAt) };
+  }
+}
+
+/** 正式日结只读取 Longbridge 官方日 K 的常规盘数据，绝不使用实时/盘后报价。 */
+export class KeychainLongbridgeFormalSettlementCandleReader
+  implements FormalSettlementCandleReader
+{
+  constructor(private readonly sdk: LongbridgeKeychainReadSdk = new LongbridgeKeychainSdk()) {}
+
+  async readDailyCandles(input: {
+    source: import("@/server/ports").AssetSourceSummary;
+    symbols: string[];
+  }): Promise<FormalSettlementDailyCandle[]> {
+    if (input.source.kind !== "longbridge") {
+      throw new Error(`正式日结不支持证券来源类型：${input.source.kind}`);
+    }
+    if (input.source.credentialReference !== this.sdk.credentialReference()) {
+      throw new Error("长桥来源不是 macOS Keychain 凭证，请重新连接");
+    }
+    const candles = await withKeychainAuthenticationRetry(() =>
+      this.sdk.readDailyCandles(input.symbols),
+    );
+    return candles.map((candle) => ({
+      symbol: candle.symbol,
+      close: candle.close,
+      timestamp: optionalUnixSecondsIso(candle.timestamp, "dailyCandle.timestamp")
+        ?? (() => {
+          throw new Error("长桥日 K 缺少时间");
+        })(),
+      tradeSession: candle.tradeSession,
+    }));
   }
 }
