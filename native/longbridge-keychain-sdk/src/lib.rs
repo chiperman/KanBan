@@ -454,7 +454,7 @@ pub async fn read_assets(
     }))
 }
 
-/// 读取指定标的的最新报价。只暴露标的、现价、昨收和时间。
+/// 读取指定标的的最新报价及供应商返回的交易时段候选。
 #[napi]
 pub async fn read_quotes(client_id: String, callback_port: u32, symbols: Vec<String>) -> NapiResult<String> {
     let callback_port = u16::try_from(callback_port)
@@ -466,10 +466,18 @@ pub async fn read_quotes(client_id: String, callback_port: u32, symbols: Vec<Str
     if symbols.is_empty() {
         return serialize(Vec::<serde_json::Value>::new());
     }
+    // Longbridge 明确说明港股 BMP 一次超过 20 个标的时为延迟行情；
+    // 这只描述交付延迟，绝不用于推断交易时段。
+    let delayed_hk_quotes = symbols
+        .iter()
+        .filter(|symbol| symbol.ends_with(".HK"))
+        .count()
+        > 20;
     let oauth = load_oauth(client_id, callback_port)
         .await
         .map_err(napi_error)?;
-    let config = std::sync::Arc::new(Config::from_oauth(oauth));
+    // 夜盘字段只有 SDK 显式开启后才可能由供应商返回；没有返回时保持未知。
+    let config = std::sync::Arc::new(Config::from_oauth(oauth).enable_overnight());
     let (quote, _) = QuoteContext::new(config);
     let quotes = quote
         .quote(symbols)
@@ -478,11 +486,39 @@ pub async fn read_quotes(client_id: String, callback_port: u32, symbols: Vec<Str
     let values: Vec<serde_json::Value> = quotes
         .into_iter()
         .map(|quote| {
+            let delivery = if delayed_hk_quotes && quote.symbol.ends_with(".HK") {
+                "delayed"
+            } else {
+                "unknown"
+            };
+            let pre_market_quote = quote.pre_market_quote.map(|candidate| {
+                serde_json::json!({
+                    "lastDone": candidate.last_done.to_string(),
+                    "timestamp": candidate.timestamp.unix_timestamp(),
+                })
+            });
+            let post_market_quote = quote.post_market_quote.map(|candidate| {
+                serde_json::json!({
+                    "lastDone": candidate.last_done.to_string(),
+                    "timestamp": candidate.timestamp.unix_timestamp(),
+                })
+            });
+            let overnight_quote = quote.overnight_quote.map(|candidate| {
+                serde_json::json!({
+                    "lastDone": candidate.last_done.to_string(),
+                    "timestamp": candidate.timestamp.unix_timestamp(),
+                })
+            });
             serde_json::json!({
                 "symbol": quote.symbol,
                 "lastDone": quote.last_done.to_string(),
                 "prevClose": quote.prev_close.to_string(),
                 "timestamp": quote.timestamp.unix_timestamp(),
+                "tradeStatus": quote.trade_status.as_str_name(),
+                "delivery": delivery,
+                "preMarketQuote": pre_market_quote,
+                "postMarketQuote": post_market_quote,
+                "overnightQuote": overnight_quote,
             })
         })
         .collect();

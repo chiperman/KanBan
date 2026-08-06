@@ -60,6 +60,17 @@ function sourceFixture(): AssetSourceSummary[] {
     exchangeRates: exchangeRates(CAPTURED_AT),
     syncedAt: "2026-08-05T20:04:00.000Z",
   });
+  securitySnapshot.holdings[0].quoteEvidence = {
+    session: "post-market",
+    quotedAt: "2026-08-05T20:04:00.000Z",
+    observedAt: "2026-08-05T20:04:00.000Z",
+    freshness: "current",
+    delivery: "unknown",
+    provider: {
+      name: "longbridge",
+      tradeStatus: "US_AFTER",
+    },
+  };
   const cryptoSnapshot = buildSnapshotFromPositions({
     positions: [{
       symbol: "BTC",
@@ -344,12 +355,13 @@ export async function POST(request: Request) {
     }
     const secondRun = await runner.run();
     const recordedSettlements = await settlements.list();
-    const currentSecurityPrice = (await database.listSources())
+    const currentSecurity = (await database.listSources())
       .find((source) => source.id === "longbridge-source")
-      ?.snapshot.holdings[0]?.currentPrice?.amount;
+      ?.snapshot.holdings[0];
     await database.deleteAssetSourceData("longbridge-source");
     return Response.json({
-      currentSecurityPrice,
+      currentSecurityPrice: currentSecurity?.currentPrice?.amount,
+      currentSecuritySession: currentSecurity?.quoteEvidence?.session,
       firstRun,
       secondRun,
       dailyTrendCount: (await database.listDailyAssetTrendObservations()).length,

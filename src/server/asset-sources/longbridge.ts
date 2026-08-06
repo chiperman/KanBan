@@ -10,12 +10,16 @@ import type {
   AssetSourceRefresher,
   AssetHolding,
   AssetSnapshot,
+  AssetQuoteEvidence,
   FormalSettlementCandleReader,
   FormalSettlementDailyCandle,
   LongbridgeAuthorizationResult,
   LongbridgeOAuth,
 } from "@/server/ports";
-import { LongbridgeKeychainSdk } from "@/server/asset-sources/longbridge-keychain-sdk";
+import {
+  LongbridgeKeychainSdk,
+  type LongbridgeNativeQuote,
+} from "@/server/asset-sources/longbridge-keychain-sdk";
 import {
   decimalAdd,
   decimalCompare,
@@ -63,6 +67,144 @@ function optionalUnixSecondsIso(value: unknown, field: string): string | null {
     throw new Error(`长桥响应 ${field} 格式无效`);
   }
   return timestamp.toISOString();
+}
+
+function safeQuoteTimestamp(value: unknown): string | null {
+  try {
+    return optionalUnixSecondsIso(value, "quote.timestamp");
+  } catch {
+    return null;
+  }
+}
+
+function quotePrice(value: unknown): string | null {
+  return typeof value === "string" && /^\d+(?:\.\d+)?$/.test(value)
+    ? value
+    : null;
+}
+
+type LongbridgeQuoteSession = Exclude<
+  AssetQuoteEvidence["session"],
+  "crypto-24h"
+>;
+
+interface LongbridgeQuoteSelection {
+  price: string;
+  session: LongbridgeQuoteSession;
+  quotedAt: string | null;
+  delivery: "delayed" | "unknown";
+  tradeStatus: string | null;
+}
+
+interface KnownLongbridgeQuoteCandidate extends LongbridgeQuoteSelection {
+  quotedAt: string;
+}
+
+function longbridgeQuoteCandidate(
+  session: Exclude<LongbridgeQuoteSession, "unknown">,
+  quote: { lastDone: string; timestamp: number } | null | undefined,
+  delivery: "delayed" | "unknown",
+  tradeStatus: string | null,
+): KnownLongbridgeQuoteCandidate | null {
+  const price = quotePrice(quote?.lastDone);
+  const quotedAt = safeQuoteTimestamp(quote?.timestamp);
+  return price === null || quotedAt === null
+    ? null
+    : { price, session, quotedAt, delivery, tradeStatus };
+}
+
+/**
+ * 当前证券报价只由 Longbridge 返回的交易状态、盘外候选及其时间戳决定。
+ * 不读取本机时间、市场日历或标的后缀来推断报价所属时段。
+ */
+function selectLongbridgeQuote(
+  quote: LongbridgeNativeQuote,
+): LongbridgeQuoteSelection | null {
+  const tradeStatus = typeof quote.tradeStatus === "string"
+    ? quote.tradeStatus
+    : null;
+  const delivery = quote.delivery === "delayed" ? "delayed" : "unknown";
+  const primaryPrice = quotePrice(quote.lastDone);
+  const primaryTimestamp = safeQuoteTimestamp(quote.timestamp);
+  const candidates = [
+    ...(tradeStatus === "NORMAL"
+      ? [
+          longbridgeQuoteCandidate(
+            "regular",
+            quote,
+            delivery,
+            tradeStatus,
+          ),
+        ]
+      : []),
+    longbridgeQuoteCandidate(
+      "pre-market",
+      quote.preMarketQuote,
+      delivery,
+      tradeStatus,
+    ),
+    longbridgeQuoteCandidate(
+      "post-market",
+      quote.postMarketQuote,
+      delivery,
+      tradeStatus,
+    ),
+    longbridgeQuoteCandidate(
+      "overnight",
+      quote.overnightQuote,
+      delivery,
+      tradeStatus,
+    ),
+  ].filter((candidate): candidate is KnownLongbridgeQuoteCandidate => candidate !== null);
+
+  if (candidates.length > 0) {
+    const latestAt = candidates.reduce(
+      (latest, candidate) => latest > candidate.quotedAt ? latest : candidate.quotedAt,
+      candidates[0].quotedAt,
+    );
+    const latest = candidates.filter((candidate) => candidate.quotedAt === latestAt);
+    if (latest.length === 1) return latest[0];
+    if (primaryPrice !== null) {
+      return {
+        price: primaryPrice,
+        session: "unknown",
+        quotedAt: primaryTimestamp,
+        delivery,
+        tradeStatus,
+      };
+    }
+    return {
+      ...latest[0],
+      session: "unknown",
+    };
+  }
+
+  return primaryPrice === null
+    ? null
+    : {
+        price: primaryPrice,
+        session: "unknown",
+        quotedAt: primaryTimestamp,
+        delivery,
+        tradeStatus,
+      };
+}
+
+function quoteEvidence(
+  selection: LongbridgeQuoteSelection,
+  observedAt: string,
+): AssetQuoteEvidence {
+  return {
+    session: selection.session,
+    quotedAt: selection.quotedAt,
+    observedAt,
+    freshness: "current",
+    delivery: selection.delivery,
+    provider: {
+      name: "longbridge",
+      tradeStatus: selection.tradeStatus,
+    },
+  };
 }
 
 function listFromPage(page: unknown): JsonRecord[] {
@@ -169,12 +311,7 @@ export function mapLongbridgeSnapshot(input: {
   accountPages: unknown[];
   positionPages: unknown[];
   syncedAt: string;
-  quotes?: Array<{
-    symbol: string;
-    lastDone: string;
-    prevClose: string;
-    timestamp: number;
-  }>;
+  quotes?: LongbridgeNativeQuote[];
   exchangeRates?: unknown[];
 }): AssetSnapshot {
   const account = listFromPage(input.accountPages[0] ?? {}).at(0);
@@ -194,7 +331,10 @@ export function mapLongbridgeSnapshot(input: {
       const quantity = text(item.quantity ?? item.holding_units, "quantity");
       const nativePrice = optionalText(item.current_net_asset_value);
       const quote = quotes.get(symbol);
-      const price = nativePrice ?? quote?.lastDone ?? null;
+      const selectedQuote = quote && !isLongbridgeUsOptionSymbol(symbol)
+        ? selectLongbridgeQuote(quote)
+        : null;
+      const price = nativePrice ?? selectedQuote?.price ?? null;
       const currency = text(item.currency, "currency");
       const marketValue =
         optionalText(item.market_value) ??
@@ -213,13 +353,13 @@ export function mapLongbridgeSnapshot(input: {
             item.net_asset_value_day,
             "net_asset_value_day",
           ) ?? input.syncedAt
-        : quote
-          ? optionalUnixSecondsIso(quote.timestamp, "quote.timestamp") ?? input.syncedAt
+        : selectedQuote
+          ? selectedQuote.quotedAt ?? input.syncedAt
         : input.syncedAt;
       const priceSource = nativePrice
         ? "Longbridge 基金净值"
-        : quote
-          ? "Longbridge 实时行情"
+        : selectedQuote
+          ? "Longbridge 行情"
         : optionalText(item.market_value)
           ? "Longbridge 账户估值"
           : null;
@@ -230,6 +370,9 @@ export function mapLongbridgeSnapshot(input: {
         currency,
         assetClass: "securities" as const,
         currentPrice: price ? { amount: price, currency } : null,
+        ...(nativePrice === null && selectedQuote
+          ? { quoteEvidence: quoteEvidence(selectedQuote, input.syncedAt) }
+          : {}),
         previousClose: quote
           ? { amount: quote.prevClose, currency }
           : null,
@@ -817,7 +960,13 @@ async function withKeychainAuthenticationRetry<T>(
 }
 
 function stockSymbols(page: unknown): string[] {
-  return [...new Set(listFromPage(page).map((item) => text(item.symbol, "symbol")))];
+  return [
+    ...new Set(
+      listFromPage(page)
+        .map((item) => text(item.symbol, "symbol"))
+        .filter((symbol) => !isLongbridgeUsOptionSymbol(symbol)),
+    ),
+  ];
 }
 
 async function keychainSnapshot(
@@ -839,12 +988,7 @@ async function keychainSnapshot(
 
 function snapshotWithQuotes(
   snapshot: AssetSnapshot,
-  quotes: Array<{
-    symbol: string;
-    lastDone: string;
-    prevClose: string;
-    timestamp: number;
-  }>,
+  quotes: LongbridgeNativeQuote[],
   syncedAt: string,
 ): AssetSnapshot {
   const bySymbol = new Map(quotes.map((quote) => [quote.symbol, quote]));
@@ -853,12 +997,26 @@ function snapshotWithQuotes(
     syncedAt,
     holdings: snapshot.holdings.map((holding) => {
       const quote = bySymbol.get(holding.symbol);
-      if (!quote) return holding;
-      const marketValue = multiplyDecimal(holding.quantity, quote.lastDone);
-      const pricedAt = optionalUnixSecondsIso(quote.timestamp, "quote.timestamp") ?? syncedAt;
+      const selectedQuote = quote && !isLongbridgeUsOptionSymbol(holding.symbol)
+        ? selectLongbridgeQuote(quote)
+        : null;
+      if (!quote || !selectedQuote) {
+        return holding.quoteEvidence === undefined
+          ? holding
+          : {
+              ...holding,
+              quoteEvidence: {
+                ...holding.quoteEvidence,
+                freshness: "retained",
+              },
+            };
+      }
+      const marketValue = multiplyDecimal(holding.quantity, selectedQuote.price);
+      const pricedAt = selectedQuote.quotedAt ?? syncedAt;
       return {
         ...holding,
-        currentPrice: { amount: quote.lastDone, currency: holding.currency },
+        currentPrice: { amount: selectedQuote.price, currency: holding.currency },
+        quoteEvidence: quoteEvidence(selectedQuote, syncedAt),
         previousClose: { amount: quote.prevClose, currency: holding.currency },
         marketValue,
         sourceMarketValue:
@@ -868,13 +1026,75 @@ function snapshotWithQuotes(
         valuation:
           holding.currency === snapshot.total.currency
             ? {
-                status: "valued" as const,
-                priceSource: "Longbridge 实时行情",
+              status: "valued" as const,
+                priceSource: "Longbridge 行情",
                 pricedAt,
               }
             : {
                 status: "unvalued" as const,
                 reason: `缺少 ${holding.currency}/${snapshot.total.currency} 来源汇率`,
+              },
+      };
+    }),
+  };
+}
+
+/**
+ * 完整持仓刷新已成功时，单标的报价仍可能因权限或供应商部分响应缺失。
+ * 保留最后一份可核验报价，并明确其不是本次确认的报价。
+ */
+function snapshotRetainingMissingQuotes(
+  snapshot: AssetSnapshot,
+  previous: AssetSnapshot,
+): AssetSnapshot {
+  const previousBySymbol = new Map(
+    previous.holdings.map((holding) => [holding.symbol, holding]),
+  );
+  return {
+    ...snapshot,
+    holdings: snapshot.holdings.map((holding) => {
+      if (holding.currentPrice !== null || holding.quoteEvidence !== undefined) {
+        return holding;
+      }
+      const retained = previousBySymbol.get(holding.symbol);
+      if (
+        retained?.currentPrice === null ||
+        retained?.currentPrice === undefined ||
+        retained.quoteEvidence === undefined
+      ) {
+        return holding;
+      }
+      const marketValue = multiplyDecimal(
+        holding.quantity,
+        retained.currentPrice.amount,
+      );
+      const sourceAmount = convertLongbridgeAmount(
+        marketValue,
+        holding.currency,
+        snapshot.total.currency,
+        snapshot.exchangeRates,
+      );
+      return {
+        ...holding,
+        currentPrice: retained.currentPrice,
+        quoteEvidence: {
+          ...retained.quoteEvidence,
+          freshness: "retained",
+        },
+        previousClose: retained.previousClose ?? holding.previousClose,
+        marketValue,
+        sourceMarketValue:
+          sourceAmount === null
+            ? null
+            : { amount: sourceAmount, currency: snapshot.total.currency },
+        valuation:
+          sourceAmount !== null && retained.valuation.status === "valued"
+            ? retained.valuation
+            : {
+                status: "unvalued" as const,
+                reason: sourceAmount === null
+                  ? `保留的 Longbridge 行情缺少 ${holding.currency}/${snapshot.total.currency} 来源汇率`
+                  : "保留的 Longbridge 行情此前不可估值",
               },
       };
     }),
@@ -981,12 +1201,17 @@ export class KeychainLongbridgeSourceRefresher implements AssetSourceRefresher {
     if (mode === "prices") {
       const quotes = await withKeychainAuthenticationRetry(() =>
         this.sdk.readQuotes(
-          source.snapshot.holdings.map((holding) => holding.symbol),
+          source.snapshot.holdings
+            .map((holding) => holding.symbol)
+            .filter((symbol) => !isLongbridgeUsOptionSymbol(symbol)),
         ),
       );
       return { snapshot: snapshotWithQuotes(source.snapshot, quotes, attemptedAt) };
     }
-    return { snapshot: await keychainSnapshot(this.sdk, attemptedAt) };
+    const snapshot = await keychainSnapshot(this.sdk, attemptedAt);
+    return {
+      snapshot: snapshotRetainingMissingQuotes(snapshot, source.snapshot),
+    };
   }
 }
 

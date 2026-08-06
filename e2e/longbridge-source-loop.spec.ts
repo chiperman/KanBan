@@ -375,6 +375,137 @@ test("长桥 OAuth 先预览后原子保存，并展示总额与紧凑持仓", a
   expect(browserRequests).not.toContainEqual(expect.stringContaining("mcp.longbridge.com"));
 });
 
+test("证券持仓表在现价与成本之间显示供应商报价时段", async ({
+  page,
+}) => {
+  await configureLongbridge(page, {
+    quotes: [{
+      symbol: "AAPL.US",
+      lastDone: "215",
+      prevClose: "210",
+      timestamp: 1785960000,
+      tradeStatus: "NORMAL",
+    }, {
+      symbol: "NVDA.US",
+      lastDone: "181",
+      prevClose: "180",
+      timestamp: 1785960000,
+      tradeStatus: "US_PREV",
+      preMarketQuote: { lastDone: "184.25", timestamp: 1785964320 },
+    }, {
+      symbol: "TSLA.US",
+      lastDone: "420",
+      prevClose: "415",
+      timestamp: 1785960000,
+      tradeStatus: "US_AFTER",
+      postMarketQuote: { lastDone: "422.5", timestamp: 1785963360 },
+    }, {
+      symbol: "MSFT.US",
+      lastDone: "430",
+      prevClose: "425",
+      timestamp: 1785960000,
+      tradeStatus: "US_NIGHT",
+      overnightQuote: { lastDone: "432.5", timestamp: 1785958800 },
+    }, {
+      symbol: "0700.HK",
+      lastDone: "600",
+      prevClose: "590",
+      timestamp: 1785961320,
+      tradeStatus: "CLOSING",
+      delivery: "delayed",
+    }, {
+      symbol: "9988.HK",
+      lastDone: "128.25",
+      prevClose: "125",
+      timestamp: -1,
+      tradeStatus: "CLOSING",
+    }],
+  });
+  await loginAsOwner(page);
+  await startLongbridgeFlow(page);
+  await page
+    .getByRole("dialog", { name: "确认长桥资产来源" })
+    .getByRole("button", { name: "确认并保存" })
+    .click();
+
+  const card = page.getByTestId("longbridge-card");
+  const layoutCard = card.locator(
+    "xpath=ancestor::article[contains(concat(' ', normalize-space(@class), ' '), ' card ')][1]",
+  );
+  const resizeHandle = layoutCard.getByRole("button", {
+    name: /调整长桥资产宽度/,
+  });
+  await expect(card.getByTestId("asset-source-total")).toHaveText(
+    "123,456.79 USD",
+  );
+  await expect(resizeHandle).toBeEnabled();
+  const layoutCardId = await layoutCard.getAttribute("data-layout-card-id");
+  expect(layoutCardId).toBeTruthy();
+  const waitForSavedSpan = (span: number) =>
+    page.waitForResponse((response) => {
+      if (
+        !response.url().endsWith("/api/asset-cards/layout") ||
+        response.request().method() !== "PUT"
+      ) {
+        return false;
+      }
+      try {
+        const body = JSON.parse(response.request().postData() ?? "{}") as {
+          cards?: Array<{ id?: string; span?: number }>;
+        };
+        return body.cards?.some(
+          (item) => item.id === layoutCardId && item.span === span,
+        ) ?? false;
+      } catch {
+        return false;
+      }
+    });
+  const saveAsTwo = waitForSavedSpan(2);
+  await resizeHandle.press("ArrowRight");
+  await saveAsTwo;
+  await expect(
+    card.getByTestId("holding-top-list").getByRole("listitem"),
+  ).toHaveCount(5);
+  await expect(layoutCard).toHaveClass(/span-2/);
+  const saveAsThree = waitForSavedSpan(3);
+  await resizeHandle.press("ArrowRight");
+  await saveAsThree;
+  await expect(layoutCard).toHaveClass(/span-3/);
+  const detail = card.getByTestId("asset-holdings-detail");
+  await expect(detail).toBeVisible();
+  await expect(detail.getByRole("columnheader")).toHaveText([
+    "名称",
+    /市值\s*\/\s*数量/,
+    /现价\s*\/\s*成本/,
+    "当日盈亏",
+    "持仓盈亏",
+  ]);
+
+  for (const [symbol, label] of [
+    ["AAPL.US", "常规盘 · 行情 2026-08-06 04:00"],
+    ["NVDA.US", "盘前 · 行情 2026-08-06 05:12"],
+    ["TSLA.US", "盘后 · 行情 2026-08-06 04:56"],
+    ["MSFT.US", "夜盘 · 行情 2026-08-06 03:40"],
+    ["0700.HK", "延迟行情 · 时段未知 · 行情 2026-08-06 04:22"],
+    ["9988.HK", "时段未知 · 时间不可用"],
+  ]) {
+    const row = detail.locator("tbody tr").filter({ hasText: symbol });
+    const priceCell = row.locator(".holding-current-cost-price");
+    await expect(priceCell).toContainText(label);
+    await expect(priceCell.locator(".holding-quote-session")).toHaveCount(1);
+  }
+  await expect(
+    detail.locator("tbody tr").filter({ hasText: "9988.HK" }),
+  ).toContainText("Longbridge 行情 · 时间不可用");
+
+  const applePriceCell = detail
+    .locator("tbody tr")
+    .filter({ hasText: "AAPL.US" })
+    .locator(".holding-current-cost-price");
+  await expect(applePriceCell).toContainText("215.000");
+  await expect(applePriceCell).toContainText("190.123");
+});
+
 test("长桥持仓刷新失败时保留最后成功数据并明确标记过期", async ({
   page,
 }) => {
@@ -542,6 +673,115 @@ test("Keychain 长桥快照使用 USD 总额并按官方汇率估值跨币种持
       }),
     ]),
   );
+});
+
+test("Keychain 行情只按供应商会话与时间选择当前证券报价", async ({
+  request,
+}) => {
+  const response = await request.post(
+    "/test-doubles/longbridge/production-start",
+    { data: { action: "keychain-quote-sessions" } },
+  );
+
+  expect(response.ok()).toBeTruthy();
+  const body = await response.json();
+  const holdings = body.snapshot.holdings as Array<{
+    symbol: string;
+    currentPrice: { amount: string; currency: string } | null;
+    quoteEvidence?: {
+      session: string;
+      quotedAt: string | null;
+      freshness: string;
+      delivery: string;
+      provider: { name: string; tradeStatus: string | null };
+    };
+  }>;
+  const holding = (symbol: string) =>
+    holdings.find((item) => item.symbol === symbol);
+
+  expect(holding("AAPL.US")).toMatchObject({
+    currentPrice: { amount: "215.000", currency: "USD" },
+    quoteEvidence: {
+      session: "regular",
+      quotedAt: "2026-08-05T20:00:00.000Z",
+      freshness: "current",
+      delivery: "unknown",
+      provider: { name: "longbridge", tradeStatus: "NORMAL" },
+    },
+  });
+  expect(holding("NVDA.US")).toMatchObject({
+    currentPrice: { amount: "184.250", currency: "USD" },
+    quoteEvidence: {
+      session: "pre-market",
+      quotedAt: "2026-08-05T21:12:00.000Z",
+    },
+  });
+  expect(holding("TSLA.US")).toMatchObject({
+    currentPrice: { amount: "422.500", currency: "USD" },
+    quoteEvidence: {
+      session: "post-market",
+      quotedAt: "2026-08-05T20:56:00.000Z",
+    },
+  });
+  expect(holding("MSFT.US")).toMatchObject({
+    currentPrice: { amount: "500.125", currency: "USD" },
+    quoteEvidence: {
+      session: "overnight",
+      quotedAt: "2026-08-05T19:40:00.000Z",
+    },
+  });
+  expect(holding("0700.HK")).toMatchObject({
+    currentPrice: { amount: "600.000", currency: "HKD" },
+    quoteEvidence: {
+      session: "unknown",
+      quotedAt: "2026-08-05T20:22:00.000Z",
+      delivery: "delayed",
+    },
+  });
+  expect(holding("AMD.US")).toMatchObject({
+    currentPrice: { amount: "177.000", currency: "USD" },
+    quoteEvidence: {
+      session: "unknown",
+      quotedAt: "2026-08-05T20:05:00.000Z",
+    },
+  });
+  expect(holding("META.US")).toMatchObject({
+    currentPrice: { amount: "601.000", currency: "USD" },
+    quoteEvidence: {
+      session: "unknown",
+      quotedAt: null,
+    },
+  });
+});
+
+test("Keychain 完整持仓刷新在单标的无报价时保留旧报价证据", async ({
+  request,
+}) => {
+  const response = await request.post(
+    "/test-doubles/longbridge/production-start",
+    { data: { action: "keychain-holdings-retains-quote-evidence" } },
+  );
+
+  expect(response.ok()).toBeTruthy();
+  const body = await response.json();
+  expect(body.snapshot.syncedAt).toBe("2026-05-29T00:00:00.000Z");
+  expect(body.snapshot.holdings).toHaveLength(1);
+  expect(body.snapshot.holdings[0]).toMatchObject({
+    symbol: "AAPL.US",
+    currentPrice: { amount: "100", currency: "USD" },
+    marketValue: "1000",
+    quoteEvidence: {
+      session: "post-market",
+      quotedAt: "2026-05-28T20:04:00.000Z",
+      freshness: "retained",
+      delivery: "unknown",
+    },
+    valuation: {
+      status: "valued",
+      priceSource: "Longbridge 行情",
+      pricedAt: "2026-05-28T20:04:00.000Z",
+    },
+  });
 });
 
 test("Keychain 瞬时认证失败只重试一次并给出统一修复命令", async ({

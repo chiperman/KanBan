@@ -45,10 +45,23 @@ export interface LongbridgeSdkAssets {
   exchangeRates: unknown[];
 }
 
-export interface LongbridgeSdkQuote {
+/** 原生 addon 已归一化的报价 DTO，不是官方 SDK 对象。 */
+export interface LongbridgeNativeQuote {
   symbol: string;
   lastDone: string;
   prevClose: string;
+  timestamp: number;
+  /** 原生 SDK 原样传递的交易状态枚举；未知枚举保持原值。 */
+  tradeStatus?: string;
+  /** Longbridge 仅在可由请求规则直接判断时标注延迟。 */
+  delivery?: "delayed" | "unknown";
+  preMarketQuote?: LongbridgeNativePrePostQuote | null;
+  postMarketQuote?: LongbridgeNativePrePostQuote | null;
+  overnightQuote?: LongbridgeNativePrePostQuote | null;
+}
+
+export interface LongbridgeNativePrePostQuote {
+  lastDone: string;
   timestamp: number;
 }
 
@@ -170,7 +183,7 @@ export class LongbridgeKeychainSdk {
     );
   }
 
-  async readQuotes(symbols: string[]): Promise<LongbridgeSdkQuote[]> {
+  async readQuotes(symbols: string[]): Promise<LongbridgeNativeQuote[]> {
     return parse(
       await nativeSdk().readQuotes(this.clientId, this.port, symbols),
       "长桥 SDK 报价响应格式无效",

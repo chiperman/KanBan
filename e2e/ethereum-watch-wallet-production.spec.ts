@@ -1,4 +1,10 @@
-import { expect, test, type CDPSession, type Page } from "@playwright/test";
+import {
+  expect,
+  test,
+  type CDPSession,
+  type Locator,
+  type Page,
+} from "@playwright/test";
 
 const ADDRESS = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
 
@@ -51,6 +57,45 @@ async function addEvmSource(
     .click();
   await expect(page.getByTestId(chain === "ethereum" ? "ethereum-watch-card" : "bsc-watch-card"))
     .toBeVisible();
+}
+
+async function expandHoldingDetails(
+  page: Page,
+  card: Locator,
+): Promise<void> {
+  const layoutCard = card.locator(
+    "xpath=ancestor::article[contains(concat(' ', normalize-space(@class), ' '), ' card ')][1]",
+  );
+  const resizeHandle = layoutCard.getByRole("button", {
+    name: /调整.*宽度/,
+  });
+  await expect(resizeHandle).toBeEnabled();
+  const layoutCardId = await layoutCard.getAttribute("data-layout-card-id");
+  expect(layoutCardId).toBeTruthy();
+
+  for (const span of [2, 3]) {
+    const saved = page.waitForResponse((response) => {
+      if (
+        !response.url().endsWith("/api/asset-cards/layout") ||
+        response.request().method() !== "PUT"
+      ) {
+        return false;
+      }
+      try {
+        const body = JSON.parse(response.request().postData() ?? "{}") as {
+          cards?: Array<{ id?: string; span?: number }>;
+        };
+        return body.cards?.some(
+          (item) => item.id === layoutCardId && item.span === span,
+        ) ?? false;
+      } catch {
+        return false;
+      }
+    });
+    await resizeHandle.press("ArrowRight");
+    await saved;
+    await expect(layoutCard).toHaveClass(new RegExp(`span-${span}`));
+  }
 }
 
 test.beforeEach(async ({ request }) => {
@@ -110,6 +155,26 @@ test("共享 EVM 适配器用 chain ID 56 独立映射 BNB 与 BEP-20", async ({
   ]));
   expect(body.priceRequests.join("\n")).toContain("/networks/bsc/token_price/");
   expect(JSON.stringify(body)).not.toContain("server-secret-test-key");
+});
+
+test("加密持仓在现价区域显示 24h 而不伪造证券交易时段", async ({ page }) => {
+  await page.request.post("/test-doubles/ethereum", { data: { scenario: "valid" } });
+  await loginAsOwner(page);
+  await addEvmSource(page, "ethereum");
+
+  const card = page.getByTestId("ethereum-watch-card");
+  await expect(card.getByTestId("asset-source-total")).toHaveText("5,519.00 USD");
+  await expandHoldingDetails(page, card);
+
+  const ethRow = card
+    .getByTestId("asset-holdings-detail")
+    .locator("tbody tr")
+    .first();
+  await expect(ethRow).toContainText("Ethereum");
+  await expect(ethRow).toContainText("ETH");
+  const ethPrice = ethRow.locator(".holding-current-price-cell");
+  await expect(ethPrice).toContainText("24h · 行情 2026-01-01 08:00");
+  await expect(ethPrice).not.toContainText(/常规盘|盘前|盘后|夜盘/);
 });
 
 test("统一来源流程可独立保存 BNB Smart Chain 公开地址", async ({ page }) => {

@@ -319,6 +319,30 @@ export type AssetValuation =
       reason: string;
     };
 
+export type AssetQuoteSession =
+  | "regular"
+  | "pre-market"
+  | "post-market"
+  | "overnight"
+  | "unknown"
+  | "crypto-24h";
+
+/** 当前价格的供应商时段与时间证据；旧快照可缺省。 */
+export interface AssetQuoteEvidence {
+  session: AssetQuoteSession;
+  /** 供应商给出的成交/报价时间；绝不使用同步完成时间填充。 */
+  quotedAt: string | null;
+  /** KanBan 成功读取该供应商响应的时间，仅供诊断。 */
+  observedAt: string;
+  freshness: "current" | "retained" | "unavailable";
+  /** 未得到供应商或已知请求规则直接证明时，必须为 unknown。 */
+  delivery: "realtime" | "delayed" | "unknown";
+  provider: {
+    name: string;
+    tradeStatus: string | null;
+  };
+}
+
 export interface AssetHolding {
   symbol: string;
   name: string;
@@ -345,6 +369,8 @@ export interface AssetHolding {
   /** 现金汇总持仓的来源原生币种拆分；总资产仍只计该持仓一次。 */
   cashBalances?: AssetCashBalance[];
   currentPrice: AssetMoney | null;
+  /** 当前价格的会话证据；缺省时 UI 按未知时段兼容旧快照。 */
+  quoteEvidence?: AssetQuoteEvidence;
   /** 用于按来源上一交易日收盘价计算当日持仓盈亏；旧快照可缺省。 */
   previousClose?: AssetMoney | null;
   marketValue: string | null;

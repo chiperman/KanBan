@@ -50,6 +50,7 @@ test("正式日结固定证券官方收盘、同窗加密价格且幂等", async
   const result = await response.json();
   expect(result).toMatchObject({
     currentSecurityPrice: "217.250",
+    currentSecuritySession: "post-market",
     firstRun: { outcome: "recorded" },
     secondRun: { outcome: "already-recorded" },
     dailyTrendCount: 0,

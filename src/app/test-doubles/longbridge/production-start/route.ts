@@ -26,6 +26,8 @@ export async function POST(request: Request) {
       | "refresh-expired-trade"
       | "refresh-expired-malformed-scope"
       | "keychain-snapshot"
+      | "keychain-quote-sessions"
+      | "keychain-holdings-retains-quote-evidence"
       | "keychain-refresh-retry"
       | "keychain-refresh-retry-exhausted"
       | "rest-source-audit";
@@ -166,6 +168,7 @@ export async function POST(request: Request) {
           };
         },
         readQuotes: async () => [],
+        readDailyCandles: async () => [],
       });
       const source: AssetSourceSummary = {
         id: "keychain-retry-source",
@@ -277,6 +280,7 @@ export async function POST(request: Request) {
           prevClose: "590",
           timestamp: 1785150000,
         }],
+        readDailyCandles: async () => [],
       });
       const { credentials: _credentials, ...safe } = await oauth.finish({
         code: "browser-test-code",
@@ -284,6 +288,262 @@ export async function POST(request: Request) {
         redirectUri: new URL("/callback", request.url).toString(),
       });
       return Response.json(safe);
+    }
+    if (body.action === "keychain-quote-sessions") {
+      const oauth = new KeychainLongbridgeOAuth({
+        beginAuthorization: () => ({
+          status: "authorized" as const,
+          authorizationUrl: null,
+        }),
+        beginBrowserAuthorization: () => ({
+          authorizationUrl: "https://openapi.longbridge.com/oauth2/authorize",
+          state: "test-state",
+        }),
+        completeBrowserAuthorization: async () => undefined,
+        authorizationStatus: () => ({
+          status: "authorized" as const,
+          authorizationUrl: null,
+        }),
+        credentialReference: () => "macos-keychain:browser-test-client",
+        readAssets: async () => ({
+          accountPage: {
+            data: {
+              list: [{
+                currency: "USD",
+                net_assets: "25000",
+              }],
+            },
+          },
+          stockPage: {
+            data: {
+              list: [{
+                account_channel: "lb",
+                stock_info: [{
+                  symbol: "AAPL.US",
+                  symbol_name: "Apple",
+                  quantity: "10",
+                  currency: "USD",
+                  cost_price: "190",
+                }, {
+                  symbol: "NVDA.US",
+                  symbol_name: "NVIDIA",
+                  quantity: "5",
+                  currency: "USD",
+                  cost_price: "170",
+                }, {
+                  symbol: "TSLA.US",
+                  symbol_name: "Tesla",
+                  quantity: "3",
+                  currency: "USD",
+                  cost_price: "400",
+                }, {
+                  symbol: "MSFT.US",
+                  symbol_name: "Microsoft",
+                  quantity: "4",
+                  currency: "USD",
+                  cost_price: "480",
+                }, {
+                  symbol: "0700.HK",
+                  symbol_name: "Tencent",
+                  quantity: "20",
+                  currency: "HKD",
+                  cost_price: "550",
+                }, {
+                  symbol: "AMD.US",
+                  symbol_name: "AMD",
+                  quantity: "8",
+                  currency: "USD",
+                  cost_price: "160",
+                }, {
+                  symbol: "META.US",
+                  symbol_name: "Meta",
+                  quantity: "2",
+                  currency: "USD",
+                  cost_price: "590",
+                }],
+              }],
+            },
+          },
+          fundPage: { data: { list: [] } },
+          exchangeRates: [],
+        }),
+        readQuotes: async () => [{
+          symbol: "AAPL.US",
+          lastDone: "215.000",
+          prevClose: "210",
+          timestamp: 1785960000,
+          tradeStatus: "NORMAL",
+          delivery: "unknown",
+        }, {
+          symbol: "NVDA.US",
+          lastDone: "181.000",
+          prevClose: "180",
+          timestamp: 1785960000,
+          tradeStatus: "US_PREV",
+          preMarketQuote: {
+            lastDone: "184.250",
+            timestamp: 1785964320,
+          },
+        }, {
+          symbol: "TSLA.US",
+          lastDone: "420.000",
+          prevClose: "415",
+          timestamp: 1785960000,
+          tradeStatus: "US_AFTER",
+          postMarketQuote: {
+            lastDone: "422.500",
+            timestamp: 1785963360,
+          },
+        }, {
+          symbol: "MSFT.US",
+          lastDone: "495.000",
+          prevClose: "490",
+          timestamp: 1785960000,
+          tradeStatus: "US_NIGHT",
+          overnightQuote: {
+            lastDone: "500.125",
+            timestamp: 1785958800,
+          },
+        }, {
+          symbol: "0700.HK",
+          lastDone: "600.000",
+          prevClose: "590",
+          timestamp: 1785961320,
+          tradeStatus: "CLOSING",
+          delivery: "delayed",
+        }, {
+          symbol: "AMD.US",
+          lastDone: "177.000",
+          prevClose: "176",
+          timestamp: 1785960300,
+          tradeStatus: "US_AFTER",
+          preMarketQuote: {
+            lastDone: "178.000",
+            timestamp: 1785960300,
+          },
+          postMarketQuote: {
+            lastDone: "179.000",
+            timestamp: 1785960300,
+          },
+        }, {
+          symbol: "META.US",
+          lastDone: "601.000",
+          prevClose: "600",
+          timestamp: -1,
+          tradeStatus: "US_PREV",
+          preMarketQuote: {
+            lastDone: "602.000",
+            timestamp: -1,
+          },
+        }],
+        readDailyCandles: async () => [],
+      });
+      const { credentials: _credentials, ...safe } = await oauth.finish({
+        code: "browser-test-code",
+        codeVerifier: "test-state",
+        redirectUri: new URL("/callback", request.url).toString(),
+      });
+      return Response.json(safe);
+    }
+    if (body.action === "keychain-holdings-retains-quote-evidence") {
+      const credentialReference = "macos-keychain:browser-test-client";
+      const refresher = new KeychainLongbridgeSourceRefresher({
+        beginAuthorization: () => ({
+          status: "authorized" as const,
+          authorizationUrl: null,
+        }),
+        beginBrowserAuthorization: () => ({
+          authorizationUrl: "https://openapi.longbridge.com/oauth2/authorize",
+          state: "test-state",
+        }),
+        completeBrowserAuthorization: async () => undefined,
+        authorizationStatus: () => ({
+          status: "authorized" as const,
+          authorizationUrl: null,
+        }),
+        credentialReference: () => credentialReference,
+        readAssets: async () => ({
+          accountPage: {
+            data: { list: [{ currency: "USD", net_assets: "1000" }] },
+          },
+          stockPage: {
+            data: {
+              list: [{
+                account_channel: "lb",
+                stock_info: [{
+                  symbol: "AAPL.US",
+                  symbol_name: "Apple",
+                  quantity: "10",
+                  currency: "USD",
+                  cost_price: "90",
+                }],
+              }],
+            },
+          },
+          fundPage: { data: { list: [] } },
+          exchangeRates: [],
+        }),
+        readQuotes: async () => [],
+        readDailyCandles: async () => [],
+      });
+      const source: AssetSourceSummary = {
+        id: "keychain-retained-quote-source",
+        kind: "longbridge",
+        label: "长桥保留行情测试",
+        accountId: "longbridge:keychain-retained-quote",
+        permissions: ["account", "positions", "market-data"],
+        credentialReference,
+        snapshot: {
+          total: { amount: "1000", currency: "USD" },
+          holdings: [{
+            symbol: "AAPL.US",
+            name: "Apple",
+            quantity: "10",
+            currency: "USD",
+            assetClass: "securities",
+            currentPrice: { amount: "100", currency: "USD" },
+            quoteEvidence: {
+              session: "post-market",
+              quotedAt: "2026-05-28T20:04:00.000Z",
+              observedAt: "2026-05-28T20:04:00.000Z",
+              freshness: "current",
+              delivery: "unknown",
+              provider: {
+                name: "longbridge",
+                tradeStatus: "US_AFTER",
+              },
+            },
+            previousClose: { amount: "95", currency: "USD" },
+            marketValue: "1000",
+            sourceMarketValue: { amount: "1000", currency: "USD" },
+            valuation: {
+              status: "valued",
+              priceSource: "Longbridge 行情",
+              pricedAt: "2026-05-28T20:04:00.000Z",
+            },
+            costPrice: "90",
+            platformProfit: null,
+            changePercent: null,
+          }],
+          exchangeRates: [],
+          syncedAt: "2026-05-28T20:04:00.000Z",
+        },
+        sync: {
+          status: "current",
+          lastSuccessfulAt: "2026-05-28T20:04:00.000Z",
+          lastAttemptAt: "2026-05-28T20:04:00.000Z",
+          error: null,
+        },
+      };
+      const result = await refresher.refresh({
+        source,
+        credentials: credentialReference,
+        mode: "holdings",
+        attemptedAt: "2026-05-29T00:00:00.000Z",
+        signal: new AbortController().signal,
+        persistCredentials: async () => undefined,
+      });
+      return Response.json({ snapshot: result.snapshot });
     }
     if (body.action === "rest-source-audit") {
       const [adapter, packageJson, lockfile] = await Promise.all([

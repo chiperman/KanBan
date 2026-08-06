@@ -803,20 +803,32 @@ body {
 .holding-market-value-summary span,
 .holding-profit-summary strong,
 .holding-profit-summary span,
-.holding-current-cost-price > strong,
-.holding-current-cost-price > span {
+.holding-current-cost-price > .holding-current-price,
+.holding-current-cost-price > span,
+.holding-current-price-cell > .holding-current-price,
+.holding-current-price-cell > .holding-quote-session {
   display: block;
 }
 
 .holding-market-value-summary span,
 .holding-profit-summary span,
-.holding-current-cost-price > span {
+.holding-current-cost-price > span,
+.holding-current-price-cell > .holding-quote-session {
   margin-top: 3px;
   font-size: 11px;
 }
 
-.holding-current-cost-price > span {
+.holding-current-cost-price > span,
+.holding-current-price-cell > .holding-quote-session {
   color: var(--secondary);
+}
+
+.holding-current-cost-price > .holding-quote-session {
+  display: block;
+  margin-top: 4px;
+  color: var(--secondary);
+  font-size: 10px;
+  white-space: normal;
 }
 
 .asset-updated {
