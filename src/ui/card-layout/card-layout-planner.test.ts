@@ -1,16 +1,16 @@
-import { expect, test } from "@playwright/test";
+import assert from "node:assert/strict";
+import test from "node:test";
 
 import {
   applyDropCandidate,
   planDropCandidates,
-} from "@/ui/card-layout/card-layout-planner";
+} from "./card-layout-planner";
 
 test("三格资产卡片可以缩小到两格卡片右侧的一格空位", () => {
   const cards = [
     { id: "longbridge", span: 2 as const },
     { id: "demo", span: 3 as const },
   ];
-
   const plan = planDropCandidates({
     cards,
     draggedId: "demo",
@@ -22,12 +22,16 @@ test("三格资产卡片可以缩小到两格卡片右侧的一格空位", () =>
       item.row === 0 && item.columnStart === 2 && item.span === 1,
   );
 
-  expect(candidate).toMatchObject({
-    kind: "fill-gap",
-    previousSpan: 3,
-    startsNewRow: false,
-  });
-  expect(applyDropCandidate(cards, candidate!)).toEqual([
+  assert.ok(candidate);
+  assert.deepEqual(
+    {
+      kind: candidate.kind,
+      previousSpan: candidate.previousSpan,
+      startsNewRow: candidate.startsNewRow,
+    },
+    { kind: "fill-gap", previousSpan: 3, startsNewRow: false },
+  );
+  assert.deepEqual(applyDropCandidate(cards, candidate), [
     cards[0],
     { id: "demo", span: 1, startsNewRow: undefined },
   ]);
@@ -43,18 +47,20 @@ test("空白新行候选保持资产卡片原跨度", () => {
     columns: 3,
     allowAdaptiveShrink: true,
   });
-
-  const newRowCandidates = plan.candidates.filter(
+  const candidates = plan.candidates.filter(
     (candidate) => candidate.kind === "new-row",
   );
-  expect(newRowCandidates).toEqual([
-    expect.objectContaining({
-      insertIndex: 1,
-      span: 3,
-      previousSpan: 3,
-      startsNewRow: true,
-    }),
-  ]);
+
+  assert.equal(candidates.length, 1);
+  assert.deepEqual(
+    {
+      insertIndex: candidates[0].insertIndex,
+      span: candidates[0].span,
+      previousSpan: candidates[0].previousSpan,
+      startsNewRow: candidates[0].startsNewRow,
+    },
+    { insertIndex: 1, span: 3, previousSpan: 3, startsNewRow: true },
+  );
 });
 
 test("原跨度能放入连续空位时不生成同位置缩小候选", () => {
@@ -67,14 +73,14 @@ test("原跨度能放入连续空位时不生成同位置缩小候选", () => {
     columns: 3,
     allowAdaptiveShrink: true,
   });
+  const candidates = plan.candidates.filter(
+    (candidate) => candidate.row === 0 && candidate.columnStart === 1,
+  );
 
-  expect(
-    plan.candidates.filter(
-      (candidate) => candidate.row === 0 && candidate.columnStart === 1,
-    ),
-  ).toEqual([
-    expect.objectContaining({ span: 2, previousSpan: 2 }),
-  ]);
+  assert.deepEqual(
+    candidates.map(({ span, previousSpan }) => ({ span, previousSpan })),
+    [{ span: 2, previousSpan: 2 }],
+  );
 });
 
 test("可见资产卡片重排时隐藏卡片保持原有槽位", () => {
@@ -90,11 +96,12 @@ test("可见资产卡片重排时隐藏卡片保持原有槽位", () => {
     columns: 3,
     allowAdaptiveShrink: true,
   });
-  const firstCandidate = plan.candidates.find(
-    (candidate) => candidate.insertIndex === 0 && candidate.span === 1,
+  const candidate = plan.candidates.find(
+    (item) => item.insertIndex === 0 && item.span === 1,
   );
 
-  expect(applyDropCandidate(cards, firstCandidate!)).toEqual([
+  assert.ok(candidate);
+  assert.deepEqual(applyDropCandidate(cards, candidate), [
     { id: "dragged", span: 1, startsNewRow: undefined },
     hidden,
     cards[0],
@@ -112,34 +119,34 @@ test("两列和单列候选不改写桌面持久化跨度", () => {
       columns,
       allowAdaptiveShrink: false,
     });
-    expect(plan.candidates.length).toBeGreaterThan(0);
-    expect(plan.candidates.every((candidate) => candidate.span === 3)).toBe(true);
+
+    assert.ok(plan.candidates.length > 0);
+    assert.ok(plan.candidates.every((candidate) => candidate.span === 3));
   }
 });
 
 test("末行仍有空位时也生成强制新行候选", () => {
-  const cards = [
-    { id: "first", span: 1 as const },
-    { id: "second", span: 1 as const },
-    { id: "dragged", span: 1 as const },
-  ];
   const plan = planDropCandidates({
-    cards,
+    cards: [
+      { id: "first", span: 1 },
+      { id: "second", span: 1 },
+      { id: "dragged", span: 1 },
+    ],
     draggedId: "dragged",
     columns: 3,
     allowAdaptiveShrink: true,
   });
-
-  expect(plan.candidates).toContainEqual(
-    expect.objectContaining({
-      kind: "new-row",
-      insertIndex: 2,
-      row: 1,
-      columnStart: 0,
-      span: 1,
-      startsNewRow: true,
-    }),
+  const candidate = plan.candidates.find(
+    (item) =>
+      item.kind === "new-row" &&
+      item.insertIndex === 2 &&
+      item.row === 1 &&
+      item.columnStart === 0 &&
+      item.span === 1 &&
+      item.startsNewRow,
   );
+
+  assert.ok(candidate);
 });
 
 test("同一位置只保留能放下的最大跨度候选", () => {
@@ -152,10 +159,10 @@ test("同一位置只保留能放下的最大跨度候选", () => {
     columns: 3,
     allowAdaptiveShrink: true,
   });
-  const sameAnchor = plan.candidates.filter(
+  const candidates = plan.candidates.filter(
     (candidate) => candidate.row === 0 && candidate.columnStart === 1,
   );
 
-  expect(sameAnchor).toHaveLength(1);
-  expect(sameAnchor[0].span).toBe(2);
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].span, 2);
 });
