@@ -39,6 +39,10 @@ const ASSET_PRODUCT_LABELS: Record<string, string> = {
   dcp: "DCP",
 };
 
+export function assetProductDisplayName(product: string): string {
+  return ASSET_PRODUCT_LABELS[product] ?? product;
+}
+
 const HOLDING_PRODUCT_LABELS: Record<string, string> = {
   spot: "现货",
   funding: "资金",
@@ -198,7 +202,7 @@ export function AssetProductCoverage({
                       <div className="vibe-coverage-product-copy">
                         <div className="vibe-coverage-product-head">
                           <strong>
-                            {ASSET_PRODUCT_LABELS[product.product] ?? product.product}
+                            {assetProductDisplayName(product.product)}
                           </strong>
                           {product.freshness === "expired" ? (
                             <span className="vibe-coverage-product-stale">

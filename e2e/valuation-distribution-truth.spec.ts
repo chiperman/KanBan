@@ -88,6 +88,12 @@ test("总资产使用来源原生价格与显式汇率，保留原值并正确�
   ).toBe(true);
   await expect(overview).toContainText("561.34 USD");
   await expect(overview).toContainText("当前估值：不完整 · 1 项未估值");
+  const completeness = overview.getByTestId("data-completeness-panel");
+  await expect(completeness).toContainText("数据完整性");
+  await expect(completeness).toContainText("Beta Crypto");
+  await expect(completeness).toContainText("1 项持仓未估值");
+  await expect(completeness).toContainText("Mystery Token (MYST)");
+  await expect(completeness).toContainText("来源没有可靠价格");
   await expect(overview).toContainText("证券");
   await expect(overview).toContainText("464.04 USD");
   await expect(overview).toContainText("加密资产");

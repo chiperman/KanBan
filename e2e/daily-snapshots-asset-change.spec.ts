@@ -713,6 +713,13 @@ test("趋势区间会记忆，且每日明细分页独立于图表区间", async
   await expect(yesterdayChange).toContainText("较昨日 · 03月06日");
   await expect(yesterdayChange).toContainText("+1.00 USD");
   await expect(yesterdayChange).toContainText("昨日总资产 133.00 USD");
+  const sourceChanges = page.getByTestId(
+    "total-asset-yesterday-source-changes",
+  );
+  await expect(sourceChanges).toContainText("变动来源");
+  await expect(sourceChanges).toContainText("Alpha Securities");
+  await expect(sourceChanges).toContainText("+1.00 USD");
+  await expect(sourceChanges).not.toContainText("Beta Crypto");
   await expect(trend).not.toContainText("较昨日");
   await expect(page.locator("body")).not.toContainText("今日资产变动");
   await expect(trend.locator(".total-trend-point-dot")).toHaveCount(0);
