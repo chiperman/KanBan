@@ -169,7 +169,6 @@ export function OwnerDashboard({
     useState<ReportingCurrency>("USD");
   const [trendRange, setTrendRange] = useState<TrendRange>("30d");
   const [displayCards, setDisplayCards] = useState(cards);
-  const [mobileOverviewExpanded, setMobileOverviewExpanded] = useState(false);
   const [layoutMode, setLayoutMode] = useState(false);
   const [resizingId, setResizingId] = useState<string | null>(null);
   const [resizePreview, setResizePreview] = useState<{
@@ -558,8 +557,6 @@ export function OwnerDashboard({
       {assetSources.length > 0 ? (
         <article
           className="card vibe-data-card total-overview-card"
-          data-mobile-expanded={mobileOverviewExpanded ? "true" : "false"}
-          data-mobile-layout-mode={layoutMode ? "true" : "false"}
           data-testid="total-overview-card"
           data-vibe-surface="data-card"
           tabIndex={-1}
@@ -577,18 +574,6 @@ export function OwnerDashboard({
             showSensitiveInfo={showSensitiveInfo}
             storageNamespace={demoMode ? "demo" : "owner"}
           />
-          <button
-            type="button"
-            className="mobile-overview-toggle"
-            aria-expanded={mobileOverviewExpanded}
-            aria-label={`${mobileOverviewExpanded ? "折叠" : "展开"}总资产详情`}
-            onClick={() => setMobileOverviewExpanded((current) => !current)}
-          >
-            <span>
-              {mobileOverviewExpanded ? "收起资产详情" : "查看分布与趋势"}
-            </span>
-            <span className="mobile-card-summary-toggle" aria-hidden="true" />
-          </button>
         </article>
       ) : null}
       <div className="dashboard-control-deck" data-vibe-module="control-deck">

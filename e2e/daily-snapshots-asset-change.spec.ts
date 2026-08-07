@@ -790,7 +790,7 @@ test("来源趋势独立断点且跟随全局趋势区间", async ({ page, reque
   await expect(betaTrend).not.toContainText("缺少 1 天观测，折线已断开");
 });
 
-test("移动端可查看来源每日总额明细且不产生横向溢出", async ({
+test("移动端可查看总资产每日观测明细且不产生横向溢出", async ({
   page,
   request,
 }) => {
@@ -803,20 +803,12 @@ test("移动端可查看来源每日总额明细且不产生横向溢出", async
   await page.setViewportSize({ width: 390, height: 844 });
   await loginAsOwner(page);
 
-  const alphaTrend = page.getByTestId("asset-source-trend-source-alpha");
-  const alphaCard = alphaTrend.locator("xpath=ancestor::article");
-  await alphaCard.getByRole("button", { name: "展开Alpha Securities" }).click();
-  await expect(alphaCard).toHaveAttribute("data-mobile-expanded", "true");
-
-  const sourceDailyDetails = alphaTrend.getByTestId(
-    "asset-source-daily-details-source-alpha",
-  );
-  await sourceDailyDetails.getByText("每日总额（3）").click();
+  const totalTrend = page.getByTestId("total-asset-trend");
+  const totalDailyDetails = totalTrend.locator(".daily-trend-details");
+  await totalDailyDetails.getByText(/观测明细（/).click();
   await expect(
-    alphaTrend.getByTestId("asset-source-daily-detail-source-alpha").first(),
+    totalTrend.getByTestId("daily-trend-detail").first(),
   ).toBeVisible();
-  await expect(sourceDailyDetails).toContainText("03月04日");
-  await expect(sourceDailyDetails).toContainText("50.00 USD");
 
   const viewport = await page.evaluate(() => ({
     clientWidth: document.documentElement.clientWidth,
@@ -825,7 +817,7 @@ test("移动端可查看来源每日总额明细且不产生横向溢出", async
   expect(viewport.scrollWidth).toBeLessThanOrEqual(viewport.clientWidth);
 });
 
-test("移动端趋势入口、键盘操作与窄屏来源图保持可访问", async ({
+test("移动端总资产趋势入口、键盘操作与窄屏图保持可访问", async ({
   page,
   request,
 }) => {
@@ -839,9 +831,10 @@ test("移动端趋势入口、键盘操作与窄屏来源图保持可访问", as
   await loginAsOwner(page);
   const overviewCard = page.getByTestId("total-overview-card");
   const trend = page.getByTestId("total-asset-trend");
-  await expect(trend).toBeHidden();
-  await overviewCard.getByRole("button", { name: "展开总资产详情" }).click();
   await expect(trend).toBeVisible();
+  await expect(
+    overviewCard.getByRole("button", { name: /总资产详情/ }),
+  ).toHaveCount(0);
   await expect(trend.getByTestId("daily-trend-detail").first()).toBeHidden();
 
   const trendRange = overviewCard.getByRole("button", { name: "趋势区间" });
@@ -849,10 +842,10 @@ test("移动端趋势入口、键盘操作与窄屏来源图保持可访问", as
   await expect(trendRange).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(
-    overviewCard.getByRole("option", { name: "7日", exact: true }),
+    page.getByRole("option", { name: "7日", exact: true }),
   ).toBeVisible();
   await page.keyboard.press("Escape");
-  await chooseOverviewOption(overviewCard, "趋势区间", "7日");
+  await chooseOverviewOption(page, "趋势区间", "7日");
   await expect(
     trend.getByRole("img", { name: /最近7个上海自然日总资产趋势/ }),
   ).toBeVisible();
@@ -868,13 +861,6 @@ test("移动端趋势入口、键盘操作与窄屏来源图保持可访问", as
   await page.keyboard.press("Enter");
   await expect(trend).toContainText("第 2 / 2 页");
 
-  const sourceChart = page.getByTestId("asset-source-trend-source-alpha")
-    .getByRole("img", { name: "Alpha Securities来源总额趋势" });
-  const alphaCard = page.getByTestId("asset-source-trend-source-alpha")
-    .locator("xpath=ancestor::article");
-  await alphaCard.getByRole("button", { name: "展开Alpha Securities" }).click();
-  await expect(alphaCard).toHaveAttribute("data-mobile-expanded", "true");
-  await expect(sourceChart).toBeVisible();
   const viewport = await page.evaluate(() => ({
     clientWidth: document.documentElement.clientWidth,
     scrollWidth: document.documentElement.scrollWidth,

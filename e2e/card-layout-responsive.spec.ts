@@ -1422,7 +1422,7 @@ test("手机端可用触摸拖动标题并保留桌面宽度", async ({ browser 
   }
 });
 
-test("手机端总资产默认保留摘要并可展开全部详情", async ({ page, request }) => {
+test("手机端总资产默认展示分布和趋势", async ({ page, request }) => {
   await request.post("/test-doubles/reset");
   const seeded = await request.post("/test-doubles/release-acceptance", {
     data: { action: "seed" },
@@ -1431,28 +1431,15 @@ test("手机端总资产默认保留摘要并可展开全部详情", async ({ pa
   await page.setViewportSize({ width: 390, height: 844 });
   await loginAsOwner(page);
 
-  const overview = page.getByTestId("total-overview-card");
-  await expect(overview).toHaveAttribute("data-mobile-expanded", "false");
   await expect(page.getByTestId("total-asset-amount")).toBeVisible();
-  await expect(page.getByTestId("total-asset-yesterday-change")).toBeVisible();
-  await expect(page.getByTestId("total-asset-trend")).toBeHidden();
-
-  await page.getByRole("button", { name: "展开总资产详情" }).click();
-  await expect(overview).toHaveAttribute("data-mobile-expanded", "true");
   await expect(page.getByTestId("total-asset-trend")).toBeVisible();
-
-  await page.getByRole("button", { name: "折叠总资产详情" }).click();
-  await expect(overview).toHaveAttribute("data-mobile-expanded", "false");
-  await expect(page.getByTestId("total-asset-trend")).toBeHidden();
-
-  await page.getByRole("button", { name: "展开总资产详情" }).click();
-  await expect(overview).toHaveAttribute("data-mobile-expanded", "true");
-  await expect(page.getByTestId("total-asset-trend")).toBeVisible();
+  await expect(page.getByLabel("资产分布")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /总资产详情/ }),
+  ).toHaveCount(0);
   await expect(page.getByRole("button", { name: "全部展开" })).toHaveCount(0);
 
-  await page.getByRole("button", { name: "调整卡片顺序" }).click();
-  await expect(page.getByTestId("total-asset-trend")).toBeHidden();
-  await page.getByRole("button", { name: "完成调整" }).click();
+  await page.getByRole("button", { name: "进入布局管理" }).click();
   await expect(page.getByTestId("total-asset-trend")).toBeVisible();
 });
 

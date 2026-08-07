@@ -209,3 +209,28 @@ test("手机总览可明确进入和退出布局管理，且无横向溢出", as
   await expect(enterLayoutMode).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
+
+test("手机总览默认及布局管理时保留分布和趋势", async ({
+  page,
+  request,
+}) => {
+  const seeded = await request.post("/test-doubles/release-acceptance", {
+    data: { action: "seed" },
+  });
+  expect(seeded.ok()).toBeTruthy();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await loginAsOwner(page);
+
+  const distribution = page.getByLabel("资产分布");
+  const trend = page.getByTestId("total-asset-trend");
+  await expect(distribution).toBeVisible();
+  await expect(trend).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /总资产详情/ }),
+  ).toHaveCount(0);
+
+  await page.getByRole("button", { name: "进入布局管理" }).click();
+  await expect(distribution).toBeVisible();
+  await expect(trend).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});

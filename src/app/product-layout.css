@@ -457,8 +457,7 @@ a {
 
 .mobile-card-summary,
 .mobile-card-sort-row,
-.vibe-button.mobile-card-layout-toggle,
-.mobile-overview-toggle {
+.vibe-button.mobile-card-layout-toggle {
   display: none;
 }
 
@@ -1596,9 +1595,10 @@ body {
   margin-bottom: var(--vibe-space-3);
   padding: var(--vibe-space-12) var(--vibe-space-6) var(--vibe-space-8);
   border: 0;
-  border-bottom: 1px solid var(--line-2);
-  border-radius: 0;
-  background: transparent;
+  border-radius: var(--r-md);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
 }
 
 .total-overview {
@@ -3063,19 +3063,6 @@ body {
   white-space: nowrap;
 }
 
-.total-overview-card::after {
-  content: "";
-  position: absolute;
-  top: var(--vibe-space-10);
-  right: var(--vibe-space-6);
-  width: min(30vw, 360px);
-  height: 96px;
-  background-image: radial-gradient(circle, var(--line-2) 1px, transparent 1px);
-  background-size: 16px 16px;
-  opacity: 0.28;
-  pointer-events: none;
-}
-
 .total-overview {
   position: relative;
   z-index: 1;
@@ -4208,9 +4195,6 @@ body {
     align-items: start;
   }
 
-  .total-overview-card::after {
-    width: 240px;
-  }
 }
 
 @media (max-width: 639px) {
@@ -4220,13 +4204,6 @@ body {
 
   .total-overview-amount {
     font-size: 42px;
-  }
-
-  .total-overview-card::after {
-    top: var(--vibe-space-8);
-    width: 116px;
-    height: 72px;
-    opacity: 0.2;
   }
 
   .allocation-instrument {
@@ -4256,52 +4233,6 @@ body {
 
   .vibe-button.mobile-card-layout-toggle {
     display: inline-flex;
-  }
-
-  .mobile-overview-toggle {
-    position: relative;
-    z-index: 2;
-    display: flex;
-    width: 100%;
-    min-height: 44px;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--vibe-space-3);
-    margin-top: var(--vibe-space-5);
-    padding: var(--vibe-space-2) 0;
-    border: 0;
-    border-top: 1px solid var(--line);
-    background: transparent;
-    color: var(--secondary);
-    font-family: var(--f-mono);
-    font-size: var(--vibe-type-caption);
-    text-align: left;
-    cursor: pointer;
-  }
-
-  .total-overview-card[data-mobile-expanded="false"] .allocation-instrument,
-  .total-overview-card[data-mobile-expanded="false"] .valuation-controls,
-  .total-overview-card[data-mobile-expanded="false"] .conversion-observation,
-  .total-overview-card[data-mobile-expanded="false"] .distribution-list,
-  .total-overview-card[data-mobile-expanded="false"] .asset-trend,
-  .total-overview-card[data-mobile-layout-mode="true"] .allocation-instrument,
-  .total-overview-card[data-mobile-layout-mode="true"] .valuation-controls,
-  .total-overview-card[data-mobile-layout-mode="true"] .conversion-observation,
-  .total-overview-card[data-mobile-layout-mode="true"] .distribution-list,
-  .total-overview-card[data-mobile-layout-mode="true"] .asset-trend,
-  .total-overview-card[data-mobile-layout-mode="true"]
-    .mobile-overview-toggle {
-    display: none;
-  }
-
-  .total-overview-card[data-mobile-expanded="false"] .total-overview {
-    gap: var(--vibe-space-5);
-  }
-
-  .total-overview-card[data-mobile-expanded="true"]
-    .mobile-overview-toggle
-    .mobile-card-summary-toggle {
-    transform: translateY(2px) rotate(225deg);
   }
 
   .card-grid > .card {
