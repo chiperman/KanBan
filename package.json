@@ -14,12 +14,16 @@
     "build": "next build",
     "start": "node scripts/run-local-next.mjs start",
     "typecheck": "tsc --noEmit",
-    "test:browser": "playwright test",
+    "test:browser:test": "playwright test",
+    "test:browser:production": "playwright test --config=playwright.production.config.ts",
+    "test:browser": "pnpm test:browser:test && pnpm test:browser:production",
+    "test:browser:parallel": "node scripts/run-playwright-shards.mjs",
+    "test:browser:production:parallel": "PLAYWRIGHT_CONFIG=playwright.production.config.ts node scripts/run-playwright-shards.mjs",
     "test:smoke:quick": "playwright test --config=playwright.smoke.config.ts",
     "test:smoke": "pnpm build && pnpm test:smoke:quick",
     "test:ticket-02:quick": "playwright test --config=playwright.ticket-02.config.ts",
     "test:ticket-02": "pnpm build && pnpm test:ticket-02:quick",
-    "test:regression": "next build && pnpm test:browser",
+    "test:regression": "next build && PLAYWRIGHT_SHARDS=4 PLAYWRIGHT_RUN_PREFIX=browser pnpm test:browser:parallel && PLAYWRIGHT_SHARDS=2 PLAYWRIGHT_RUN_PREFIX=production pnpm test:browser:production:parallel",
     "test": "pnpm typecheck && pnpm test:smoke"
   },
   "dependencies": {
