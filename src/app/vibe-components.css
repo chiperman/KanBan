@@ -472,7 +472,7 @@ textarea.vibe-field__input {
   transition: opacity var(--dur, 0.2s) var(--ease);
 }
 
-.vibe-button:hover {
+.vibe-button:not(:disabled):hover {
   opacity: 0.8;
 }
 

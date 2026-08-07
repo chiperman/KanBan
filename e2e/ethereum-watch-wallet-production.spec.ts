@@ -196,6 +196,44 @@ test("统一来源流程可独立保存 BNB Smart Chain 公开地址", async ({ 
   await expect(card).toContainText("BNB Smart Chain");
 });
 
+test("确认保存 EVM 公开地址时显示进行中状态", async ({ page }) => {
+  await page.request.post("/test-doubles/ethereum", { data: { scenario: "valid" } });
+  await loginAsOwner(page);
+  await page.getByRole("button", { name: "添加资产来源" }).click();
+  await page.getByRole("radio", { name: "EVM 观察钱包" }).check();
+  await page.getByRole("checkbox", { name: "BNB Smart Chain 观察钱包" }).uncheck();
+  await page.getByLabel("EVM 公开地址（每行一个）").fill(ADDRESS);
+  await page.getByRole("button", { name: "验证公开地址" }).click();
+
+  let releaseConfirm: (() => void) | undefined;
+  let confirmStarted!: () => void;
+  const confirmPending = new Promise<void>((resolve) => {
+    confirmStarted = resolve;
+  });
+  await page.route("**/api/asset-sources/evm/confirm", async (route) => {
+    confirmStarted();
+    await new Promise<void>((resolve) => {
+      releaseConfirm = resolve;
+    });
+    await route.continue();
+  });
+
+  const preview = page.getByRole("dialog", { name: "确认 EVM 观察钱包" });
+  const confirmButton = preview.getByRole("button", {
+    name: /确认并保存|正在保存…/,
+  });
+  await confirmButton.click();
+  await confirmPending;
+
+  await expect(confirmButton).toBeDisabled();
+  await expect(confirmButton).toHaveAttribute("aria-busy", "true");
+  await expect(confirmButton).toContainText("正在保存…");
+  await expect(confirmButton.locator(".source-dialog-pending-indicator")).toBeVisible();
+
+  releaseConfirm?.();
+  await expect(page.getByTestId("ethereum-watch-card")).toBeVisible();
+});
+
 test("公开地址验证与保存保持原子，失败不留下来源或服务端配置", async ({ page }) => {
   await page.request.post("/test-doubles/ethereum", {
     data: { scenario: "valid", commitError: "EVM 原子保存失败" },

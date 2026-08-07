@@ -81,6 +81,43 @@ test("来源 Dialog 打开后捕获焦点，Escape 关闭并恢复触发按钮",
   await expect(trigger).toBeFocused();
 });
 
+test("验证只读凭证时明确显示进行态且禁用态不响应悬停", async ({ page }) => {
+  const configured = await page.request.post("/test-doubles/binance", {
+    data: { scenario: "valid" },
+  });
+  expect(configured.ok()).toBeTruthy();
+  await loginAsOwner(page);
+
+  let releasePreview: (() => void) | undefined;
+  const previewGate = new Promise<void>((resolve) => {
+    releasePreview = resolve;
+  });
+  await page.route("**/api/asset-sources/binance/preview", async (route) => {
+    await previewGate;
+    await route.continue();
+  });
+
+  await page.getByRole("button", { name: "添加资产来源" }).click();
+  const dialog = page.getByRole("dialog", { name: "添加资产来源" });
+  await dialog.getByRole("radio", { name: "Binance" }).click();
+  await dialog.getByLabel("Binance API Key").fill("test-api-key");
+  await dialog.getByLabel("Binance API Secret").fill("test-api-secret");
+  await dialog.getByRole("button", { name: "验证只读凭证" }).click();
+
+  const pendingButton = dialog.getByRole("button", {
+    name: "正在验证只读凭证…",
+  });
+  await expect(pendingButton).toBeDisabled();
+  await expect(pendingButton).toHaveAttribute("aria-busy", "true");
+  await pendingButton.hover();
+  await expect(pendingButton).toHaveCSS("opacity", "1");
+
+  releasePreview?.();
+  await expect(
+    page.getByRole("dialog", { name: "确认 Binance 资产来源" }),
+  ).toBeVisible();
+});
+
 test("移动端来源配置采用全屏 sheet，页头次要操作收进本机设置", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await loginAsOwner(page);

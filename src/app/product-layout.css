@@ -4952,6 +4952,34 @@ body {
   margin-top: var(--vibe-space-4);
 }
 
+.source-dialog-action--pending:disabled {
+  cursor: progress;
+  opacity: 1;
+}
+
+.source-dialog-pending-indicator {
+  width: var(--vibe-space-3);
+  height: var(--vibe-space-3);
+  flex: 0 0 var(--vibe-space-3);
+  border: 1px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: source-dialog-pending-spin 0.8s ease-in-out infinite;
+}
+
+@keyframes source-dialog-pending-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .source-dialog-pending-indicator {
+    border-right-color: currentColor;
+    animation: none;
+  }
+}
+
 .source-evm-service-notice .vibe-button {
   display: inline-flex;
   min-height: 32px;

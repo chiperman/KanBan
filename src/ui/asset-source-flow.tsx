@@ -415,6 +415,17 @@ export function AssetSourceFlow() {
   const previewDescription = preview
     ? assetSourceProvider(preview.provider)
     : null;
+  const startActionLabel = pending
+    ? providerId === "manual"
+      ? "正在保存…"
+      : providerId === "evm"
+        ? "正在验证公开地址…"
+        : provider?.authorization === "oauth"
+          ? "正在准备授权…"
+          : "正在验证只读凭证…"
+    : providerId === "manual"
+      ? "添加资产来源"
+      : selectedProvider?.startLabel ?? "开始 OAuth 授权";
 
   return (
     <>
@@ -450,17 +461,21 @@ export function AssetSourceFlow() {
               {step === "configure" ? (
                 <VibeButton
                   type={providerId === "manual" ? "submit" : "button"}
+                  aria-busy={pending}
+                  className={pending ? "source-dialog-action--pending" : undefined}
                   disabled={pending || !ready}
                   onClick={
                     providerId === "manual" ? undefined : () => void start()
                   }
                   variant="primary"
                 >
-                  {providerId === "manual"
-                    ? pending
-                      ? "正在保存…"
-                      : "添加资产来源"
-                    : selectedProvider?.startLabel ?? "开始 OAuth 授权"}
+                  {pending ? (
+                    <span
+                      aria-hidden="true"
+                      className="source-dialog-pending-indicator"
+                    />
+                  ) : null}
+                  {startActionLabel}
                 </VibeButton>
               ) : null}
             </>
@@ -652,11 +667,19 @@ export function AssetSourceFlow() {
               </VibeButton>
               <VibeButton
                 type="button"
+                aria-busy={pending}
+                className={pending ? "source-dialog-action--pending" : undefined}
                 disabled={pending}
                 onClick={() => void confirm()}
                 variant="primary"
               >
-                确认并保存
+                {pending ? (
+                  <span
+                    aria-hidden="true"
+                    className="source-dialog-pending-indicator"
+                  />
+                ) : null}
+                {pending ? "正在保存…" : "确认并保存"}
               </VibeButton>
             </>
           }
