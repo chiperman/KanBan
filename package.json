@@ -33,6 +33,8 @@
     "test:ticket-05": "pnpm build && pnpm test:ticket-05:quick",
     "test:ticket-06:quick": "playwright test --config=playwright.ticket-06.config.ts",
     "test:ticket-06": "pnpm build && pnpm test:ticket-06:quick",
+    "test:ticket-07:quick": "playwright test --config=playwright.ticket-07.config.ts",
+    "test:ticket-07": "pnpm build && pnpm test:ticket-07:quick",
     "test:regression": "pnpm build && pnpm test:browser",
     "test": "pnpm typecheck && pnpm test:unit && pnpm test:smoke"
   },

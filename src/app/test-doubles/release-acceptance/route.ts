@@ -214,6 +214,30 @@ async function seed() {
   return services;
 }
 
+async function seedMigrationAcceptance() {
+  const services = await seed();
+  await services.manualAssetRecords.create({ label: "迁移手工储备" });
+  const manualSource = (await services.assetSources.list()).find(
+    (source) => source.kind === "manual",
+  );
+  if (manualSource === undefined) {
+    throw new Error("迁移验收夹具未创建手工资产来源");
+  }
+  await services.manualAssetRecords.record(manualSource.id, {
+    day: "2025-12-31",
+    amount: "12345.67",
+    currency: "USD",
+  });
+  await services.assetCards.replaceAll(
+    (await services.assetCards.list()).map((card) =>
+      card.sourceId === "test-binance-source-2"
+        ? { ...card, span: 2, startsNewRow: true }
+        : card,
+    ),
+  );
+  return services;
+}
+
 export async function POST(request: Request) {
   if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
   const body = (await request.json().catch(() => null)) as {
@@ -223,11 +247,13 @@ export async function POST(request: Request) {
     getTestServices().assetSynchronization.reset("release-partial-failure");
     return Response.json({ ok: true });
   }
-  if (body?.action !== "seed") {
+  if (body?.action !== "seed" && body?.action !== "seed-migration") {
     return Response.json({ error: "发布验收操作无效" }, { status: 400 });
   }
   try {
-    const services = await seed();
+    const services = body.action === "seed-migration"
+      ? await seedMigrationAcceptance()
+      : await seed();
     return Response.json({
       sourceCount: (await services.assetSources.list()).length,
       secretCount: services.secrets.size(),
