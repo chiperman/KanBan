@@ -1385,10 +1385,6 @@ export class InMemoryAssetSourceConnections implements AssetSourceConnections {
         await this.secrets.remove(credentialReference);
         throw new Error("EVM 观察钱包不存在或链不匹配");
       }
-      if (existing.lifecycle !== "disconnected") {
-        await this.secrets.remove(credentialReference);
-        throw new Error("资产来源仍处于连接状态，无需重新授权");
-      }
     }
     const sourceId =
       existing?.id ??

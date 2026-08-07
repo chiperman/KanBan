@@ -59,6 +59,10 @@ interface StoredPreview {
   expiresAt: number;
   authorization: Omit<AssetSourceAuthorization, "credentials">;
   credentials: SealedCredentials;
+  reauthorization?: {
+    sourceId: string;
+    expectedAccountId: string;
+  };
 }
 
 export class AssetSourceOnboardingError extends Error {
@@ -98,13 +102,23 @@ export class AssetSourceOnboarding {
     provider: AssetSourceProvider,
     input: Input,
     observedAt: string,
+    reauthorization?: {
+      sourceId: string;
+      expectedAccountId: string;
+    },
   ): Promise<AssetSourceOnboardingPreview> {
     const adapter = this.adapter(provider) as AssetSourceProviderAdapter<Input>;
     const authorization = await adapter.authorize(input, observedAt);
     if (authorization.provider !== provider) {
       throw new Error(`资产来源 adapter 返回了错误的平台：${authorization.provider}`);
     }
-    const id = this.remember(authorization);
+    if (
+      reauthorization !== undefined &&
+      authorization.account.id !== reauthorization.expectedAccountId
+    ) {
+      throw new Error("输入的公开地址或账户与此来源不一致；请新建资产来源。");
+    }
+    const id = this.remember(authorization, reauthorization);
     return this.publicPreview(provider, id)!;
   }
 
@@ -136,6 +150,7 @@ export class AssetSourceOnboarding {
     provider: AssetSourceProvider,
     id: string,
     observedAt: string,
+    expectedReauthorizationSourceId?: string,
   ): Promise<void> {
     const stored = this.claim(provider, id);
     if (!stored) {
@@ -147,13 +162,34 @@ export class AssetSourceOnboarding {
     const original = this.open(stored);
     const adapter = this.adapter(original.provider);
     try {
+      if (
+        expectedReauthorizationSourceId !== undefined &&
+        stored.reauthorization?.sourceId !== expectedReauthorizationSourceId
+      ) {
+        throw new AssetSourceOnboardingError(
+          "preview-unavailable",
+          "授权预览已失效或不属于当前来源",
+        );
+      }
+      if (
+        stored.reauthorization !== undefined &&
+        original.account.id !== stored.reauthorization.expectedAccountId
+      ) {
+        throw new Error("输入的公开地址或账户与此来源不一致；请新建资产来源。");
+      }
       const revalidated = await adapter.revalidate(original, observedAt);
       this.assertStable(
         original,
         revalidated,
         adapter.scopeChangedMessage,
       );
-      await adapter.connect(revalidated);
+      if (
+        stored.reauthorization !== undefined &&
+        revalidated.account.id !== stored.reauthorization.expectedAccountId
+      ) {
+        throw new Error("输入的公开地址或账户与此来源不一致；请新建资产来源。");
+      }
+      await adapter.connect(revalidated, stored.reauthorization?.sourceId);
       this.clear(id);
     } catch (error) {
       this.claimed.delete(id);
@@ -201,7 +237,13 @@ export class AssetSourceOnboarding {
     return adapter;
   }
 
-  private remember(authorization: AssetSourceAuthorization): string {
+  private remember(
+    authorization: AssetSourceAuthorization,
+    reauthorization?: {
+      sourceId: string;
+      expectedAccountId: string;
+    },
+  ): string {
     const id = randomUUID();
     const { credentials, ...safeAuthorization } = authorization;
     this.previews.set(id, {
@@ -209,6 +251,7 @@ export class AssetSourceOnboarding {
       expiresAt: this.now() + this.previewTtlMs,
       authorization: safeAuthorization,
       credentials: this.seal(credentials),
+      ...(reauthorization === undefined ? {} : { reauthorization }),
     });
     const timer = setTimeout(() => this.clear(id), this.previewTtlMs);
     timer.unref();

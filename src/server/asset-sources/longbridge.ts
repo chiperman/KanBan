@@ -501,6 +501,10 @@ function multiplyDecimal(left: string, right: string): string {
 interface StartedAuthorization {
   codeVerifier: string;
   redirectUri: string;
+  reauthorization?: {
+    sourceId: string;
+    expectedAccountId: string;
+  };
   expiresAt: number;
 }
 

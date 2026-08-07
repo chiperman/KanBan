@@ -152,6 +152,15 @@ type SourceAuthorizationResult =
   | BitAuthorizationResult
   | EvmWatchAuthorizationResult;
 
+function connectedSourceKind(
+  sourceKind: SourceConnectionKind,
+  result: SourceAuthorizationResult,
+): AssetSourceSummary["kind"] {
+  if (sourceKind !== "evm") return sourceKind;
+  if (!("chain" in result)) throw new Error("EVM 重新授权缺少链信息");
+  return result.chain === "ethereum" ? "evm-watch-ethereum" : "evm-watch-bsc";
+}
+
 const SOURCE_CARD_DETAILS = {
   longbridge: {
     kind: "longbridge",
@@ -285,15 +294,10 @@ interface DashboardDatabase {
     credentialReference: string,
     capturedAt: string,
   ): Promise<void>;
-  reconnectBinance(
+  reconnectAssetSource(
     sourceId: string,
-    result: BinanceAuthorizationResult,
-    credentialReference: string,
-    capturedAt: string,
-  ): Promise<string | null>;
-  reconnectEvm(
-    sourceId: string,
-    result: EvmWatchAuthorizationResult,
+    sourceKind: SourceConnectionKind,
+    result: SourceAuthorizationResult,
     credentialReference: string,
     capturedAt: string,
   ): Promise<string | null>;
@@ -1177,74 +1181,22 @@ export class FileDashboardDatabase {
     return this.connectAssetSource("binance", result, credentialReference, capturedAt);
   }
 
-  async reconnectBinance(
+  async reconnectAssetSource(
     sourceId: string,
-    result: BinanceAuthorizationResult,
+    sourceKind: SourceConnectionKind,
+    result: SourceAuthorizationResult,
     credentialReference: string,
     capturedAt: string,
   ): Promise<string | null> {
     return this.mutate((state) => {
       const index = state.assetSources.findIndex(({ id }) => id === sourceId);
       const source = state.assetSources[index];
-      if (!source || source.kind !== "binance") {
-        throw new Error("Binance 资产来源不存在");
+      const kind = connectedSourceKind(sourceKind, result);
+      if (!source || source.kind !== kind) {
+        throw new Error("资产来源不存在或类型不匹配");
       }
       if (source.accountId !== result.account.id) {
-        throw new Error("新凭证对应的 Binance 账户与原来源不一致");
-      }
-      state.assetSources[index] = {
-        ...source,
-        label: result.account.label,
-        permissions: result.permissions,
-        credentialReference,
-        snapshot: result.snapshot,
-        lifecycle: "connected",
-        sync: {
-          status: "current",
-          lastSuccessfulAt: result.snapshot.syncedAt,
-          lastAttemptAt: result.snapshot.syncedAt,
-          error: null,
-        },
-      };
-      const snapshot = buildDailyAssetSnapshot(state.assetSources, capturedAt);
-      const trendIndex = state.dailyAssetTrendObservations.findIndex(
-        ({ day }) => day === snapshot.day,
-      );
-      if (trendIndex === -1) {
-        state.dailyAssetTrendObservations.push(structuredClone(snapshot));
-      } else {
-        state.dailyAssetTrendObservations[trendIndex] = mergeDailyTrendObservation(
-          state.dailyAssetTrendObservations[trendIndex],
-          snapshot,
-          false,
-        );
-      }
-      if (!state.dailyAssetSnapshots.some(({ day }) => day === snapshot.day)) {
-        state.dailyAssetSnapshots.push(structuredClone(snapshot));
-      }
-      state.dailyAssetSnapshots.sort((left, right) => left.day.localeCompare(right.day));
-      state.dailyAssetTrendObservations.sort((left, right) => left.day.localeCompare(right.day));
-      return source.credentialReference;
-    });
-  }
-
-  async reconnectEvm(
-    sourceId: string,
-    result: EvmWatchAuthorizationResult,
-    credentialReference: string,
-    capturedAt: string,
-  ): Promise<string | null> {
-    return this.mutate((state) => {
-      const index = state.assetSources.findIndex(({ id }) => id === sourceId);
-      const source = state.assetSources[index];
-      const kind = result.chain === "ethereum"
-        ? "evm-watch-ethereum"
-        : "evm-watch-bsc";
-      if (!source || source.kind !== kind) {
-        throw new Error("EVM 观察钱包不存在或链不匹配");
-      }
-      if (source.lifecycle !== "disconnected") {
-        throw new Error("资产来源仍处于连接状态，无需重新授权");
+        throw new Error("新授权对应的账户与原来源不一致");
       }
       state.assetSources[index] = {
         ...source,
@@ -3173,77 +3125,21 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
     this.connectAssetSource("binance", result, credentialReference, capturedAt);
   }
 
-  async reconnectBinance(
+  async reconnectAssetSource(
     sourceId: string,
-    result: BinanceAuthorizationResult,
+    sourceKind: SourceConnectionKind,
+    result: SourceAuthorizationResult,
     credentialReference: string,
     capturedAt: string,
   ): Promise<string | null> {
     return this.transaction(() => {
       const source = this.listSourcesSync().find(({ id }) => id === sourceId);
-      if (!source || source.kind !== "binance") {
-        throw new Error("Binance 资产来源不存在");
+      const kind = connectedSourceKind(sourceKind, result);
+      if (!source || source.kind !== kind) {
+        throw new Error("资产来源不存在或类型不匹配");
       }
       if (source.accountId !== result.account.id) {
-        throw new Error("新凭证对应的 Binance 账户与原来源不一致");
-      }
-      const updated: AssetSourceSummary = {
-        ...source,
-        label: result.account.label,
-        permissions: result.permissions,
-        credentialReference,
-        snapshot: result.snapshot,
-        lifecycle: "connected",
-        sync: {
-          status: "current",
-          lastSuccessfulAt: result.snapshot.syncedAt,
-          lastAttemptAt: result.snapshot.syncedAt,
-          error: null,
-        },
-      };
-      this.database
-        .prepare(`
-          UPDATE asset_sources
-          SET label = ?, permissions_json = ?, credential_reference = ?, lifecycle = ?
-          WHERE id = ?
-        `)
-        .run(
-          updated.label,
-          JSON.stringify(updated.permissions),
-          updated.credentialReference,
-          "connected",
-          updated.id,
-        );
-      this.upsertSourceDetails(updated);
-      const observation = buildDailyAssetSnapshot(
-        this.listSourcesSync(),
-        capturedAt,
-      );
-      const hasBaseline = this.database
-        .prepare("SELECT day FROM daily_asset_snapshots WHERE day = ?")
-        .get(observation.day) !== undefined;
-      if (!hasBaseline) this.insertDailyBaseline(observation);
-      this.upsertDailyTrendObservation(observation);
-      return source.credentialReference;
-    });
-  }
-
-  async reconnectEvm(
-    sourceId: string,
-    result: EvmWatchAuthorizationResult,
-    credentialReference: string,
-    capturedAt: string,
-  ): Promise<string | null> {
-    return this.transaction(() => {
-      const source = this.listSourcesSync().find(({ id }) => id === sourceId);
-      const kind = result.chain === "ethereum"
-        ? "evm-watch-ethereum"
-        : "evm-watch-bsc";
-      if (!source || source.kind !== kind) {
-        throw new Error("EVM 观察钱包不存在或链不匹配");
-      }
-      if (source.lifecycle !== "disconnected") {
-        throw new Error("资产来源仍处于连接状态，无需重新授权");
+        throw new Error("新授权对应的账户与原来源不一致");
       }
       const updated: AssetSourceSummary = {
         ...source,
@@ -3700,128 +3596,96 @@ export class DatabaseAssetSourceConnections implements AssetSourceConnections {
     }
   }
 
+  private async replaceExisting(
+    sourceId: string,
+    sourceKind: SourceConnectionKind,
+    result: SourceAuthorizationResult,
+  ): Promise<void> {
+    await this.ready;
+    const credentialReference = await this.secrets.stage(result.credentials);
+    try {
+      await this.secrets.commit(credentialReference);
+    } catch (error) {
+      await this.secrets.remove(credentialReference);
+      throw error;
+    }
+
+    let previousReference: string | null;
+    try {
+      previousReference = await this.database.reconnectAssetSource(
+        sourceId,
+        sourceKind,
+        result,
+        credentialReference,
+        this.clock.now().toISOString(),
+      );
+    } catch (error) {
+      await this.secrets.remove(credentialReference);
+      throw error;
+    }
+    if (
+      previousReference !== null &&
+      previousReference !== credentialReference
+    ) {
+      await this.secrets.remove(previousReference);
+    }
+  }
+
+  private async connectOrReplace(
+    sourceKind: SourceConnectionKind,
+    result: SourceAuthorizationResult,
+    save: (credentialReference: string, capturedAt: string) => Promise<void>,
+  ): Promise<void> {
+    await this.ready;
+    const kind = connectedSourceKind(sourceKind, result);
+    const existing = (await this.database.listSources()).find(
+      (source) =>
+        source.kind === kind && source.accountId === result.account.id,
+    );
+    if (existing) {
+      await this.replaceExisting(existing.id, sourceKind, result);
+      return;
+    }
+    await this.connect(result, save);
+  }
+
   connectLongbridge(result: LongbridgeAuthorizationResult) {
-    return this.connect(result, (reference, capturedAt) =>
+    return this.connectOrReplace("longbridge", result, (reference, capturedAt) =>
       this.database.connectLongbridge(result, reference, capturedAt));
   }
 
   connectBinance(result: BinanceAuthorizationResult) {
-    return this.reconnectBinance(result);
+    return this.connectOrReplace("binance", result, (reference, capturedAt) =>
+      this.database.connectBinance(result, reference, capturedAt));
   }
 
   connectOkx(result: OkxAuthorizationResult) {
-    return this.connect(result, (reference, capturedAt) =>
+    return this.connectOrReplace("okx", result, (reference, capturedAt) =>
       this.database.connectOkx(result, reference, capturedAt));
   }
 
   connectBitget(result: BitgetAuthorizationResult) {
-    return this.connect(result, (reference, capturedAt) =>
+    return this.connectOrReplace("bitget", result, (reference, capturedAt) =>
       this.database.connectBitget(result, reference, capturedAt));
   }
 
   connectBit(result: BitAuthorizationResult) {
-    return this.connect(result, (reference, capturedAt) =>
+    return this.connectOrReplace("bit", result, (reference, capturedAt) =>
       this.database.connectBit(result, reference, capturedAt));
   }
 
   connectEvm(result: EvmWatchAuthorizationResult) {
-    const kind = result.chain === "ethereum"
-      ? "evm-watch-ethereum"
-      : "evm-watch-bsc";
-    return this.reconnectEvmForExistingSource(kind, result);
+    return this.connectOrReplace("evm", result, (reference, capturedAt) =>
+      this.database.connectEvm(result, reference, capturedAt));
   }
 
   async reconnectEvm(
     sourceId: string,
     result: EvmWatchAuthorizationResult,
   ): Promise<void> {
-    await this.ready;
-    const credentialReference = await this.secrets.stage(result.credentials);
-    try {
-      await this.secrets.commit(credentialReference);
-    } catch (error) {
-      await this.secrets.remove(credentialReference);
-      throw error;
-    }
-
-    let previousReference: string | null;
-    try {
-      previousReference = await this.database.reconnectEvm(
-        sourceId,
-        result,
-        credentialReference,
-        this.clock.now().toISOString(),
-      );
-    } catch (error) {
-      await this.secrets.remove(credentialReference);
-      throw error;
-    }
-    if (
-      previousReference !== null &&
-      previousReference !== credentialReference
-    ) {
-      await this.secrets.remove(previousReference);
-    }
+    await this.replaceExisting(sourceId, "evm", result);
   }
 
-  private async reconnectEvmForExistingSource(
-    kind: "evm-watch-ethereum" | "evm-watch-bsc",
-    result: EvmWatchAuthorizationResult,
-  ): Promise<void> {
-    await this.ready;
-    const existing = (await this.database.listSources()).find(
-      (source) =>
-        source.kind === kind && source.accountId === result.account.id,
-    );
-    if (existing) {
-      await this.reconnectEvm(existing.id, result);
-      return;
-    }
-    await this.connect(result, (reference, capturedAt) =>
-      this.database.connectEvm(result, reference, capturedAt));
-  }
-
-  private async reconnectBinance(
-    result: BinanceAuthorizationResult,
-  ): Promise<void> {
-    await this.ready;
-    const existing = (await this.database.listSources()).find(
-      (source) =>
-        source.kind === "binance" && source.accountId === result.account.id,
-    );
-    if (!existing) {
-      await this.connect(result, (reference, capturedAt) =>
-        this.database.connectBinance(result, reference, capturedAt));
-      return;
-    }
-
-    const credentialReference = await this.secrets.stage(result.credentials);
-    try {
-      await this.secrets.commit(credentialReference);
-    } catch (error) {
-      await this.secrets.remove(credentialReference);
-      throw error;
-    }
-
-    let previousReference: string | null;
-    try {
-      previousReference = await this.database.reconnectBinance(
-        existing.id,
-        result,
-        credentialReference,
-        this.clock.now().toISOString(),
-      );
-    } catch (error) {
-      await this.secrets.remove(credentialReference);
-      throw error;
-    }
-    if (
-      previousReference !== null &&
-      previousReference !== credentialReference
-    ) {
-      await this.secrets.remove(previousReference);
-    }
-  }
 }
 
 class ReadySecretStore implements SecretStore {

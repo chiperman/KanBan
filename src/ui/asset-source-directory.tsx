@@ -33,6 +33,14 @@ export function AssetSourceDirectory({
       <p className="asset-source-directory__intro">
         自动账户、观察钱包与手工资产记录统一在此查看；详情才提供单来源数据与生命周期操作。
       </p>
+      <VibeLink
+        aria-label="新增来源"
+        className="asset-source-directory__create"
+        href="/asset-sources/new"
+        variant="outline"
+      >
+        新增来源
+      </VibeLink>
       {sources.length === 0 ? (
         <div className="empty-state">
           <p className="empty-title">暂无资产来源</p>

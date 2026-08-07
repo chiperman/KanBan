@@ -13,7 +13,7 @@ import {
   AssetSourceCard,
   type AssetSourceView,
 } from "@/ui/longbridge-asset-card";
-import { VibeButton } from "@/ui/vibe/vibe-button";
+import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
 import { VibeDateField } from "@/ui/vibe/vibe-date-field";
 import { VibeDialog } from "@/ui/vibe/vibe-dialog";
 import { VibeField, VibeSelectField } from "@/ui/vibe/vibe-field";
@@ -459,6 +459,12 @@ export function AssetSourceDetail({
               <dd>{permissionSummary(source.permissions)}</dd>
             </div>
           </dl>
+          <VibeLink
+            href={`/asset-sources/${encodeURIComponent(source.id)}/reauthorize`}
+            variant="outline"
+          >
+            更换授权 / 重新授权
+          </VibeLink>
         </section>
       ) : null}
 

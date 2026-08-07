@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import {
   ASSET_SOURCE_PROVIDERS,
@@ -19,7 +20,6 @@ import type {
   ExternalServiceConfigurationStatus,
 } from "@/server/ports";
 import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
-import { VibeDialog } from "@/ui/vibe/vibe-dialog";
 import {
   VibeField,
   VibeSelectField,
@@ -34,6 +34,12 @@ interface Preview {
   permissions: AssetPermission[];
   total: AssetMoney;
   accountMode?: BitgetAccountMode;
+}
+
+interface Reauthorization {
+  sourceId: string;
+  sourceLabel: string;
+  provider: AssetSourceProviderId;
 }
 
 const EVM_CHAINS = ["ethereum", "bsc"] as const;
@@ -51,18 +57,21 @@ const EVM_WATCH_WALLET = {
     },
   ] satisfies AssetSourceFieldDescription[],
   startLabel: "验证公开地址",
-  fieldHelp: "默认同步 Ethereum 与 BNB Smart Chain；相同地址会按两条链分别读取。",
+  fieldHelp: "仅读取公开地址余额；不接收私钥、助记词、MPC 恢复材料或签名能力。",
 };
 
 const MANUAL_ASSET_SOURCE = {
   id: "manual" as const,
   label: "手工记录资产",
+  fields: [] satisfies AssetSourceFieldDescription[],
+  fieldHelp: undefined,
 };
 
 type ProviderSelectionId =
   | AssetSourceProviderId
   | typeof EVM_WATCH_WALLET.id
   | typeof MANUAL_ASSET_SOURCE.id;
+type FlowStep = "choose" | "configure" | "preview";
 
 const PROVIDER_OPTIONS = [
   ...ASSET_SOURCE_PROVIDERS.filter(
@@ -78,14 +87,36 @@ function formatAmount(amount: string, fixed = false): string {
   return fraction ? `${grouped}.${fraction}` : grouped;
 }
 
-export function AssetSourceFlow() {
-  const [choosing, setChoosing] = useState(false);
-  const [step, setStep] = useState<"choose" | "configure">("choose");
-  const [providerId, setProviderId] = useState<ProviderSelectionId | "">("");
+function isEvmProvider(value: ProviderSelectionId | ""): value is EvmChain | "evm" {
+  return value === "evm" || value === "ethereum" || value === "bsc";
+}
+
+function stepLabel(
+  step: FlowStep,
+  current: FlowStep,
+  label: string,
+): string {
+  return step === current ? `${label}（当前步骤）` : label;
+}
+
+export function AssetSourceFlow({
+  reauthorization,
+}: {
+  reauthorization?: Reauthorization;
+}) {
+  const router = useRouter();
+  const isReauthorizing = reauthorization !== undefined;
+  const [step, setStep] = useState<FlowStep>(
+    isReauthorizing ? "configure" : "choose",
+  );
+  const [providerId, setProviderId] = useState<ProviderSelectionId | "">(
+    reauthorization?.provider ?? "",
+  );
   const [previews, setPreviews] = useState<Preview[]>([]);
-  const [previewMode, setPreviewMode] = useState<"single" | "evm" | null>(null);
   const [evmChains, setEvmChains] = useState<EvmChain[]>(
-    [...EVM_CHAINS],
+    isReauthorizing && isEvmProvider(reauthorization?.provider ?? "")
+      ? [reauthorization!.provider as EvmChain]
+      : [...EVM_CHAINS],
   );
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
@@ -93,13 +124,26 @@ export function AssetSourceFlow() {
   const [manualLabel, setManualLabel] = useState("");
   const [evmServiceStatus, setEvmServiceStatus] =
     useState<ExternalServiceConfigurationStatus | null>(null);
+
   const provider =
     providerId && providerId !== "evm" && providerId !== "manual"
       ? assetSourceProvider(providerId)
       : null;
   const selectedProvider =
-    provider ?? (providerId === "evm" ? EVM_WATCH_WALLET : null);
+    provider ??
+    (providerId === "evm"
+      ? EVM_WATCH_WALLET
+      : providerId === "manual"
+        ? MANUAL_ASSET_SOURCE
+        : null);
   const preview = previews[0] ?? null;
+  const isEvm = isEvmProvider(providerId);
+  const previewUrl = reauthorization === undefined
+    ? null
+    : `/api/asset-sources/${encodeURIComponent(reauthorization.sourceId)}/reauthorize/preview`;
+  const confirmUrl = reauthorization === undefined
+    ? null
+    : `/api/asset-sources/${encodeURIComponent(reauthorization.sourceId)}/reauthorize/confirm`;
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -107,33 +151,36 @@ export function AssetSourceFlow() {
     const previewId = params.get("longbridge_preview");
     if (callbackError) {
       setError(callbackError);
-      setChoosing(true);
+      setStep("configure");
       return;
     }
     if (!previewId) return;
-    void fetch(
-      `/api/asset-sources/longbridge/preview?id=${encodeURIComponent(previewId)}`,
-    )
+    if (providerId !== "longbridge") {
+      setProviderId("longbridge");
+      return;
+    }
+    const endpoint = previewUrl ?? "/api/asset-sources/longbridge/preview";
+    void fetch(`${endpoint}?id=${encodeURIComponent(previewId)}`)
       .then(async (response) => {
         const body = (await response.json()) as Preview & { error?: string };
         if (!response.ok) throw new Error(body.error ?? "授权预览失败");
         setPreviews([body]);
-        setPreviewMode("single");
+        setStep("preview");
+        window.history.replaceState(null, "", window.location.pathname);
       })
       .catch((caught: unknown) => {
         setError(caught instanceof Error ? caught.message : "授权预览失败");
-        setChoosing(true);
+        setStep("configure");
       });
-  }, []);
+  }, [previewUrl, providerId]);
 
   useEffect(() => {
-    if (providerId !== "evm" || step !== "configure") return;
+    if (!isEvm || step !== "configure") return;
     let active = true;
     void fetch("/api/external-services")
-      .then(async (response) => {
-        if (!response.ok) return null;
-        return response.json() as Promise<ExternalServiceConfigurationStatus>;
-      })
+      .then(async (response) => response.ok
+        ? response.json() as Promise<ExternalServiceConfigurationStatus>
+        : null)
       .then((result) => {
         if (active) setEvmServiceStatus(result);
       })
@@ -143,11 +190,7 @@ export function AssetSourceFlow() {
     return () => {
       active = false;
     };
-  }, [providerId, step]);
-
-  function clearCallbackQuery() {
-    window.history.replaceState(null, "", window.location.pathname);
-  }
+  }, [isEvm, step]);
 
   function updateField(id: AssetSourceFieldId, value: string) {
     setFields((current) => ({ ...current, [id]: value }));
@@ -156,83 +199,41 @@ export function AssetSourceFlow() {
   function chooseProvider(id: ProviderSelectionId) {
     setProviderId(id);
     setError("");
-    window.requestAnimationFrame(() => setStep("configure"));
+    setStep("configure");
   }
 
-  function cancelChoosing() {
-    setFields(initialAssetSourceFields());
-    setEvmChains([...EVM_CHAINS]);
-    setManualLabel("");
-    setProviderId("");
+  function backToDirectory() {
+    router.push("/asset-sources");
+  }
+
+  function backToChoice() {
+    setError("");
     setStep("choose");
-    setChoosing(false);
-    clearCallbackQuery();
+  }
+
+  function sourceAuthorizationBody() {
+    if (!provider) return null;
+    return assetSourceAuthorizationBody(provider, fields);
   }
 
   async function startOAuth() {
-    const response = await fetch("/api/asset-sources/longbridge/oauth/start", {
-      method: "POST",
-    });
-    const body = (await response.json()) as {
+    const endpoint = reauthorization === undefined
+      ? "/api/asset-sources/longbridge/oauth/start"
+      : `/api/asset-sources/${encodeURIComponent(reauthorization.sourceId)}/reauthorize/oauth/start`;
+    const response = await fetch(endpoint, { method: "POST" });
+    const body = (await response.json().catch(() => null)) as {
       authorizationUrl?: string;
-      state?: string;
-      authorizationMode?: "browser-redirect" | "local-loopback";
       error?: string;
-    };
-    if (
-      !response.ok ||
-      !body.state ||
-      (!body.authorizationUrl && body.authorizationMode !== "local-loopback")
-    ) {
+    } | null;
+    if (!response.ok || !body?.authorizationUrl) {
+      setError(body?.error ?? "无法开始长桥授权");
       setPending(false);
-      setError(body.error ?? "无法开始长桥授权");
       return;
     }
-    if (body.authorizationMode !== "local-loopback") {
-      window.location.assign(body.authorizationUrl!);
-      return;
-    }
-    if (body.authorizationUrl) {
-      window.open(
-        body.authorizationUrl,
-        "longbridge-oauth",
-        "popup,width=560,height=720",
-      );
-    }
-    const deadline = Date.now() + 10 * 60_000;
-    while (Date.now() < deadline) {
-      await new Promise((resolve) => window.setTimeout(resolve, 1_000));
-      const status = await fetch(
-        `/api/asset-sources/longbridge/oauth/status?state=${encodeURIComponent(body.state)}`,
-      );
-      const result = (await status.json().catch(() => null)) as
-        | { status?: string; previewId?: string; error?: string }
-        | null;
-      if (status.ok && result?.status === "authorized" && result.previewId) {
-        window.location.assign(
-          `/?longbridge_preview=${encodeURIComponent(result.previewId)}`,
-        );
-        return;
-      }
-      if (!status.ok || result?.error) {
-        setPending(false);
-        setError(result?.error ?? "长桥授权状态读取失败");
-        return;
-      }
-    }
-    setPending(false);
-    setError("等待长桥授权超时，请重新开始");
+    window.location.assign(body.authorizationUrl);
   }
 
-  async function start() {
-    if (providerId === "manual") {
-      await saveManualAsset();
-      return;
-    }
-    if (providerId === "evm") {
-      await startEvm();
-      return;
-    }
+  async function startSinglePreview() {
     if (!provider) return;
     setPending(true);
     setError("");
@@ -240,51 +241,30 @@ export function AssetSourceFlow() {
       await startOAuth();
       return;
     }
-    const response = await fetch(
-      `/api/asset-sources/${provider.route}/preview`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(assetSourceAuthorizationBody(provider, fields)),
-      },
-    );
+    const endpoint = previewUrl ?? `/api/asset-sources/${provider.route}/preview`;
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(sourceAuthorizationBody()),
+    });
     const body = (await response.json().catch(() => null)) as
       | (Preview & { error?: string })
       | null;
     setPending(false);
-    if (!response.ok || !body) {
+    if (!response.ok || body === null) {
       setError(body?.error ?? provider.validationError);
       return;
     }
     setFields(initialAssetSourceFields());
-    setChoosing(false);
     setPreviews([body]);
-    setPreviewMode("single");
+    setStep("preview");
   }
 
-  async function saveManualAsset() {
-    setPending(true);
-    setError("");
-    const response = await fetch("/api/asset-sources/manual", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        label: manualLabel,
-      }),
-    });
-    const body = (await response.json().catch(() => null)) as
-      | { error?: string }
-      | null;
-    if (!response.ok) {
-      setPending(false);
-      setError(body?.error ?? "手工资产记录保存失败");
-      return;
-    }
-    window.location.reload();
-  }
-
-  async function startEvm() {
-    if (evmChains.length === 0) {
+  async function startEvmPreview() {
+    const chains = isReauthorizing
+      ? [reauthorization.provider as EvmChain]
+      : evmChains;
+    if (chains.length === 0) {
       setError("请至少选择一条 EVM 链");
       return;
     }
@@ -295,8 +275,9 @@ export function AssetSourceFlow() {
       .map((value) => value.trim())
       .filter(Boolean);
     const results = await Promise.all(
-      evmChains.map(async (chain) => {
-        const response = await fetch("/api/asset-sources/evm/preview", {
+      chains.map(async (chain) => {
+        const endpoint = previewUrl ?? "/api/asset-sources/evm/preview";
+        const response = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ chain, addresses }),
@@ -317,7 +298,9 @@ export function AssetSourceFlow() {
           )
           .map(({ chain, body }) =>
             fetch(
-              `/api/asset-sources/evm/preview?id=${encodeURIComponent(body.id)}&provider=${chain}`,
+              previewUrl === null
+                ? `/api/asset-sources/evm/preview?id=${encodeURIComponent(body.id)}&provider=${chain}`
+                : `${previewUrl}?id=${encodeURIComponent(body.id)}`,
               { method: "DELETE" },
             ),
           ),
@@ -328,35 +311,65 @@ export function AssetSourceFlow() {
     }
     setPending(false);
     setFields(initialAssetSourceFields());
-    setChoosing(false);
     setPreviews(results.map(({ body }) => body!));
-    setPreviewMode("evm");
+    setStep("preview");
   }
 
-  async function confirm() {
-    if (previewMode === "evm") {
-      await confirmEvm();
+  async function start() {
+    if (providerId === "manual") {
+      setError("");
+      setStep("preview");
       return;
     }
-    if (!preview) return;
-    const description = assetSourceProvider(preview.provider);
+    if (isEvm) {
+      await startEvmPreview();
+      return;
+    }
+    await startSinglePreview();
+  }
+
+  async function confirmManualAsset() {
     setPending(true);
-    const response = await fetch(
-      `/api/asset-sources/${description.route}/confirm`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: preview.id, provider: preview.provider }),
-      },
-    );
-    const body = (await response.json()) as { error?: string };
+    setError("");
+    const response = await fetch("/api/asset-sources/manual", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label: manualLabel }),
+    });
+    const body = (await response.json().catch(() => null)) as
+      | { error?: string }
+      | null;
     if (!response.ok) {
       setPending(false);
-      setError(body.error ?? `保存 ${description.label} 来源失败`);
+      setError(body?.error ?? "手工资产记录保存失败");
       return;
     }
-    clearCallbackQuery();
-    window.location.reload();
+    router.push("/asset-sources");
+    router.refresh();
+  }
+
+  async function confirmSingle() {
+    if (!preview || !provider) return;
+    setPending(true);
+    setError("");
+    const endpoint = confirmUrl ?? `/api/asset-sources/${provider.route}/confirm`;
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: preview.id, provider: preview.provider }),
+    });
+    const body = (await response.json().catch(() => null)) as { error?: string } | null;
+    if (!response.ok) {
+      setPending(false);
+      setError(body?.error ?? `保存 ${provider.label} 来源失败`);
+      return;
+    }
+    router.push(
+      reauthorization === undefined
+        ? "/asset-sources"
+        : `/asset-sources/${encodeURIComponent(reauthorization.sourceId)}`,
+    );
+    router.refresh();
   }
 
   async function confirmEvm() {
@@ -364,8 +377,8 @@ export function AssetSourceFlow() {
     setError("");
     const remaining = [...previews];
     for (const current of previews) {
-      const description = assetSourceProvider(current.provider);
-      const response = await fetch("/api/asset-sources/evm/confirm", {
+      const endpoint = confirmUrl ?? "/api/asset-sources/evm/confirm";
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: current.id, provider: current.provider }),
@@ -374,34 +387,40 @@ export function AssetSourceFlow() {
       if (!response.ok) {
         setPending(false);
         setPreviews(remaining);
-        setError(
-          remaining.length === previews.length
-            ? body?.error ?? "保存 EVM 观察钱包失败"
-            : `已保存部分链；${description.label} 保存失败：${body?.error ?? "请重试"}`,
-        );
+        setError(body?.error ?? "保存 EVM 观察钱包失败");
         return;
       }
       remaining.shift();
     }
-    clearCallbackQuery();
-    window.location.reload();
+    router.push(
+      reauthorization === undefined
+        ? "/asset-sources"
+        : `/asset-sources/${encodeURIComponent(reauthorization.sourceId)}`,
+    );
+    router.refresh();
+  }
+
+  async function confirm() {
+    if (providerId === "manual") {
+      await confirmManualAsset();
+    } else if (isEvm) {
+      await confirmEvm();
+    } else {
+      await confirmSingle();
+    }
   }
 
   async function cancelPreview() {
     await Promise.all(
       previews.map((current) => {
         const description = assetSourceProvider(current.provider);
-        return fetch(
-          `/api/asset-sources/${description.route}/preview?id=${encodeURIComponent(current.id)}&provider=${current.provider}`,
-          { method: "DELETE" },
-        );
+        const endpoint = previewUrl === null
+          ? `/api/asset-sources/${description.route}/preview?id=${encodeURIComponent(current.id)}&provider=${current.provider}`
+          : `${previewUrl}?id=${encodeURIComponent(current.id)}`;
+        return fetch(endpoint, { method: "DELETE" });
       }),
     );
-    setPreviews([]);
-    setPreviewMode(null);
-    setEvmChains([...EVM_CHAINS]);
-    setChoosing(false);
-    clearCallbackQuery();
+    backToDirectory();
   }
 
   const ready =
@@ -411,216 +430,156 @@ export function AssetSourceFlow() {
         selectedProvider.fields.every(
           (field) => fields[field.id].trim().length > 0,
         ) &&
-        (providerId !== "evm" || evmChains.length > 0);
-  const previewDescription = preview
-    ? assetSourceProvider(preview.provider)
-    : null;
-  const startActionLabel = pending
-    ? providerId === "manual"
-      ? "正在保存…"
-      : providerId === "evm"
-        ? "正在验证公开地址…"
-        : provider?.authorization === "oauth"
-          ? "正在准备授权…"
-          : "正在验证只读凭证…"
+        (isReauthorizing || providerId !== "evm" || evmChains.length > 0);
+  const flowTitle = isReauthorizing
+    ? `重新授权 ${reauthorization.sourceLabel}`
+    : "新增资产来源";
+  const configurationTitle = providerId === "manual"
+    ? "填写来源名称"
+    : isEvm
+      ? "填写公开地址"
+      : "填写只读授权";
+  const startLabel = pending
+    ? "正在校验…"
     : providerId === "manual"
-      ? "添加资产来源"
-      : selectedProvider?.startLabel ?? "开始 OAuth 授权";
+      ? "查看确认"
+      : providerId === "evm"
+        ? EVM_WATCH_WALLET.startLabel
+        : provider?.startLabel ?? "验证只读授权";
 
   return (
-    <>
-      <VibeButton
-        type="button"
-        onClick={() => {
-          setError("");
-          setProviderId("");
-          setStep("choose");
-          setChoosing(true);
-        }}
-        variant="outline"
-      >
-        添加资产来源
-      </VibeButton>
-      {error && !choosing && previews.length === 0 ? (
-        <VibeNotice className="content-error" role="alert" tone="error">
+    <section className="asset-source-flow" aria-label={flowTitle}>
+      <header className="asset-source-flow__header">
+        <p className="card-label">
+          {isReauthorizing ? "SOURCE / REAUTHORIZE" : "SOURCE / ONBOARDING"}
+        </p>
+        <h1>{flowTitle}</h1>
+        <p>
+          {isReauthorizing
+            ? "请重新提供最小只读授权材料；已保存的凭证不会显示或回填。"
+            : "选择来源、填写最小只读授权、校验范围后再确认保存。"}
+        </p>
+      </header>
+
+      <ol aria-label="来源接入步骤" className="asset-source-flow__steps">
+        {!isReauthorizing ? (
+          <li data-current={step === "choose" ? "true" : undefined}>
+            {stepLabel("choose", step, "1 选择来源")}
+          </li>
+        ) : null}
+        <li data-current={step === "configure" ? "true" : undefined}>
+          {stepLabel("configure", step, isReauthorizing ? "1 重新填写材料" : "2 填写授权")}
+        </li>
+        <li data-current={step === "preview" ? "true" : undefined}>
+          {stepLabel("preview", step, isReauthorizing ? "2 校验与确认" : "3 校验与确认")}
+        </li>
+      </ol>
+
+      {error ? (
+        <VibeNotice className="asset-source-flow__notice" role="alert" tone="error">
           {error}
         </VibeNotice>
       ) : null}
-      {choosing ? (
-        <VibeDialog
-          actions={
-            <>
-              <VibeButton
-                type="button"
-                disabled={pending}
-                onClick={cancelChoosing}
-                variant="text"
+
+      {step === "choose" ? (
+        <section aria-labelledby="source-flow-choose-title" className="asset-source-flow__panel">
+          <h2 id="source-flow-choose-title">选择来源类型</h2>
+          <p>自动账户、观察钱包与手工资产记录都从同一工作区进入。</p>
+          <fieldset className="source-provider-list">
+            <legend className="sr-only">来源类型</legend>
+            {PROVIDER_OPTIONS.map((description) => (
+              <label
+                className="source-option vibe-choice"
+                data-vibe-component="choice"
+                key={description.id}
               >
-                取消
-              </VibeButton>
-              {step === "configure" ? (
-                <VibeButton
-                  type={providerId === "manual" ? "submit" : "button"}
-                  aria-busy={pending}
-                  className={pending ? "source-dialog-action--pending" : undefined}
-                  disabled={pending || !ready}
-                  onClick={
-                    providerId === "manual" ? undefined : () => void start()
-                  }
-                  variant="primary"
-                >
-                  {pending ? (
-                    <span
-                      aria-hidden="true"
-                      className="source-dialog-pending-indicator"
-                    />
-                  ) : null}
-                  {startActionLabel}
-                </VibeButton>
-              ) : null}
-            </>
-          }
-          aria-label="添加资产来源"
-          className="source-dialog"
-          description={
-            step === "choose"
-              ? "选择可连接的账户、观察钱包，或手工记录的资产总额。"
-              : providerId === "manual"
-                ? "先创建独立资产来源；之后在对应卡片内添加或编辑每日总额。"
-                : "连接成功前不会保存凭证或来源。"
-          }
-          eyebrow={
-            providerId === "manual"
-              ? "MANUAL ASSET / DAILY TOTAL"
-              : "ASSET SOURCE / READ ONLY"
-          }
-          onClose={cancelChoosing}
-          onSubmit={
-            providerId === "manual"
-              ? (event) => {
-                  event.preventDefault();
-                  void saveManualAsset();
-                }
-              : undefined
-          }
-          title={
-            step === "choose"
-              ? "选择来源类型"
-              : providerId === "manual"
-                ? "创建手工资产来源"
-                : selectedProvider?.label ?? "配置来源"
-          }
-          titleId="asset-source-dialog-title"
-        >
-          {step === "configure" ? (
-            <VibeButton
-              type="button"
-              className="source-dialog-back"
+                <input
+                  type="radio"
+                  name="asset-provider"
+                  value={description.id}
+                  checked={providerId === description.id}
+                  onChange={() => chooseProvider(description.id)}
+                />
+                <span>{description.label}</span>
+              </label>
+            ))}
+          </fieldset>
+          <VibeButton onClick={backToDirectory} type="button" variant="text">
+            取消并返回资产来源
+          </VibeButton>
+        </section>
+      ) : null}
+
+      {step === "configure" && selectedProvider !== null ? (
+        <section aria-labelledby="source-flow-configure-title" className="asset-source-flow__panel">
+          <h2 id="source-flow-configure-title">{configurationTitle}</h2>
+          <p>
+            {providerId === "manual"
+              ? "手工资产来源无凭证；创建后再在详情中维护按上海自然日保存的总额。"
+              : isReauthorizing && isEvm
+                ? "只能提供与当前来源身份相同的公开地址；不会接收任何私钥或签名材料。"
+                : "交易、划转、提现、未知或不完整权限都会被拒绝，失败时不会保存来源或凭证。"}
+          </p>
+          {providerId === "manual" ? (
+            <VibeField
+              autoComplete="off"
+              autoFocus
               disabled={pending}
-              onClick={() => {
-                setError("");
-                setStep("choose");
-              }}
-              variant="text"
-            >
-              返回来源列表
-            </VibeButton>
-          ) : null}
-          {error ? (
-            <VibeNotice className="login-error" role="alert" tone="error">
-              {error}
-            </VibeNotice>
-          ) : null}
-          {step === "choose" ? (
-            <div className="source-provider-list">
-              {PROVIDER_OPTIONS.map((description) => (
-                <label
-                  className="source-option vibe-choice"
-                  data-vibe-component="choice"
-                  key={description.id}
-                >
-                  <input
-                    type="radio"
-                    name="asset-provider"
-                    value={description.id}
-                    checked={providerId === description.id}
-                    onClick={() => {
-                      if (providerId === description.id) chooseProvider(description.id);
-                    }}
-                    onChange={(event) =>
-                      chooseProvider(event.target.value as ProviderSelectionId)
-                    }
-                  />
-                  <span>{description.label}</span>
-                </label>
-              ))}
-            </div>
-          ) : null}
-          {step === "configure" && providerId === "manual" ? (
+              fieldId="manual-asset-label"
+              label="资产名称"
+              maxLength={40}
+              onChange={(event) => setManualLabel(event.currentTarget.value)}
+              placeholder="例如：A股"
+              value={manualLabel}
+            />
+          ) : (
             <div className="source-credential-fields">
-              <VibeField
-                autoComplete="off"
-                autoFocus
-                disabled={pending}
-                fieldId="manual-asset-label"
-                label="资产名称"
-                maxLength={40}
-                onChange={(event) => setManualLabel(event.currentTarget.value)}
-                placeholder="例如：A股"
-                value={manualLabel}
-              />
-            </div>
-          ) : step === "configure" && selectedProvider?.fields.length ? (
-            <div className="source-credential-fields">
-              {providerId === "evm" &&
+              {isEvm &&
               evmServiceStatus !== null &&
               (!evmServiceStatus.coinGecko.configured ||
                 !evmServiceStatus.ethereumRpc.configured ||
                 !evmServiceStatus.bscRpc.configured) ? (
-                <VibeNotice
-                  className="source-evm-service-notice"
-                  role="status"
-                  tone="info"
-                >
+                <VibeNotice role="status" tone="info">
                   EVM 钱包依赖全局 CoinGecko、Ethereum RPC 与 BSC RPC 配置。
-                  <VibeLink href="/settings" variant="text">
-                    前往本机设置
-                  </VibeLink>
+                  <VibeLink href="/settings" variant="text">前往本机设置</VibeLink>
                 </VibeNotice>
               ) : null}
               {selectedProvider.fields.map((field) =>
                 field.control === "select" ? (
                   <VibeSelectField
+                    disabled={pending}
                     fieldId={`asset-source-${field.id}`}
                     key={field.id}
                     label={field.label}
+                    onValueChange={(value) => updateField(field.id, value)}
                     options={field.options ?? []}
                     value={fields[field.id]}
-                    onValueChange={(value) => updateField(field.id, value)}
                   />
                 ) : field.control === "textarea" ? (
                   <VibeTextAreaField
                     autoComplete="off"
+                    disabled={pending}
                     fieldId={`asset-source-${field.id}`}
                     key={field.id}
                     label={field.label}
+                    onChange={(event) => updateField(field.id, event.target.value)}
                     rows={4}
                     value={fields[field.id]}
-                    onChange={(event) => updateField(field.id, event.target.value)}
                   />
                 ) : (
                   <VibeField
                     autoComplete={field.control === "password" ? "new-password" : "off"}
+                    disabled={pending}
                     fieldId={`asset-source-${field.id}`}
                     key={field.id}
                     label={field.label}
+                    onChange={(event) => updateField(field.id, event.target.value)}
                     type={field.control}
                     value={fields[field.id]}
-                    onChange={(event) => updateField(field.id, event.target.value)}
                   />
                 ),
               )}
-              {providerId === "evm" ? (
+              {providerId === "evm" && !isReauthorizing ? (
                 <fieldset className="source-evm-chains">
                   <legend className="vibe-field__label">同步链</legend>
                   {EVM_CHAINS.map((chain) => {
@@ -645,103 +604,101 @@ export function AssetSourceFlow() {
                 </fieldset>
               ) : null}
               {selectedProvider.fieldHelp ? (
-                <p className="vibe-dialog__copy source-field-help">
-                  {selectedProvider.fieldHelp}
-                </p>
+                <p className="source-field-help">{selectedProvider.fieldHelp}</p>
               ) : null}
             </div>
-          ) : null}
-        </VibeDialog>
+          )}
+          <div className="asset-source-flow__actions">
+            {!isReauthorizing ? (
+              <VibeButton disabled={pending} onClick={backToChoice} type="button" variant="text">
+                返回选择来源
+              </VibeButton>
+            ) : (
+              <VibeButton disabled={pending} onClick={backToDirectory} type="button" variant="text">
+                取消并返回资产来源
+              </VibeButton>
+            )}
+            <VibeButton
+              aria-busy={pending}
+              disabled={pending || !ready}
+              onClick={() => void start()}
+              type="button"
+              variant="primary"
+            >
+              {startLabel}
+            </VibeButton>
+          </div>
+        </section>
       ) : null}
-      {preview && previewDescription ? (
-        <VibeDialog
-          actions={
+
+      {step === "preview" ? (
+        <section aria-labelledby="source-flow-preview-title" className="asset-source-flow__panel">
+          <h2 id="source-flow-preview-title">
+            {providerId === "manual" ? "确认创建手工资产来源" : "校验与范围预览"}
+          </h2>
+          {providerId === "manual" ? (
             <>
-              <VibeButton
-                type="button"
-                disabled={pending}
-                onClick={() => void cancelPreview()}
-                variant="text"
-              >
-                取消
-              </VibeButton>
-              <VibeButton
-                type="button"
-                aria-busy={pending}
-                className={pending ? "source-dialog-action--pending" : undefined}
-                disabled={pending}
-                onClick={() => void confirm()}
-                variant="primary"
-              >
-                {pending ? (
-                  <span
-                    aria-hidden="true"
-                    className="source-dialog-pending-indicator"
-                  />
-                ) : null}
-                {pending ? "正在保存…" : "确认并保存"}
-              </VibeButton>
+              <p>“{manualLabel}”会创建为独立的无凭证来源。</p>
+              <dl className="source-preview-list vibe-preview-list">
+                <div className="vibe-data-row">
+                  <dt>来源能力</dt>
+                  <dd>无凭证来源</dd>
+                </div>
+                <div className="vibe-data-row">
+                  <dt>数据边界</dt>
+                  <dd>不创建持仓或同步能力</dd>
+                </div>
+              </dl>
             </>
-          }
-          aria-label={
-            previewMode === "evm"
-              ? "确认 EVM 观察钱包"
-              : previewDescription.dialogLabel
-          }
-          description={
-            previewMode === "evm"
-              ? "确认后会分别保存所选链的公开地址配置。"
-              : `确认后才会把${previewDescription.savedMaterial}写入服务端存储。`
-          }
-          eyebrow={
-            previewMode === "evm"
-              ? "EVM 观察钱包公开地址预览"
-              : previewDescription.previewTitle
-          }
-          onClose={() => void cancelPreview()}
-          title={
-            previewMode === "evm"
-              ? `EVM 观察钱包 · ${previews.length} 条链`
-              : preview.account.label
-          }
-          titleId="asset-source-preview-title"
-        >
-          <dl className="source-preview-list vibe-preview-list">
-            {previewMode === "evm"
-              ? previews.map((current) => {
+          ) : (
+            <>
+              <p>已完成只读校验；确认前不会把授权材料写入持久化存储。</p>
+              <dl className="source-preview-list vibe-preview-list">
+                {previews.map((current) => {
                   const description = assetSourceProvider(current.provider);
                   return (
-                    <div className="vibe-data-row" key={current.provider}>
+                    <div className="vibe-data-row" key={current.id}>
                       <dt>{description.label}</dt>
                       <dd>
-                        {description.previewScope()} ·{" "}
-                        {formatAmount(current.total.amount, true)} {current.total.currency}
+                        {description.previewScope(current.accountMode)} ·{" "}
+                        {formatAmount(
+                          current.total.amount,
+                          current.provider !== "longbridge",
+                        )} {current.total.currency}
                       </dd>
                     </div>
                   );
-                })
-              : (
-                <>
-                  <div className="vibe-data-row">
-                    <dt>可读取范围</dt>
-                    <dd>{previewDescription.previewScope(preview.accountMode)}</dd>
-                  </div>
-                  <div className="vibe-data-row">
-                    <dt>账户总额</dt>
-                    <dd>
-                      {formatAmount(preview.total.amount, preview.provider !== "longbridge")} {preview.total.currency}
-                    </dd>
-                  </div>
-                </>
-              )}
-          </dl>
-          {error ? (
-            <VibeNotice className="login-error" role="alert" tone="error">
-              {error}
-            </VibeNotice>
-          ) : null}
-        </VibeDialog>
+                })}
+              </dl>
+            </>
+          )}
+          <div className="asset-source-flow__actions">
+            <VibeButton
+              disabled={pending}
+              onClick={() => void cancelPreview()}
+              type="button"
+              variant="text"
+            >
+              取消
+            </VibeButton>
+            <VibeButton
+              aria-busy={pending}
+              disabled={pending}
+              onClick={() => void confirm()}
+              type="button"
+              variant="primary"
+            >
+              {pending
+                ? "正在保存…"
+                : providerId === "manual"
+                  ? "确认创建来源"
+                  : isReauthorizing
+                    ? "确认更新授权"
+                    : "确认并保存"}
+            </VibeButton>
+          </div>
+        </section>
       ) : null}
-    </>
+    </section>
   );
 }
