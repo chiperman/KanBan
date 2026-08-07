@@ -69,6 +69,16 @@ async function state(page: Page) {
   };
 }
 
+async function disconnectBinance(page: Page) {
+  await page.getByRole("button", { name: "管理 Binance 资产" }).click();
+  const management = page.getByRole("dialog", { name: "管理 Binance 资产" });
+  await management.getByRole("button", { name: "断开来源" }).click();
+  await page
+    .getByRole("dialog", { name: "确认断开 Binance 资产" })
+    .getByRole("button", { name: "确认断开" })
+    .click();
+}
+
 test.beforeEach(async ({ request }) => {
   await request.post("/test-doubles/reset");
 });
@@ -130,6 +140,53 @@ test("Binance 只读凭证先预览后原子保存，并展示现货、资金与
 
   expect(await state(page)).toEqual({ savedSources: 1, savedSecrets: 1 });
   expect(responseBodies.join("\n")).not.toContain(API_SECRET);
+});
+
+test("重新验证同一 Binance 账户时替换凭证并保留原卡片", async ({
+  page,
+}) => {
+  await configure(page);
+  await loginAsOwner(page);
+  await startBinanceFlow(page);
+  await page
+    .getByRole("dialog", { name: "确认 Binance 资产来源" })
+    .getByRole("button", { name: "确认并保存" })
+    .click();
+
+  const originalCard = page.getByTestId("binance-card");
+  await expect(originalCard).toHaveCount(1);
+
+  await startBinanceFlow(page);
+  await page
+    .getByRole("dialog", { name: "确认 Binance 资产来源" })
+    .getByRole("button", { name: "确认并保存" })
+    .click();
+
+  await expect(page.getByTestId("binance-card")).toHaveCount(1);
+  expect(await state(page)).toEqual({ savedSources: 1, savedSecrets: 1 });
+});
+
+test("已断开的 Binance 可直接恢复原卡片，不新增来源或删除凭证", async ({
+  page,
+}) => {
+  await configure(page);
+  await loginAsOwner(page);
+  await startBinanceFlow(page);
+  await page
+    .getByRole("dialog", { name: "确认 Binance 资产来源" })
+    .getByRole("button", { name: "确认并保存" })
+    .click();
+
+  await disconnectBinance(page);
+  expect(await state(page)).toEqual({ savedSources: 1, savedSecrets: 1 });
+  await page.getByRole("button", { name: "管理 Binance 资产" }).click();
+  const management = page.getByRole("dialog", { name: "管理 Binance 资产" });
+  await management.getByRole("button", { name: "恢复连接" }).click();
+
+  await expect(page.getByTestId("binance-card")).toHaveCount(1);
+  await expect(page.getByLabel("Binance API Key")).toHaveCount(0);
+  await expect(page.getByLabel("Binance API Secret")).toHaveCount(0);
+  expect(await state(page)).toEqual({ savedSources: 1, savedSecrets: 1 });
 });
 
 test("全局持仓搜索筛选 Binance 明细", async ({ page }) => {

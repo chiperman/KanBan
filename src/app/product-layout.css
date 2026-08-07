@@ -3375,6 +3375,29 @@ body {
   letter-spacing: 0.08em;
 }
 
+.source-management-reauthorization {
+  display: grid;
+  gap: var(--vibe-space-4);
+  margin-top: var(--vibe-space-4);
+}
+
+.source-management-reauthorization > .vibe-button {
+  justify-self: start;
+}
+
+.source-management-actions {
+  display: grid;
+  justify-items: start;
+  gap: var(--vibe-space-2);
+  margin-top: var(--vibe-space-5);
+  padding-top: var(--vibe-space-4);
+  border-top: 1px solid var(--line);
+}
+
+.source-management-delete-action.vibe-button {
+  color: var(--accent-text);
+}
+
 .page-settings {
   min-height: 100dvh;
 }

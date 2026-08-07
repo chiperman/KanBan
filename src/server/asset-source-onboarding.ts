@@ -42,7 +42,10 @@ export interface AssetSourceProviderAdapter<Input = unknown> {
     authorization: AssetSourceAuthorization,
     observedAt: string,
   ): Promise<AssetSourceAuthorization>;
-  connect(authorization: AssetSourceAuthorization): Promise<void>;
+  connect(
+    authorization: AssetSourceAuthorization,
+    reconnectSourceId?: string,
+  ): Promise<void>;
 }
 
 interface SealedCredentials {
@@ -156,6 +159,35 @@ export class AssetSourceOnboarding {
       this.claimed.delete(id);
       throw error;
     }
+  }
+
+  async reauthorize<Input>(
+    provider: AssetSourceProvider,
+    input: Input,
+    sourceId: string,
+    observedAt: string,
+    expectedAccountId?: string,
+  ): Promise<void> {
+    const adapter = this.adapter(provider) as AssetSourceProviderAdapter<Input>;
+    const original = await adapter.authorize(input, observedAt);
+    if (original.provider !== provider) {
+      throw new Error(`资产来源 adapter 返回了错误的平台：${provider}`);
+    }
+    if (
+      expectedAccountId !== undefined &&
+      original.account.id !== expectedAccountId
+    ) {
+      throw new Error(
+        "输入的公开地址与此来源不一致；请新建资产来源。",
+      );
+    }
+    const revalidated = await adapter.revalidate(original, observedAt);
+    this.assertStable(
+      original,
+      revalidated,
+      adapter.scopeChangedMessage,
+    );
+    await adapter.connect(revalidated, sourceId);
   }
 
   private adapter(provider: AssetSourceProvider): AssetSourceProviderAdapter {

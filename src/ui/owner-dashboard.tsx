@@ -44,9 +44,12 @@ import {
 } from "@/ui/total-asset-overview";
 import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
 import { VibeDialog } from "@/ui/vibe/vibe-dialog";
-import { VibeField, VibeSelectField } from "@/ui/vibe/vibe-field";
+import {
+  VibeField,
+  VibeSelectField,
+  VibeTextAreaField,
+} from "@/ui/vibe/vibe-field";
 import { VibeDateField } from "@/ui/vibe/vibe-date-field";
-import { VibeMenu } from "@/ui/vibe/vibe-menu";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
 
 function cardName(card: Card): string {
@@ -379,6 +382,8 @@ export function OwnerDashboard({
     source: AssetSourceView;
     stage: 1 | 2;
   } | null>(null);
+  const [disconnectTarget, setDisconnectTarget] =
+    useState<AssetSourceView | null>(null);
   const [managementTarget, setManagementTarget] =
     useState<AssetSourceView | null>(null);
   const [displayNameDraft, setDisplayNameDraft] = useState("");
@@ -386,6 +391,10 @@ export function OwnerDashboard({
     ManualAssetClass | ""
   >("");
   const [displayNamePending, setDisplayNamePending] = useState(false);
+  const [evmReauthorizationDraft, setEvmReauthorizationDraft] = useState("");
+  const [evmReauthorizationMode, setEvmReauthorizationMode] = useState(false);
+  const [evmReauthorizationPending, setEvmReauthorizationPending] =
+    useState(false);
   const [manualAmountDraft, setManualAmountDraft] = useState("");
   const [manualCurrencyDraft, setManualCurrencyDraft] = useState<
     "USD" | "CNY" | "HKD"
@@ -709,6 +718,9 @@ export function OwnerDashboard({
     setDisplayNameDraft("");
     setManualAssetClassDraft("");
     setDisplayNamePending(false);
+    setEvmReauthorizationDraft("");
+    setEvmReauthorizationMode(false);
+    setEvmReauthorizationPending(false);
   }
 
   function closeManualAssetRecord() {
@@ -786,16 +798,77 @@ export function OwnerDashboard({
     }
   }
 
-  async function disconnectSource(source: AssetSourceView) {
-    if (!window.confirm(`断开“${sourceName(source)}”将删除只读凭证并停止同步，但保留已有数据和历史快照。确认断开吗？`)) return;
+  function requestSourceDisconnect(source: AssetSourceView) {
+    setError("");
+    setDisconnectTarget(source);
+    closeSourceManagement();
+  }
+
+  async function disconnectSource() {
+    if (!disconnectTarget) return;
+    setLifecyclePending(true);
     setError("");
     try {
-      await cardRequest(`/api/asset-sources/${encodeURIComponent(source.id)}`, "PATCH", {
-        action: "disconnect",
-      });
+      await cardRequest(
+        `/api/asset-sources/${encodeURIComponent(disconnectTarget.id)}`,
+        "PATCH",
+        { action: "disconnect" },
+      );
       window.location.reload();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "断开失败，请重试");
+      setLifecyclePending(false);
+    }
+  }
+
+  async function restoreSource(source: AssetSourceView) {
+    setLifecyclePending(true);
+    setError("");
+    try {
+      await cardRequest(
+        `/api/asset-sources/${encodeURIComponent(source.id)}`,
+        "PATCH",
+        { action: "restore" },
+      );
+      await cardRequest("/api/asset-sources/refresh", "POST", {
+        mode: "holdings",
+        sourceId: source.id,
+      });
+      window.location.reload();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "恢复连接失败，请重试");
+      if (source.kind.startsWith("evm-watch-")) {
+        setEvmReauthorizationMode(true);
+      }
+      setLifecyclePending(false);
+    }
+  }
+
+  async function reauthorizeEvmSource(source: AssetSourceView) {
+    const addresses = evmReauthorizationDraft
+      .split(/\r?\n/)
+      .map((address) => address.trim())
+      .filter(Boolean);
+    if (addresses.length === 0) {
+      setError("请输入至少一个 EVM 公开地址");
+      return;
+    }
+    setEvmReauthorizationPending(true);
+    setError("");
+    try {
+      await cardRequest(
+        `/api/asset-sources/${encodeURIComponent(source.id)}`,
+        "PATCH",
+        { action: "reauthorize-evm", addresses },
+      );
+      window.location.reload();
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "公开地址验证失败，请检查后重试",
+      );
+      setEvmReauthorizationPending(false);
     }
   }
 
@@ -1299,35 +1372,13 @@ export function OwnerDashboard({
           aria-label={`管理 ${sourceName(managementTarget)}`}
           className="source-management-dialog"
           description={
-            managementTarget.kind === "manual"
+            evmReauthorizationMode
+              ? "请输入原公开地址以恢复此来源；原卡片和历史数据会保留。"
+              : managementTarget.kind === "manual"
               ? "仅修改本看板中的显示名称与资产类别。名称清空后恢复默认名称。"
               : "仅修改本看板中的显示名称。清空后恢复默认名称。"
           }
           eyebrow="SOURCE / CONTROL"
-          headerActions={
-            <VibeMenu
-              items={[
-                ...(managementTarget.kind !== "manual" &&
-                managementTarget.lifecycle !== "disconnected"
-                  ? [{
-                      key: "disconnect",
-                      label: "断开来源",
-                      onSelect: () => void disconnectSource(managementTarget),
-                    }]
-                  : []),
-                {
-                  key: "delete",
-                  label: "永久删除数据",
-                  tone: "danger" as const,
-                  onSelect: () => {
-                    setDeleteTarget({ source: managementTarget, stage: 1 });
-                    closeSourceManagement();
-                  },
-                },
-              ]}
-              label="更多来源操作"
-            />
-          }
           onClose={closeSourceManagement}
           onSubmit={(event) => {
             event.preventDefault();
@@ -1336,6 +1387,11 @@ export function OwnerDashboard({
           title={sourceName(managementTarget)}
           titleId="source-management-title"
         >
+          {error ? (
+            <VibeNotice className="login-error" role="alert" tone="error">
+              {error}
+            </VibeNotice>
+          ) : null}
           <VibeField
             autoComplete="off"
             autoFocus
@@ -1365,6 +1421,34 @@ export function OwnerDashboard({
               value={manualAssetClassDraft}
             />
           ) : null}
+          {evmReauthorizationMode &&
+          managementTarget.kind.startsWith("evm-watch-") ? (
+            <div className="source-management-reauthorization">
+              <VibeTextAreaField
+                autoComplete="off"
+                autoFocus
+                disabled={evmReauthorizationPending}
+                fieldId="asset-source-reauthorize-evm-addresses"
+                label="EVM 公开地址（每行一个）"
+                onChange={(event) =>
+                  setEvmReauthorizationDraft(event.currentTarget.value)
+                }
+                rows={3}
+                value={evmReauthorizationDraft}
+              />
+              <VibeButton
+                disabled={
+                  evmReauthorizationPending ||
+                  evmReauthorizationDraft.trim() === ""
+                }
+                onClick={() => void reauthorizeEvmSource(managementTarget)}
+                type="button"
+                variant="outline"
+              >
+                {evmReauthorizationPending ? "正在验证…" : "验证并恢复"}
+              </VibeButton>
+            </div>
+          ) : null}
           {managementTarget.kind.startsWith("evm-watch-") ? (
             <VibeLink
               className="source-management-scope-link"
@@ -1373,6 +1457,41 @@ export function OwnerDashboard({
             >
               管理资产范围
             </VibeLink>
+          ) : null}
+          {managementTarget.kind !== "manual" ? (
+            <div className="source-management-actions">
+              {managementTarget.lifecycle === "disconnected" ? (
+                <VibeButton
+                  disabled={lifecyclePending}
+                  onClick={() => void restoreSource(managementTarget)}
+                  type="button"
+                  variant="outline"
+                >
+                  {lifecyclePending ? "正在恢复…" : "恢复连接"}
+                </VibeButton>
+              ) : null}
+              {managementTarget.lifecycle !== "disconnected" ? (
+                <VibeButton
+                  disabled={lifecyclePending}
+                  onClick={() => requestSourceDisconnect(managementTarget)}
+                  type="button"
+                  variant="text"
+                >
+                  断开来源
+                </VibeButton>
+              ) : null}
+              <VibeButton
+                className="source-management-delete-action"
+                onClick={() => {
+                  setDeleteTarget({ source: managementTarget, stage: 1 });
+                  closeSourceManagement();
+                }}
+                type="button"
+                variant="text"
+              >
+                永久删除数据
+              </VibeButton>
+            </div>
           ) : null}
         </VibeDialog>
       ) : null}
@@ -1456,6 +1575,44 @@ export function OwnerDashboard({
           title="删除历史数据"
           titleId="manual-asset-delete-title"
         />
+      ) : null}
+      {disconnectTarget ? (
+        <VibeDialog
+          actions={
+            <>
+              <VibeButton
+                type="button"
+                disabled={lifecyclePending}
+                onClick={() => setDisconnectTarget(null)}
+                variant="text"
+              >
+                取消
+              </VibeButton>
+              <VibeButton
+                type="button"
+                disabled={lifecyclePending}
+                onClick={() => void disconnectSource()}
+                variant="primary"
+              >
+                {lifecyclePending ? "正在断开…" : "确认断开"}
+              </VibeButton>
+            </>
+          }
+          aria-label={`确认断开 ${sourceName(disconnectTarget)}`}
+          description="断开后将停止同步，保留加密连接凭证、已有数据和历史快照；之后可直接恢复连接。"
+          eyebrow="SOURCE / DISCONNECT"
+          onClose={() => {
+            if (!lifecyclePending) setDisconnectTarget(null);
+          }}
+          title={sourceName(disconnectTarget)}
+          titleId="source-disconnect-title"
+        >
+          {error ? (
+            <VibeNotice className="login-error" role="alert" tone="error">
+              {error}
+            </VibeNotice>
+          ) : null}
+        </VibeDialog>
       ) : null}
       {deleteTarget ? (
         <VibeDialog

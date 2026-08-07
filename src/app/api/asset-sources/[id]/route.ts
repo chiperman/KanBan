@@ -40,6 +40,7 @@ export async function PATCH(
     currency?: unknown;
     day?: unknown;
     manualAssetClass?: unknown;
+    addresses?: unknown;
   } | null;
 
   try {
@@ -98,6 +99,39 @@ export async function PATCH(
         );
       }
       await context.services.assetSourceLifecycle.disconnect(id);
+    } else if (body?.action === "restore") {
+      if (context.source.kind === "manual") {
+        return Response.json(
+          { error: "手工资产记录不支持恢复连接" },
+          { status: 400 },
+        );
+      }
+      await context.services.assetSourceLifecycle.restore(id);
+    } else if (body?.action === "reauthorize-evm") {
+      const provider = context.source.kind === "evm-watch-ethereum"
+        ? "ethereum"
+        : context.source.kind === "evm-watch-bsc"
+          ? "bsc"
+          : null;
+      if (!provider) {
+        return Response.json(
+          { error: "只有 EVM 观察钱包可以重新输入公开地址" },
+          { status: 400 },
+        );
+      }
+      if (
+        !Array.isArray(body.addresses) ||
+        !body.addresses.every((address) => typeof address === "string")
+      ) {
+        return Response.json({ error: "EVM 公开地址格式无效" }, { status: 400 });
+      }
+      await context.services.assetSourceOnboarding.reauthorize(
+        provider,
+        { provider, addresses: body.addresses },
+        id,
+        context.services.clock.now().toISOString(),
+        context.source.accountId,
+      );
     } else {
       return Response.json({ error: "来源操作无效" }, { status: 400 });
     }

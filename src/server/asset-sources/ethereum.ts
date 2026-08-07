@@ -98,7 +98,7 @@ function normalizeAddresses(values: string[]): string[] {
   if (new Set(normalized).size !== normalized.length) {
     throw new Error("EVM 公开地址不能重复");
   }
-  return normalized;
+  return normalized.sort();
 }
 
 function units(hex: unknown, decimals: number, field: string): string {

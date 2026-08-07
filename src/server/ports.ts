@@ -566,6 +566,10 @@ export interface AssetSourceConnections {
   connectBitget(result: BitgetAuthorizationResult): Promise<void>;
   connectBit(result: BitAuthorizationResult): Promise<void>;
   connectEvm(result: EvmWatchAuthorizationResult): Promise<void>;
+  reconnectEvm(
+    sourceId: string,
+    result: EvmWatchAuthorizationResult,
+  ): Promise<void>;
 }
 
 export interface ManualAssetRecordInput {
@@ -616,6 +620,7 @@ export interface AssetSourceLifecycle {
     status: "included" | "ignored" | "unrecognized",
   ): Promise<void>;
   disconnect(sourceId: string): Promise<void>;
+  restore(sourceId: string): Promise<void>;
   deleteData(sourceId: string): Promise<void>;
 }
 

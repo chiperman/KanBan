@@ -249,11 +249,16 @@ export function createAssetSourceProviderAdapters({
             })),
           };
         },
-        async connect(authorization) {
-          await connections.connectEvm({
+        async connect(authorization, reconnectSourceId) {
+          const result = {
             ...authorization,
             chain: provider,
-          });
+          };
+          if (reconnectSourceId) {
+            await connections.reconnectEvm(reconnectSourceId, result);
+            return;
+          }
+          await connections.connectEvm(result);
         },
       }),
     ),

@@ -22,6 +22,16 @@ export async function POST(request: Request) {
     services.assetSynchronization.reset("evm-unknown-valued");
     return Response.json({ ok: true });
   }
+  if (body.scenario === "forget-credential") {
+    const source = (await services.assetSources.list()).find(({ kind }) =>
+      kind.startsWith("evm-watch-"),
+    );
+    if (!source?.credentialReference) {
+      return Response.json({ error: "缺少 EVM 测试凭证" }, { status: 400 });
+    }
+    await services.secrets.remove(source.credentialReference);
+    return Response.json({ ok: true });
+  }
   services.evm.configure(body.scenario ?? "valid");
   services.assetSourceConnections.failNext(body.commitError);
   if ((await services.assetCards.list()).length === 0) {

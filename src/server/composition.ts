@@ -87,7 +87,8 @@ function hasCurrentServices(
     services !== null &&
     services.externalServices !== undefined &&
     typeof services.assetSourceLifecycle.setEvmTokenPreference === "function" &&
-    typeof services.manualAssetRecords.record === "function"
+    typeof services.manualAssetRecords.record === "function" &&
+    typeof services.assetSourceOnboarding?.reauthorize === "function"
   );
 }
 
