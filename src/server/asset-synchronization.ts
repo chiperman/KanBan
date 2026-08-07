@@ -150,9 +150,13 @@ export class SourceIsolatedAssetSynchronization
       (source) => source.lifecycle !== "disconnected",
     );
     if (connectedSources.length > 0) {
+      const dailySnapshot = buildDailyAssetSnapshot(
+        connectedSources,
+        attemptedAt,
+      );
       await this.dailySnapshots.record(
-        buildDailyAssetSnapshot(connectedSources, attemptedAt),
-        successCount > 0,
+        dailySnapshot,
+        successCount === sources.length,
       );
     }
     return {

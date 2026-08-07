@@ -153,7 +153,17 @@ export class InMemoryDailyAssetSnapshots implements DailyAssetSnapshots {
   }
 
   async record(snapshot: DailyAssetSnapshot, createBaseline: boolean): Promise<void> {
-    if (createBaseline) await this.createIfAbsent(snapshot);
+    const baselineIndex = this.snapshots.findIndex(
+      ({ day }) => day === snapshot.day,
+    );
+    if (createBaseline && baselineIndex === -1) {
+      await this.createIfAbsent(snapshot);
+    } else if (
+      createBaseline &&
+      this.snapshots[baselineIndex].status === "expired"
+    ) {
+      this.snapshots[baselineIndex] = structuredClone(snapshot);
+    }
     const index = this.trendObservations.findIndex(({ day }) => day === snapshot.day);
     if (index === -1) return;
     this.trendObservations[index] = mergeDailyTrendObservation(

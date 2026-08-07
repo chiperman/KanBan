@@ -138,6 +138,59 @@ export async function POST(request: Request) {
       await rm(root, { recursive: true, force: true });
     }
   }
+  if (body?.action === "production-incomplete-baseline-repair") {
+    const root = await mkdtemp(path.join(tmpdir(), "pad-daily-snapshot-"));
+    try {
+      const dashboardPath = path.join(root, "dashboard.json");
+      const legacyCardsPath = path.join(root, "cards.json");
+      const database = new FileDashboardDatabase(dashboardPath, legacyCardsPath);
+      const snapshot = buildDailyAssetSnapshot(
+        await services.assetSources.list(),
+        services.clock.now().toISOString(),
+      );
+      await database.createDailyAssetSnapshotIfAbsent({
+        ...snapshot,
+        complete: false,
+        status: "expired",
+        sources: snapshot.sources.map((source, index) =>
+          index === 0
+            ? source
+            : { ...source, complete: false, status: "expired" },
+        ),
+      });
+      const repairedAt = new Date(
+        new Date(snapshot.capturedAt).getTime() + 60_000,
+      ).toISOString();
+      await database.recordDailyAssetObservation(
+        {
+          ...snapshot,
+          capturedAt: repairedAt,
+          total: { ...snapshot.total, USD: "303" },
+          sources: snapshot.sources.map((source, index) => ({
+            ...source,
+            capturedAt: repairedAt,
+            total: {
+              ...source.total,
+              USD: index === 0 ? "101" : "202",
+            },
+          })),
+        },
+        true,
+      );
+      const reloaded = new FileDashboardDatabase(dashboardPath, legacyCardsPath);
+      const [baseline] = await reloaded.listDailyAssetSnapshots();
+      return Response.json({
+        count: (await reloaded.listDailyAssetSnapshots()).length,
+        capturedAt: baseline?.capturedAt,
+        complete: baseline?.complete,
+        status: baseline?.status,
+        totalUsd: baseline?.total.USD,
+        sourceCount: baseline?.sources.length,
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
   if (body?.action === "connect-before-failed-refresh") {
     services.clock.set(INITIAL_AT);
     services.assetSynchronization.reset("all-failure");

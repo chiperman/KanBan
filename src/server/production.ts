@@ -868,10 +868,17 @@ export class FileDashboardDatabase {
     createBaseline: boolean,
   ): Promise<void> {
     await this.mutate((state) => {
-      const baseline = state.dailyAssetSnapshots.find(({ day }) => day === snapshot.day);
-      if (baseline === undefined && createBaseline) {
+      const baselineIndex = state.dailyAssetSnapshots.findIndex(
+        ({ day }) => day === snapshot.day,
+      );
+      if (baselineIndex === -1 && createBaseline) {
         state.dailyAssetSnapshots.push(structuredClone(snapshot));
         state.dailyAssetSnapshots.sort((left, right) => left.day.localeCompare(right.day));
+      } else if (
+        createBaseline &&
+        state.dailyAssetSnapshots[baselineIndex].status === "expired"
+      ) {
+        state.dailyAssetSnapshots[baselineIndex] = structuredClone(snapshot);
       }
       const index = state.dailyAssetTrendObservations.findIndex(
         ({ day }) => day === snapshot.day,
@@ -2112,6 +2119,11 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
         JSON.stringify(snapshot.exchangeRates ?? []),
       ).changes > 0;
     if (!inserted) return false;
+    this.insertDailyBaselineSources(snapshot);
+    return true;
+  }
+
+  private insertDailyBaselineSources(snapshot: DailyAssetSnapshot): void {
     const statement = this.database.prepare(`
       INSERT OR IGNORE INTO daily_asset_source_snapshots (
         day, source_id, label, kind, captured_at, complete, status, total_usd, total_cny,
@@ -2132,7 +2144,30 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
         source.total.HKD ?? null,
       );
     }
-    return inserted;
+  }
+
+  private replaceExpiredDailyBaseline(snapshot: DailyAssetSnapshot): void {
+    this.database
+      .prepare(`
+        UPDATE daily_asset_snapshots
+        SET captured_at = ?, complete = ?, status = ?, total_usd = ?, total_cny = ?,
+          total_hkd = ?, exchange_rates_json = ?
+        WHERE day = ?
+      `)
+      .run(
+        snapshot.capturedAt,
+        Number(snapshot.complete),
+        snapshot.status ?? (snapshot.complete ? "complete" : "incomplete"),
+        snapshot.total.USD,
+        snapshot.total.CNY,
+        snapshot.total.HKD ?? null,
+        JSON.stringify(snapshot.exchangeRates ?? []),
+        snapshot.day,
+      );
+    this.database
+      .prepare("DELETE FROM daily_asset_source_snapshots WHERE day = ?")
+      .run(snapshot.day);
+    this.insertDailyBaselineSources(snapshot);
   }
 
   private upsertDailyTrendObservation(
@@ -2819,10 +2854,19 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
     createBaseline: boolean,
   ): Promise<void> {
     this.transaction(() => {
-      const hasBaseline = this.database
-        .prepare("SELECT day FROM daily_asset_snapshots WHERE day = ?")
-        .get(snapshot.day) !== undefined;
-      if (!hasBaseline && createBaseline) this.insertDailyBaseline(snapshot);
+      const baseline = this.database
+        .prepare("SELECT status FROM daily_asset_snapshots WHERE day = ?")
+        .get(snapshot.day) as { status: "complete" | "incomplete" | "expired" }
+          | undefined;
+      if (baseline === undefined && createBaseline) {
+        this.insertDailyBaseline(snapshot);
+      } else if (
+        createBaseline &&
+        baseline !== undefined &&
+        baseline.status === "expired"
+      ) {
+        this.replaceExpiredDailyBaseline(snapshot);
+      }
       const hasTrend = this.database
         .prepare("SELECT day FROM daily_asset_trend_observations WHERE day = ?")
         .get(snapshot.day) !== undefined;

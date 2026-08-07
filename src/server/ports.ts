@@ -123,8 +123,8 @@ export interface DailyAssetSnapshots {
   listTrendObservations(): Promise<DailyAssetTrendObservation[]>;
   createIfAbsent(snapshot: DailyAssetSnapshot): Promise<boolean>;
   /**
-   * 成功刷新建立日初基准（如尚不存在）并更新趋势观测；
-   * 失败刷新只更新已存在趋势观测的完整性/过期状态。
+   * 所有来源刷新成功后建立日初基准（如尚不存在），并可修复同日遗留的过期基准；
+   * 已有非过期基准不可改写。失败刷新只更新已存在趋势观测的完整性/过期状态。
    */
   record(
     snapshot: DailyAssetTrendObservation,

@@ -384,6 +384,64 @@ test("同日后续成功刷新只更新每日趋势观测，失败保留最后�
   }]);
 });
 
+test("首轮部分失败不冻结日初基准，首次完整同步才建立", async ({
+  page,
+  request,
+}) => {
+  await configure(request);
+  const partialFailure = await request.post("/test-doubles/daily-snapshots", {
+    data: { action: "partial-failure" },
+  });
+  expect(partialFailure.ok()).toBeTruthy();
+
+  await loginAsOwner(page);
+  await expect(page.getByTestId("asset-refresh-status")).toContainText(
+    "同步完成 · 1 个来源失败",
+  );
+  expect((await history(request)).baselines).toEqual([]);
+  expect((await history(request)).trendObservations).toEqual([]);
+
+  await request.post("/test-doubles/daily-snapshots", {
+    data: { action: "recover" },
+  });
+  await setServerTime(request, "2026-04-01T15:59:55.000Z");
+  await manualRefresh(page);
+
+  const recovered = await history(request);
+  expect(recovered.baselines).toMatchObject([{
+    day: "2026-04-01",
+    capturedAt: "2026-04-01T15:59:55.000Z",
+    complete: true,
+    status: "complete",
+    total: { USD: "302" },
+  }]);
+  expect(recovered.trendObservations).toMatchObject([{
+    day: "2026-04-01",
+    capturedAt: "2026-04-01T15:59:55.000Z",
+    complete: true,
+    status: "complete",
+    total: { USD: "302" },
+  }]);
+});
+
+test("遗留的不完整日初基准会由同日完整快照修复", async ({
+  request,
+}) => {
+  await configure(request);
+  const response = await request.post("/test-doubles/daily-snapshots", {
+    data: { action: "production-incomplete-baseline-repair" },
+  });
+  expect(response.ok()).toBeTruthy();
+  await expect(response.json()).resolves.toEqual({
+    count: 1,
+    capturedAt: "2026-04-01T16:00:50.000Z",
+    complete: true,
+    status: "complete",
+    totalUsd: "303",
+    sourceCount: 2,
+  });
+});
+
 test("未估值趋势不伪造零值，平台盈亏只出现在来源提供的范围", async ({
   page,
   request,
