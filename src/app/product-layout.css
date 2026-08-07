@@ -585,6 +585,68 @@ a {
   pointer-events: none;
 }
 
+.overview-card-summary {
+  display: grid;
+  gap: var(--vibe-space-2);
+  min-width: 0;
+}
+
+.overview-card-summary-title {
+  margin: 0;
+  color: var(--display);
+  font-family: var(--f-display);
+  font-size: var(--vibe-type-subheading);
+  font-weight: 500;
+  line-height: 1;
+}
+
+.overview-card-summary-amount {
+  margin: var(--vibe-space-2) 0 0;
+  color: var(--display);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-heading);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.overview-card-summary-status {
+  margin: 0;
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
+}
+
+.layout-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--vibe-space-2);
+  margin-top: var(--vibe-space-6);
+  padding-top: var(--vibe-space-3);
+  border-top: 1px solid var(--line);
+}
+
+.layout-card-actions .vibe-button {
+  min-height: 40px;
+}
+
+.hidden-layout-cards {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--vibe-space-2);
+  margin-top: var(--vibe-space-8);
+  padding-top: var(--vibe-space-5);
+  border-top: 1px solid var(--line);
+}
+
+.hidden-layout-cards h2 {
+  width: 100%;
+  margin: 0;
+  color: var(--display);
+  font-size: var(--vibe-type-subheading);
+  font-weight: 500;
+}
+
 .card-drop-zone-layer {
   position: absolute;
   z-index: 6;

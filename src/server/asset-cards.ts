@@ -93,6 +93,7 @@ export function updateAssetCardLayout(cards: Card[], value: unknown): Card[] {
       !isRecord(item) ||
       typeof item.id !== "string" ||
       !isSpan(item.span) ||
+      (item.hidden !== undefined && typeof item.hidden !== "boolean") ||
       (item.startsNewRow !== undefined &&
         typeof item.startsNewRow !== "boolean") ||
       seen.has(item.id)
@@ -107,6 +108,7 @@ export function updateAssetCardLayout(cards: Card[], value: unknown): Card[] {
     return {
       ...card,
       span: item.span,
+      hidden: item.hidden === true || undefined,
       startsNewRow: item.startsNewRow === true || undefined,
     };
   });

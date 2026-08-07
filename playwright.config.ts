@@ -9,10 +9,14 @@ export const PROD_BASE_URL = `http://localhost:${PROD_SERVER_PORT}`;
 export default defineConfig({
   testDir: "./e2e",
   timeout: 30_000,
+  expect: {
+    timeout: 3_000,
+  },
   retries: 0,
   workers: 1,
   reporter: "list",
   use: {
+    actionTimeout: 3_000,
     baseURL: TEST_BASE_URL,
   },
   webServer: [

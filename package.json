@@ -14,7 +14,10 @@
     "build": "next build",
     "start": "node scripts/run-local-next.mjs start",
     "typecheck": "tsc --noEmit",
-    "test": "next build && playwright test"
+    "test:browser": "playwright test",
+    "test:ticket-02": "playwright test e2e/overview-layout-mode.spec.ts",
+    "test:regression": "next build && pnpm test:browser",
+    "test": "pnpm test:regression"
   },
   "dependencies": {
     "@dnd-kit/core": "6.3.1",

@@ -270,6 +270,7 @@ function DraggableCard({
 
 export function CardLayoutEditor({
   cards,
+  editable = true,
   renderCard,
   renderOverlay,
   gridOverlay,
@@ -277,6 +278,7 @@ export function CardLayoutEditor({
   onCardsChangedDuringDrag,
 }: {
   cards: Card[];
+  editable?: boolean;
   renderCard(card: Card, controls: CardDragControls): ReactNode;
   renderOverlay(card: Card): ReactNode;
   gridOverlay?: ReactNode;
@@ -436,6 +438,7 @@ export function CardLayoutEditor({
         },
       }}
       onDragStart={({ active }) => {
+        if (!editable) return;
         const draggedId = String(active.id);
         const grid = gridRef.current;
         const draggedRect = active.rect.current.initial;
@@ -462,6 +465,7 @@ export function CardLayoutEditor({
         });
       }}
       onDragOver={({ over }) => {
+        if (!editable) return;
         setSession((current) => {
           if (!current) return null;
           return updateActiveDropCandidate(current, over?.id);
@@ -472,6 +476,7 @@ export function CardLayoutEditor({
         setDragGridMinHeight(null);
       }}
       onDragEnd={({ over }) => {
+        if (!editable) return;
         setDragGridMinHeight(null);
         if (!session || !sameCardIds(cards, session.originalCards)) {
           if (
@@ -515,7 +520,7 @@ export function CardLayoutEditor({
           <DraggableCard
             key={card.id}
             card={card}
-            disabled={saving}
+            disabled={!editable || saving}
             animateLayout={session !== null}
             renderCard={renderCard}
           />

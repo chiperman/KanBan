@@ -74,6 +74,13 @@ async function loginAsOwner(page: Page): Promise<void> {
   await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
 }
 
+async function enterLayoutMode(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "进入布局管理" }).click();
+  await expect(
+    page.getByRole("button", { name: "退出布局管理" }),
+  ).toBeVisible();
+}
+
 async function pointerDrag(
   page: Page,
   source: ReturnType<Page["locator"]>,
@@ -256,6 +263,7 @@ test("三格资产卡片可缩小并放入两格卡片右侧空位", async ({
   expect(fixture.ok()).toBeTruthy();
   await page.setViewportSize({ width: 1280, height: 1000 });
   await loginAsOwner(page);
+  await enterLayoutMode(page);
 
   const source = page.getByTestId("card").filter({ hasText: "三格卡片" });
   const target = page.getByTestId("card").filter({ hasText: "两格卡片" });
@@ -309,6 +317,7 @@ test("同一行候选使用互不重叠的固定命中区域", async ({ page, re
   expect(fixture.ok()).toBeTruthy();
   await page.setViewportSize({ width: 1280, height: 900 });
   await loginAsOwner(page);
+  await enterLayoutMode(page);
 
   const source = page.locator('[data-layout-card-id="dragged"]');
   const handle = source.getByRole("button", { name: "拖动待移动卡片调整排序" });
@@ -360,6 +369,7 @@ test("拖动经过插入位置时兄弟资产卡片会在松手前实时让位",
   expect(fixture.ok()).toBeTruthy();
   await page.setViewportSize({ width: 1280, height: 900 });
   await loginAsOwner(page);
+  await enterLayoutMode(page);
 
   const source = page.locator('[data-layout-card-id="first"]');
   const second = page.locator('[data-layout-card-id="second"]');
@@ -450,6 +460,7 @@ test("向左拖动首次进入左侧插入位置时兄弟卡片平滑向右让�
   await loginAsOwner(page);
   await page.reload();
   await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
+  await enterLayoutMode(page);
 
   const first = page.locator('[data-layout-card-id="first"]');
   const source = page.locator('[data-layout-card-id="third"]');
@@ -517,6 +528,7 @@ test("向左拖动首次进入左侧插入位置时兄弟卡片平滑向右让�
 test("Escape 取消网格放置且不保存布局", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 1000 });
   await loginAsOwner(page);
+  await enterLayoutMode(page);
   const source = page.getByTestId("card").filter({ hasText: "宽卡片" });
   const handle = source.getByRole("button", { name: /拖动宽卡片调整排序/ });
   const handleBox = await handle.boundingBox();
@@ -553,6 +565,7 @@ test("键盘可以选择与指针相同的自适应缩小候选", async ({
   });
   await page.setViewportSize({ width: 1280, height: 1000 });
   await loginAsOwner(page);
+  await enterLayoutMode(page);
   const source = page.getByTestId("card").filter({ hasText: "三格卡片" });
   const handle = source.getByRole("button", { name: /拖动三格卡片调整排序/ });
   await handle.focus();
@@ -586,6 +599,7 @@ test("布局保存失败时恢复拖动前布局", async ({ page, request }) => 
   });
   await page.setViewportSize({ width: 1280, height: 1000 });
   await loginAsOwner(page);
+  await enterLayoutMode(page);
   await page.route("**/api/asset-cards/layout", async (route) => {
     await route.fulfill({ status: 500, contentType: "application/json", body: '{"error":"测试失败"}' });
   });
@@ -628,6 +642,7 @@ test("拖拽说明 ID 在首次渲染和刷新后保持稳定", async ({ page })
   });
 
   await loginAsOwner(page);
+  await enterLayoutMode(page);
 
   const dragHandles = page.getByRole("button", { name: /拖动.*调整排序/ });
   await expect(dragHandles.first()).toHaveAttribute(
@@ -637,6 +652,7 @@ test("拖拽说明 ID 在首次渲染和刷新后保持稳定", async ({ page })
   await expect(page.locator("#asset-card-layout-dnd")).toHaveCount(1);
 
   await page.reload();
+  await enterLayoutMode(page);
 
   await expect(dragHandles.first()).toHaveAttribute(
     "aria-describedby",
@@ -646,7 +662,7 @@ test("拖拽说明 ID 在首次渲染和刷新后保持稳定", async ({ page })
   expect(hydrationErrors).toEqual([]);
 });
 
-test("未认证状态不能调整布局，所有者可直接排序并调整资产卡片宽度", async ({
+test("未认证状态不能调整布局，所有者进入布局管理后可排序并调整资产卡片宽度", async ({
   page,
 }) => {
   await page.goto("/");
@@ -669,11 +685,14 @@ test("未认证状态不能调整布局，所有者可直接排序并调整资�
   expect(visitorAttempt).toBe(401);
 
   await loginAsOwner(page);
-  await expect(page.getByRole("button", { name: "编辑布局" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "进入布局管理" })).toBeVisible();
   await expect(page.locator(".layout-span-control select")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /调整.*宽度/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /拖动.*调整排序/ })).toHaveCount(0);
+  await expect(page.locator('[draggable="true"]')).toHaveCount(0);
+  await enterLayoutMode(page);
   await expect(page.getByRole("button", { name: /调整.*宽度/ })).toHaveCount(CARDS.length);
   await expect(page.getByRole("button", { name: /拖动.*调整排序/ })).toHaveCount(CARDS.length);
-  await expect(page.locator('[draggable="true"]')).toHaveCount(0);
   const savedResize = page.waitForResponse(
     (response) => response.url().endsWith("/api/asset-cards/layout") && response.request().method() === "PUT",
   );
@@ -705,6 +724,7 @@ test("旧高度数据不会撑大资产卡片，卡片高度始终跟随内容",
   });
   expect(fixture.ok()).toBeTruthy();
   await loginAsOwner(page);
+  await enterLayoutMode(page);
 
   const card = page.getByTestId("card").filter({ hasText: "窄卡片" });
   expect(await card.evaluate((element) => element.style.minHeight)).toBe("");
@@ -721,6 +741,7 @@ test("所有者通过卡片手柄排序并调整宽度后刷新仍保留布局",
   page,
 }) => {
   await loginAsOwner(page);
+  await enterLayoutMode(page);
 
   const wide = page.getByTestId("card").filter({ hasText: "宽卡片" });
   const narrow = page.getByTestId("card").filter({ hasText: "窄卡片" });
@@ -887,6 +908,7 @@ test("所有者拖至末尾会强制从新行开始并在刷新后保留", async
   expect(fixture.ok()).toBeTruthy();
   await page.setViewportSize({ width: 1280, height: 1400 });
   await loginAsOwner(page);
+  await enterLayoutMode(page);
   const fifth = page.getByTestId("card").filter({ hasText: "第五张卡片" });
   const savedReorder = page.waitForResponse(
     (response) => response.url().endsWith("/api/asset-cards/layout") && response.request().method() === "PUT",
@@ -947,6 +969,7 @@ test("拖动末尾 Web3 ETH 卡片时新行预览紧接最后一张可见卡片"
   expect(fixture.ok()).toBeTruthy();
   await page.setViewportSize({ width: 1280, height: 1400 });
   await loginAsOwner(page);
+  await enterLayoutMode(page);
 
   const grid = page.getByTestId("card-grid");
   const cards = page.locator("[data-layout-card-id]");
@@ -1139,6 +1162,7 @@ test("卡片较多时可从视口顶部拖到页面底部新行", async ({ page,
   expect(fixture.ok()).toBeTruthy();
   await page.setViewportSize({ width: 1280, height: 900 });
   await loginAsOwner(page);
+  await enterLayoutMode(page);
 
   const source = page.locator('[data-layout-card-id="card-1"]');
   const handle = source.getByRole("button", { name: /拖动资产卡片 1调整排序/ });
