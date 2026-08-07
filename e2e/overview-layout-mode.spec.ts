@@ -112,10 +112,32 @@ test("总览仅保留日常查看和快捷控制，来源摘要不展开持仓�
   await expect(
     page.getByRole("searchbox", { name: "搜索全部持仓" }),
   ).toHaveCount(0);
+  await expect(page.getByTestId("data-completeness-panel")).toHaveCount(0);
   await expect(page.getByText("NVIDIA", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /隐藏.*资产|管理.*资产/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /拖动.*调整排序/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /调整.*宽度/ })).toHaveCount(0);
+
+  const overviewGeometry = await page.evaluate(() => {
+    const totalOverview = document.querySelector<HTMLElement>(
+      '[data-testid="total-overview-card"]',
+    );
+    const trend = document.querySelector<HTMLElement>(
+      '[data-testid="total-asset-trend"]',
+    );
+    if (!totalOverview || !trend) return null;
+    const totalOverviewTop = totalOverview.getBoundingClientRect().top;
+    return trend.getBoundingClientRect().top - totalOverviewTop;
+  });
+  expect(overviewGeometry).not.toBeNull();
+  expect(overviewGeometry!).toBeLessThan(1_200);
+
+  await expect(
+    page
+      .getByTestId("card")
+      .filter({ hasText: "Binance" })
+      .locator(".overview-card-summary-amount"),
+  ).toHaveText(/\d{1,3}(?:,\d{3})*\.\d{2} USD/);
 });
 
 test("布局管理模式以键盘可达入口即时保存排序、宽度、换行和隐藏，并在重开后保持", async ({

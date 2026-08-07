@@ -17,15 +17,10 @@ import {
 import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
 import {
   buildTotalValuation,
-  holdingMakesTotalIncomplete,
   type DistributionDimension,
   type ReportingCurrency,
   type ValuationSource,
 } from "@/domain/valuation";
-import {
-  activeSourceHoldings,
-  isUnrecognizedEvmTokenHolding,
-} from "@/domain/evm-token-preferences";
 import type {
   DailyAssetTrendObservation,
   FormalDailySettlement,
@@ -43,7 +38,6 @@ import {
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { AssetTrendChart } from "@/ui/asset-trend-chart";
-import { assetProductDisplayName } from "@/ui/asset-product-coverage";
 import { FormalDailySettlementSummary } from "@/ui/formal-daily-settlement-summary";
 import {
   formatShanghaiDateTime,
@@ -87,18 +81,6 @@ type TotalTrendPoint = {
 
 type TrendValuationSource = ValuationSource & {
   manualRecords?: ManualAssetRecord[];
-};
-
-type DataCompletenessIssue = {
-  key: string;
-  label: string;
-  detail: string;
-};
-
-type DataCompletenessSource = {
-  id: string;
-  label: string;
-  issues: DataCompletenessIssue[];
 };
 
 type YesterdaySourceChange = {
@@ -239,169 +221,6 @@ function trendStatusLabel(status: TotalTrendPoint["status"]): string {
       : "完整";
 }
 
-function holdingLabel(
-  holding: TrendValuationSource["snapshot"]["holdings"][number],
-): string {
-  return holding.name === holding.symbol
-    ? holding.symbol
-    : `${holding.name} (${holding.symbol})`;
-}
-
-function listHoldingLabels(
-  holdings: TrendValuationSource["snapshot"]["holdings"],
-  showSensitiveInfo: boolean,
-): string {
-  return showSensitiveInfo
-    ? holdings.map(holdingLabel).join("、")
-    : `${holdings.length} 项名称已隐藏`;
-}
-
-function dataCompletenessSources(
-  sources: TrendValuationSource[],
-  showSensitiveInfo: boolean,
-): DataCompletenessSource[] {
-  return sources.flatMap((source) => {
-    const issues: DataCompletenessIssue[] = [];
-    const sourceLabel = sourceGroupTitle(source);
-    const activeHoldings = activeSourceHoldings(source);
-    const coverage = source.snapshot.coverage;
-
-    if (source.sync.status === "expired") {
-      issues.push({
-        key: "stale",
-        label: "同步已过期",
-        detail: source.sync.error
-          ? `${source.sync.error}；最后成功同步：${formatShanghaiDateTime(source.sync.lastSuccessfulAt)}`
-          : `最后成功同步：${formatShanghaiDateTime(source.sync.lastSuccessfulAt)}`,
-      });
-    }
-
-    if (coverage && coverage.status !== "complete") {
-      const coverageProducts = coverage?.products.filter(
-        (product) =>
-          product.capability !== "detailed" ||
-          product.freshness === "expired" ||
-          product.message !== null,
-      ) ?? [];
-      const productDetail = coverageProducts.map((product) => {
-        const detail = [
-          assetProductDisplayName(product.product),
-          product.capability === "aggregate-only"
-            ? "仅汇总"
-            : product.capability === "indirect"
-              ? "间接覆盖"
-              : product.capability === "unsupported"
-                ? "未覆盖"
-                : product.capability === "unknown"
-                  ? "覆盖未知"
-                  : null,
-          product.freshness === "expired" ? "已过期" : null,
-          product.message,
-        ]
-          .filter(Boolean)
-          .join(" · ");
-        return detail;
-      });
-      const knownValueGap = [
-        coverage?.unexplainedValue
-          ? `未解释 ${amount(coverage.unexplainedValue.amount)} ${coverage.unexplainedValue.currency}`
-          : null,
-        coverage && coverage.excludedPositiveAccounts.length > 0
-          ? `未纳入 ${coverage.excludedPositiveAccounts.join("、")}`
-          : null,
-      ]
-        .filter(Boolean)
-        .join("；");
-      issues.push({
-        key: "coverage",
-        label: coverage?.status === "partial"
-          ? "来源总额覆盖不完整"
-          : "来源总额覆盖未验证",
-        detail: [
-          knownValueGap,
-          productDetail.length > 0 ? productDetail.join("；") : null,
-          knownValueGap || productDetail.length > 0
-            ? null
-            : "当前来源无法确认总额是否覆盖全部产品",
-        ]
-          .filter(Boolean)
-          .join("；"),
-      });
-    } else if (coverage) {
-      const aggregateOnlyProducts = coverage.products.filter(
-        (product) =>
-          product.capability === "aggregate-only" ||
-          product.capability === "indirect" ||
-          product.freshness === "expired",
-      );
-      if (aggregateOnlyProducts.length > 0) {
-        issues.push({
-          key: "detail-coverage",
-          label: "持仓明细受限（不影响总资产）",
-          detail: aggregateOnlyProducts.map((product) =>
-            [
-              assetProductDisplayName(product.product),
-              product.capability === "aggregate-only" ? "仅汇总" : "间接覆盖",
-              product.freshness === "expired" ? "已过期" : null,
-              product.message,
-            ]
-              .filter(Boolean)
-              .join(" · "),
-          ).join("；"),
-        });
-      }
-    }
-
-    const unvaluedHoldings = activeHoldings.filter(holdingMakesTotalIncomplete);
-    if (unvaluedHoldings.length > 0) {
-      const unrecognizedHoldings = unvaluedHoldings.filter((holding) =>
-        isUnrecognizedEvmTokenHolding(source, holding),
-      );
-      const knownUnvaluedHoldings = unvaluedHoldings.filter(
-        (holding) => !unrecognizedHoldings.includes(holding),
-      );
-      if (unrecognizedHoldings.length > 0) {
-        issues.push({
-          key: "unrecognized",
-          label: `${unrecognizedHoldings.length} 项待确认资产未估值`,
-          detail: `${listHoldingLabels(unrecognizedHoldings, showSensitiveInfo)}；缺少可靠价格，未按零计入总资产`,
-        });
-      }
-      if (knownUnvaluedHoldings.length > 0) {
-        const reasons = [
-          ...new Set(knownUnvaluedHoldings.flatMap((holding) =>
-            holding.valuation.status === "unvalued"
-              ? [holding.valuation.reason]
-              : [],
-          )),
-        ];
-        issues.push({
-          key: "unvalued",
-          label: `${knownUnvaluedHoldings.length} 项持仓未估值`,
-          detail: `${listHoldingLabels(knownUnvaluedHoldings, showSensitiveInfo)}${
-            reasons.length > 0 ? `；${reasons.join("；")}` : ""
-          }`,
-        });
-      }
-    }
-
-    const quoteUnavailableHoldings = activeHoldings.filter(
-      (holding) => holding.valuation.status === "quote-unavailable",
-    );
-    if (quoteUnavailableHoldings.length > 0) {
-      issues.push({
-        key: "quote-unavailable",
-        label: `${quoteUnavailableHoldings.length} 项持仓行情未接入`,
-        detail: `${listHoldingLabels(quoteUnavailableHoldings, showSensitiveInfo)}；账户总额已包含，不影响总资产`,
-      });
-    }
-
-    return issues.length > 0
-      ? [{ id: source.id, label: sourceLabel, issues }]
-      : [];
-  });
-}
-
 export function TotalAssetOverview({
   sources,
   currency,
@@ -476,14 +295,6 @@ export function TotalAssetOverview({
     valuation.coverageIssues.length > 0
     ? "error"
       : "success";
-  const completenessSources = useMemo(
-    () => dataCompletenessSources(sources, showSensitiveInfo),
-    [showSensitiveInfo, sources],
-  );
-  const completenessIssueCount = completenessSources.reduce(
-    (count, source) => count + source.issues.length,
-    0,
-  );
   const firstTrendDay = useMemo(
     () => history.reduce<string | undefined>(
       (earliest, observation) =>
@@ -815,36 +626,6 @@ export function TotalAssetOverview({
             );
           })}
         </VibeNotice>
-      ) : null}
-      {completenessIssueCount > 0 ? (
-        <section
-          className="data-completeness-panel"
-          data-testid="data-completeness-panel"
-          aria-label="数据完整性"
-        >
-          <header className="data-completeness-panel-head">
-            <p className="card-label">数据完整性</p>
-            <span>{String(completenessIssueCount).padStart(2, "0")} GAPS</span>
-          </header>
-          <p className="data-completeness-panel-hint">
-            以下限制不会按零处理；标注“不影响总资产”的项目仅影响持仓明细。
-          </p>
-          <ol className="data-completeness-list">
-            {completenessSources.map((source) => (
-              <li key={source.id}>
-                <strong>{source.label}</strong>
-                <ul>
-                  {source.issues.map((issue) => (
-                    <li key={issue.key}>
-                      <span>{issue.label}</span>
-                      <p>{issue.detail}</p>
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            ))}
-          </ol>
-        </section>
       ) : null}
       {trendToday?.observed && trendToday.status === "complete" ? (
         <section

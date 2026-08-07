@@ -8,6 +8,7 @@ import {
   type PointerEvent,
 } from "react";
 
+import { decimalToFixed } from "@/domain/decimal";
 import { shanghaiDay } from "@/domain/daily-asset-snapshots";
 import { portfolioSourceTotal } from "@/domain/evm-token-preferences";
 import type {
@@ -48,9 +49,9 @@ function sourceName(source: AssetSourceView): string {
 }
 
 function groupedAmount(value: string): string {
-  const [integer, fraction] = value.split(".");
+  const [integer, fraction] = decimalToFixed(value, 2).split(".");
   const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  return fraction ? `${grouped}.${fraction}` : grouped;
+  return `${grouped}.${fraction}`;
 }
 
 function CardCornerMarks() {
@@ -81,7 +82,9 @@ function OverviewCardSummary({
         : "已同步";
 
   return (
-    <div className="overview-card-summary">
+    <div
+      className={`overview-card-summary${source ? " overview-card-summary--source" : ""}`}
+    >
       <p className="card-label">
         {source ? "SOURCE / SUMMARY" : "ASSET / SUMMARY"}
       </p>

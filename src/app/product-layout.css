@@ -615,6 +615,42 @@ a {
   font-size: var(--vibe-type-caption);
 }
 
+@media (min-width: 1024px) {
+  .card.span-2 .overview-card-summary--source,
+  .card.span-3 .overview-card-summary--source {
+    grid-template-areas:
+      "label status"
+      "title amount";
+    grid-template-columns: minmax(0, 1fr) minmax(168px, auto);
+    align-items: end;
+    column-gap: var(--vibe-space-6);
+    row-gap: var(--vibe-space-2);
+  }
+
+  .card.span-2 .overview-card-summary--source > .card-label,
+  .card.span-3 .overview-card-summary--source > .card-label {
+    grid-area: label;
+  }
+
+  .card.span-2 .overview-card-summary--source > .overview-card-summary-title,
+  .card.span-3 .overview-card-summary--source > .overview-card-summary-title {
+    grid-area: title;
+  }
+
+  .card.span-2 .overview-card-summary--source > .overview-card-summary-amount,
+  .card.span-3 .overview-card-summary--source > .overview-card-summary-amount {
+    grid-area: amount;
+    margin: 0;
+    text-align: right;
+  }
+
+  .card.span-2 .overview-card-summary--source > .overview-card-summary-status,
+  .card.span-3 .overview-card-summary--source > .overview-card-summary-status {
+    grid-area: status;
+    text-align: right;
+  }
+}
+
 .layout-card-actions {
   display: flex;
   flex-wrap: wrap;
