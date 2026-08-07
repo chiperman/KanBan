@@ -25,6 +25,8 @@
     "test:smoke": "pnpm build && pnpm test:smoke:quick",
     "test:ticket-02:quick": "playwright test --config=playwright.ticket-02.config.ts",
     "test:ticket-02": "pnpm build && pnpm test:ticket-02:quick",
+    "test:ticket-03:quick": "playwright test --config=playwright.ticket-03.config.ts",
+    "test:ticket-03": "pnpm build && pnpm test:ticket-03:quick",
     "test:regression": "pnpm build && pnpm test:browser",
     "test": "pnpm typecheck && pnpm test:unit && pnpm test:smoke"
   },

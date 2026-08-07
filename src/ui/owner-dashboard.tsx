@@ -30,6 +30,7 @@ import {
   type TrendRange,
 } from "@/ui/total-asset-overview";
 import { VibeButton } from "@/ui/vibe/vibe-button";
+import { VibeLink } from "@/ui/vibe/vibe-button";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
 
 function cardName(card: Card): string {
@@ -66,10 +67,12 @@ function CardCornerMarks() {
 function OverviewCardSummary({
   card,
   source,
+  sourceLinkEnabled = false,
   showSensitiveInfo,
 }: {
   card: Card;
   source?: AssetSourceView;
+  sourceLinkEnabled?: boolean;
   showSensitiveInfo: boolean;
 }) {
   const sourceTotal = source ? portfolioSourceTotal(source) : null;
@@ -88,9 +91,20 @@ function OverviewCardSummary({
       <p className="card-label">
         {source ? "SOURCE / SUMMARY" : "ASSET / SUMMARY"}
       </p>
-      <h2 className="overview-card-summary-title">
-        {source ? sourceName(source) : cardName(card)}
-      </h2>
+      {source && sourceLinkEnabled ? (
+        <VibeLink
+          aria-label={`查看 ${sourceName(source)}来源详情`}
+          className="overview-source-detail-link"
+          href={`/asset-sources/${encodeURIComponent(source.id)}`}
+          variant="text"
+        >
+          <h2 className="overview-card-summary-title">{sourceName(source)}</h2>
+        </VibeLink>
+      ) : (
+        <h2 className="overview-card-summary-title">
+          {source ? sourceName(source) : cardName(card)}
+        </h2>
+      )}
       {source ? (
         <>
           <p className="overview-card-summary-amount">
@@ -455,6 +469,7 @@ export function OwnerDashboard({
         <OverviewCardSummary
           card={card}
           source={source}
+          sourceLinkEnabled={!demoMode}
           showSensitiveInfo={showSensitiveInfo}
         />
         {layoutMode ? (
@@ -545,6 +560,7 @@ export function OwnerDashboard({
       <OverviewCardSummary
         card={card}
         source={sourceForCard(card)}
+        sourceLinkEnabled={!demoMode}
         showSensitiveInfo={showSensitiveInfo}
       />
     );

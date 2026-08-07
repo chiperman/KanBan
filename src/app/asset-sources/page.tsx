@@ -5,6 +5,7 @@ import {
   type PageSearchParams,
 } from "@/server/auth/canonical-origin";
 import { getServices } from "@/server/composition";
+import { AssetSourceDirectory } from "@/ui/asset-source-directory";
 import { SessionGuard } from "@/ui/session-guard";
 import { WorkbenchShell } from "@/ui/workbench-shell";
 
@@ -17,7 +18,12 @@ export default async function AssetSourcesPage({
 }) {
   await redirectLoopbackIpToLocalhost("/asset-sources", searchParams);
 
-  if ((await getServices().auth.currentSession()) === null) redirect("/");
+  const services = getServices();
+  if ((await services.auth.currentSession()) === null) redirect("/");
+  const [sources, cards] = await Promise.all([
+    services.assetSources.list(),
+    services.assetCards.list(),
+  ]);
 
   return (
     <SessionGuard>
@@ -29,6 +35,7 @@ export default async function AssetSourcesPage({
           <main id="main-content">
             <p className="card-label">WORKBENCH / 02</p>
             <h1>资产来源</h1>
+            <AssetSourceDirectory cards={cards} sources={sources} />
           </main>
         </div>
       </WorkbenchShell>
