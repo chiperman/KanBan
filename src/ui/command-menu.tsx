@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useRouter } from "next/navigation";
 
 import { ASSET_MANUAL_REFRESH_EVENT } from "@/shared/command-events";
 import { OWNER_LOCK_EVENT } from "@/shared/session-policy";
@@ -11,6 +12,13 @@ interface NavigationTarget {
   id: string;
   label: string;
 }
+
+const WORKBENCH_DESTINATIONS = [
+  { href: "/", label: "总览" },
+  { href: "/asset-sources", label: "资产来源" },
+  { href: "/data-health", label: "数据健康" },
+  { href: "/settings", label: "设置与安全" },
+] as const;
 
 interface Command {
   id: string;
@@ -30,6 +38,7 @@ function navigationTargets(): NavigationTarget[] {
 }
 
 export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [targets, setTargets] = useState<NavigationTarget[]>([]);
@@ -78,29 +87,41 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
   }, [open]);
 
   const commands = useMemo<Command[]>(() => {
-    const navigation = targets.map((target) => ({
-      id: `navigate:${target.id}`,
-      label: `跳转到 ${target.label}`,
-      detail: "卡片导航",
-      keywords: `${target.label} 跳转 导航 卡片`,
-      action() {
-        close(false);
-        requestAnimationFrame(() => {
-          const element = document.querySelector<HTMLElement>(
-            `[data-command-target="${CSS.escape(target.id)}"]`,
-          );
-          if (!element) return;
-          const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-          element.scrollIntoView({
-            behavior: reducedMotion ? "auto" : "smooth",
-            block: "center",
+    const navigation = [
+      ...WORKBENCH_DESTINATIONS.map(({ href, label }) => ({
+        id: `workbench:${href}`,
+        label: `前往${label}`,
+        detail: "工作台导航",
+        keywords: `${label} 前往 跳转 导航 工作台`,
+        action() {
+          close(false);
+          router.push(href);
+        },
+      })),
+      ...targets.map((target) => ({
+        id: `navigate:${target.id}`,
+        label: `跳转到 ${target.label}`,
+        detail: "卡片导航",
+        keywords: `${target.label} 跳转 导航 卡片`,
+        action() {
+          close(false);
+          requestAnimationFrame(() => {
+            const element = document.querySelector<HTMLElement>(
+              `[data-command-target="${CSS.escape(target.id)}"]`,
+            );
+            if (!element) return;
+            const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+            element.scrollIntoView({
+              behavior: reducedMotion ? "auto" : "smooth",
+              block: "center",
+            });
+            element.focus({ preventScroll: true });
+            element.dataset.commandHighlight = "true";
+            window.setTimeout(() => delete element.dataset.commandHighlight, 900);
           });
-          element.focus({ preventScroll: true });
-          element.dataset.commandHighlight = "true";
-          window.setTimeout(() => delete element.dataset.commandHighlight, 900);
-        });
-      },
-    }));
+        },
+      })),
+    ];
     const actions: Command[] = [];
     if (refreshEnabled) {
       actions.push({
@@ -125,7 +146,7 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
       },
     });
     return [...navigation, ...actions];
-  }, [refreshEnabled, targets]);
+  }, [refreshEnabled, router, targets]);
 
   const normalized = query.trim().toLocaleLowerCase("zh-CN");
   const filtered = commands.filter((command) =>

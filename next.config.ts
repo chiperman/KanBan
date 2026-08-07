@@ -11,6 +11,18 @@ const nextConfig: NextConfig = {
         source: "/",
         headers: [{ key: "Cache-Control", value: "no-store" }],
       },
+      {
+        source: "/asset-sources/:path*",
+        headers: [{ key: "Cache-Control", value: "no-store" }],
+      },
+      {
+        source: "/data-health",
+        headers: [{ key: "Cache-Control", value: "no-store" }],
+      },
+      {
+        source: "/settings",
+        headers: [{ key: "Cache-Control", value: "no-store" }],
+      },
     ];
   },
 };

@@ -18,6 +18,7 @@ import { ExternalServiceSettings } from "@/ui/external-service-settings";
 import { SessionGuard } from "@/ui/session-guard";
 import { ThemeSwitcher } from "@/ui/theme-switcher";
 import { VibeLink } from "@/ui/vibe/vibe-button";
+import { WorkbenchShell } from "@/ui/workbench-shell";
 
 export const dynamic = "force-dynamic";
 
@@ -41,58 +42,60 @@ export default async function SettingsPage({
   const externalServiceStatus = await services.externalServices.status();
 
   return (
-    <div className="page page-settings">
-      <a className="skip-link" href="#main-content">
-        跳到主要内容
-      </a>
-      <SessionGuard>
-        <header className="page-header">
-          <div className="header-title">
-            <p className="header-label">
-              <span className="header-index" aria-hidden="true">
-                02
-              </span>
-              <span className="header-wordmark" lang="en">
-                LOCAL SETTINGS
-              </span>
-            </p>
-          </div>
-          <div className="header-side">
-            <LocalClock initialTime={now.toISOString()} compact />
-            <VibeLink className="header-action-button" href="/" variant="outline">
-              返回资产看板
-            </VibeLink>
-            <LogoutButton />
-            <ThemeSwitcher />
-          </div>
-        </header>
-        <main className="settings-main" id="main-content">
-          <header className="settings-page-head">
-            <p className="card-label">LOCAL / SETTINGS</p>
-            <h1>本机设置</h1>
-            <p>
-              管理显示偏好、外部服务连接与备用登录方式。
-            </p>
+    <SessionGuard>
+      <WorkbenchShell refreshEnabled={false}>
+        <div className="page page-settings">
+        <a className="skip-link" href="#main-content">
+          跳到主要内容
+        </a>
+          <header className="page-header">
+            <div className="header-title">
+              <p className="header-label">
+                <span className="header-index" aria-hidden="true">
+                  02
+                </span>
+                <span className="header-wordmark" lang="en">
+                  LOCAL SETTINGS
+                </span>
+              </p>
+            </div>
+            <div className="header-side">
+              <LocalClock initialTime={now.toISOString()} compact />
+              <VibeLink className="header-action-button" href="/" variant="outline">
+                返回资产看板
+              </VibeLink>
+              <LogoutButton />
+              <ThemeSwitcher />
+            </div>
           </header>
-          <ExternalServiceSettings initialStatus={externalServiceStatus} />
-          <section
-            className="settings-section"
-            aria-label="持仓盈亏显示设置"
-          >
-            <ProfitColorSettings initialScheme={initialProfitColorScheme} />
-          </section>
-          <section
-            className="settings-section"
-            aria-labelledby="recovery-settings-title"
-          >
-            <h2 id="recovery-settings-title">备用登录</h2>
-            <p className="settings-description">
-              配置或更新当前终端所有者的 TOTP 备用登录。
-            </p>
-            <RecoverySetup configured={recoveryConfigured} />
-          </section>
-        </main>
-      </SessionGuard>
-    </div>
+          <main className="settings-main" id="main-content">
+            <header className="settings-page-head">
+              <p className="card-label">LOCAL / SETTINGS</p>
+              <h1>本机设置</h1>
+              <p>
+                管理显示偏好、外部服务连接与备用登录方式。
+              </p>
+            </header>
+            <ExternalServiceSettings initialStatus={externalServiceStatus} />
+            <section
+              className="settings-section"
+              aria-label="持仓盈亏显示设置"
+            >
+              <ProfitColorSettings initialScheme={initialProfitColorScheme} />
+            </section>
+            <section
+              className="settings-section"
+              aria-labelledby="recovery-settings-title"
+            >
+              <h2 id="recovery-settings-title">备用登录</h2>
+              <p className="settings-description">
+                配置或更新当前终端所有者的 TOTP 备用登录。
+              </p>
+              <RecoverySetup configured={recoveryConfigured} />
+            </section>
+          </main>
+        </div>
+      </WorkbenchShell>
+    </SessionGuard>
   );
 }

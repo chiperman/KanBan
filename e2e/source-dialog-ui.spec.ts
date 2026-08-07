@@ -118,18 +118,22 @@ test("验证只读凭证时明确显示进行态且禁用态不响应悬停", as
   ).toBeVisible();
 });
 
-test("移动端来源配置采用全屏 sheet，页头次要操作收进本机设置", async ({ page }) => {
+test("移动端来源配置采用全屏 sheet，页头设置操作收进本机设置", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await loginAsOwner(page);
 
   await expect(page.getByText("EXTERNAL ACCESS / READ ONLY")).toHaveCount(1);
   await expect(page.getByRole("button", { name: "立即锁定（退出登录）" })).toBeVisible();
   await expect(page.getByRole("button", { name: "本机设置" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "打开快捷命令" })).toBeHidden();
+  await expect(page.getByRole("button", { name: "打开快捷命令" })).toBeVisible();
 
   await page.getByRole("button", { name: "本机设置" }).click();
   await expect(page.getByRole("link", { name: "本机设置" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "打开快捷命令" })).toBeVisible();
+  await expect(
+    page
+      .locator(".header-utility-actions")
+      .getByRole("button", { name: "打开快捷命令" }),
+  ).toHaveCount(0);
   await expect(page.getByRole("button", { name: "配置备用登录" })).toHaveCount(0);
 
   await page.getByRole("button", { name: "添加资产来源" }).click();

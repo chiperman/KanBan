@@ -9,8 +9,10 @@ import { VibeTooltip } from "@/ui/vibe/vibe-tooltip";
 
 export function HeaderUtilities({
   refreshEnabled,
+  commandMenu = true,
 }: {
   refreshEnabled: boolean;
+  commandMenu?: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -25,7 +27,7 @@ export function HeaderUtilities({
         本机设置
       </button>
       <div className="header-utility-actions" data-open={open ? "true" : "false"}>
-        <CommandMenu refreshEnabled={refreshEnabled} />
+        {commandMenu ? <CommandMenu refreshEnabled={refreshEnabled} /> : null}
         <VibeTooltip label="设置">
           <VibeLink
             aria-label="本机设置"

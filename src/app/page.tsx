@@ -12,6 +12,7 @@ import { OwnerDashboard } from "@/ui/owner-dashboard"
 import { OwnerLogin } from "@/ui/owner-login"
 import { SessionGuard } from "@/ui/session-guard"
 import { ThemeSwitcher } from "@/ui/theme-switcher"
+import { WorkbenchShell } from "@/ui/workbench-shell"
 import { VibeLink } from "@/ui/vibe/vibe-button"
 import { VibeDotIcon } from "@/ui/vibe/vibe-dot-icon"
 import { VibeTooltip } from "@/ui/vibe/vibe-tooltip"
@@ -142,59 +143,67 @@ export default async function AssetDashboardPage({
     await services.dailyAssetSnapshots.listTrendObservations()
 
   return (
-    <div className="page page-dashboard">
-      <a className="skip-link" href="#main-content">
-        跳到主要内容
-      </a>
-      <SessionGuard>
-        <header className="page-header">
-          <div className="header-title">
-            <p className="header-label">
-              <span className="header-index" aria-hidden="true">
-                01
+    <SessionGuard>
+      <WorkbenchShell
+        refreshEnabled={assetSources.some(
+          (source) =>
+            source.lifecycle !== "disconnected" && source.kind !== "manual",
+        )}
+      >
+        <div className="page page-dashboard">
+        <a className="skip-link" href="#main-content">
+          跳到主要内容
+        </a>
+          <header className="page-header">
+            <div className="header-title">
+              <p className="header-label">
+                <span className="header-index" aria-hidden="true">
+                  01
+                </span>
+                <span className="header-wordmark" lang="en">
+                  PERSONAL ASSET DASHBOARD
+                </span>
+              </p>
+              <span data-testid="view-mode" hidden>
+                所有者视图 · 资产看板 · 已验证身份
               </span>
-              <span className="header-wordmark" lang="en">
-                PERSONAL ASSET DASHBOARD
-              </span>
-            </p>
-            <span data-testid="view-mode" hidden>
-              所有者视图 · 资产看板 · 已验证身份
-            </span>
-          </div>
-          <div className="header-side">
-            <span className="header-system">EXTERNAL ACCESS / READ ONLY</span>
-            <LocalClock initialTime={now.toISOString()} compact />
-            <HeaderUtilities
-              refreshEnabled={assetSources.some(
-                (source) =>
-                  source.lifecycle !== "disconnected" &&
-                  source.kind !== "manual",
-              )}
+            </div>
+            <div className="header-side">
+              <span className="header-system">EXTERNAL ACCESS / READ ONLY</span>
+              <LocalClock initialTime={now.toISOString()} compact />
+              <HeaderUtilities
+                commandMenu={false}
+                refreshEnabled={assetSources.some(
+                  (source) =>
+                    source.lifecycle !== "disconnected" &&
+                    source.kind !== "manual",
+                )}
+              />
+              <VibeTooltip label="进入演示模式">
+                <VibeLink
+                  aria-label="进入演示模式"
+                  className="header-action-button header-demo-link"
+                  href="/?mode=demo"
+                  variant="outline"
+                >
+                  <VibeDotIcon name="computer" size={24} />
+                </VibeLink>
+              </VibeTooltip>
+              <LogoutButton />
+              <ThemeSwitcher />
+            </div>
+          </header>
+          <main id="main-content">
+            <OwnerDashboard
+              cards={assetCards}
+              assetSources={assetSources}
+              dailyAssetTrendObservations={dailyAssetTrendObservations}
+              formalDailySettlements={formalDailySettlements}
+              currentDay={shanghaiDay(now)}
             />
-            <VibeTooltip label="进入演示模式">
-              <VibeLink
-                aria-label="进入演示模式"
-                className="header-action-button header-demo-link"
-                href="/?mode=demo"
-                variant="outline"
-              >
-                <VibeDotIcon name="computer" size={24} />
-              </VibeLink>
-            </VibeTooltip>
-            <LogoutButton />
-            <ThemeSwitcher />
-          </div>
-        </header>
-        <main id="main-content">
-          <OwnerDashboard
-            cards={assetCards}
-            assetSources={assetSources}
-            dailyAssetTrendObservations={dailyAssetTrendObservations}
-            formalDailySettlements={formalDailySettlements}
-            currentDay={shanghaiDay(now)}
-          />
-        </main>
-      </SessionGuard>
-    </div>
+          </main>
+        </div>
+      </WorkbenchShell>
+    </SessionGuard>
   )
 }
