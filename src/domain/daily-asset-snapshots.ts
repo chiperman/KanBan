@@ -149,14 +149,6 @@ export function mergeDailyTrendObservation(
   next: DailyAssetTrendObservation,
   preserveObservationCapturedAt: boolean,
 ): DailyAssetTrendObservation {
-  const sourceIdsUnchanged =
-    previous.sources.length === next.sources.length &&
-    previous.sources.every((source) =>
-      next.sources.some(({ sourceId }) => sourceId === source.sourceId),
-    );
-  if (previous.complete && !next.complete && sourceIdsUnchanged) {
-    return previous;
-  }
   const bySourceId = new Map(
     previous.sources.map((source) => [source.sourceId, source]),
   );
@@ -164,7 +156,9 @@ export function mergeDailyTrendObservation(
     const previousSource = bySourceId.get(source.sourceId);
     bySourceId.set(
       source.sourceId,
-      preserveObservationCapturedAt && previousSource
+      preserveObservationCapturedAt &&
+          previousSource?.complete &&
+          !source.complete
         ? { ...source, capturedAt: previousSource.capturedAt }
         : source,
     );
@@ -179,11 +173,14 @@ export function mergeDailyTrendObservation(
     total.USD !== null &&
     total.HKD !== null &&
     sources.every((source) => source.complete);
+  const capturedAt = sources.reduce(
+    (latest, source) =>
+      source.capturedAt > latest ? source.capturedAt : latest,
+    "",
+  ) || next.capturedAt;
   return {
     ...next,
-    capturedAt: preserveObservationCapturedAt
-      ? previous.capturedAt
-      : next.capturedAt,
+    capturedAt,
     sources,
     total,
     complete,

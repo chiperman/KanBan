@@ -27,6 +27,15 @@ async function configureDataHealth(page: Page): Promise<void> {
   expect(configured.ok()).toBeTruthy();
 }
 
+async function loginWithDataHealthFixture(page: Page): Promise<void> {
+  await configureDataHealth(page);
+  await loginAsOwner(page);
+  await expect(page.getByTestId("asset-refresh-status")).toContainText(
+    "来源失败",
+  );
+  await configureDataHealth(page);
+}
+
 async function chooseOption(
   page: Page,
   label: string,
@@ -53,8 +62,7 @@ test.beforeEach(async ({ request }) => {
 test("数据健康诊断同步、估值与历史缺口，但不提供修复操作", async ({
   page,
 }) => {
-  await configureDataHealth(page);
-  await loginAsOwner(page);
+  await loginWithDataHealthFixture(page);
   await page.goto("/data-health");
 
   await expect(page.getByRole("heading", { name: "数据健康" })).toBeVisible();
@@ -95,8 +103,7 @@ test("数据健康诊断同步、估值与历史缺口，但不提供修复操�
 test("数据健康可按范围、来源与完整性筛选历史，并进入来源详情", async ({
   page,
 }) => {
-  await configureDataHealth(page);
-  await loginAsOwner(page);
+  await loginWithDataHealthFixture(page);
   await page.goto("/data-health");
 
   const history = page.getByTestId("data-health-history");
@@ -136,9 +143,8 @@ test("数据健康在手机无横向溢出，锁定态不泄露来源或历史",
   expect(await page.content()).not.toContain("Alpha Securities");
   expect(await page.content()).not.toContain("2026-03-03");
 
-  await configureDataHealth(page);
   await page.setViewportSize({ width: 390, height: 844 });
-  await loginAsOwner(page);
+  await loginWithDataHealthFixture(page);
   await page.goto("/data-health");
   await expect(page.getByTestId("data-health-diagnostics")).toBeVisible();
   await expectNoHorizontalOverflow(page);

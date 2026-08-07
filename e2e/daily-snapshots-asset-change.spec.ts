@@ -83,17 +83,31 @@ async function history(request: APIRequestContext) {
   };
 }
 
-async function manualRefresh(page: Page) {
-  const [response] = await Promise.all([
-    page.waitForResponse((candidate) =>
+async function waitForRefreshReport(
+  page: Page,
+  expectedFailureCount: number,
+): Promise<void> {
+  while (true) {
+    const response = await page.waitForResponse((candidate) =>
       candidate.url().endsWith("/api/asset-sources/refresh") &&
-      candidate.request().method() === "POST",
-    ),
-    page.getByRole("button", { name: "立即刷新资产" }).click(),
-  ]);
-  expect(response.ok()).toBeTruthy();
+      candidate.request().method() === "POST"
+    );
+    expect(response.ok()).toBeTruthy();
+    const report = await response.json().catch(() => null) as {
+      failureCount?: unknown;
+    } | null;
+    if (report?.failureCount === expectedFailureCount) return;
+  }
+}
+
+async function manualRefresh(page: Page, expectedFailureCount = 0) {
+  const completed = waitForRefreshReport(page, expectedFailureCount);
+  await page.getByRole("button", { name: "立即刷新资产" }).click();
+  await completed;
   await expect(page.getByTestId("asset-refresh-status")).toContainText(
-    "同步完成",
+    expectedFailureCount === 0
+      ? "同步完成"
+      : `同步完成 · ${expectedFailureCount} 个来源失败`,
   );
 }
 
@@ -321,9 +335,10 @@ test("同日后续成功刷新只更新每日趋势观测，失败保留最后�
     data: { action: "partial-failure" },
   });
   await setServerTime(request, "2026-04-01T15:59:57.000Z");
-  await manualRefresh(page);
-  const afterPartialFailure = await history(request);
-  expect(afterPartialFailure.trendObservations).toMatchObject([{
+  await manualRefresh(page, 1);
+  await expect.poll(async () =>
+    (await history(request)).trendObservations,
+  ).toMatchObject([{
     day: "2026-04-01",
     capturedAt: "2026-04-01T15:59:57.000Z",
     complete: false,
@@ -346,20 +361,20 @@ test("同日后续成功刷新只更新每日趋势观测，失败保留最后�
       },
     ],
   }]);
-  await expect(page.getByTestId("total-asset-trend")).toContainText(
-    "昨日变化未计算",
-  );
-  await expect(page.getByTestId("total-asset-trend")).toContainText(
-    "04月01日过期",
-  );
+  const trend = page.getByTestId("total-asset-trend");
+  await expect(trend).toContainText("1 天不完整或过期");
+  await expect(trend).toContainText("04月01日");
+  await expect(trend).toContainText("312.00 USD");
+  await expect(trend).toContainText("过期");
 
   await request.post("/test-doubles/daily-snapshots", {
     data: { action: "fail-all" },
   });
   await setServerTime(request, "2026-04-01T15:59:58.000Z");
-  await manualRefresh(page);
-  const afterFailure = await history(request);
-  expect(afterFailure.trendObservations).toMatchObject([{
+  await manualRefresh(page, 2);
+  await expect.poll(async () =>
+    (await history(request)).trendObservations,
+  ).toMatchObject([{
     day: "2026-04-01",
     capturedAt: "2026-04-01T15:59:57.000Z",
     total: { USD: "312" },
