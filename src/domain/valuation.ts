@@ -259,14 +259,16 @@ export function buildTotalValuation(
   sources: ValuationSource[],
   currency: ReportingCurrency,
   dimension: DistributionDimension,
+  rateSources: ValuationSource[] = sources,
 ): TotalValuation {
   const recordedSources = sources.filter(hasManualAssetRecord);
-  const longbridgeRates = recordedSources.flatMap((source) =>
+  const recordedRateSources = rateSources.filter(hasManualAssetRecord);
+  const longbridgeRates = recordedRateSources.flatMap((source) =>
     source.kind === "longbridge" ? source.snapshot.exchangeRates : [],
   );
   const allRates = [
     ...longbridgeRates,
-    ...recordedSources.flatMap((source) => source.snapshot.exchangeRates),
+    ...recordedRateSources.flatMap((source) => source.snapshot.exchangeRates),
   ];
   const displayRate = (quoteCurrency: "CNY" | "HKD") => {
     const observation = rateFor(allRates, "USD", quoteCurrency);
