@@ -52,23 +52,7 @@ test("六类来源形成正确总额、分布、真实稳定币价格与失败�
   await expect(page.getByTestId("card")).toHaveCount(0);
   await loginAsOwner(page);
 
-  for (const testId of [
-    "longbridge-card",
-    "binance-card",
-    "okx-card",
-    "bitget-card",
-    "ethereum-watch-card",
-    "bsc-watch-card",
-  ]) {
-    await expect(page.getByTestId(testId)).toBeVisible();
-  }
   await page.setViewportSize({ width: 1280, height: 900 });
-  const sourceCardTops = await page.getByTestId("card").evaluateAll((cards) =>
-    cards.map((card) => Math.round(card.getBoundingClientRect().top)),
-  );
-  expect(new Set(sourceCardTops.slice(0, 3)).size).toBe(1);
-  expect(new Set(sourceCardTops.slice(3, 6)).size).toBe(1);
-  expect(sourceCardTops[3]).toBeGreaterThan(sourceCardTops[0]);
   const overview = page.getByTestId("total-overview-card");
   await expect(overview.getByTestId("total-asset-amount")).toHaveText("142,548.00 USD");
   await expect(overview).toContainText("当前估值：不完整 · 2 项未估值");
@@ -77,23 +61,12 @@ test("六类来源形成正确总额、分布、真实稳定币价格与失败�
   await expect(overview.getByLabel("资产分布")).toContainText("加密资产");
   await expect(overview.getByLabel("资产分布")).toContainText("42,548.00 USD");
 
-  await chooseOverviewOption(overview, "分布维度", "资产来源");
-  for (const source of [
-    "长桥账户",
-    "Binance 只读账户",
-    "OKX 只读账户",
-    "Bitget 只读账户",
-    "Ethereum 观察钱包",
-    "BNB Smart Chain 观察钱包",
-  ]) {
-    await expect(overview.getByLabel("资产分布")).toContainText(source);
-  }
-  await chooseOverviewOption(overview, "计价货币", "CNY");
+  await chooseOverviewOption(page, "计价货币", "CNY");
   await expect(overview.getByTestId("total-asset-amount")).toHaveText(
     "1,026,345.60 CNY",
   );
   await expect(overview).toContainText("USD/CNY 7.2000 · 发布验收汇率");
-  await chooseOverviewOption(overview, "计价货币", "USD");
+  await chooseOverviewOption(page, "计价货币", "USD");
 
   await expect(page.getByTestId("asset-refresh-status")).toContainText("同步完成");
   await page.request.post("/test-doubles/clock", {
@@ -107,18 +80,34 @@ test("六类来源形成正确总额、分布、真实稳定币价格与失败�
   await expect(page.getByTestId("asset-refresh-status")).toContainText(
     "同步完成 · 2 个来源失败",
   );
-  await expect(page.getByTestId("longbridge-card")).toContainText("过期数据");
-  await expect(page.getByTestId("ethereum-watch-card")).toContainText("过期数据");
-  await expect(page.getByTestId("binance-card")).toContainText("数据当前");
-  await expect(page.getByTestId("bsc-watch-card")).toContainText("数据当前");
-  await expect(page.getByTestId("longbridge-card")).toContainText("最后更新：2026-01-01 08:00");
-  await expect(page.getByTestId("binance-card")).toContainText("最后更新：2026-01-01 08:10");
-  await expect(page.getByTestId("longbridge-card")).not.toContainText("最后成功：");
   await expect(overview).toContainText("包含 2 个过期来源");
   await expect(overview.getByTestId("total-asset-amount")).toHaveText("142,548.00 USD");
-  await expect(page.getByTestId("longbridge-card").getByTestId("asset-source-total")).toHaveText(
+
+  await page.getByRole("link", { name: "查看 长桥资产来源详情" }).click();
+  const longbridge = page.getByTestId("longbridge-card");
+  await expect(longbridge).toContainText("过期数据");
+  await expect(longbridge).toContainText("最后更新：2026-01-01 08:00");
+  await expect(longbridge).not.toContainText("最后成功：");
+  await expect(longbridge.getByTestId("asset-source-total")).toHaveText(
     "100,000.00 USD",
   );
+
+  await page.goto("/");
+  await page.getByRole("link", { name: "查看 Binance 资产来源详情" }).click();
+  const binance = page.getByTestId("binance-card");
+  await expect(binance).toContainText("数据当前");
+  await expect(binance).toContainText("最后更新：2026-01-01 08:10");
+
+  await page.goto("/");
+  await page.getByRole("link", {
+    name: "查看 Ethereum 观察钱包来源详情",
+  }).click();
+  await expect(page.getByTestId("ethereum-watch-card")).toContainText("过期数据");
+  await page.goto("/");
+  await page.getByRole("link", {
+    name: "查看 BNB Smart Chain 观察钱包来源详情",
+  }).click();
+  await expect(page.getByTestId("bsc-watch-card")).toContainText("数据当前");
 });
 
 test("完整锁定到所有者再锁定旅程不泄露敏感数据且不存在越界入口", async ({

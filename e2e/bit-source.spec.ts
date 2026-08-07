@@ -37,10 +37,8 @@ async function configure(page: Page, scenario = "valid") {
 }
 
 async function startBitFlow(page: Page, assertFieldHelp = false) {
-  const dialog = page.getByRole("dialog", { name: "添加资产来源" });
-  if (!(await dialog.isVisible())) {
-    await page.getByRole("button", { name: "添加资产来源" }).click();
-  }
+  await page.goto("/asset-sources/new");
+  await expect(page).toHaveURL("/asset-sources/new");
   await page.getByRole("radio", { name: "BIT / Matrixport" }).click();
   if (assertFieldHelp) {
     await expect(
@@ -77,16 +75,20 @@ test("BIT / Matrixport 以只读凭证保存 Wallet、Balance+ 与 DCP，且不�
   });
 
   await startBitFlow(page, true);
-  const preview = page.getByRole("dialog", {
-    name: "确认 BIT / Matrixport 资产来源",
-  });
-  await expect(preview).toContainText("BIT / Matrixport 账户 · UID 605788");
-  await expect(preview).toContainText("Wallet 余额、Balance+、DCP（只读）");
+  await expect(
+    page.getByRole("heading", { name: "校验与范围预览" }),
+  ).toBeVisible();
+  await expect(page.getByText("BIT / Matrixport", { exact: true })).toBeVisible();
+  await expect(page.getByText("Wallet 余额、Balance+、DCP（只读）")).toBeVisible();
   await expect(page.getByText(API_SECRET)).toHaveCount(0);
-  await expect(preview).not.toContainText("交易");
-  await expect(preview).not.toContainText("提现");
+  await expect(page.locator("main")).not.toContainText("交易");
+  await expect(page.locator("main")).not.toContainText("提现");
 
-  await preview.getByRole("button", { name: "确认并保存" }).click();
+  await page.getByRole("button", { name: "确认并保存" }).click();
+  await expect(page).toHaveURL("/asset-sources");
+  await page.getByRole("link", {
+    name: /BIT \/ Matrixport 账户.*自动账户/,
+  }).click();
   const card = page.getByTestId("bit-card");
   await expect(card.getByTestId("asset-source-total")).toHaveText("160.00 USD");
   await expect(card).toContainText("Wallet");
@@ -95,14 +97,6 @@ test("BIT / Matrixport 以只读凭证保存 Wallet、Balance+ 与 DCP，且不�
   );
   const coverage = card.getByTestId("bit-product-coverage");
   await expect(coverage).toContainText("03 PRODUCTS");
-  const currentTarget = page.getByTestId("card-index").getByRole("button", {
-    name: "定位 BIT / Matrixport 资产",
-  });
-  await expect(currentTarget).not.toHaveAttribute("data-source-state", "error");
-  const resizeHandle = page.getByRole("button", {
-    name: /调整\s*BIT \/ Matrixport 资产宽度/,
-  });
-  await resizeHandle.press("ArrowRight");
   await expect(coverage).toBeVisible();
   await coverage.locator("summary").click();
   await expect(coverage).not.toContainText("Fixed Income");
@@ -112,27 +106,20 @@ test("BIT / Matrixport 以只读凭证保存 Wallet、Balance+ 与 DCP，且不�
   expect(await state(page)).toEqual({ savedSources: 1, savedSecrets: 1 });
 });
 
-test("BIT / Matrixport 同步异常时顶部导航标红", async ({ page }) => {
+test("BIT / Matrixport 同步异常时来源详情明确标记失败", async ({ page }) => {
   await configure(page);
   await loginAsOwner(page);
   await startBitFlow(page);
-  await page.getByRole("dialog", {
-    name: "确认 BIT / Matrixport 资产来源",
-  }).getByRole("button", { name: "确认并保存" }).click();
-  await expect(page.getByTestId("bit-card")).toBeVisible();
+  await page.getByRole("button", { name: "确认并保存" }).click();
+  await page.getByRole("link", {
+    name: /BIT \/ Matrixport 账户.*自动账户/,
+  }).click();
+  const card = page.getByTestId("bit-card");
+  await expect(card).toBeVisible();
 
   await configure(page, "refresh-failure");
-  await page.getByRole("button", { name: "立即刷新资产" }).click();
-  await expect(page.getByTestId("bit-card")).toContainText("BIT 同步失败");
-
-  const target = page.getByTestId("card-index").getByRole("button", {
-    name: "定位 BIT / Matrixport 资产（数据异常）",
-  });
-  await expect(target).toHaveAttribute("data-source-state", "error");
-  await expect(target).toHaveCSS(
-    "color",
-    /rgb\((255, 82, 71|210, 59, 48)\)/,
-  );
+  await page.getByRole("button", { name: /刷新 BIT \/ Matrixport/ }).click();
+  await expect(card).toContainText("重试来源同步失败，已保留最后成功数据");
 });
 
 test("BIT / Matrixport 确认前账户变化或保存失败不会遗留来源与凭证", async ({
@@ -141,22 +128,19 @@ test("BIT / Matrixport 确认前账户变化或保存失败不会遗留来源与
   await configure(page);
   await loginAsOwner(page);
   await startBitFlow(page);
-  const preview = page.getByRole("dialog", {
-    name: "确认 BIT / Matrixport 资产来源",
-  });
   await configure(page, "identity-changed");
-  await preview.getByRole("button", { name: "确认并保存" }).click();
-  await expect(preview.getByRole("alert")).toContainText("账户范围已变化");
+  await page.getByRole("button", { name: "确认并保存" }).click();
+  await expect(
+    page.locator(".asset-source-flow__notice[role=alert]"),
+  ).toContainText("账户范围已变化");
   expect(await state(page)).toEqual({ savedSources: 0, savedSecrets: 0 });
 
-  await preview.getByRole("button", { name: "取消" }).click();
   await configure(page, "commit-failure");
   await startBitFlow(page);
-  const failed = page.getByRole("dialog", {
-    name: "确认 BIT / Matrixport 资产来源",
-  });
-  await failed.getByRole("button", { name: "确认并保存" }).click();
-  await expect(failed.getByRole("alert")).toContainText("原子事务写入失败");
+  await page.getByRole("button", { name: "确认并保存" }).click();
+  await expect(
+    page.locator(".asset-source-flow__notice[role=alert]"),
+  ).toContainText("原子事务写入失败");
   expect(await state(page)).toEqual({ savedSources: 0, savedSecrets: 0 });
 });
 

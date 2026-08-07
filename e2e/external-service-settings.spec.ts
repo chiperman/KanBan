@@ -54,21 +54,20 @@ test("外部服务只在本机设置中加密配置，EVM 来源仅提示依赖"
   }));
   expect(JSON.stringify(body)).not.toContain("demo-test-key");
 
-  await page.getByRole("link", { name: "返回资产看板" }).click();
-  await page.getByRole("button", { name: "添加资产来源" }).click();
+  await page.goto("/asset-sources/new");
   const statusRead = page.waitForResponse((response) =>
     response.url().endsWith("/api/external-services") &&
     response.request().method() === "GET",
   );
-  await page.getByRole("radio", { name: "EVM 观察钱包" }).check();
+  await page.getByRole("radio", { name: "EVM 观察钱包" }).click();
   await statusRead;
   await expect(page.getByText("EVM 钱包依赖全局 CoinGecko")).toHaveCount(0);
 });
 
 test("未配置 EVM 服务时，来源配置页指向本机设置", async ({ page }) => {
   await loginAsOwner(page);
-  await page.getByRole("button", { name: "添加资产来源" }).click();
-  await page.getByRole("radio", { name: "EVM 观察钱包" }).check();
+  await page.goto("/asset-sources/new");
+  await page.getByRole("radio", { name: "EVM 观察钱包" }).click();
   const notice = page.getByText("EVM 钱包依赖全局 CoinGecko");
   await expect(notice).toBeVisible();
   const settings = page.getByRole("link", { name: "前往本机设置" });

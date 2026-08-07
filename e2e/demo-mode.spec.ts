@@ -18,7 +18,7 @@ test.beforeEach(async ({ request }) => {
   expect(cards.ok()).toBeTruthy();
 });
 
-test("未登录可从首页进入零落盘演示模式，并展示完整虚构来源", async ({
+test("未登录可从首页进入零落盘演示模式，并展示虚构来源摘要", async ({
   page,
 }) => {
   const assetApiRequests: string[] = [];
@@ -46,22 +46,14 @@ test("未登录可从首页进入零落盘演示模式，并展示完整虚构�
   await expect(page.getByRole("heading", { name: "Ethereum · 示例观察钱包" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "BNB Smart Chain · 示例观察钱包" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "DIY 手工资产" })).toBeVisible();
-  await expect(page.getByTestId("asset-source-total")).toHaveCount(7);
+  await expect(page.locator(".overview-card-summary--source")).toHaveCount(7);
   await expect(page.getByTestId("total-asset-yesterday-change")).toHaveCount(0);
   await expect(page.locator("body")).not.toContainText(REAL_CARD_TITLE);
 
-  await page.getByRole("button", { name: "立即刷新资产" }).click();
-  await expect(page.getByRole("status").filter({
-    hasText: "演示模式下不可操作，数据不会保存",
-  })).toContainText(
-    "演示模式下不可操作，数据不会保存",
-  );
-  await page.getByRole("button", { name: "刷新 Binance · 示例现货账户" }).click();
-  await expect(page.getByRole("status").filter({
-    hasText: "演示模式下不可操作，数据不会保存",
-  })).toContainText(
-    "演示模式下不可操作，数据不会保存",
-  );
+  await expect(page.getByRole("button", { name: "立即刷新资产" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: /刷新 Binance.*示例现货账户/ }),
+  ).toHaveCount(0);
   expect(assetApiRequests).toEqual([]);
 
   await page.getByRole("link", { name: "退出演示" }).click();

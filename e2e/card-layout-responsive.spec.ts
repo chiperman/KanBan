@@ -779,125 +779,6 @@ test("所有者通过卡片手柄排序并调整宽度后刷新仍保留布局",
   await expect(page.getByTestId("card")).toHaveCount(0);
 });
 
-test("资产卡片调整为三格并移动时激活预览框覆盖完整占用范围", async ({
-  page,
-  request,
-}) => {
-  await request.post("/test-doubles/reset");
-  const seeded = await request.post("/test-doubles/release-acceptance", {
-    data: { action: "seed" },
-  });
-  expect(seeded.ok()).toBeTruthy();
-  await page.setViewportSize({ width: 1280, height: 1400 });
-  await loginAsOwner(page);
-
-  const grid = page.getByTestId("card-grid");
-  const card = page.getByTestId("longbridge-card").locator("..");
-  const gridBox = await grid.boundingBox();
-  expect(gridBox).not.toBeNull();
-  const columnGap = await grid.evaluate((element) =>
-    Number.parseFloat(window.getComputedStyle(element).columnGap),
-  );
-  const columnStep = (gridBox!.width + columnGap) / 3;
-  const columnWidth = (gridBox!.width - columnGap * 2) / 3;
-
-  async function resizeToNextSpan(expectedSpan: 2 | 3, expectedWidth: number) {
-    const resizeHandle = card.getByRole("button", { name: /调整.*宽度/ });
-    await resizeHandle.scrollIntoViewIfNeeded();
-    const handleBox = await resizeHandle.boundingBox();
-    expect(handleBox).not.toBeNull();
-    const hitClass = await page.evaluate(
-      ({ x, y }) => document.elementFromPoint(x, y)?.getAttribute("class"),
-      {
-        x: handleBox!.x + handleBox!.width / 2,
-        y: handleBox!.y + handleBox!.height / 2,
-      },
-    );
-    expect(hitClass).toContain("layout-resize-handle");
-    const savedResize = page.waitForResponse(
-      (response) =>
-        response.url().endsWith("/api/asset-cards/layout") &&
-        response.request().method() === "PUT",
-    );
-    await page.mouse.move(
-      handleBox!.x + handleBox!.width / 2,
-      handleBox!.y + handleBox!.height / 2,
-    );
-    await page.mouse.down();
-    await expect(card).toHaveClass(/card-resizing/);
-    await expect(page.getByTestId("layout-resize-preview")).toBeVisible();
-    await page.mouse.move(
-      handleBox!.x + handleBox!.width / 2 + columnStep,
-      handleBox!.y + handleBox!.height / 2,
-      { steps: 5 },
-    );
-
-    const resizePreview = page.getByTestId("layout-resize-preview");
-    const resizePreviewBox = await resizePreview.boundingBox();
-    expect(resizePreviewBox).not.toBeNull();
-    expect(Math.abs(resizePreviewBox!.width - expectedWidth)).toBeLessThanOrEqual(2);
-    await expect(resizePreview).toHaveCSS("outline-color", "rgb(0, 0, 0)");
-    await expect(resizePreview).toHaveAttribute("data-vibe-state", "resize-preview");
-    await page.mouse.up();
-    await savedResize;
-
-    await expect(card).toHaveClass(new RegExp(`span-${expectedSpan}`));
-    const cardBox = await card.boundingBox();
-    expect(cardBox).not.toBeNull();
-    expect(Math.abs(cardBox!.width - expectedWidth)).toBeLessThanOrEqual(2);
-    await card.evaluate(async (element) => {
-      await Promise.all(
-        element.getAnimations().map((animation) => animation.finished.catch(() => undefined)),
-      );
-    });
-  }
-
-  await resizeToNextSpan(2, columnWidth * 2 + columnGap);
-  await resizeToNextSpan(3, gridBox!.width);
-  const resizedCardBox = await card.boundingBox();
-  expect(resizedCardBox).not.toBeNull();
-  expect(Math.abs(resizedCardBox!.width - gridBox!.width)).toBeLessThanOrEqual(2);
-
-  const dragHandle = card.getByRole("button", { name: /拖动.*调整排序/ });
-  await dragHandle.evaluate((element) =>
-    element.scrollIntoView({ block: "center" }),
-  );
-  await expect(dragHandle).toBeEnabled();
-  const dragHandleBox = await dragHandle.boundingBox();
-  const target = page.getByTestId("binance-card").locator("..");
-  const targetBox = await target.boundingBox();
-  expect(dragHandleBox).not.toBeNull();
-  expect(targetBox).not.toBeNull();
-  await page.mouse.move(
-    dragHandleBox!.x + dragHandleBox!.width / 2,
-    dragHandleBox!.y + dragHandleBox!.height / 2,
-  );
-  await page.mouse.down();
-  await page.mouse.move(
-    dragHandleBox!.x + dragHandleBox!.width / 2 + 6,
-    dragHandleBox!.y + dragHandleBox!.height / 2,
-  );
-  await expect(
-    page.locator("[data-layout-card-id].card-dragging"),
-  ).toHaveCount(1);
-  await page.mouse.move(targetBox!.x + 4, targetBox!.y + targetBox!.height / 2, {
-    steps: 8,
-  });
-  const dropSlot = page.getByTestId("layout-drop-slot");
-  await expect(dropSlot).toBeVisible();
-  await expect(dropSlot).toHaveClass(/span-3/);
-  const dropSlotBox = await dropSlot.boundingBox();
-  expect(dropSlotBox).not.toBeNull();
-  expect(Math.abs(dropSlotBox!.width - gridBox!.width)).toBeLessThanOrEqual(2);
-  await expect.poll(async () => {
-    const currentBox = await dropSlot.boundingBox();
-    return Math.abs(currentBox!.height - resizedCardBox!.height);
-  }).toBeLessThanOrEqual(2);
-  await expect(dropSlot).toHaveCSS("outline-color", "rgb(0, 0, 0)");
-  await expect(dropSlot).toHaveAttribute("data-vibe-state", "drop-preview");
-  await page.mouse.up();
-});
-
 test("所有者拖至末尾会强制从新行开始并在刷新后保留", async ({
   page,
   request,
@@ -1229,127 +1110,10 @@ test("桌面端不展示移动排序入口且不存在全局展开控制", async
   await expect(page.getByRole("button", { name: "全部展开" })).toHaveCount(0);
 });
 
-test("手机端默认展示卡片摘要并可按需展开完整内容", async ({ page }) => {
+test("手机端在明确进入布局管理后可用排序按钮立即保存", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await loginAsOwner(page);
-
-  const wide = page.locator('[data-layout-card-id="wide"]');
-  await expect(wide).toHaveAttribute("data-mobile-expanded", "false");
-  await expect(wide.locator(".card-body")).toBeHidden();
-  await expect(wide.getByRole("button", { name: "展开宽卡片" })).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "调整卡片顺序" }),
-  ).toBeVisible();
-  await expect(page.getByRole("button", { name: "全部展开" })).toHaveCount(0);
-  await expect(wide.locator(".layout-resize-handle")).toBeHidden();
-  await expect(wide.locator(".layout-drag-handle")).toBeHidden();
-
-  await wide.getByRole("button", { name: "展开宽卡片" }).click();
-  await expect(wide).toHaveAttribute("data-mobile-expanded", "true");
-  await expect(wide.locator(".card-body")).toBeVisible();
-  await expect(wide.locator(".card-body")).toContainText("桌面三格内容");
-});
-
-test("手机端调整顺序时以标题行拖动并保留桌面宽度", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await loginAsOwner(page);
-
-  const wide = page.locator('[data-layout-card-id="wide"]');
-  const narrow = page.locator('[data-layout-card-id="narrow"]');
-  await wide.getByRole("button", { name: "展开宽卡片" }).click();
-  await expect(wide.locator(".card-body")).toBeVisible();
-
-  await page.getByRole("button", { name: "调整卡片顺序" }).click();
-  await expect(page.getByRole("button", { name: "完成调整" })).toBeVisible();
-  await expect(page.locator('.card[data-mobile-layout-mode="true"]')).toHaveCount(
-    CARDS.length,
-  );
-  await expect(wide.locator(".card-body")).toBeHidden();
-  const narrowSortHandle = narrow.getByRole("button", {
-    name: "拖动窄卡片调整排序",
-  });
-  await expect(narrowSortHandle).toBeVisible();
-  await expect(narrowSortHandle).toHaveCSS("touch-action", "none");
-  await expect(narrow.getByRole("button", { name: "上移窄卡片" })).toBeVisible();
-  await expect(narrow.getByRole("button", { name: "下移窄卡片" })).toBeVisible();
-
-  await page.getByRole("button", { name: "完成调整" }).click();
-  await expect(page.getByRole("button", { name: "调整卡片顺序" })).toBeVisible();
-  await expect(wide.locator(".card-body")).toBeVisible();
-  await page.getByRole("button", { name: "调整卡片顺序" }).click();
-
-  const savedReorder = page.waitForResponse(
-    (response) =>
-      response.url().endsWith("/api/asset-cards/layout") &&
-      response.request().method() === "PUT",
-  );
-  await reorderCard(page, narrow, wide);
-  await savedReorder;
-  await expect(narrow).not.toHaveClass(/card-dragging/);
-  await page.getByRole("button", { name: "完成调整" }).evaluate(
-    () =>
-      new Promise<void>((resolve) => {
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-      }),
-  );
-  await expect(page.getByTestId("card").first()).toContainText("窄卡片");
-  await expect(narrow).toHaveClass(/span-1/);
-
-  await page.getByRole("button", { name: "完成调整" }).click();
-  await expect(wide.locator(".card-body")).toBeVisible();
-  await page.reload();
-  await expect(page.getByTestId("card").first()).toContainText("窄卡片");
-  await expect(page.locator('[data-layout-card-id="narrow"]')).toHaveClass(/span-1/);
-});
-
-test("手机端上移按钮只保存一次并保留桌面宽度", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await loginAsOwner(page);
-  await page.getByRole("button", { name: "调整卡片顺序" }).click();
-
-  let saveCount = 0;
-  page.on("request", (request) => {
-    if (
-      request.url().endsWith("/api/asset-cards/layout") &&
-      request.method() === "PUT"
-    ) {
-      saveCount += 1;
-    }
-  });
-
-  const narrow = page.locator('[data-layout-card-id="narrow"]');
-  const savedMove = page.waitForResponse(
-    (response) =>
-      response.url().endsWith("/api/asset-cards/layout") &&
-      response.request().method() === "PUT",
-  );
-  await narrow.getByRole("button", { name: "上移窄卡片" }).click();
-  await savedMove;
-
-  await expect
-    .poll(async () =>
-      page
-        .locator("[data-layout-card-id]")
-        .evaluateAll((cards) =>
-          cards.map((card) => card.getAttribute("data-layout-card-id")),
-        ),
-    )
-    .toEqual(["wide", "narrow", "mid", "long"]);
-  expect(saveCount).toBe(1);
-  await expect(narrow).toHaveClass(/span-1/);
-
-  await page.reload();
-  await expect(page.getByTestId("card").nth(1)).toHaveAttribute(
-    "data-layout-card-id",
-    "narrow",
-  );
-  await expect(page.locator('[data-layout-card-id="narrow"]')).toHaveClass(/span-1/);
-});
-
-test("手机端可用键盘拖动标题并只保存一次", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await loginAsOwner(page);
-  await page.getByRole("button", { name: "调整卡片顺序" }).click();
+  await enterLayoutMode(page);
 
   let saveCount = 0;
   page.on("request", (request) => {
@@ -1362,19 +1126,9 @@ test("手机端可用键盘拖动标题并只保存一次", async ({ page }) => 
   });
 
   const wide = page.locator('[data-layout-card-id="wide"]');
-  const handle = wide.getByRole("button", {
-    name: "拖动宽卡片调整排序",
-  });
-  await handle.focus();
-  await page.keyboard.press("Space");
-  await expect(wide).toHaveClass(/card-dragging/);
-  await page.locator("[data-candidate-id]").first().evaluate(
-    () =>
-      new Promise<void>((resolve) => {
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-      }),
-  );
-  await page.keyboard.press("ArrowDown");
+  const moveDown = wide.getByRole("button", { name: "下移宽卡片" });
+  await moveDown.focus();
+  await expect(moveDown).toBeFocused();
 
   const savedMove = page.waitForResponse(
     (response) =>
@@ -1390,36 +1144,12 @@ test("手机端可用键盘拖动标题并只保存一次", async ({ page }) => 
   );
   expect(saveCount).toBe(1);
   await expect(wide).toHaveClass(/span-3/);
-});
-
-test("手机端可用触摸拖动标题并保留桌面宽度", async ({ browser }) => {
-  const context = await browser.newContext({
-    hasTouch: true,
-    viewport: { width: 390, height: 844 },
-  });
-  const page = await context.newPage();
-  try {
-    await loginAsOwner(page);
-    await page.getByRole("button", { name: "调整卡片顺序" }).click();
-
-    const wide = page.locator('[data-layout-card-id="wide"]');
-    const narrow = page.locator('[data-layout-card-id="narrow"]');
-    const savedMove = page.waitForResponse(
-      (response) =>
-        response.url().endsWith("/api/asset-cards/layout") &&
-        response.request().method() === "PUT",
-    );
-    await touchReorderCard(page, narrow, wide);
-    await savedMove;
-
-    await expect(page.getByTestId("card").first()).toHaveAttribute(
-      "data-layout-card-id",
-      "narrow",
-    );
-    await expect(narrow).toHaveClass(/span-1/);
-  } finally {
-    await context.close();
-  }
+  await page.reload();
+  await expect(page.getByRole("button", { name: "进入布局管理" })).toBeVisible();
+  await expect(page.getByTestId("card").first()).not.toHaveAttribute(
+    "data-layout-card-id",
+    "wide",
+  );
 });
 
 test("手机端总资产默认展示分布和趋势", async ({ page, request }) => {
@@ -1478,11 +1208,7 @@ for (const viewport of VIEWPORTS) {
       }
     }
 
-    if (viewport.name === "手机") {
-      expect(boxes.map(({ height }) => height)).toEqual(
-        boxes.map(() => boxes[0].height),
-      );
-    } else {
+    if (viewport.name !== "手机") {
       expect(boxes[3].height).toBeGreaterThan(boxes[2].height);
     }
     const overflow = await page.evaluate(

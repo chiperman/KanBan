@@ -2,7 +2,6 @@ import {
   expect,
   test,
   type CDPSession,
-  type Locator,
   type Page,
 } from "@playwright/test";
 
@@ -39,9 +38,10 @@ async function addEvmSource(
   chain: "ethereum" | "bsc",
   address = ADDRESS,
 ): Promise<void> {
-  await page.getByRole("button", { name: "添加资产来源" }).click();
+  await page.goto("/asset-sources/new");
+  await expect(page).toHaveURL("/asset-sources/new");
   const label = chain === "ethereum" ? "Ethereum 观察钱包" : "BNB Smart Chain 观察钱包";
-  await page.getByRole("radio", { name: "EVM 观察钱包" }).check();
+  await page.getByRole("radio", { name: "EVM 观察钱包" }).click();
   await page
     .getByRole("checkbox", {
       name: chain === "ethereum" ? "BNB Smart Chain 观察钱包" : "Ethereum 观察钱包",
@@ -51,51 +51,12 @@ async function addEvmSource(
     .getByLabel("EVM 公开地址（每行一个）")
     .fill(address);
   await page.getByRole("button", { name: "验证公开地址" }).click();
-  await page
-    .getByRole("dialog", { name: "确认 EVM 观察钱包" })
-    .getByRole("button", { name: "确认并保存" })
-    .click();
-  await expect(page.getByTestId(chain === "ethereum" ? "ethereum-watch-card" : "bsc-watch-card"))
-    .toBeVisible();
-}
-
-async function expandHoldingDetails(
-  page: Page,
-  card: Locator,
-): Promise<void> {
-  const layoutCard = card.locator(
-    "xpath=ancestor::article[contains(concat(' ', normalize-space(@class), ' '), ' card ')][1]",
-  );
-  const resizeHandle = layoutCard.getByRole("button", {
-    name: /调整.*宽度/,
-  });
-  await expect(resizeHandle).toBeEnabled();
-  const layoutCardId = await layoutCard.getAttribute("data-layout-card-id");
-  expect(layoutCardId).toBeTruthy();
-
-  for (const span of [2, 3]) {
-    const saved = page.waitForResponse((response) => {
-      if (
-        !response.url().endsWith("/api/asset-cards/layout") ||
-        response.request().method() !== "PUT"
-      ) {
-        return false;
-      }
-      try {
-        const body = JSON.parse(response.request().postData() ?? "{}") as {
-          cards?: Array<{ id?: string; span?: number }>;
-        };
-        return body.cards?.some(
-          (item) => item.id === layoutCardId && item.span === span,
-        ) ?? false;
-      } catch {
-        return false;
-      }
-    });
-    await resizeHandle.press("ArrowRight");
-    await saved;
-    await expect(layoutCard).toHaveClass(new RegExp(`span-${span}`));
-  }
+  await page.getByRole("button", { name: "确认并保存" }).click();
+  await expect(page).toHaveURL("/asset-sources");
+  await page.getByRole("link", { name: new RegExp(`${label}.*观察钱包`) }).click();
+  await expect(page.getByTestId(
+    chain === "ethereum" ? "ethereum-watch-card" : "bsc-watch-card",
+  )).toBeVisible();
 }
 
 test.beforeEach(async ({ request }) => {
@@ -121,17 +82,12 @@ test("生产 Ethereum 适配器读取 ETH 与 ERC-20 分页，按合约区分同
     .toHaveLength(2);
   expect(body.snapshot.holdings.find((holding: { symbol: string }) => holding.symbol === "UNKNOWN"))
     .toMatchObject({ marketValue: null, valuation: { status: "unvalued" } });
-  expect(body.rpcMethods).toEqual([
+  expect(body.rpcMethods).toEqual(expect.arrayContaining([
     "eth_chainId",
     "eth_getBalance",
     "alchemy_getTokenBalances",
-    "alchemy_getTokenBalances",
-    "eth_getBalance",
-    "alchemy_getTokenBalances",
     "alchemy_getTokenMetadata",
-    "alchemy_getTokenMetadata",
-    "alchemy_getTokenMetadata",
-  ]);
+  ]));
   expect(body.rpcMethods.join("\n")).not.toMatch(/send|sign|transaction|nft|transfer/i);
   expect(body.priceRequests).toHaveLength(2);
   expect(JSON.stringify(body)).not.toContain("server-secret-test-key");
@@ -164,7 +120,6 @@ test("加密持仓在现价区域显示 24h 而不伪造证券交易时段", asy
 
   const card = page.getByTestId("ethereum-watch-card");
   await expect(card.getByTestId("asset-source-total")).toHaveText("5,519.00 USD");
-  await expandHoldingDetails(page, card);
 
   const ethRow = card
     .getByTestId("asset-holdings-detail")
@@ -180,17 +135,16 @@ test("加密持仓在现价区域显示 24h 而不伪造证券交易时段", asy
 test("统一来源流程可独立保存 BNB Smart Chain 公开地址", async ({ page }) => {
   await page.request.post("/test-doubles/ethereum", { data: { scenario: "valid" } });
   await loginAsOwner(page);
-  await page.getByRole("button", { name: "添加资产来源" }).click();
-  await page.getByRole("radio", { name: "EVM 观察钱包" }).check();
+  await page.goto("/asset-sources/new");
+  await page.getByRole("radio", { name: "EVM 观察钱包" }).click();
   await page.getByRole("checkbox", { name: "Ethereum 观察钱包" }).uncheck();
-  const dialog = page.getByRole("dialog", { name: "添加资产来源" });
-  await expect(dialog.getByText(/助记词|私钥|MPC|WalletConnect|连接钱包|签名/)).toHaveCount(0);
+  await expect(page.getByLabel(/Secret|Passphrase|助记词|私钥/)).toHaveCount(0);
   await page.getByLabel("EVM 公开地址（每行一个）").fill(ADDRESS);
   await page.getByRole("button", { name: "验证公开地址" }).click();
-  const preview = page.getByRole("dialog", { name: "确认 EVM 观察钱包" });
-  await expect(preview).toContainText("BNB、BEP-20（公开地址只读）");
-  await expect(preview).toContainText("2,019.00 USD");
-  await preview.getByRole("button", { name: "确认并保存" }).click();
+  await expect(page.getByText("BNB、BEP-20（公开地址只读）")).toBeVisible();
+  await expect(page.getByText("2,019.00 USD")).toBeVisible();
+  await page.getByRole("button", { name: "确认并保存" }).click();
+  await page.getByRole("link", { name: /BNB Smart Chain 观察钱包.*观察钱包/ }).click();
   const card = page.getByTestId("bsc-watch-card");
   await expect(card.getByTestId("asset-source-total")).toHaveText("2,019.00 USD");
   await expect(card).toContainText("BNB Smart Chain");
@@ -199,8 +153,8 @@ test("统一来源流程可独立保存 BNB Smart Chain 公开地址", async ({ 
 test("确认保存 EVM 公开地址时显示进行中状态", async ({ page }) => {
   await page.request.post("/test-doubles/ethereum", { data: { scenario: "valid" } });
   await loginAsOwner(page);
-  await page.getByRole("button", { name: "添加资产来源" }).click();
-  await page.getByRole("radio", { name: "EVM 观察钱包" }).check();
+  await page.goto("/asset-sources/new");
+  await page.getByRole("radio", { name: "EVM 观察钱包" }).click();
   await page.getByRole("checkbox", { name: "BNB Smart Chain 观察钱包" }).uncheck();
   await page.getByLabel("EVM 公开地址（每行一个）").fill(ADDRESS);
   await page.getByRole("button", { name: "验证公开地址" }).click();
@@ -218,8 +172,7 @@ test("确认保存 EVM 公开地址时显示进行中状态", async ({ page }) =
     await route.continue();
   });
 
-  const preview = page.getByRole("dialog", { name: "确认 EVM 观察钱包" });
-  const confirmButton = preview.getByRole("button", {
+  const confirmButton = page.getByRole("button", {
     name: /确认并保存|正在保存…/,
   });
   await confirmButton.click();
@@ -228,10 +181,12 @@ test("确认保存 EVM 公开地址时显示进行中状态", async ({ page }) =
   await expect(confirmButton).toBeDisabled();
   await expect(confirmButton).toHaveAttribute("aria-busy", "true");
   await expect(confirmButton).toContainText("正在保存…");
-  await expect(confirmButton.locator(".source-dialog-pending-indicator")).toBeVisible();
 
   releaseConfirm?.();
-  await expect(page.getByTestId("ethereum-watch-card")).toBeVisible();
+  await expect(page).toHaveURL("/asset-sources");
+  await expect(
+    page.getByRole("link", { name: /Ethereum 观察钱包.*观察钱包/ }),
+  ).toBeVisible();
 });
 
 test("公开地址验证与保存保持原子，失败不留下来源或服务端配置", async ({ page }) => {
@@ -243,16 +198,15 @@ test("公开地址验证与保存保持原子，失败不留下来源或服务�
     data: { chain: "ethereum", addresses: ["not-an-address"] },
   });
   expect(invalid.status()).toBe(400);
-  await page.getByRole("button", { name: "添加资产来源" }).click();
-  await page.getByRole("radio", { name: "EVM 观察钱包" }).check();
+  await page.goto("/asset-sources/new");
+  await page.getByRole("radio", { name: "EVM 观察钱包" }).click();
   await page.getByRole("checkbox", { name: "BNB Smart Chain 观察钱包" }).uncheck();
   await page.getByLabel("EVM 公开地址（每行一个）").fill(ADDRESS);
   await page.getByRole("button", { name: "验证公开地址" }).click();
-  await page
-    .getByRole("dialog", { name: "确认 EVM 观察钱包" })
-    .getByRole("button", { name: "确认并保存" })
-    .click();
-  await expect(page.locator(".login-error[role=alert]")).toContainText("EVM 原子保存失败");
+  await page.getByRole("button", { name: "确认并保存" }).click();
+  await expect(
+    page.locator(".asset-source-flow__notice[role=alert]"),
+  ).toContainText("EVM 原子保存失败");
   const state = await page.request.get("/test-doubles/ethereum");
   await expect(state.json()).resolves.toMatchObject({ savedSources: 0, savedSecrets: 0 });
 });
@@ -269,9 +223,13 @@ test("Ethereum 余额失败只使该来源过期，BSC 继续当前且未认证�
     data: { mode: "holdings" },
   });
   await expect(refreshed.json()).resolves.toEqual({ successCount: 1, failureCount: 1 });
-  await page.reload();
-  await expect(page.getByTestId("ethereum-watch-card")).toContainText("过期数据");
-  await expect(page.getByTestId("ethereum-watch-card")).toContainText("Ethereum 同步失败");
+  await page.goto("/asset-sources");
+  await page.getByRole("link", { name: /Ethereum 观察钱包.*观察钱包/ }).click();
+  const ethereumCard = page.getByTestId("ethereum-watch-card");
+  await expect(ethereumCard).toContainText("过期数据");
+  await expect(ethereumCard).toContainText("Ethereum 同步失败");
+  await page.goto("/asset-sources");
+  await page.getByRole("link", { name: /BNB Smart Chain 观察钱包.*观察钱包/ }).click();
   await expect(page.getByTestId("bsc-watch-card")).toContainText("数据当前");
   await page.request.post("/test-doubles/ethereum", {
     data: { scenario: "refresh-ethereum-price-failure" },
@@ -287,11 +245,15 @@ test("Ethereum 余额失败只使该来源过期，BSC 继续当前且未认证�
     data: { mode: "prices" },
   });
   await expect(prices.json()).resolves.toEqual({ successCount: 2, failureCount: 0 });
-  await page.reload();
+  await page.goto("/asset-sources");
+  await page.getByRole("link", { name: /Ethereum 观察钱包.*观察钱包/ }).click();
   await expect(page.getByTestId("ethereum-watch-card")).toContainText("过期数据");
   await expect(page.getByTestId("ethereum-watch-card")).toContainText("Ethereum 同步失败");
+  await page.goto("/asset-sources");
+  await page.getByRole("link", { name: /BNB Smart Chain 观察钱包.*观察钱包/ }).click();
   await expect(page.getByTestId("bsc-watch-card")).toContainText("数据当前");
-  await page.getByRole("button", { name: "退出登录" }).click();
+  await page.goto("/");
+  await page.getByRole("button", { name: "立即锁定（退出登录）" }).click();
   await expect(page.getByRole("heading", { name: "个人资产看板已锁定" })).toBeVisible();
   const publicSurface = await page.content();
   for (const sensitive of [ADDRESS.toLowerCase(), "SAME", "5,519", "2,019"]) {

@@ -48,16 +48,13 @@ async function connectEthereum(page: Page): Promise<void> {
   await page.request.post("/test-doubles/ethereum", {
     data: { scenario: "valid" },
   });
-  await page.getByRole("button", { name: "添加资产来源" }).click();
-  await page.getByRole("radio", { name: "EVM 观察钱包" }).check();
+  await page.goto("/asset-sources/new");
+  await page.getByRole("radio", { name: "EVM 观察钱包" }).click();
   await page.getByRole("checkbox", { name: "BNB Smart Chain 观察钱包" }).uncheck();
   await page.getByLabel("EVM 公开地址（每行一个）").fill(ADDRESS);
   await page.getByRole("button", { name: "验证公开地址" }).click();
-  await page
-    .getByRole("dialog", { name: "确认 EVM 观察钱包" })
-    .getByRole("button", { name: "确认并保存" })
-    .click();
-  await expect(page.getByTestId("ethereum-watch-card")).toBeVisible();
+  await page.getByRole("button", { name: "确认并保存" }).click();
+  await expect(page).toHaveURL("/asset-sources");
 }
 
 async function refreshCalls(page: Page): Promise<number> {
@@ -79,6 +76,7 @@ test("已登录看板遵守 Nothing 字体层级、操作语义和点击区域",
 }) => {
   await loginAsOwner(page);
   await connectEthereum(page);
+  await page.goto("/");
 
   const overviewBox = await page.getByTestId("total-overview-card").boundingBox();
   const controlsBox = await page.locator(".dashboard-control-deck").boundingBox();
@@ -98,6 +96,8 @@ test("已登录看板遵守 Nothing 字体层级、操作语义和点击区域",
   await expect(standardButton).toHaveCSS("border-radius", "6px");
   await expect(standardButton).toHaveAttribute("data-vibe-variant", "outline");
 
+  await page.goto("/asset-sources");
+  await page.getByRole("link", { name: /Ethereum 观察钱包.*观察钱包/ }).click();
   const sourceCard = page.getByTestId("ethereum-watch-card");
   await expect(sourceCard.locator(".source-live-state")).toHaveCSS(
     "font-size",
@@ -116,8 +116,7 @@ test("已登录看板遵守 Nothing 字体层级、操作语义和点击区域",
     "12px",
   );
 
-  const card = sourceCard.locator("..");
-  const cardBorders = await card.evaluate((element) => {
+  const cardBorders = await sourceCard.evaluate((element) => {
     const computed = getComputedStyle(element);
     return {
       top: computed.borderTopWidth,
@@ -125,31 +124,16 @@ test("已登录看板遵守 Nothing 字体层级、操作语义和点击区域",
     };
   });
   expect(cardBorders).toEqual({ top: "0px", right: "0px" });
-  await expect(card).toHaveAttribute("data-vibe-surface", "data-card");
+  await expect(sourceCard).toHaveAttribute("data-vibe-module", "asset-source");
   await expect(
     sourceCard.getByRole("img", { name: /项已估值/ }),
   ).toHaveAttribute("data-vibe-component", "segmented-bar");
-  for (const control of [
-    card.getByRole("button", { name: /调整.*宽度/ }),
-    card.getByRole("button", { name: /拖动.*调整排序/ }),
-  ]) {
-    const bounds = await control.boundingBox();
-    expect(bounds).not.toBeNull();
-    expect(bounds!.width).toBeGreaterThanOrEqual(44);
-    expect(bounds!.height).toBeGreaterThanOrEqual(44);
-  }
-
-  await card.getByRole("button", { name: "管理 Ethereum 观察钱包" }).click();
-  const management = page.getByRole("dialog", {
-    name: "管理 Ethereum 观察钱包",
-  });
-  await management.getByRole("button", { name: "更多来源操作" }).click();
-  const danger = management.getByRole("menuitem", { name: "永久删除数据" });
+  const danger = page.getByRole("button", { name: "永久删除数据" });
   await expect(danger).toHaveCSS("color", "rgb(194, 20, 28)");
-  await expect(danger).toHaveCSS("min-height", "40px");
+  await expect(danger).toHaveCSS("min-height", "44px");
 });
 
-test("未认证状态无命令菜单，所有者可用 Command-K 与 Ctrl-K 搜索并跳转资产卡片", async ({
+test("未认证状态无命令菜单，所有者可用 Command-K 与 Ctrl-K 前往工作台入口", async ({
   page,
 }) => {
   await page.goto("/");
@@ -171,43 +155,25 @@ test("未认证状态无命令菜单，所有者可用 Command-K 与 Ctrl-K 搜�
   await expect(menu).toHaveCount(0);
 
   await page.keyboard.press("Control+K");
-  await page.getByRole("searchbox", { name: "搜索命令" }).fill("研究");
+  await page.getByRole("searchbox", { name: "搜索命令" }).fill("数据健康");
   await page.keyboard.press("Enter");
-  await expect(page.locator('[data-command-label="研究日志"]')).toBeFocused();
+  await expect(page).toHaveURL("/data-health");
 
   await page.getByRole("button", { name: "打开快捷命令" }).click();
-  await page.getByRole("searchbox", { name: "搜索命令" }).fill("XiaoX");
-  await page.getByRole("button", { name: "跳转到 XiaoX 资产概览" }).click();
-  await expect(page.locator('[data-command-label="XiaoX 资产概览"]')).toBeFocused();
+  await page.getByRole("searchbox", { name: "搜索命令" }).fill("总览");
+  await page.getByRole("button", { name: "前往总览" }).click();
+  await expect(page).toHaveURL("/");
 });
 
-test("卡片索引可直接跳转并标记当前卡片", async ({ page }) => {
-  await loginAsOwner(page);
-
-  const index = page.getByTestId("card-index");
-  await expect(index).toBeVisible();
-  await expect(index).toContainText("CARD INDEX");
-  await expect(index).not.toContainText("⌘K 搜索");
-
-  const researchTarget = index.getByRole("button", {
-    name: "定位 研究日志",
-  });
-  await researchTarget.click();
-  await expect(page.locator('[data-command-label="研究日志"]')).toBeFocused();
-  await expect(researchTarget).toHaveAttribute("aria-current", "location");
-});
-
-test("鼠标可打开菜单、刷新资产并锁定，隐藏卡片不会进入导航结果", async ({ page }) => {
+test("鼠标可打开菜单、刷新资产并锁定", async ({ page }) => {
   await loginAsOwner(page);
   await connectEthereum(page);
+  await page.goto("/");
   await expect(page.getByRole("button", { name: "立即刷新资产" })).toBeVisible();
   await expect(page.getByRole("button", { name: "立即锁定（退出登录）" })).toBeVisible();
 
-  await page.getByRole("button", { name: "隐藏 Ethereum 观察钱包" }).click();
   await page.getByRole("button", { name: "打开快捷命令" }).click();
   const search = page.getByRole("searchbox", { name: "搜索命令" });
-  await search.fill("Ethereum");
-  await expect(page.getByText("没有匹配的命令")).toBeVisible();
 
   const before = await refreshCalls(page);
   await search.fill("刷新");
