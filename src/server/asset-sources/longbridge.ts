@@ -48,7 +48,19 @@ function optionalText(value: unknown): string | null {
 }
 
 export function isLongbridgeUsOptionSymbol(symbol: string): boolean {
-  return /^[A-Z0-9.]+\d{6}[CP]\d{6}\.US$/i.test(symbol);
+  const match = /^(?:[A-Z0-9.^_-]+)(\d{6})[CP]\d+\.US$/i.exec(symbol);
+  if (match === null) return false;
+  const expiration = match[1];
+  if (expiration === undefined) return false;
+  const year = 2000 + Number(expiration.slice(0, 2));
+  const month = Number(expiration.slice(2, 4));
+  const day = Number(expiration.slice(4, 6));
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
 }
 
 function optionalUnixSecondsIso(value: unknown, field: string): string | null {

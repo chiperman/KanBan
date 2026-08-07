@@ -1,5 +1,7 @@
 import { expect, test, type CDPSession, type Page } from "@playwright/test";
 
+import { isLongbridgeUsOptionSymbol } from "@/server/asset-sources/longbridge";
+
 interface VirtualPasskey {
   client: CDPSession;
   authenticatorId: string;
@@ -22,6 +24,25 @@ const PRODUCTION_ACCESS_TOKEN = [
   "test-signature",
 ].join(".");
 const PRODUCTION_REFRESH_TOKEN = "refresh-token-must-never-reach-browser";
+
+test("长桥美股期权代码支持可变长度行权价且拒绝无效到期日", () => {
+  for (const symbol of [
+    "NVDA260805C210000.US",
+    "HOOD260807P89000.US",
+    "SPXW260807P6345.US",
+    "^SPX260807C1.US",
+    "BRK.B260807C450000.US",
+  ]) {
+    expect(isLongbridgeUsOptionSymbol(symbol)).toBe(true);
+  }
+  for (const symbol of [
+    "AAPL260232C210000.US",
+    "AAPL260807C210000.HK",
+    "AAPL.US",
+  ]) {
+    expect(isLongbridgeUsOptionSymbol(symbol)).toBe(false);
+  }
+});
 
 async function attachPasskey(page: Page): Promise<VirtualPasskey> {
   const client = await page.context().newCDPSession(page);
@@ -662,6 +683,28 @@ test("Keychain 长桥快照使用 USD 总额并按官方汇率估值跨币种持
       }),
       expect.objectContaining({
         symbol: "NVDA260805C210000.US",
+        quantity: "-1",
+        currentPrice: null,
+        marketValue: null,
+        sourceMarketValue: null,
+        valuation: {
+          status: "quote-unavailable",
+          reason: "Longbridge Open API 未接入期权行情",
+        },
+      }),
+      expect.objectContaining({
+        symbol: "HOOD260807P89000.US",
+        quantity: "-2",
+        currentPrice: null,
+        marketValue: null,
+        sourceMarketValue: null,
+        valuation: {
+          status: "quote-unavailable",
+          reason: "Longbridge Open API 未接入期权行情",
+        },
+      }),
+      expect.objectContaining({
+        symbol: "SPXW260807P6345.US",
         quantity: "-1",
         currentPrice: null,
         marketValue: null,

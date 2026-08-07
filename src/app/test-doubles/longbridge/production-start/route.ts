@@ -259,6 +259,18 @@ export async function POST(request: Request) {
                     quantity: "-1",
                     currency: "USD",
                     cost_price: "0.450",
+                  }, {
+                    symbol: "HOOD260807P89000.US",
+                    symbol_name: "HOOD 260807 89 Put",
+                    quantity: "-2",
+                    currency: "USD",
+                    cost_price: "0.650",
+                  }, {
+                    symbol: "SPXW260807P6345.US",
+                    symbol_name: "SPXW 260807 6345 Put",
+                    quantity: "-1",
+                    currency: "USD",
+                    cost_price: "10.000",
                   }],
                 }],
               },
