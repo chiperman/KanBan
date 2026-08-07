@@ -15,7 +15,8 @@
     "start": "node scripts/run-local-next.mjs start",
     "typecheck": "tsc --noEmit",
     "test:browser": "playwright test",
-    "test:ticket-02": "playwright test e2e/overview-layout-mode.spec.ts",
+    "test:ticket-02:quick": "playwright test --config=playwright.ticket-02.config.ts",
+    "test:ticket-02": "pnpm build && pnpm test:ticket-02:quick",
     "test:regression": "next build && pnpm test:browser",
     "test": "pnpm test:regression"
   },
