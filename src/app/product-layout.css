@@ -4354,6 +4354,89 @@ body {
   margin-top: var(--vibe-space-6);
 }
 
+.security-settings__statuses {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--vibe-space-3);
+  max-width: 720px;
+  margin: var(--vibe-space-6) 0 0;
+}
+
+.security-settings__statuses > div {
+  min-width: 0;
+  padding: var(--vibe-space-4);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.security-settings__statuses dt,
+.security-settings__statuses dd {
+  margin: 0;
+}
+
+.security-settings__statuses dt {
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-label);
+  letter-spacing: 0.08em;
+}
+
+.security-settings__statuses dd {
+  margin-top: var(--vibe-space-2);
+  color: var(--secondary);
+  font-size: var(--vibe-type-body);
+}
+
+.security-settings__statuses dd[data-vibe-tone="success"] {
+  color: var(--success);
+}
+
+.security-settings__recovery {
+  margin-top: var(--vibe-space-8);
+  padding-top: var(--vibe-space-5);
+  border-top: 1px solid var(--line-2);
+}
+
+.security-settings__recovery h3 {
+  margin: 0;
+  color: var(--display);
+  font-size: var(--vibe-type-subheading);
+}
+
+.business-data-backup-settings__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--vibe-space-3);
+  margin-top: var(--vibe-space-6);
+}
+
+.business-data-restore {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--vibe-space-3);
+  max-width: 720px;
+  margin-top: var(--vibe-space-6);
+}
+
+.business-data-restore__preview {
+  display: grid;
+  gap: var(--vibe-space-4);
+  max-width: 720px;
+  margin-top: var(--vibe-space-5);
+  padding-top: var(--vibe-space-5);
+  border-top: 1px solid var(--line-2);
+}
+
+.business-data-restore__preview > p,
+.business-data-restore__dialog-summary {
+  margin: 0;
+  color: var(--secondary);
+  font-size: var(--vibe-type-caption);
+  line-height: 1.6;
+}
+
 .external-service-settings {
   margin-top: var(--vibe-space-12);
   padding-top: var(--vibe-space-6);
@@ -4560,6 +4643,14 @@ body {
 }
 
 @media (max-width: 639px) {
+  .business-data-restore {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .business-data-restore > .vibe-button {
+    width: 100%;
+  }
+
   .external-service-settings__head {
     display: grid;
   }

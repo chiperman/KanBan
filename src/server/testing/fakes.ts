@@ -1744,6 +1744,29 @@ export function createTestServices(): TestServices {
       connections: assetSourceConnections,
     }),
   );
+  let exportedBackupFileName: string | null = null;
+  const backupPreview = async () => {
+    const [sources, cards, snapshots] = await Promise.all([
+      assetSources.list(),
+      assetCards.list(),
+      dailyAssetSnapshots.list(),
+    ]);
+    const days = snapshots.map(({ day }) => day).sort();
+    return {
+      sourceCount: sources.length,
+      cardCount: cards.length,
+      snapshotRange: {
+        from: days[0] ?? null,
+        to: days.at(-1) ?? null,
+      },
+      replaces: {
+        sourceCount: sources.length,
+        cardCount: cards.length,
+        snapshotCount: snapshots.length,
+      },
+      warning: "备份仍包含敏感资产数据，请仅存放在受保护的位置。",
+    };
+  };
   return {
     clock,
     assetCards,
@@ -1771,13 +1794,24 @@ export function createTestServices(): TestServices {
     assetSourceOnboarding,
     businessDataBackups: {
       async exportBackup() {
-        throw new Error("内存测试服务不提供本地备份文件");
+        exportedBackupFileName = "asset-dashboard-test-backup.json";
+        return {
+          fileName: exportedBackupFileName,
+          checksum: "test-only-checksum",
+          warning: "备份仍包含敏感资产数据，请仅存放在受保护的位置。",
+        };
       },
-      async previewRestore() {
-        throw new Error("内存测试服务不提供本地备份文件");
+      async previewRestore(fileName: string) {
+        if (fileName !== exportedBackupFileName) {
+          throw new Error("本机备份文件不存在");
+        }
+        return backupPreview();
       },
-      async restore() {
-        throw new Error("内存测试服务不提供本地备份文件");
+      async restore(fileName: string) {
+        if (fileName !== exportedBackupFileName) {
+          throw new Error("本机备份文件不存在");
+        }
+        return backupPreview();
       },
     },
   };

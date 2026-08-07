@@ -97,7 +97,7 @@ async function openRecoverySettings(page: Page): Promise<void> {
   if (new URL(page.url()).pathname !== "/settings") {
     await page.getByRole("link", { name: "本机设置" }).click();
   }
-  await expect(page.getByRole("heading", { name: "本机设置" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "设置与安全" })).toBeVisible();
 }
 
 async function configureRecovery(page: Page): Promise<string> {
