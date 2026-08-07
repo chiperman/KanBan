@@ -63,6 +63,7 @@ import {
 } from "@/domain/daily-asset-snapshots";
 import { decimalAdd } from "@/domain/decimal";
 import { normalizeAssetSourceDisplayName } from "@/domain/asset-source-display-name";
+import { assertManualAssetRecordNotFuture } from "@/domain/manual-asset-records";
 import {
   mapBinanceSnapshot,
   validateBinanceReadOnlyPermissions,
@@ -363,9 +364,7 @@ export class InMemoryManualAssetRecords implements ManualAssetRecords {
     input: ManualAssetRecordInput,
   ): Promise<void> {
     const capturedAt = this.clock.now().toISOString();
-    if (input.day > shanghaiDay(capturedAt)) {
-      throw new Error("记录日期不能晚于今天");
-    }
+    assertManualAssetRecordNotFuture(input.day, shanghaiDay(capturedAt));
     const sources = await this.sources.list();
     const source = sources.find((item) => item.id === sourceId);
     if (!source) throw new Error("资产来源不存在");

@@ -27,6 +27,9 @@ import {
 } from "@/domain/daily-asset-snapshots";
 import { normalizeAssetSourceDisplayName } from "@/domain/asset-source-display-name";
 import {
+  assertManualAssetRecordNotFuture,
+} from "@/domain/manual-asset-records";
+import {
   normalizeIgnoredAssetKeys,
   updateEvmTokenPreferences,
 } from "@/domain/evm-token-preferences";
@@ -1056,9 +1059,7 @@ export class FileDashboardDatabase {
     capturedAt: string,
   ): Promise<void> {
     await this.mutate((state) => {
-      if (input.day > shanghaiDay(capturedAt)) {
-        throw new Error("记录日期不能晚于今天");
-      }
+      assertManualAssetRecordNotFuture(input.day, shanghaiDay(capturedAt));
       const source = state.assetSources.find((item) => item.id === sourceId);
       if (!source) throw new Error("资产来源不存在");
       if (source.kind !== "manual") {
@@ -2963,9 +2964,7 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
     capturedAt: string,
   ): Promise<void> {
     this.transaction(() => {
-      if (input.day > shanghaiDay(capturedAt)) {
-        throw new Error("记录日期不能晚于今天");
-      }
+      assertManualAssetRecordNotFuture(input.day, shanghaiDay(capturedAt));
       const source = this.listSourcesSync().find(
         (item) => item.id === sourceId,
       );

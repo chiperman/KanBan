@@ -718,6 +718,9 @@ export function AssetSourceCard({
   const sourceTrendByDay = new Map(
     sourceHistory.map((observation) => [observation.day, observation]),
   );
+  const trendSnapshotByDay = new Map(
+    history.map((snapshot) => [snapshot.day, snapshot]),
+  );
   const sourceDailyDetails = [...sourceHistory].sort((left, right) =>
     right.day.localeCompare(left.day)
   );
@@ -739,11 +742,17 @@ export function AssetSourceCard({
         };
       }
       const recordedObservation = sourceTrendByDay.get(record.day);
+      const recordedSnapshot = trendSnapshotByDay.get(record.day);
       return {
         day,
         index,
         amount: recordedObservation?.total[reportingCurrency] ??
-          (record.currency === reportingCurrency ? record.amount : null),
+          convertCurrencyAmount(
+            record.amount,
+            record.currency,
+            reportingCurrency,
+            recordedSnapshot?.exchangeRates ?? [],
+          ),
         manualRecordDay: record.day,
         observed: record.day === day && recordedObservation !== undefined,
         status: "complete" as const,

@@ -224,6 +224,82 @@ test("手工资产来源在卡片内按上海自然日保存一条，并可在�
   });
 });
 
+test("手工资产历史可编辑、删除，并回退到最新保留记录", async ({
+  page,
+  request,
+}) => {
+  await request.post("/test-doubles/clock", {
+    data: { now: "2026-01-04T04:00:00.000Z" },
+  });
+  await loginAsOwner(page);
+  await page.getByRole("button", { name: "添加资产来源" }).click();
+  const create = page.getByRole("dialog", { name: "添加资产来源" });
+  await create.getByRole("radio", { name: "手工记录资产" }).click();
+  await create.getByLabel("资产名称").fill("A股");
+  await create.getByRole("button", { name: "添加资产来源" }).click();
+
+  const card = page.getByTestId("manual-asset-card");
+  await card.getByRole("button", { name: "添加数据" }).click();
+  const firstRecord = page.getByRole("dialog", { name: "记录 A股 数据" });
+  await firstRecord.getByLabel("记录日期").click();
+  await page
+    .getByRole("dialog", { name: "选择记录日期" })
+    .getByRole("button", { name: "2026-01-01" })
+    .click();
+  await firstRecord.getByLabel("资产总额").fill("100000");
+  await firstRecord.getByRole("button", { name: "保存数据" }).click();
+
+  await card.getByRole("button", { name: "添加数据" }).click();
+  const latestRecord = page.getByRole("dialog", { name: "记录 A股 数据" });
+  await latestRecord.getByLabel("资产总额").fill("108000");
+  await latestRecord.getByRole("button", { name: "保存数据" }).click();
+
+  await chooseOverviewOption(page, "计价货币", "CNY");
+  const history = card.getByLabel("A股历史记录");
+  const latestItem = history.locator("li").filter({ hasText: "2026-01-04" });
+  await expect(history).toContainText("2026-01-01100,000.00 CNY");
+  await expect(latestItem).toContainText("108,000.00 CNY");
+
+  await latestItem.getByRole("button", { name: "编辑" }).click();
+  const edit = page.getByRole("dialog", { name: "记录 A股 数据" });
+  await expect(edit.getByLabel("记录日期")).toBeDisabled();
+  await edit.getByLabel("资产总额").fill("109000");
+  await edit.getByRole("button", { name: "保存数据" }).click();
+  await expect(latestItem).toContainText("109,000.00 CNY");
+  await expect(history.getByRole("listitem")).toHaveCount(2);
+
+  await latestItem.getByRole("button", { name: "删除" }).click();
+  const deletion = page.getByRole("dialog", {
+    name: "删除 A股 2026-01-04 数据",
+  });
+  await deletion.getByRole("button", { name: "删除数据" }).click();
+
+  await expect(history).not.toContainText("2026-01-04");
+  await expect(history).toContainText("2026-01-01");
+  await expect(card.getByTestId("asset-source-total")).toContainText(
+    "100,000.00 CNY",
+  );
+
+  const [manualSource] = (await manualState(page)).sources.filter(
+    ({ kind }) => kind === "manual",
+  );
+  const future = await page.request.patch(
+    `/api/asset-sources/${encodeURIComponent(manualSource.id)}`,
+    {
+      data: {
+        action: "manual-record",
+        day: "2026-01-05",
+        amount: "120000",
+        currency: "CNY",
+      },
+    },
+  );
+  expect(future.status()).toBe(400);
+  await expect(future.json()).resolves.toEqual({
+    error: "记录日期不能晚于今天",
+  });
+});
+
 test("低频手工记录不降低完整性，并按最近记录延用趋势金额", async ({
   page,
   request,

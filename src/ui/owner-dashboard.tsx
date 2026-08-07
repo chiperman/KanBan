@@ -1531,7 +1531,10 @@ export function OwnerDashboard({
           titleId="manual-asset-record-title"
         >
           <VibeDateField
-            disabled={manualRecordPending}
+            disabled={
+              manualRecordPending ||
+              manualRecordTarget.record !== undefined
+            }
             fieldId="manual-asset-record-day"
             label="记录日期"
             max={currentDay}

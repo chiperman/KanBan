@@ -84,6 +84,15 @@ export function parseManualAssetRecordDay(value: unknown): string {
   return day;
 }
 
+export function assertManualAssetRecordNotFuture(
+  day: string,
+  currentDay: string,
+): void {
+  if (day > currentDay) {
+    throw new InvalidManualAssetRecordError("记录日期不能晚于今天");
+  }
+}
+
 export function parseManualAssetClass(
   value: unknown,
 ): ManualAssetClass | null {
