@@ -144,3 +144,22 @@ test("组合与区间投资盈亏从完整资产端点和外部资金进出派�
     investmentProfitRatio: "0.413793103448275862",
   });
 });
+
+test("没有初始投入事实时不把全部资产误判为投资盈亏", () => {
+  const analysis = analyzeInvestmentPerformance({
+    currency: "USD",
+    asOf: "2026-08-05T00:00:00.000Z",
+    currentTotal: {
+      amount: "16000",
+      complete: true,
+      observedAt: "2026-08-05T00:00:00.000Z",
+    },
+    cashflows: [],
+    interval: null,
+  });
+
+  assert.deepEqual(analysis.current, {
+    cumulativeNetInvestment: null,
+    investmentProfit: null,
+  });
+});

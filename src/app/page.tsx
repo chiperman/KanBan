@@ -4,10 +4,9 @@ import {
   type PageSearchParams,
 } from "@/server/auth/canonical-origin"
 import { getServices } from "@/server/composition"
-import { HeaderUtilities } from "@/ui/header-utilities"
+import { DailyOverviewWorkspace } from "@/ui/daily-overview-workspace"
 import { LocalClock } from "@/ui/local-clock"
 import { LogoutButton } from "@/ui/logout-button"
-import { OwnerDashboard } from "@/ui/owner-dashboard"
 import { OwnerLogin } from "@/ui/owner-login"
 import { SessionGuard } from "@/ui/session-guard"
 import { ThemeSwitcher } from "@/ui/theme-switcher"
@@ -52,29 +51,20 @@ export default async function AssetDashboardPage({
   }
 
   const now = services.clock.now()
-  const assetCards = await services.assetCards.list()
-  const [storedSources, manualRecords, formalDailySettlements] = await Promise.all([
+  const [
+    storedSources,
+    cashflows,
+    dailyAssetTrendObservations,
+    dailyBaselines,
+  ] = await Promise.all([
     services.assetSources.list(),
-    services.manualAssetRecords.list(),
-    services.formalDailySettlements.list(),
+    services.investmentCashflows.list(),
+    services.dailyAssetSnapshots.listTrendObservations(),
+    services.dailyAssetSnapshots.list(),
   ])
-  const recordsBySource = new Map<string, typeof manualRecords>()
-  for (const record of manualRecords) {
-    recordsBySource.set(record.sourceId, [
-      ...(recordsBySource.get(record.sourceId) ?? []),
-      record,
-    ])
-  }
   const assetSources = storedSources.map(
-    ({ credentialReference: _credentialReference, permissions: _permissions, ...source }) => ({
-      ...source,
-      ...(source.kind === "manual"
-        ? { manualRecords: recordsBySource.get(source.id) ?? [] }
-        : {}),
-    })
+    ({ credentialReference: _credentialReference, permissions: _permissions, ...source }) => source,
   )
-  const dailyAssetTrendObservations =
-    await services.dailyAssetSnapshots.listTrendObservations()
 
   return (
     <SessionGuard>
@@ -105,25 +95,18 @@ export default async function AssetDashboardPage({
             <div className="header-side">
               <span className="header-system">EXTERNAL ACCESS / READ ONLY</span>
               <LocalClock initialTime={now.toISOString()} compact />
-              <HeaderUtilities
-                commandMenu={false}
-                refreshEnabled={assetSources.some(
-                  (source) =>
-                    source.lifecycle !== "disconnected" &&
-                    source.kind !== "manual",
-                )}
-              />
               <LogoutButton />
               <ThemeSwitcher />
             </div>
           </header>
           <main id="main-content">
-            <OwnerDashboard
-              cards={assetCards}
-              assetSources={assetSources}
-              dailyAssetTrendObservations={dailyAssetTrendObservations}
-              formalDailySettlements={formalDailySettlements}
+            <DailyOverviewWorkspace
+              cashflows={cashflows}
+              currentObservedAt={now.toISOString()}
+              dailyBaselines={dailyBaselines}
               currentDay={shanghaiDay(now)}
+              sources={assetSources}
+              trendObservations={dailyAssetTrendObservations}
             />
           </main>
         </div>

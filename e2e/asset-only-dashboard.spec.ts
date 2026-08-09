@@ -105,7 +105,13 @@ test("登录后只展示资产能力，普通内容卡片接口与编辑入口�
 }) => {
   await loginAsOwner(page);
 
-  await expect(page.getByText(SENSITIVE_TITLE)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "总览" })).toBeVisible();
+  await expect(
+    page
+      .getByTestId("workbench-desktop-navigation")
+      .getByRole("link", { name: "资产与持仓", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText(SENSITIVE_TITLE)).toHaveCount(0);
   await expect(
     page.getByRole("button", {
       name: /新建身份卡片|新建 Now 卡片|新建链接卡片|新建 Markdown 卡片/,

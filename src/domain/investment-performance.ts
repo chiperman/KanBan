@@ -237,10 +237,12 @@ export function analyzeInvestmentPerformance(input: {
   const cashflowsBeforeAsOf = input.cashflows.filter(
     (cashflow) => new Date(cashflow.occurredAt).valueOf() <= asOf,
   );
-  const cumulativeNetInvestment = sumCashflows(
-    cashflowsBeforeAsOf,
-    input.currency,
+  const hasInitialInvestment = cashflowsBeforeAsOf.some(
+    (cashflow) => cashflow.kind === "initial-investment",
   );
+  const cumulativeNetInvestment = hasInitialInvestment
+    ? sumCashflows(cashflowsBeforeAsOf, input.currency)
+    : null;
 
   const current = input.currentTotal;
   const currentCanCalculate =

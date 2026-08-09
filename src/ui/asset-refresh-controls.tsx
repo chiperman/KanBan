@@ -154,12 +154,14 @@ export function AssetSourceRefreshButton({
 }
 
 export function AssetRefreshControls({
+  automaticRefresh = true,
   enabled,
   hasEvmSources,
   hasNonEvmSources,
   needsDailyEvmPriceRefresh,
   onPendingChange,
 }: {
+  automaticRefresh?: boolean;
   enabled: boolean;
   hasEvmSources: boolean;
   hasNonEvmSources: boolean;
@@ -232,7 +234,7 @@ export function AssetRefreshControls({
   }, [refresh]);
 
   useEffect(() => {
-    if (!enabled || automaticRefreshAttempted.current) return;
+    if (!automaticRefresh || !enabled || automaticRefreshAttempted.current) return;
     automaticRefreshAttempted.current = true;
     const plan = initialAutomaticPlan.current;
     void (async () => {
@@ -243,10 +245,10 @@ export function AssetRefreshControls({
         await runAndMark("prices", false, "evm");
       }
     })();
-  }, [enabled, runAndMark]);
+  }, [automaticRefresh, enabled, runAndMark]);
 
   useEffect(() => {
-    if (!hasNonEvmSources) return;
+    if (!automaticRefresh || !hasNonEvmSources) return;
     const tick = () => {
       if (document.visibilityState === "hidden" || inFlight.current) return;
       const now = Date.now();
@@ -258,10 +260,10 @@ export function AssetRefreshControls({
     };
     const timer = window.setInterval(tick, 30_000);
     return () => window.clearInterval(timer);
-  }, [hasNonEvmSources, runAndMark]);
+  }, [automaticRefresh, hasNonEvmSources, runAndMark]);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!automaticRefresh || !enabled) return;
     const visibilityChanged = () => {
       if (document.visibilityState === "visible") {
         void runAndMark("all");
@@ -269,7 +271,7 @@ export function AssetRefreshControls({
     };
     document.addEventListener("visibilitychange", visibilityChanged);
     return () => document.removeEventListener("visibilitychange", visibilityChanged);
-  }, [enabled, runAndMark]);
+  }, [automaticRefresh, enabled, runAndMark]);
 
   useEffect(() => {
     if (!enabled) return;
