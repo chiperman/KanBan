@@ -50,6 +50,9 @@ test("设置与安全集中低频入口，计价货币与金额显示仍属于�
   await expect(page.getByRole("heading", { name: "默认偏好" })).toBeVisible();
   await expect(page.getByRole("button", { name: "导出业务数据备份" })).toBeVisible();
   await expect(page.getByLabel("要恢复的本机备份文件名")).toBeVisible();
+  await expect(
+    page.getByText("资金账本及对应的长桥参考汇率观察", { exact: false }),
+  ).toBeVisible();
 
   await expect(page.getByLabel("计价货币")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "隐藏关键信息" })).toHaveCount(0);
@@ -104,6 +107,9 @@ test("备份与恢复入口不回显外部来源凭证，且可用键盘预演�
   await page.keyboard.press("Enter");
   await expect(
     page.getByRole("status").filter({ hasText: "已恢复业务数据" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: "资金账本" }),
   ).toBeVisible();
 });
 

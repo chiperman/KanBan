@@ -95,9 +95,15 @@ function totpCode(secret: string, now: Date): string {
 
 async function openRecoverySettings(page: Page): Promise<void> {
   if (new URL(page.url()).pathname !== "/settings") {
-    await page.getByRole("link", { name: "本机设置" }).click();
+    await page.getByRole("link", { name: "设置与安全" }).click();
   }
   await expect(page.getByRole("heading", { name: "设置与安全" })).toBeVisible();
+}
+
+async function expectAuthenticatedWorkbench(page: Page): Promise<void> {
+  await expect(page.getByTestId("workbench-shell")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "总览" })).toBeVisible();
+  await expect(page.getByTestId("login-gate")).toHaveCount(0);
 }
 
 async function configureRecovery(page: Page): Promise<string> {
@@ -288,7 +294,7 @@ test("所有者可仅凭 TOTP 备用登录", async ({ page, request }) => {
   await submitButton.click();
 
   await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
-  await expect(page.getByText(SENSITIVE_BODY)).toBeVisible();
+  await expectAuthenticatedWorkbench(page);
 });
 
 test("同一个 TOTP 验证码不能重复登录", async ({ page, request }) => {
@@ -423,7 +429,7 @@ test("TOTP 连续五次失败后限流五分钟", async ({
   await page.getByRole("button", { name: "完成备用登录" }).click();
 
   await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
-  await expect(page.getByText(SENSITIVE_BODY)).toBeVisible();
+  await expectAuthenticatedWorkbench(page);
 });
 
 test("TOTP 从第五次失败起锁定五分钟", async ({ page, request }) => {
@@ -498,7 +504,7 @@ test("连续三十分钟无操作后自动锁定，随后仍可使用 Passkey �
   ).toBeVisible();
   expect(await page.content()).not.toContain(SENSITIVE_BODY);
   await unlockWithPasskey(page);
-  await expect(page.getByText(SENSITIVE_BODY)).toBeVisible();
+  await expectAuthenticatedWorkbench(page);
 });
 
 test("并发 TOTP 请求共享五次尝试上限", async ({ page, request }) => {
@@ -564,7 +570,7 @@ test("关闭浏览器上下文后敏感会话不会在新上下文恢复", async
   );
   const firstPage = firstContext.pages()[0] ?? (await firstContext.newPage());
   await provisionAndLogin(firstPage);
-  await expect(firstPage.getByText(SENSITIVE_BODY)).toBeVisible();
+  await expectAuthenticatedWorkbench(firstPage);
   const session = (await firstContext.cookies()).find(
     (cookie) => cookie.name === "pad_session",
   );

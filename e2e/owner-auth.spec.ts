@@ -70,6 +70,12 @@ async function login(page: Page) {
   await page.getByRole("button", { name: "使用 Passkey 登录" }).click();
 }
 
+async function expectAuthenticatedWorkbench(page: Page) {
+  await expect(page.getByTestId("workbench-shell")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "总览" })).toBeVisible();
+  await expect(page.getByTestId("login-gate")).toHaveCount(0);
+}
+
 test("未认证首页只显示所有者登录入口且不泄露资产数据", async ({ page }) => {
   const bodies: string[] = [];
   page.on("response", (response) => {
@@ -161,10 +167,7 @@ test("所有者可从锁定首页完成首次预置并返回登录资产看板",
   await expect(page.getByTestId("view-mode")).toContainText("资产看板");
   await expect(page.getByTestId("local-time")).toBeVisible();
   await expect(page.getByTestId("local-time")).not.toContainText("LOCAL");
-  const asset = page.getByTestId("card").filter({ hasText: SENSITIVE_TITLE });
-  await expect(asset).toHaveCount(1);
-  await expect(asset).toContainText(SENSITIVE_BODY);
-  await expect(page.getByTestId("login-gate")).toHaveCount(0);
+  await expectAuthenticatedWorkbench(page);
 
   await page.goto("/setup");
   await expect(page.getByRole("status")).toHaveCount(0);
@@ -250,9 +253,7 @@ test("所有者退出后立即返回登录入口且旧会话失效", async ({ pa
 
   await page.goto("/");
   await login(page);
-  await expect(
-    page.getByTestId("card").filter({ hasText: SENSITIVE_TITLE }),
-  ).toBeVisible();
+  await expectAuthenticatedWorkbench(page);
 
   await page.getByRole("button", { name: "退出登录" }).click();
   await expect(page.getByTestId("login-gate")).toBeVisible();

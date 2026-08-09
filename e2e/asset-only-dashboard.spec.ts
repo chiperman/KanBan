@@ -77,6 +77,28 @@ test("未认证首页只是所有者访问入口，不再提供公开主页或�
   expect(bodies.join("\n")).not.toContain("SENSITIVE-ASSET");
 });
 
+test("旧演示查询参数不会绕过锁定面或泄露虚构资产形状", async ({
+  page,
+}) => {
+  await attachPasskey(page);
+  await page.goto("/setup");
+  await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
+  await expect(page.getByRole("status")).toContainText("已完成预置");
+
+  await page.goto("/?mode=demo");
+
+  await expect(page.getByTestId("login-gate")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "使用 Passkey 登录" }),
+  ).toBeVisible();
+  await expect(page.getByTestId("demo-mode-dashboard")).toHaveCount(0);
+  await expect(page.getByTestId("locked-product-flow")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "进入演示模式" })).toHaveCount(0);
+  expect(await page.content()).not.toMatch(
+    /Longbridge|Binance|OKX|Bitget|Web3|DEMO DATA|NET ASSET|CONSOLIDATED VIEW/,
+  );
+});
+
 test("登录后只展示资产能力，普通内容卡片接口与编辑入口均不存在", async ({
   page,
   request,

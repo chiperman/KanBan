@@ -577,8 +577,7 @@ a {
 .source-option,
 .login-dialog,
 .setup-panel,
-.empty-state,
-.session-locked {
+.empty-state {
   border-color: var(--line-2);
   border-radius: var(--r-md);
   background: var(--surface);
@@ -3267,14 +3266,130 @@ body {
   font-size: var(--vibe-type-caption);
 }
 
-.empty-state,
-.session-locked {
+.empty-state {
   padding: var(--vibe-space-24) var(--vibe-space-6);
   border: 0;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
   border-radius: 0;
   background: transparent;
+}
+
+.session-locked {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: var(--vibe-space-6);
+  border: 0;
+  animation: session-locked-veil-in var(--vibe-duration-theme) var(--ease);
+}
+
+/* 磨砂层独立于做透明度动画的容器：同一元素叠加 backdrop-filter 与透明度
+   动画时 Chromium 可能丢失子元素光栅化，拆层规避。 */
+.session-locked-veil {
+  position: absolute;
+  inset: 0;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+
+.session-locked-content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--vibe-space-3);
+  text-align: center;
+}
+
+/* 离场时不淡出罩子（避免露出底层残留内容），而是内容沉下、纯色幕布升起，
+   让整页刷新前的最后一帧是纯色，与登录门淡入衔接成连续过渡。 */
+.session-locked-content,
+.session-locked-curtain {
+  transition: opacity var(--vibe-duration-fast) var(--ease);
+}
+
+.session-locked-curtain {
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.session-locked.is-departing .session-locked-content {
+  opacity: 0;
+}
+
+.session-locked.is-departing .session-locked-curtain {
+  opacity: 1;
+}
+
+.session-locked-icon {
+  color: var(--display);
+  animation: session-locked-focus var(--vibe-duration-theme) var(--ease) 80ms
+    backwards;
+}
+
+.session-locked .empty-title {
+  animation: session-locked-fade-in var(--vibe-duration-theme) var(--ease)
+    140ms backwards;
+}
+
+.session-locked .empty-hint {
+  animation: session-locked-fade-in var(--vibe-duration-theme) var(--ease)
+    200ms backwards;
+}
+
+@keyframes session-locked-veil-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes session-locked-focus {
+  from {
+    opacity: 0;
+    filter: blur(8px);
+  }
+
+  to {
+    opacity: 1;
+    filter: none;
+  }
+}
+
+@keyframes session-locked-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-locked,
+  .session-locked-icon,
+  .session-locked .empty-title,
+  .session-locked .empty-hint {
+    animation: none;
+  }
+
+  .session-locked-content,
+  .session-locked-curtain {
+    transition: none;
+  }
 }
 
 .empty-title {
@@ -5531,15 +5646,57 @@ body {
   padding: var(--vibe-space-10);
   border: 0;
   background: transparent;
+  animation: login-gate-enter 520ms var(--ease) both;
+}
+
+/* 锁定罩淡出后，登录信息与数据流分层到达，避免整页刷新造成的硬切。 */
+@keyframes login-gate-enter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--vibe-space-3));
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-locked .login-gate--owner .login-intro {
+  animation: login-content-enter 420ms var(--ease) 80ms both;
+}
+
+.page-locked .login-flow {
+  animation: login-content-enter 360ms var(--ease) 160ms both;
+}
+
+@keyframes login-content-enter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--vibe-space-2));
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-locked .login-gate,
+  .page-locked .login-gate--owner .login-intro,
+  .page-locked .login-flow {
+    animation: none;
+  }
 }
 
 .page-locked .login-gate--owner {
   grid-template-areas:
-    "intro visual"
-    "flow visual";
-  grid-template-columns: minmax(0, 0.92fr) minmax(520px, 1.08fr);
+    "intro"
+    "flow";
+  grid-template-columns: minmax(0, 430px);
   grid-template-rows: auto auto;
-  column-gap: clamp(var(--vibe-space-8), 4vw, var(--vibe-space-16));
+  column-gap: 0;
   row-gap: var(--vibe-space-8);
 }
 
@@ -5977,15 +6134,14 @@ body {
   .page-locked .login-gate--owner {
     grid-template-areas:
       "intro"
-      "flow"
-      "visual";
+      "flow";
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto;
+    grid-template-rows: auto auto;
     row-gap: var(--vibe-space-8);
   }
 
   .page-locked .login-gate--owner.login-gate--owner-choice {
-    grid-template-rows: auto auto auto;
+    grid-template-rows: auto auto;
     row-gap: var(--vibe-space-8);
   }
 

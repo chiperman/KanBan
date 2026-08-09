@@ -1,5 +1,4 @@
 import { shanghaiDay } from "@/domain/daily-asset-snapshots"
-import { createDemoDashboardData } from "@/domain/demo-dashboard"
 import {
   redirectLoopbackIpToLocalhost,
   type PageSearchParams,
@@ -13,9 +12,6 @@ import { OwnerLogin } from "@/ui/owner-login"
 import { SessionGuard } from "@/ui/session-guard"
 import { ThemeSwitcher } from "@/ui/theme-switcher"
 import { WorkbenchShell } from "@/ui/workbench-shell"
-import { VibeLink } from "@/ui/vibe/vibe-button"
-import { VibeDotIcon } from "@/ui/vibe/vibe-dot-icon"
-import { VibeTooltip } from "@/ui/vibe/vibe-tooltip"
 
 export const dynamic = "force-dynamic"
 
@@ -25,58 +21,6 @@ export default async function AssetDashboardPage({
   searchParams: PageSearchParams
 }) {
   await redirectLoopbackIpToLocalhost("/", searchParams)
-  const demoMode = (await searchParams).mode === "demo"
-
-  if (demoMode) {
-    const demo = createDemoDashboardData(new Date())
-    return (
-      <div className="page page-dashboard page-demo" data-testid="demo-mode-dashboard">
-        <a className="skip-link" href="#main-content">
-          跳到主要内容
-        </a>
-        <header className="page-header">
-          <div className="header-title">
-            <p className="header-label">
-              <span className="header-index" aria-hidden="true">
-                01
-              </span>
-              <span className="header-wordmark" lang="en">
-                PERSONAL ASSET DASHBOARD
-              </span>
-            </p>
-            <span data-testid="view-mode" hidden>
-              演示模式 · 虚构数据 · 无需登录
-            </span>
-          </div>
-          <div className="header-side">
-            <span className="header-system demo-mode-indicator">
-              DEMO DATA / NO PERSISTENCE
-            </span>
-            <LocalClock initialTime={new Date().toISOString()} compact />
-            <VibeLink
-              aria-label="退出演示"
-              className="header-demo-link"
-              href="/"
-              variant="outline"
-            >
-              退出演示
-            </VibeLink>
-            <ThemeSwitcher />
-          </div>
-        </header>
-        <main id="main-content">
-          <OwnerDashboard
-            cards={demo.cards}
-            assetSources={demo.assetSources}
-            dailyAssetTrendObservations={demo.dailyAssetTrendObservations}
-            formalDailySettlements={[]}
-            currentDay={demo.currentDay}
-            mode="demo"
-          />
-        </main>
-      </div>
-    )
-  }
 
   const services = getServices()
   const session = await services.auth.currentSession()
@@ -97,16 +41,6 @@ export default async function AssetDashboardPage({
           </div>
           <div className="header-side">
             <LocalClock initialTime={new Date().toISOString()} compact />
-            <VibeTooltip label="进入演示模式">
-              <VibeLink
-                aria-label="进入演示模式"
-                className="header-action-button header-demo-link"
-                href="/?mode=demo"
-                variant="outline"
-              >
-                <VibeDotIcon name="computer" size={24} />
-              </VibeLink>
-            </VibeTooltip>
             <ThemeSwitcher />
           </div>
         </header>
@@ -179,16 +113,6 @@ export default async function AssetDashboardPage({
                     source.kind !== "manual",
                 )}
               />
-              <VibeTooltip label="进入演示模式">
-                <VibeLink
-                  aria-label="进入演示模式"
-                  className="header-action-button header-demo-link"
-                  href="/?mode=demo"
-                  variant="outline"
-                >
-                  <VibeDotIcon name="computer" size={24} />
-                </VibeLink>
-              </VibeTooltip>
               <LogoutButton />
               <ThemeSwitcher />
             </div>
