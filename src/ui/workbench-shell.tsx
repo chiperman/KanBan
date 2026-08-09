@@ -58,7 +58,20 @@ export function WorkbenchShell({
         className="workbench-navigation workbench-desktop-navigation"
         data-testid="workbench-desktop-navigation"
       >
-        <p className="workbench-navigation-label">资产管理工作台</p>
+        <VibeLink
+          aria-label="返回资产总览"
+          className="workbench-navigation-brand"
+          href="/"
+          variant="text"
+        >
+          <span aria-hidden="true" className="workbench-navigation-brand-index">
+            01
+          </span>
+          <span className="workbench-navigation-brand-copy">
+            <strong lang="en">PERSONAL ASSET</strong>
+            <span lang="en">DASHBOARD</span>
+          </span>
+        </VibeLink>
         <div className="workbench-navigation-links">
           <WorkbenchDestinationLinks />
         </div>

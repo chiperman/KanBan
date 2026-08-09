@@ -75,30 +75,22 @@ test.beforeEach(async ({ request }) => {
   expect(seeded.ok()).toBeTruthy();
 });
 
-test("既有自动来源、观察钱包与手工记录经工作台入口保持身份、持仓、趋势、布局和只读授权", async ({
+test("既有自动来源、观察钱包与手工记录经工作台入口保持身份、持仓、趋势和只读授权", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await loginAsOwner(page);
 
   const binanceSummary = page.getByRole("link", {
-    name: /查看 Binance 资产来源详情/,
+    name: /查看 Binance 只读账户 来源详情/,
   });
   await expect(binanceSummary).toBeVisible();
   await expect(
-    page.getByRole("link", { name: /查看 Ethereum 观察钱包来源详情/ }),
+    page.getByRole("link", { name: /查看 Ethereum 观察钱包 来源详情/ }),
   ).toBeVisible();
   await expect(
-    page.getByRole("link", { name: /查看 迁移手工储备来源详情/ }),
+    page.getByRole("link", { name: /查看 迁移手工储备 来源详情/ }),
   ).toBeVisible();
-  const binanceLayoutCard = binanceSummary.locator("xpath=ancestor::article[1]");
-  await expect(binanceLayoutCard).toHaveClass(
-    /span-2/,
-  );
-  await expect(binanceLayoutCard).toHaveClass(
-    /starts-new-row/,
-  );
-
   await binanceSummary.click();
   await expect(page).toHaveURL(/\/asset-sources\/test-binance-source-2$/);
   await expect(page.getByRole("heading", { name: "Binance 只读账户" })).toBeVisible();
@@ -138,8 +130,14 @@ test("既有自动来源、观察钱包与手工记录经工作台入口保持�
 
   await page.goto("/data-health");
   const diagnostics = page.getByTestId("data-health-diagnostics");
-  await expect(diagnostics).toContainText("Binance 只读账户");
   await expect(diagnostics).toContainText("Ethereum 观察钱包");
+  await expect(
+    diagnostics.getByRole("button", { name: "显示需关注来源（2 个）" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await diagnostics.getByRole("button", {
+    name: "显示正常来源（5 个）",
+  }).click();
+  await expect(diagnostics).toContainText("Binance 只读账户");
   await expect(diagnostics).toContainText("迁移手工储备");
   await expect(
     diagnostics.getByRole("button", { name: /刷新|修复|断开|删除/ }),

@@ -147,7 +147,7 @@ export function buildDailyAssetSnapshot(
 export function mergeDailyTrendObservation(
   previous: DailyAssetTrendObservation,
   next: DailyAssetTrendObservation,
-  preserveObservationCapturedAt: boolean,
+  preservePreviousOnFailedRefresh: boolean,
 ): DailyAssetTrendObservation {
   const bySourceId = new Map(
     previous.sources.map((source) => [source.sourceId, source]),
@@ -156,10 +156,14 @@ export function mergeDailyTrendObservation(
     const previousSource = bySourceId.get(source.sourceId);
     bySourceId.set(
       source.sourceId,
-      preserveObservationCapturedAt &&
-          previousSource?.complete &&
-          !source.complete
-        ? { ...source, capturedAt: previousSource.capturedAt }
+      preservePreviousOnFailedRefresh && previousSource !== undefined
+        ? {
+            ...source,
+            capturedAt: previousSource.capturedAt,
+            total: previousSource.total,
+          }
+        : previousSource?.complete && !source.complete
+          ? previousSource
         : source,
     );
   }

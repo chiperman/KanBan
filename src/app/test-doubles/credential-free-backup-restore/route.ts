@@ -413,12 +413,22 @@ export async function POST(request: Request) {
     const preview = await backups.previewRestore(exported.fileName);
     await backups.restore(exported.fileName);
     const [restoredSource] = await database.listSources();
+    const [restoredCard] = await database.listAssetCards();
+    if (restoredCard === undefined) {
+      throw new Error("备份恢复后缺少资产卡片");
+    }
     const trendObservations = await database.listDailyAssetTrendObservations();
     return Response.json({
       preview,
       restored: {
         sourceIds: (await database.listSources()).map(({ id }) => id),
         cardIds: (await database.listAssetCards()).map(({ id }) => id),
+        cardLayout: {
+          id: restoredCard.id,
+          hidden: restoredCard.hidden ?? false,
+          span: restoredCard.span,
+          startsNewRow: restoredCard.startsNewRow ?? false,
+        },
         snapshotDays: (await database.listDailyAssetSnapshots()).map(({ day }) => day),
         trendObservations: {
           days: trendObservations.map(({ day }) => day),

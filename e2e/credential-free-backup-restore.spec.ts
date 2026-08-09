@@ -33,6 +33,12 @@ test("导出后可以恢复业务数据且来源默认断开", async ({ request 
     restored: {
       sourceIds: ["backup-source"],
       cardIds: ["backup-card"],
+      cardLayout: {
+        id: "backup-card",
+        hidden: true,
+        span: 2,
+        startsNewRow: true,
+      },
       snapshotDays: ["2026-07-27", "2026-07-28"],
       trendObservations: {
         days: ["2026-07-27", "2026-07-28"],
