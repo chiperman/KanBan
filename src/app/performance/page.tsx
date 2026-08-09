@@ -5,6 +5,18 @@ import {
   type PageSearchParams,
 } from "@/server/auth/canonical-origin";
 import { getServices } from "@/server/composition";
+import {
+  buildTotalValuation,
+  convertCurrencyAmount,
+  type ReportingCurrency,
+} from "@/domain/valuation";
+import { hasManualAssetRecord } from "@/domain/manual-asset-records";
+import { shanghaiDay } from "@/domain/daily-asset-snapshots";
+import {
+  longbridgeReferenceRates,
+  type PortfolioObservation,
+} from "@/domain/investment-performance";
+import { InvestmentPerformanceWorkspace } from "@/ui/investment-performance-workspace";
 import { SessionGuard } from "@/ui/session-guard";
 import { WorkbenchShell } from "@/ui/workbench-shell";
 
@@ -16,24 +28,71 @@ export default async function PerformancePage({
   searchParams: PageSearchParams;
 }) {
   await redirectLoopbackIpToLocalhost("/performance", searchParams);
-  if ((await getServices().auth.currentSession()) === null) redirect("/");
+  const services = getServices();
+  if ((await services.auth.currentSession()) === null) redirect("/");
+  const now = services.clock.now();
+  const [cashflows, sources, trendObservations] = await Promise.all([
+    services.investmentCashflows.list(),
+    services.assetSources.list(),
+    services.dailyAssetSnapshots.listTrendObservations(),
+  ]);
+  const usdValuation = buildTotalValuation(sources, "USD", "source");
+  const longbridgeRates = longbridgeReferenceRates(sources);
+  const recordedSources = sources.filter(hasManualAssetRecord);
+  const currentTotals = (["USD", "CNY", "HKD"] as const).reduce(
+    (totals, currency) => {
+      const amount = usdValuation.amount === null
+        ? null
+        : currency === "USD"
+          ? usdValuation.amount
+          : convertCurrencyAmount(
+            usdValuation.amount,
+            "USD",
+            currency,
+            longbridgeRates,
+          );
+      const complete =
+        amount !== null &&
+        usdValuation.incomplete === false &&
+        usdValuation.expiredCount === 0 &&
+        recordedSources.length > 0 &&
+        recordedSources.every(
+          (source) =>
+            source.lifecycle !== "disconnected" &&
+            source.sync.status === "current",
+        );
+      totals[currency] = amount === null
+        ? null
+        : {
+            amount,
+            complete,
+            observedAt: now.toISOString(),
+          };
+      return totals;
+    },
+    {} as Record<ReportingCurrency, PortfolioObservation | null>,
+  );
 
   return (
     <SessionGuard>
-      <WorkbenchShell refreshEnabled={false}>
+      <WorkbenchShell
+        refreshEnabled={sources.some(
+          (source) =>
+            source.lifecycle !== "disconnected" && source.kind !== "manual",
+        )}
+      >
         <div className="page page-workbench-destination">
           <a className="skip-link" href="#main-content">
             跳到主要内容
           </a>
           <main id="main-content">
-            <p className="card-label">PORTFOLIO / PERFORMANCE</p>
-            <h1>收益分析</h1>
-            <div className="empty-state">
-              <p className="empty-title">收益分析正在迁移</p>
-              <p className="empty-hint">
-                资金账本、累计净投入、组合投资盈亏与区间解释将在此集中呈现；不会引入交易或资金操作。
-              </p>
-            </div>
+            <InvestmentPerformanceWorkspace
+              cashflows={cashflows}
+              currentDay={shanghaiDay(now)}
+              currentObservedAt={now.toISOString()}
+              currentTotals={currentTotals}
+              trendObservations={trendObservations}
+            />
           </main>
         </div>
       </WorkbenchShell>
