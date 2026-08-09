@@ -30,9 +30,6 @@ async function configureDataHealth(page: Page): Promise<void> {
 async function loginWithDataHealthFixture(page: Page): Promise<void> {
   await configureDataHealth(page);
   await loginAsOwner(page);
-  await expect(page.getByTestId("asset-refresh-status")).toContainText(
-    "来源失败",
-  );
   await configureDataHealth(page);
 }
 
@@ -41,7 +38,9 @@ async function chooseOption(
   label: string,
   option: string,
 ): Promise<void> {
-  const control = page.getByRole("button", { name: label });
+  const control = page
+    .getByTestId("data-health-history")
+    .getByRole("button", { name: label });
   await control.click();
   await page.getByRole("option", { name: option }).click();
   await expect(control).toContainText(option);
@@ -67,7 +66,30 @@ test("数据健康诊断同步、估值与历史缺口，但不提供修复操�
 
   await expect(page.getByRole("heading", { name: "数据健康" })).toBeVisible();
   const diagnostics = page.getByTestId("data-health-diagnostics");
-  await expect(diagnostics).toContainText("只读诊断");
+  await expect(diagnostics).toContainText(
+    "先确认哪些来源影响当前资产视图，再进入来源详情排查。",
+  );
+  await expect(
+    diagnostics.getByLabel("共 5 个来源，3 个正常，2 个需关注"),
+  ).toBeVisible();
+  await expect(
+    diagnostics.locator(".data-health-source--issue h3"),
+  ).toHaveText(["Beta Crypto", "Unknown Wallet"]);
+  await expect(
+    diagnostics.getByRole("button", {
+      name: "显示需关注来源（2 个）",
+    }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    diagnostics.getByTestId("data-health-source-source-alpha"),
+  ).toHaveCount(0);
+
+  await diagnostics.getByRole("button", {
+    name: "显示正常来源（3 个）",
+  }).click();
+  await expect(
+    diagnostics.getByRole("heading", { name: "正常来源" }),
+  ).toBeVisible();
 
   const alpha = page.getByTestId("data-health-source-source-alpha");
   await expect(alpha).toContainText("数据当前");
@@ -79,6 +101,10 @@ test("数据健康诊断同步、估值与历史缺口，但不提供修复操�
   await expect(aShares).toContainText("手工记录");
   await expect(aShares).toContainText("估值完整");
   await expect(aShares).not.toContainText("估值不完整");
+
+  await diagnostics.getByRole("button", {
+    name: "显示需关注来源（2 个）",
+  }).click();
 
   const beta = page.getByTestId("data-health-source-source-beta");
   await expect(beta).toContainText("同步失败");
@@ -122,7 +148,7 @@ test("数据健康可按范围、来源与完整性筛选历史，并进入来�
   await expect(history).toContainText("不完整历史");
 
   const sourceDetail = page.getByRole("link", {
-    name: "查看 Beta Crypto 来源详情",
+    name: "排查同步 Beta Crypto 来源详情",
   });
   await sourceDetail.focus();
   await expect(sourceDetail).toBeFocused();
@@ -132,6 +158,76 @@ test("数据健康可按范围、来源与完整性筛选历史，并进入来�
   await expect(
     page.getByRole("button", { name: "刷新 Beta Crypto" }),
   ).toBeVisible();
+});
+
+test("单来源刷新失败保留最后成功数据，并提供可理解的重试", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await loginWithDataHealthFixture(page);
+  await page.goto("/asset-sources/source-beta");
+
+  const sourceTotal = page.getByTestId("asset-source-total");
+  await expect(sourceTotal).toHaveText("200.00 USD");
+  const totalBeforeRefresh = await sourceTotal.innerText();
+  let refreshAttempts = 0;
+  await page.route("**/api/asset-sources/refresh", async (route) => {
+    refreshAttempts += 1;
+    if (refreshAttempts === 1) {
+      await route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "网络暂时不可用" }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        successCount: 1,
+        failureCount: 0,
+        sources: [],
+      }),
+    });
+  });
+
+  const refresh = page.getByRole("button", { name: "刷新 Beta Crypto" });
+  await refresh.click();
+  const status = page.getByTestId(
+    "asset-source-refresh-status-source-beta",
+  );
+  await expect(status).toContainText("网络暂时不可用");
+  await expect(refresh).toContainText("重试");
+  await expect(sourceTotal).toHaveText(totalBeforeRefresh);
+
+  await refresh.click();
+  await expect(status).toContainText("刷新完成");
+  await expect(sourceTotal).toHaveText(totalBeforeRefresh);
+  expect(refreshAttempts).toBe(2);
+});
+
+test("全局刷新成功后自动收起状态提示", async ({ page }) => {
+  await loginWithDataHealthFixture(page);
+
+  await page.route("**/api/asset-sources/refresh", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        successCount: 1,
+        failureCount: 0,
+        sources: [],
+      }),
+    });
+  });
+
+  const refresh = page.getByRole("button", { name: "立即刷新资产" });
+  const status = page.getByTestId("asset-refresh-status");
+  await refresh.click();
+  await expect(status).toContainText("同步完成");
+  await expect(status).toHaveClass(/is-visible/);
+  await expect(status).not.toHaveClass(/is-visible/, { timeout: 3_000 });
 });
 
 test("数据健康在手机无横向溢出，锁定态不泄露来源或历史", async ({

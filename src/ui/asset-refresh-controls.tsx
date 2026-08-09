@@ -178,9 +178,17 @@ export function AssetRefreshControls({
   });
   const lastPriceRefresh = useRef(Date.now());
   const lastHoldingsRefresh = useRef(Date.now());
+  const completionReset = useRef<number | null>(null);
   const [pending, setPending] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [status, setStatus] = useState("等待同步");
   const [showStatus, setShowStatus] = useState(false);
+
+  useEffect(() => () => {
+    if (completionReset.current !== null) {
+      window.clearTimeout(completionReset.current);
+    }
+  }, []);
 
   const refresh = useCallback(async (
     mode: AssetRefreshMode,
@@ -188,9 +196,14 @@ export function AssetRefreshControls({
     scope: AssetRefreshScope = "all",
   ): Promise<boolean> => {
     if (inFlight.current) return false;
+    if (completionReset.current !== null) {
+      window.clearTimeout(completionReset.current);
+      completionReset.current = null;
+    }
     inFlight.current = true;
     onPendingChange?.(true);
     setPending(true);
+    setFailed(false);
     setShowStatus(true);
     setStatus(
       manual || mode !== "prices"
@@ -202,10 +215,19 @@ export function AssetRefreshControls({
       const hasFailures = result.failureCount > 0;
       setShowStatus(true);
       setStatus(hasFailures ? `同步完成 · ${result.failureCount} 个来源失败` : "同步完成");
+      setFailed(hasFailures);
       router.refresh();
+      if (!hasFailures) {
+        completionReset.current = window.setTimeout(() => {
+          setShowStatus(false);
+          setStatus("等待同步");
+          completionReset.current = null;
+        }, 2_400);
+      }
       return true;
     } catch (error) {
       setShowStatus(true);
+      setFailed(true);
       setStatus(
         `同步失败：${error instanceof Error ? error.message : "请稍后重试"}`,
       );
@@ -290,7 +312,11 @@ export function AssetRefreshControls({
         onClick={() => void runAndMark("all", true)}
         variant="primary"
       >
-        {pending ? "正在刷新资产…" : "立即刷新资产"}
+        {pending
+          ? "正在刷新资产…"
+          : failed
+            ? "重试刷新资产"
+            : "立即刷新资产"}
       </VibeButton>
       <VibeStatusTag
         className={`asset-refresh-status${showStatus ? " is-visible" : ""}`}

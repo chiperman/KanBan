@@ -4,6 +4,11 @@ import { useMemo, useState } from "react";
 
 import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
 import {
+  daysForTrendRange,
+  sourceTrendObservationStatus,
+  type TrendRange,
+} from "@/domain/daily-trend-observations";
+import {
   activeSourceHoldings,
 } from "@/domain/evm-token-preferences";
 import { hasManualAssetRecord } from "@/domain/manual-asset-records";
@@ -13,7 +18,6 @@ import {
 } from "@/domain/valuation";
 import type {
   AssetSourceSummary,
-  DailyAssetSourceSnapshot,
   DailyAssetTrendObservation,
 } from "@/server/ports";
 import { VibeLink } from "@/ui/vibe/vibe-button";
@@ -24,8 +28,9 @@ export type DataHealthSource = Omit<
   "credentialReference"
 >;
 
-type TimeRange = "7d" | "30d" | "all";
+type TimeRange = Extract<TrendRange, "7d" | "30d" | "all">;
 type SourceFilter = "all" | string;
+type OverviewFilter = "all" | "attention" | "healthy";
 type CompletenessFilter = "all" | "complete" | "incomplete";
 type HistoryState = "complete" | "incomplete" | "gap";
 
@@ -33,6 +38,19 @@ type HistoryEntry = {
   day: string;
   detail: string;
   state: HistoryState;
+};
+
+type DiagnosticSource = {
+  manualWithoutRecord: boolean;
+  name: string;
+  reasons: string[];
+  source: DataHealthSource;
+  valuation: ReturnType<typeof valuationSummary>;
+};
+
+type SharedDiagnostic = {
+  reason: string;
+  sources: DiagnosticSource[];
 };
 
 const TIME_RANGE_OPTIONS = [
@@ -59,32 +77,6 @@ function formatTime(value: string): string {
   })
     .format(new Date(value))
     .replaceAll("/", "-");
-}
-
-function dayOffset(day: string, offset: number): string {
-  const value = new Date(`${day}T00:00:00.000Z`);
-  value.setUTCDate(value.getUTCDate() + offset);
-  return value.toISOString().slice(0, 10);
-}
-
-function daysInRange(start: string, end: string): string[] {
-  const days: string[] = [];
-  for (
-    let day = start;
-    day <= end;
-    day = dayOffset(day, 1)
-  ) {
-    days.push(day);
-  }
-  return days;
-}
-
-function sourceHistoryState(
-  snapshot: DailyAssetSourceSnapshot,
-): HistoryState {
-  return snapshot.complete && snapshot.status !== "expired"
-    ? "complete"
-    : "incomplete";
 }
 
 function historyStatusLabel(state: HistoryState): string {
@@ -185,12 +177,13 @@ function observationDetail(
   selectedSource: DataHealthSource | null,
 ): Pick<HistoryEntry, "detail" | "state"> {
   if (selectedSource === null) {
-    if (observation.complete && observation.status !== "expired") {
+    const state = sourceTrendObservationStatus(observation);
+    if (state === "complete") {
       return { state: "complete", detail: "所有已纳入来源均有完整观测" };
     }
     return {
       state: "incomplete",
-      detail: observation.status === "expired"
+      detail: state === "expired"
         ? "观测包含过期数据"
         : "观测包含未估值或不完整来源",
     };
@@ -206,17 +199,17 @@ function observationDetail(
     };
   }
 
-  const state = sourceHistoryState(sourceSnapshot);
+  const state = sourceTrendObservationStatus(sourceSnapshot);
   if (state === "complete") {
     return { state, detail: "来源观测完整" };
   }
   if (unvaluedReasons(selectedSource).length > 0) {
-    return { state, detail: "未估值来源观测" };
+    return { state: "incomplete", detail: "未估值来源观测" };
   }
-  if (sourceSnapshot.status === "expired") {
-    return { state, detail: "来源观测包含过期数据" };
+  if (state === "expired") {
+    return { state: "incomplete", detail: "来源观测包含过期数据" };
   }
-  return { state, detail: "来源观测不完整" };
+  return { state: "incomplete", detail: "来源观测不完整" };
 }
 
 function selectedDays(
@@ -228,13 +221,11 @@ function selectedDays(
     const firstDay = history
       .map((observation) => observation.day)
       .sort()[0];
-    return firstDay === undefined ? [] : daysInRange(firstDay, currentDay);
+    return firstDay === undefined
+      ? []
+      : daysForTrendRange(range, currentDay, firstDay);
   }
-  const count = range === "7d" ? 7 : 30;
-  return Array.from(
-    { length: count },
-    (_, index) => dayOffset(currentDay, index - count + 1),
-  );
+  return daysForTrendRange(range, currentDay);
 }
 
 function historyEntries(
@@ -264,9 +255,8 @@ function historyEntries(
 
 function sourceDiagnosticReasons(
   source: DataHealthSource,
-  rateSources: DataHealthSource[],
+  valuation: ReturnType<typeof valuationSummary>,
 ): string[] {
-  const valuation = valuationSummary(source, rateSources);
   return [
     ...(source.sync.error === null ? [] : [`上次同步失败：${source.sync.error}`]),
     ...valuation.reasons,
@@ -277,6 +267,28 @@ function sourceStateTone(source: DataHealthSource): "current" | "issue" {
   return source.sync.error === null && source.sync.status === "current"
     ? "current"
     : "issue";
+}
+
+function sourceDetailAction({
+  manualWithoutRecord,
+  source,
+  valuation,
+}: DiagnosticSource): string {
+  if (manualWithoutRecord) return "添加记录";
+  if (source.sync.error !== null) return "排查同步";
+  if (valuation.label !== "估值完整") return "排查估值";
+  return "查看详情";
+}
+
+function overviewHeading(
+  filter: OverviewFilter,
+  attentionSourceCount: number,
+): string {
+  if (filter === "attention") {
+    return attentionSourceCount > 0 ? "需关注来源" : "来源状态";
+  }
+  if (filter === "healthy") return "正常来源";
+  return "全部来源";
 }
 
 export function DataHealthDiagnostics({
@@ -292,6 +304,8 @@ export function DataHealthDiagnostics({
   const [sourceId, setSourceId] = useState<SourceFilter>("all");
   const [completeness, setCompleteness] =
     useState<CompletenessFilter>("all");
+  const [overviewFilter, setOverviewFilter] =
+    useState<OverviewFilter>("attention");
   const selectedSource = sources.find((source) => source.id === sourceId) ?? null;
   const sourceOptions = [
     { value: "all", label: "全部来源" },
@@ -315,24 +329,123 @@ export function DataHealthDiagnostics({
     (entry) => entry.state === "incomplete",
   ).length;
   const gapCount = entries.filter((entry) => entry.state === "gap").length;
+  const diagnosticSources = useMemo<DiagnosticSource[]>(
+    () =>
+      sources
+        .map((source) => {
+          const valuation = valuationSummary(source, sources);
+          const reasons = sourceDiagnosticReasons(source, valuation);
+          return {
+            manualWithoutRecord:
+              source.kind === "manual" && !hasManualAssetRecord(source),
+            name: assetSourceDisplayName(source),
+            reasons,
+            source,
+            valuation,
+          };
+        })
+        .sort(
+          (left, right) =>
+            Number(right.reasons.length > 0) -
+            Number(left.reasons.length > 0),
+        ),
+    [sources],
+  );
+  const attentionSourceCount = diagnosticSources.filter(
+    ({ reasons }) => reasons.length > 0,
+  ).length;
+  const healthySourceCount = sources.length - attentionSourceCount;
+  const activeOverviewFilter =
+    attentionSourceCount === 0 && overviewFilter === "attention"
+      ? "all"
+      : overviewFilter;
+  const sharedDiagnostics = useMemo<SharedDiagnostic[]>(() => {
+    const sourcesByReason = new Map<string, DiagnosticSource[]>();
+    for (const diagnosticSource of diagnosticSources) {
+      if (diagnosticSource.reasons.length === 0) continue;
+      for (const reason of diagnosticSource.reasons) {
+        const matchedSources = sourcesByReason.get(reason) ?? [];
+        matchedSources.push(diagnosticSource);
+        sourcesByReason.set(reason, matchedSources);
+      }
+    }
+    return Array.from(sourcesByReason, ([reason, matchedSources]) => ({
+      reason,
+      sources: matchedSources,
+    })).filter(({ sources: matchedSources }) => matchedSources.length > 1);
+  }, [diagnosticSources]);
+  const sharedDiagnosticReasons = new Set(
+    sharedDiagnostics.map(({ reason }) => reason),
+  );
+  const visibleDiagnosticSources = diagnosticSources.filter(
+    ({ reasons }) =>
+      activeOverviewFilter === "all" ||
+      (activeOverviewFilter === "attention" && reasons.length > 0) ||
+      (activeOverviewFilter === "healthy" && reasons.length === 0),
+  );
+  const historyCoverageEntries = entries.slice(-30);
 
   return (
     <div className="data-health-diagnostics" data-testid="data-health-diagnostics">
       <section className="data-health-intro">
         <p className="data-health-intro__eyebrow">READ ONLY / DIAGNOSTICS</p>
-        <h2>只读诊断</h2>
-        <p>
-          数据健康只说明同步、估值与历史覆盖；刷新、重新授权与来源生命周期操作保留在对应来源详情。
+        <p className="data-health-intro__summary">
+          先确认哪些来源影响当前资产视图，再进入来源详情排查。
+        </p>
+        <p className="data-health-intro__boundary">
+          刷新、重新授权与来源生命周期操作保留在对应来源详情。
         </p>
       </section>
 
       <section aria-label="来源诊断" className="data-health-source-section">
         <div className="data-health-section-heading">
           <div>
-            <p className="card-label">SOURCES / CURRENT STATE</p>
-            <h2>来源状态</h2>
+            <p className="card-label">SOURCE HEALTH / CURRENT STATE</p>
+            <h2>{overviewHeading(activeOverviewFilter, attentionSourceCount)}</h2>
           </div>
-          <p>{sources.length} 个来源</p>
+          <div
+            aria-label={`共 ${sources.length} 个来源，${healthySourceCount} 个正常，${attentionSourceCount} 个需关注`}
+            className="data-health-summary"
+            role="group"
+          >
+            {[
+              {
+                count: sources.length,
+                filter: "all" as const,
+                label: "来源总数",
+                actionLabel: "全部",
+                tone: "muted",
+              },
+              {
+                count: healthySourceCount,
+                filter: "healthy" as const,
+                label: "正常",
+                actionLabel: "正常",
+                tone: "current",
+              },
+              {
+                count: attentionSourceCount,
+                filter: "attention" as const,
+                label: "需关注",
+                actionLabel: "需关注",
+                tone: attentionSourceCount > 0 ? "issue" : "muted",
+              },
+            ].map(({ actionLabel, count, filter, label, tone }) => (
+              <button
+                aria-label={`显示${actionLabel}来源（${count} 个）`}
+                aria-pressed={activeOverviewFilter === filter}
+                className="data-health-summary__item"
+                key={filter}
+                onClick={() => setOverviewFilter(filter)}
+                type="button"
+              >
+                <span>{label}</span>
+                <strong data-tone={tone}>
+                  {count}<small>个</small>
+                </strong>
+              </button>
+            ))}
+          </div>
         </div>
         {sources.length === 0 ? (
           <div className="empty-state">
@@ -340,66 +453,128 @@ export function DataHealthDiagnostics({
             <p className="empty-hint">接入或创建来源后，此处会显示同步与历史覆盖状态。</p>
           </div>
         ) : (
-          <ol className="data-health-source-list">
-            {sources.map((source) => {
-              const name = assetSourceDisplayName(source);
-              const valuation = valuationSummary(source, sources);
-              const reasons = sourceDiagnosticReasons(source, sources);
-              const manualWithoutRecord =
-                source.kind === "manual" && !hasManualAssetRecord(source);
-              return (
-                <li
-                  data-testid={`data-health-source-${source.id}`}
-                  key={source.id}
-                >
-                  <article className="data-health-source">
-                    <div className="data-health-source__identity">
-                      <h3>{name}</h3>
-                      <p>{source.label}</p>
-                    </div>
-                    <div className="data-health-source__facts">
-                      <div>
-                        <span>同步状态</span>
-                        <p data-tone={sourceStateTone(source)}>
-                          {syncLabels(source).join(" · ")}
-                        </p>
-                      </div>
-                      <div>
-                        <span>{source.kind === "manual" ? "最近记录" : "最后成功"}</span>
-                        <p>
-                          {manualWithoutRecord
-                            ? "尚无记录"
-                            : formatTime(source.sync.lastSuccessfulAt)}
-                        </p>
-                      </div>
-                      <div>
-                        <span>估值完整性</span>
-                        <p data-tone={valuation.label === "估值完整" ? "current" : "issue"}>
-                          {valuation.label}
-                        </p>
-                      </div>
-                    </div>
-                    {reasons.length > 0 ? (
-                      <ul aria-label={`${name} 诊断原因`} className="data-health-source__reasons">
-                        {reasons.map((reason) => <li key={reason}>{reason}</li>)}
-                      </ul>
-                    ) : (
-                      <p className="data-health-source__reasons data-health-source__reasons--clear">
-                        未发现同步或估值异常。
-                      </p>
-                    )}
-                    <VibeLink
-                      aria-label={`查看 ${name} 来源详情`}
-                      href={`/asset-sources/${encodeURIComponent(source.id)}`}
-                      variant="text"
+          <>
+            {activeOverviewFilter !== "healthy" && sharedDiagnostics.length > 0 ? (
+              <ul
+                aria-label="共同诊断"
+                className="data-health-shared-diagnostics"
+              >
+                {sharedDiagnostics.map(({ reason, sources: matchedSources }) => {
+                  const hasUnvaluedSource = matchedSources.some(({ valuation }) =>
+                    valuation.label.includes("未估值")
+                  );
+                  return (
+                    <li key={reason}>
+                      <p>共同诊断 · 影响 {matchedSources.length} 个来源</p>
+                      <strong>{reason}</strong>
+                      <span>
+                        {hasUnvaluedSource
+                          ? "相关未估值资产未计入总览："
+                          : "请在对应来源详情排查："}
+                        {matchedSources.map(({ name, source }) => (
+                          <VibeLink
+                            aria-label={`查看 ${name} 来源详情`}
+                            href={`/asset-sources/${encodeURIComponent(source.id)}`}
+                            key={source.id}
+                            variant="text"
+                          >
+                            {name}
+                          </VibeLink>
+                        ))}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+            <div aria-hidden="true" className="data-health-source__columns">
+              <span>来源</span>
+              <span>同步状态</span>
+              <span>最近更新</span>
+              <span>估值完整性</span>
+              <span>详情</span>
+            </div>
+            <ol
+              aria-live="polite"
+              className="data-health-source-list"
+            >
+              {visibleDiagnosticSources.map(
+                ({
+                  manualWithoutRecord,
+                  name,
+                  reasons,
+                  source,
+                  valuation,
+                }) => {
+                  const requiresAttention = reasons.length > 0;
+                  const visibleReasons = reasons.filter(
+                    (reason) => !sharedDiagnosticReasons.has(reason),
+                  );
+                  const action = sourceDetailAction({
+                    manualWithoutRecord,
+                    name,
+                    reasons,
+                    source,
+                    valuation,
+                  });
+                  return (
+                    <li
+                      data-testid={`data-health-source-${source.id}`}
+                      key={source.id}
                     >
-                      查看来源详情
-                    </VibeLink>
-                  </article>
-                </li>
-              );
-            })}
-          </ol>
+                      <article
+                        className={`data-health-source${requiresAttention ? " data-health-source--issue" : " data-health-source--compact"}`}
+                      >
+                        <div className="data-health-source__identity">
+                          <h3>{name}</h3>
+                          <p>{source.label}</p>
+                        </div>
+                        <div className="data-health-source__fact">
+                          <span>同步状态</span>
+                          <p data-tone={sourceStateTone(source)}>
+                            {syncLabels(source).join(" · ")}
+                          </p>
+                        </div>
+                        <div className="data-health-source__fact">
+                          <span>{source.kind === "manual" ? "最近记录" : "最后成功"}</span>
+                          <p>
+                            {manualWithoutRecord
+                              ? "尚无记录"
+                              : formatTime(source.sync.lastSuccessfulAt)}
+                          </p>
+                        </div>
+                        <div className="data-health-source__fact">
+                          <span>估值完整性</span>
+                          <p
+                            data-tone={
+                              valuation.label === "估值完整" ? "current" : "issue"
+                            }
+                          >
+                            {valuation.label}
+                          </p>
+                        </div>
+                        <VibeLink
+                          aria-label={`${action} ${name} 来源详情`}
+                          href={`/asset-sources/${encodeURIComponent(source.id)}`}
+                          variant="text"
+                        >
+                          {action}
+                        </VibeLink>
+                        {visibleReasons.length > 0 ? (
+                          <ul
+                            aria-label={`${name} 诊断原因`}
+                            className="data-health-source__reasons"
+                          >
+                            {visibleReasons.map((reason) => <li key={reason}>{reason}</li>)}
+                          </ul>
+                        ) : null}
+                      </article>
+                    </li>
+                  );
+                },
+              )}
+            </ol>
+          </>
         )}
       </section>
 
@@ -415,6 +590,21 @@ export function DataHealthDiagnostics({
               : "所选范围内观测完整"}
           </p>
         </div>
+        <ol
+          aria-label={`所选范围的历史覆盖，共 ${historyCoverageEntries.length} 天`}
+          className="data-health-history__coverage"
+        >
+          {historyCoverageEntries.map((entry) => (
+            <li data-state={entry.state} key={entry.day}>
+              <time
+                aria-label={`${entry.day} · ${historyStatusLabel(entry.state)} · ${entry.detail}`}
+                dateTime={entry.day}
+              >
+                {entry.day.slice(5).replace("-", "/")}
+              </time>
+            </li>
+          ))}
+        </ol>
         <div className="data-health-filters">
           <VibeSelect
             fieldId="data-health-range"

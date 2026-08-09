@@ -1844,14 +1844,14 @@ a {
 }
 
 .data-health-intro__eyebrow,
-.data-health-source__facts span,
+.data-health-source__columns,
+.data-health-source__fact span,
 .data-health-history__list span {
   color: var(--muted);
   font-family: var(--f-mono);
   font-size: var(--vibe-type-label);
 }
 
-.data-health-intro h2,
 .data-health-section-heading h2 {
   margin: var(--vibe-space-2) 0 0;
   color: var(--display);
@@ -1860,9 +1860,18 @@ a {
   font-weight: 500;
 }
 
-.data-health-intro > p:last-child {
+.data-health-intro__summary {
+  margin: var(--vibe-space-3) 0 0;
+  color: var(--primary);
+  font-family: var(--f-ui);
+  font-size: var(--vibe-type-body);
+}
+
+.data-health-intro__boundary {
   margin: var(--vibe-space-3) 0 0;
   color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
 }
 
 .data-health-section-heading {
@@ -1881,6 +1890,125 @@ a {
   text-align: right;
 }
 
+.data-health-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-width: min(100%, 320px);
+  margin: 0;
+  padding: 0;
+}
+
+.data-health-summary__item {
+  min-width: 0;
+  min-height: 52px;
+  padding-left: var(--vibe-space-4);
+  border-left: 1px solid var(--line);
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.data-health-summary__item > span {
+  display: block;
+  color: var(--muted);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-label);
+}
+
+.data-health-summary__item strong {
+  display: block;
+  margin: var(--vibe-space-1) 0 0;
+  color: var(--display);
+  font-family: var(--f-display);
+  font-size: var(--vibe-type-subheading);
+  font-variation-settings: "ROND" 100;
+  font-weight: 500;
+}
+
+.data-health-summary__item strong[data-tone="current"] {
+  color: var(--success);
+}
+
+.data-health-summary__item strong[data-tone="issue"] {
+  color: var(--error);
+}
+
+.data-health-summary__item strong[data-tone="muted"] {
+  color: var(--secondary);
+}
+
+.data-health-summary__item small {
+  margin-left: var(--vibe-space-1);
+  color: currentColor;
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-label);
+  font-weight: 400;
+}
+
+.data-health-summary__item[aria-pressed="true"] {
+  background: var(--display);
+}
+
+.data-health-summary__item[aria-pressed="true"] > span,
+.data-health-summary__item[aria-pressed="true"] strong,
+.data-health-summary__item[aria-pressed="true"] small {
+  color: var(--bg);
+}
+
+.data-health-summary__item:focus-visible {
+  outline: 1px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.data-health-shared-diagnostics {
+  display: grid;
+  gap: var(--vibe-space-3);
+  margin: 0 0 var(--vibe-space-5);
+  padding: 0;
+  list-style: none;
+}
+
+.data-health-shared-diagnostics > li {
+  display: grid;
+  gap: var(--vibe-space-1);
+  padding: var(--vibe-space-4) 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.data-health-shared-diagnostics p,
+.data-health-shared-diagnostics span {
+  margin: 0;
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
+}
+
+.data-health-shared-diagnostics p::before {
+  content: "—";
+  margin-right: var(--vibe-space-2);
+  color: var(--error);
+}
+
+.data-health-shared-diagnostics strong {
+  color: var(--primary);
+  font-family: var(--f-ui);
+  font-size: var(--vibe-type-body);
+  font-weight: 400;
+}
+
+.data-health-shared-diagnostics .vibe-button {
+  min-height: auto;
+  margin-left: var(--vibe-space-2);
+  padding: 0;
+  color: var(--primary);
+  font-size: inherit;
+}
+
 .data-health-source-list,
 .data-health-history__list {
   margin: 0;
@@ -1889,17 +2017,52 @@ a {
   border-top: 1px solid var(--line);
 }
 
+.data-health-source-list {
+  border-top: 0;
+}
+
 .data-health-source-list > li,
 .data-health-history__list > li {
   border-bottom: 1px solid var(--line);
 }
 
+.data-health-source__columns,
 .data-health-source {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr) auto;
+  grid-template-columns:
+    minmax(180px, 1.2fr)
+    minmax(120px, .8fr)
+    minmax(150px, .9fr)
+    minmax(150px, .9fr)
+    auto;
   align-items: start;
-  gap: var(--vibe-space-5);
+  gap: var(--vibe-space-4);
+}
+
+.data-health-source__columns {
+  padding: var(--vibe-space-3) 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.data-health-source__columns > span:last-child {
+  text-align: right;
+}
+
+.data-health-source {
   padding: var(--vibe-space-5) 0;
+}
+
+.data-health-source--compact {
+  padding-block: var(--vibe-space-4);
+}
+
+.data-health-source--compact .data-health-source__identity h3 {
+  font-size: var(--vibe-type-body);
+}
+
+.data-health-source--compact .data-health-source__identity p {
+  margin-top: 2px;
 }
 
 .data-health-source__identity {
@@ -1923,14 +2086,11 @@ a {
   overflow-wrap: anywhere;
 }
 
-.data-health-source__facts {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--vibe-space-4);
+.data-health-source__fact {
   min-width: 0;
 }
 
-.data-health-source__facts p {
+.data-health-source__fact p {
   margin: var(--vibe-space-1) 0 0;
   color: var(--primary);
   font-family: var(--f-mono);
@@ -1938,36 +2098,39 @@ a {
   overflow-wrap: anywhere;
 }
 
-.data-health-source__facts p[data-tone="current"] {
+.data-health-source__fact p[data-tone="current"] {
   color: var(--success);
 }
 
-.data-health-source__facts p[data-tone="issue"] {
+.data-health-source__fact p[data-tone="issue"] {
   color: var(--error);
 }
 
 .data-health-source__reasons {
-  grid-column: 2 / 3;
+  grid-column: 1 / -1;
   display: grid;
   gap: var(--vibe-space-1);
-  padding: 0;
+  margin-top: 0;
+  padding: var(--vibe-space-3) 0 0;
+  border-top: 1px solid var(--line);
   list-style: none;
 }
 
-.data-health-source__reasons:not(.data-health-source__reasons--clear) li::before {
+.data-health-source__reasons li::before {
   content: "—";
   margin-right: var(--vibe-space-2);
   color: var(--error);
 }
 
 .data-health-source > .vibe-button {
-  align-self: center;
+  align-self: start;
+  justify-self: end;
   white-space: nowrap;
 }
 
 .data-health-filters {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1.2fr) repeat(2, minmax(0, .8fr));
   gap: var(--vibe-space-4);
   margin-bottom: var(--vibe-space-5);
 }
@@ -1996,6 +2159,41 @@ a {
 
 .data-health-history__list li[data-state="incomplete"] p,
 .data-health-history__list li[data-state="gap"] p {
+  color: var(--error);
+}
+
+.data-health-history__coverage {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
+  gap: var(--vibe-space-2);
+  margin: 0 0 var(--vibe-space-5);
+  padding: var(--vibe-space-3) 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  list-style: none;
+}
+
+.data-health-history__coverage li {
+  min-width: 0;
+  padding: var(--vibe-space-2) 0;
+  border-top: 2px solid var(--secondary);
+}
+
+.data-health-history__coverage li[data-state="incomplete"],
+.data-health-history__coverage li[data-state="gap"] {
+  border-color: var(--error);
+}
+
+.data-health-history__coverage time {
+  display: block;
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-label);
+  text-align: center;
+}
+
+.data-health-history__coverage li[data-state="incomplete"] time,
+.data-health-history__coverage li[data-state="gap"] time {
   color: var(--error);
 }
 
@@ -2038,14 +2236,21 @@ a {
     text-align: left;
   }
 
+  .data-health-summary {
+    width: 100%;
+  }
+
+  .data-health-source__columns {
+    display: none;
+  }
+
   .data-health-source {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--vibe-space-3);
   }
 
-  .data-health-source__facts {
-    grid-template-columns: 1fr;
-    gap: var(--vibe-space-3);
+  .data-health-shared-diagnostics {
+    margin-bottom: var(--vibe-space-4);
   }
 
   .data-health-source__reasons {
@@ -2059,6 +2264,10 @@ a {
 
   .data-health-filters {
     grid-template-columns: 1fr;
+  }
+
+  .data-health-history__coverage {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .data-health-history__list > li {

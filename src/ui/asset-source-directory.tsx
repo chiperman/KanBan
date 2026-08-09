@@ -33,6 +33,9 @@ export function AssetSourceDirectory({
       <p className="asset-source-directory__intro">
         自动账户、观察钱包与手工资产记录统一在此查看；详情才提供单来源数据与生命周期操作。
       </p>
+      <VibeLink href="/data-health" variant="text">
+        查看数据健康
+      </VibeLink>
       <VibeLink
         aria-label="新增来源"
         className="asset-source-directory__create"
