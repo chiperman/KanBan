@@ -658,13 +658,16 @@ function reconcileWallet(input: {
       ...input.snapshot,
       coverage: {
         status: "partial",
+        totalIsAuthoritative: false,
         products: input.products,
         unexplainedValue: null,
         excludedPositiveAccounts,
       },
     };
   }
-  const walletValue = decimalMultiply(includedBtc, btcPrice);
+  const walletValue = decimalAdd(
+    decimalToFixed(decimalMultiply(includedBtc, btcPrice), 8),
+  );
   const difference = decimalSubtract(walletValue, input.snapshot.total.amount);
   const absoluteDifference = decimalCompare(difference, "0") < 0
     ? decimalSubtract("0", difference)
@@ -677,20 +680,18 @@ function reconcileWallet(input: {
   const unexplained = material
     ? decimalAdd(decimalToFixed(absoluteDifference, 2))
     : null;
-  const walletAboveDetail = decimalCompare(difference, "0") > 0;
   return {
     ...input.snapshot,
-    total: material && walletAboveDetail && unexplained !== null
-      ? {
-          amount: decimalAdd(input.snapshot.total.amount, unexplained),
-          currency: input.snapshot.total.currency,
-        }
-      : input.snapshot.total,
+    total: {
+      amount: walletValue,
+      currency: input.snapshot.total.currency,
+    },
     coverage: {
       status:
         input.incomplete || material || excludedPositiveAccounts.length > 0
           ? "partial"
           : "complete",
+      totalIsAuthoritative: excludedPositiveAccounts.length === 0,
       products: input.products,
       unexplainedValue:
         unexplained === null
@@ -1867,18 +1868,21 @@ export class ProductionBinanceSourceRefresher
             : []
         ),
       );
+      const snapshot = valuePositions({
+        positions,
+        exchangeInfo,
+        tickers,
+        equityQuotes: equities.equityQuotes,
+        spotCostPrices,
+        observedAt: attemptedAt,
+        usdtUsdQuote: usdtUsd.quote,
+        usdtUsdSource: usdtUsd.source,
+        coverage: source.snapshot.coverage,
+      });
       return {
-        snapshot: valuePositions({
-          positions,
-          exchangeInfo,
-          tickers,
-          equityQuotes: equities.equityQuotes,
-          spotCostPrices,
-          observedAt: attemptedAt,
-          usdtUsdQuote: usdtUsd.quote,
-          usdtUsdSource: usdtUsd.source,
-          coverage: source.snapshot.coverage,
-        }),
+        snapshot: source.snapshot.coverage?.totalIsAuthoritative
+          ? { ...snapshot, total: source.snapshot.total }
+          : snapshot,
       };
     }
     return {

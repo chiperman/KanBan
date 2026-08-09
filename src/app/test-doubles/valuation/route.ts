@@ -469,6 +469,64 @@ function bitgetAuthoritativeTotalSources(): AssetSourceSummary[] {
   }];
 }
 
+function binanceAuthoritativeTotalSources(): AssetSourceSummary[] {
+  return [{
+    id: "source-binance-authoritative-total",
+    kind: "binance",
+    label: "Binance 账户 · 平台总额",
+    accountId: "binance:authoritative-total",
+    permissions: ["market-data", "account", "positions"],
+    credentialReference: "test-secret-binance-authoritative-total",
+    snapshot: {
+      total: { amount: "17200", currency: "USDT" },
+      holdings: [{
+        symbol: "USDT",
+        name: "USDT · 持仓明细",
+        sourceAsset: "USDT",
+        sourceAccount: "earn",
+        sourceProduct: "simple-earn-flexible",
+        economicAssetKey: "binance:earn:USDT",
+        positionState: "active",
+        quantity: "16599.5",
+        currency: "USDT",
+        assetClass: "crypto",
+        currentPrice: { amount: "1", currency: "USDT" },
+        marketValue: "16599.5",
+        sourceMarketValue: { amount: "16599.5", currency: "USDT" },
+        valuation: {
+          status: "valued",
+          priceSource: "Binance 现货 USDTUSDC",
+          pricedAt: SYNCED_AT,
+        },
+        costPrice: null,
+        platformProfit: null,
+        changePercent: null,
+      }],
+      exchangeRates: [{
+        baseCurrency: "USDT",
+        quoteCurrency: "USD",
+        rate: "0.998",
+        source: "Binance 现货 USDTUSD",
+        observedAt: SYNCED_AT,
+      }],
+      syncedAt: SYNCED_AT,
+      coverage: {
+        status: "partial",
+        totalIsAuthoritative: true,
+        products: [{
+          product: "simple-earn-flexible",
+          capability: "detailed",
+          freshness: "current",
+          message: null,
+        }],
+        unexplainedValue: { amount: "600.5", currency: "USDT" },
+        excludedPositiveAccounts: [],
+      },
+    },
+    sync: CURRENT_SYNC,
+  }];
+}
+
 function detailCoveragePartialSources(): AssetSourceSummary[] {
   return [
     {
@@ -580,6 +638,8 @@ export async function POST(request: Request) {
         ? longbridgeOptionQuoteUnavailableSources()
       : scenario === "binance-coverage-partial"
         ? binancePartialSources()
+      : scenario === "binance-authoritative-total"
+        ? binanceAuthoritativeTotalSources()
       : scenario === "bitget-authoritative-total"
         ? bitgetAuthoritativeTotalSources()
       : scenario === "detail-coverage-partial"
@@ -603,7 +663,9 @@ export async function POST(request: Request) {
     title: source.label,
     body: "估值浏览器测试来源",
     sourceId: source.id,
-    span: scenario === "binance-coverage-partial"
+    span:
+      scenario === "binance-coverage-partial" ||
+      scenario === "binance-authoritative-total"
       ? 2
       : index === 0 && sources.length > 1
         ? 2

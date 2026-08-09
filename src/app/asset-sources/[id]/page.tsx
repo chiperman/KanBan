@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 
 import { shanghaiDay } from "@/domain/daily-asset-snapshots";
+import { longbridgeReferenceRates } from "@/domain/investment-performance";
 import {
   redirectLoopbackIpToLocalhost,
   type PageSearchParams,
@@ -41,6 +42,7 @@ export default async function AssetSourceDetailPage({
     ? manualRecords.filter((record) => record.sourceId === source.id)
     : [];
   const cardHidden = cards.find((card) => card.sourceId === source.id)?.hidden ?? false;
+  const reportingExchangeRates = longbridgeReferenceRates(sources);
 
   return (
     <SessionGuard>
@@ -54,6 +56,7 @@ export default async function AssetSourceDetailPage({
               cardHidden={cardHidden}
               currentDay={shanghaiDay(services.clock.now())}
               history={history}
+              reportingExchangeRates={reportingExchangeRates}
               source={{ ...source, ...(source.kind === "manual" ? { manualRecords: records } : {}) }}
             />
           </main>

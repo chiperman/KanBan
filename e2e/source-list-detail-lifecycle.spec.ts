@@ -38,7 +38,9 @@ test("资产来源统一列出自动账户、观察钱包和手工资产，并�
   });
   expect(created.ok()).toBeTruthy();
 
-  await page.getByRole("link", { name: /查看 Binance 资产来源详情/ }).click();
+  await page
+    .getByRole("link", { name: "查看 Binance 只读账户 来源详情" })
+    .click();
   await expect(page).toHaveURL(/\/asset-sources\/[^/]+$/);
 
   await page.goto("/asset-sources");
@@ -83,6 +85,19 @@ test("自动来源详情展示持仓、趋势、单来源刷新与脱敏授权�
   await expect(page.locator("body")).not.toContainText("TOTP");
 
   await page.goto("/asset-sources");
+  await page.getByRole("link", { name: /长桥账户.*自动账户/ }).click();
+  const holdingsDetail = page.getByTestId("asset-holdings-detail");
+  await expect(page.getByTestId("holding-top-list")).toBeHidden();
+  await expect(holdingsDetail).toBeVisible();
+  await expect(holdingsDetail.getByRole("columnheader")).toHaveText([
+    "名称",
+    /市值\s*\/\s*数量/,
+    /现价\s*\/\s*成本/,
+    "当日盈亏",
+    "持仓盈亏",
+  ]);
+
+  await page.goto("/asset-sources");
   await page.getByRole("link", { name: /私募基金.*手工资产记录/ }).click();
   await expect(page.getByRole("heading", { name: "私募基金" })).toBeVisible();
   await expect(page.getByText("历史记录", { exact: true })).toBeVisible();
@@ -90,6 +105,33 @@ test("自动来源详情展示持仓、趋势、单来源刷新与脱敏授权�
   await expect(page.getByTestId("holding-top-list")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /刷新 私募基金/ })).toHaveCount(0);
   await expect(page.getByText("只读授权摘要", { exact: true })).toHaveCount(0);
+});
+
+test("手工 CNY 来源详情使用可靠的全局汇率折算 USD", async ({
+  page,
+  request,
+}) => {
+  await request.post("/test-doubles/release-acceptance", {
+    data: { action: "seed" },
+  });
+  await loginAsOwner(page);
+
+  const created = await page.request.post("/api/asset-sources/manual", {
+    data: { label: "A 股" },
+  });
+  expect(created.ok()).toBeTruthy();
+
+  await page.goto("/asset-sources");
+  await page.getByRole("link", { name: /A 股.*手工资产记录/ }).click();
+  await page.getByRole("button", { name: "添加数据" }).click();
+  const record = page.getByRole("dialog", { name: "记录 A 股 数据" });
+  await record.getByLabel("资产总额").fill("72000");
+  await record.getByRole("button", { name: "币种" }).click();
+  await page.getByRole("option", { name: "CNY", exact: true }).click();
+  await record.getByRole("button", { name: "保存数据" }).click();
+
+  await expect(page.getByTestId("asset-source-total")).toContainText("10,000.00 USD");
+  await expect(page.getByTestId("asset-source-total")).not.toContainText("无法折算");
 });
 
 test("来源详情保留隐藏、断开、恢复与永久删除的确认保护", async ({

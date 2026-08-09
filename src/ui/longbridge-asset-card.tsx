@@ -17,8 +17,14 @@ import {
 import {
   compareNullableDecimalDescending,
   convertCurrencyAmount,
+  sourceReportingConversionRates,
   type ReportingCurrency,
 } from "@/domain/valuation";
+import {
+  daysForTrendRange,
+  sourceTrendObservationStatus,
+  type TrendRange,
+} from "@/domain/daily-trend-observations";
 import type {
   AssetExchangeRate,
   AssetHolding,
@@ -41,10 +47,6 @@ import {
 } from "@/ui/vibe/vibe-data-instrument";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
-import {
-  daysForTrendRange,
-  type TrendRange,
-} from "@/ui/total-asset-overview";
 import { AssetTrendChart } from "@/ui/asset-trend-chart";
 import {
   formatShanghaiDateTime,
@@ -764,8 +766,9 @@ export function AssetSourceCard({
       index,
       amount: observation?.total[reportingCurrency] ?? null,
       observed: observation !== undefined,
-      status: observation?.status ??
-        (observation?.complete ? "complete" : "incomplete"),
+      status: observation === undefined
+        ? "incomplete"
+        : sourceTrendObservationStatus(observation),
     };
   });
   const unavailableSourceTrendPoints = sourceTrendPoints.filter(
@@ -822,10 +825,10 @@ export function AssetSourceCard({
       ? `${quoteUnavailableCount} QUOTE N/A`
       : "VALUATION / COMPLETE";
   const heading = sourceHeading(source);
-  const displayExchangeRates = [
-    ...reportingExchangeRates,
-    ...source.snapshot.exchangeRates,
-  ];
+  const displayExchangeRates = sourceReportingConversionRates(
+    source,
+    reportingExchangeRates,
+  );
   const formatDisplayMoney = (value: string, currency: string) => {
     const converted = convertCurrencyAmount(
       value,
@@ -986,8 +989,8 @@ export function AssetSourceCard({
                   <div className="daily-trend-details-content">
                     <ol className="daily-trend-detail-list">
                       {sourceDailyDetails.map((observation) => {
-                        const observationStatus = observation.status ??
-                          (observation.complete ? "complete" : "incomplete");
+                        const observationStatus =
+                          sourceTrendObservationStatus(observation);
                         const observationAmount =
                           observation.total[reportingCurrency] ?? null;
                         const abnormal =

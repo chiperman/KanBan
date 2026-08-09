@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
 import type {
+  AssetExchangeRate,
   AssetPermission,
   DailyAssetTrendObservation,
   ManualAssetRecord,
@@ -400,11 +401,13 @@ export function AssetSourceDetail({
   cardHidden,
   currentDay,
   history,
+  reportingExchangeRates,
   source,
 }: {
   cardHidden: boolean;
   currentDay: string;
   history: DailyAssetTrendObservation[];
+  reportingExchangeRates: AssetExchangeRate[];
   source: DetailSource;
 }) {
   const [editingRecord, setEditingRecord] = useState<ManualAssetRecord | null | undefined>(
@@ -419,9 +422,16 @@ export function AssetSourceDetail({
   return (
     <>
       <section className="asset-source-detail__header">
-        <p className="card-label">SOURCE / DETAIL</p>
-        <h1>来源详情</h1>
-        <p>{manual ? "手工资产记录只维护日期总额，不含凭证、持仓或同步操作。" : "查看单一来源的持仓、趋势、同步与只读授权摘要。"}</p>
+        <div className="asset-source-detail__heading">
+          <div>
+            <p className="card-label">SOURCE / DETAIL</p>
+            <h1>来源详情</h1>
+            <p>{manual ? "手工资产记录只维护日期总额，不含凭证、持仓或同步操作。" : "查看单一来源的持仓、趋势、同步与只读授权摘要。"}</p>
+          </div>
+          <VibeLink href="/asset-sources" variant="outline">
+            返回资产来源
+          </VibeLink>
+        </div>
       </section>
 
       <section aria-label="来源身份" className="asset-source-detail__metadata">
@@ -480,7 +490,7 @@ export function AssetSourceDetail({
         }}
         profitColorScheme="red-up"
         reportingCurrency="USD"
-        reportingExchangeRates={source.snapshot.exchangeRates}
+        reportingExchangeRates={reportingExchangeRates}
         showSensitiveInfo
         source={source}
         trendRange="30d"

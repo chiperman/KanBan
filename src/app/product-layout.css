@@ -756,6 +756,371 @@ html {
   }
 }
 
+/* R05 · 来源总额与跨来源持仓观察分层，避免用持仓合计替代账户真相。 */
+.assets-holdings {
+  display: grid;
+  gap: var(--vibe-space-6);
+  padding-bottom: var(--vibe-space-16);
+}
+
+.assets-holdings__header,
+.assets-holdings__source-totals,
+.assets-holdings__observations {
+  min-width: 0;
+  border-radius: var(--r-md);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.assets-holdings__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--vibe-space-6);
+  padding: var(--vibe-space-6);
+}
+
+.assets-holdings__header h1,
+.assets-holdings__source-totals h2,
+.assets-holdings__observations h2 {
+  margin: var(--vibe-space-2) 0 0;
+  color: var(--display);
+  font-family: var(--f-head);
+  font-size: var(--vibe-type-heading);
+  font-weight: 600;
+}
+
+.assets-holdings__header > div:first-child > p:last-child,
+.assets-holdings__observations > header p {
+  max-width: 68ch;
+  margin: var(--vibe-space-3) 0 0;
+  color: var(--secondary);
+}
+
+.assets-holdings__actions,
+.assets-holdings__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--vibe-space-2);
+}
+
+.assets-holdings__actions {
+  justify-content: end;
+}
+
+.assets-holdings__source-totals,
+.assets-holdings__observations {
+  padding: var(--vibe-space-6);
+}
+
+.assets-holdings__source-totals > header,
+.assets-holdings__observations > header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--vibe-space-5);
+}
+
+.assets-holdings__source-totals > header > span {
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
+  text-align: right;
+}
+
+.assets-holdings__source-totals > ol {
+  display: grid;
+  margin: var(--vibe-space-5) 0 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+}
+
+.assets-holdings__source-totals > ol > li {
+  min-width: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.assets-holdings__source-totals > ol > li > article {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(200px, 1.15fr) auto;
+  align-items: center;
+  gap: var(--vibe-space-5);
+  padding: var(--vibe-space-4) 0;
+}
+
+.assets-holdings__source-totals strong {
+  color: var(--display);
+  font-family: var(--f-head);
+  font-size: var(--vibe-type-body);
+  font-weight: 600;
+}
+
+.assets-holdings__source-totals article > div:first-child,
+.assets-holdings__source-value,
+.assets-holdings__source-state {
+  display: grid;
+  gap: var(--vibe-space-1);
+  min-width: 0;
+}
+
+.assets-holdings__source-totals article > div:first-child > span,
+.assets-holdings__source-value > a {
+  color: var(--secondary);
+  font-size: var(--vibe-type-caption);
+}
+
+.assets-holdings__source-state .vibe-coverage {
+  margin: 0;
+}
+
+.assets-holdings__source-state .vibe-coverage summary {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.assets-holdings__source-value {
+  justify-items: end;
+  text-align: right;
+}
+
+.assets-holdings__source-value > strong {
+  font-family: var(--f-display);
+  font-size: var(--vibe-type-subheading);
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.assets-holdings__source-value .vibe-metric {
+  font-size: var(--vibe-type-subheading);
+}
+
+.assets-holdings__observations {
+  display: grid;
+  gap: var(--vibe-space-5);
+}
+
+.assets-holdings__filters {
+  align-items: end;
+  padding: var(--vibe-space-4) 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.assets-holdings__filters > p {
+  margin: 0 0 var(--vibe-space-1) auto;
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
+}
+
+.assets-holdings__table-wrap {
+  overflow-x: auto;
+  scrollbar-color: var(--line-2) transparent;
+}
+
+.assets-holdings__table-wrap table {
+  width: 100%;
+  min-width: 960px;
+  border-collapse: collapse;
+  font-size: var(--vibe-type-body-sm);
+}
+
+.assets-holdings__table-wrap th {
+  padding: 0 var(--vibe-space-3) var(--vibe-space-3);
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-label);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-align: left;
+}
+
+.assets-holdings__table-wrap td {
+  min-width: 0;
+  padding: var(--vibe-space-4) var(--vibe-space-3);
+  border-top: 1px solid var(--line);
+  color: var(--primary);
+  vertical-align: top;
+}
+
+.assets-holdings__table-wrap td:first-child {
+  padding-left: 0;
+}
+
+.assets-holdings__table-wrap td:last-child {
+  padding-right: 0;
+}
+
+.assets-holdings__table-wrap td > strong,
+.assets-holdings__table-wrap td > span,
+.assets-holdings__table-wrap td > small {
+  display: block;
+}
+
+.assets-holdings__table-wrap td > strong {
+  color: var(--display);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-body-sm);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.assets-holdings__table-wrap td > span,
+.assets-holdings__table-wrap td > small {
+  margin-top: var(--vibe-space-1);
+  color: var(--secondary);
+  font-size: var(--vibe-type-caption);
+  line-height: 1.5;
+}
+
+.assets-holdings__table-wrap tr.is-unvalued td:first-child strong,
+.assets-holdings__table-wrap tr.is-unvalued td:nth-child(2) strong {
+  color: var(--error);
+}
+
+.assets-holdings__observations > .vibe-notice {
+  max-width: none;
+  margin: 0;
+}
+
+@media (max-width: 980px) {
+  .assets-holdings__header {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .assets-holdings__actions {
+    justify-content: start;
+  }
+
+  .assets-holdings__source-totals > ol > li > article {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .assets-holdings__source-state {
+    grid-column: 1 / -1;
+    padding-top: var(--vibe-space-3);
+    border-top: 1px solid var(--line);
+  }
+}
+
+@media (max-width: 639px) {
+  .assets-holdings {
+    gap: var(--vibe-space-4);
+  }
+
+  .assets-holdings__header,
+  .assets-holdings__source-totals,
+  .assets-holdings__observations {
+    padding: var(--vibe-space-5);
+  }
+
+  .assets-holdings__header h1 {
+    font-size: var(--vibe-type-subheading);
+  }
+
+  .assets-holdings__source-totals > header,
+  .assets-holdings__observations > header {
+    display: grid;
+    gap: var(--vibe-space-3);
+  }
+
+  .assets-holdings__source-totals > header > span {
+    text-align: left;
+  }
+
+  .assets-holdings__source-totals > ol > li > article {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--vibe-space-3);
+  }
+
+  .assets-holdings__source-value .vibe-metric,
+  .assets-holdings__source-value > strong {
+    font-size: var(--vibe-type-body);
+  }
+
+  .assets-holdings__filters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .assets-holdings__filters > .vibe-select {
+    min-width: 0;
+  }
+
+  .assets-holdings__filters > .vibe-select:last-of-type,
+  .assets-holdings__filters > p {
+    grid-column: 1 / -1;
+  }
+
+  .assets-holdings__filters > p {
+    margin: 0;
+  }
+
+  .assets-holdings__table-wrap {
+    overflow: visible;
+  }
+
+  .assets-holdings__table-wrap table,
+  .assets-holdings__table-wrap thead,
+  .assets-holdings__table-wrap tbody,
+  .assets-holdings__table-wrap tr,
+  .assets-holdings__table-wrap td {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .assets-holdings__table-wrap thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .assets-holdings__table-wrap tr {
+    padding: var(--vibe-space-3) 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .assets-holdings__table-wrap tbody tr:first-child {
+    border-top: 0;
+  }
+
+  .assets-holdings__table-wrap td {
+    display: grid;
+    grid-template-columns: minmax(104px, 0.72fr) minmax(0, 1fr);
+    gap: var(--vibe-space-2);
+    padding: var(--vibe-space-2) 0;
+    border: 0;
+  }
+
+  .assets-holdings__table-wrap td::before {
+    content: attr(data-label);
+    color: var(--secondary);
+    font-family: var(--f-mono);
+    font-size: var(--vibe-type-label);
+    letter-spacing: 0.08em;
+  }
+
+  .assets-holdings__table-wrap td > strong,
+  .assets-holdings__table-wrap td > span,
+  .assets-holdings__table-wrap td > small,
+  .assets-holdings__table-wrap td > .vibe-status-tag {
+    grid-column: 2;
+  }
+
+  .assets-holdings__table-wrap td > span,
+  .assets-holdings__table-wrap td > small {
+    margin-top: calc(var(--vibe-space-1) * -1);
+  }
+}
+
 body {
   min-height: 100vh;
   background: var(--bg);
@@ -1261,6 +1626,19 @@ a {
 }
 
 .page-asset-source-detail main {
+.page-asset-source-detail .asset-source-card .asset-holdings-disclosure,
+.page-asset-source-detail
+  .asset-source-card
+  .asset-holdings-detail[data-expanded="true"] {
+  display: block;
+}
+
+.page-asset-source-detail
+  .asset-source-card
+  [data-testid="holding-top-list"] {
+  display: none;
+}
+
   max-width: 960px;
 }
 

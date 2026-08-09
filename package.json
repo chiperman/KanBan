@@ -20,7 +20,7 @@
     "test:browser:serial": "pnpm test:browser:test && pnpm test:browser:production",
     "test:browser:parallel": "node scripts/run-playwright-shards.mjs",
     "test:browser:production:parallel": "PLAYWRIGHT_CONFIG=playwright.production.config.ts node scripts/run-playwright-shards.mjs",
-    "test:unit": "node --experimental-transform-types --import ./scripts/register-ts-alias.mjs --test scripts/test-command-contract.test.mjs src/ui/card-layout/card-layout-planner.test.ts",
+    "test:unit": "node --experimental-transform-types --import ./scripts/register-ts-alias.mjs --test scripts/test-command-contract.test.mjs src/domain/daily-trend-observations.test.ts src/domain/investment-performance.test.ts src/domain/reporting-exchange-rates.test.ts src/server/investment-cashflows.test.ts src/ui/card-layout/card-layout-planner.test.ts",
     "test:smoke:quick": "playwright test --config=playwright.smoke.config.ts",
     "test:smoke": "pnpm build && pnpm test:smoke:quick",
     "test:ticket-02:quick": "playwright test --config=playwright.ticket-02.config.ts",

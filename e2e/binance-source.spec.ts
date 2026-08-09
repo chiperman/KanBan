@@ -434,7 +434,13 @@ test("生产 Binance 适配器只调用允许的读取端点并覆盖权限、�
   expect(equity.ok()).toBeTruthy();
   await expect(equity.json()).resolves.toMatchObject({
     snapshot: {
-      total: { amount: "13232.77552755511022044", currency: "USDT" },
+      total: { amount: "12849.5", currency: "USDT" },
+      coverage: {
+        status: "partial",
+        totalIsAuthoritative: true,
+        unexplainedValue: { amount: "383.28", currency: "USDT" },
+        excludedPositiveAccounts: [],
+      },
       holdings: expect.arrayContaining([
         expect.objectContaining({
           symbol: "EQ_GLD",
@@ -471,6 +477,7 @@ test("生产 Binance 适配器只调用允许的读取端点并覆盖权限、�
       "GET /sapi/v1/equity/market/quote?symbol=GLD",
     ],
     stockRequestsAuthenticated: true,
+    total: { amount: "12849.5", currency: "USDT" },
     holdings: expect.arrayContaining([
       expect.objectContaining({
         sourceAsset: "EQ_GLD",

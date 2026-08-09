@@ -5,6 +5,7 @@ import {
   type PageSearchParams,
 } from "@/server/auth/canonical-origin";
 import { getServices } from "@/server/composition";
+import { AssetsHoldingsWorkspace } from "@/ui/assets-holdings-workspace";
 import { SessionGuard } from "@/ui/session-guard";
 import { WorkbenchShell } from "@/ui/workbench-shell";
 
@@ -16,24 +17,42 @@ export default async function AssetsPage({
   searchParams: PageSearchParams;
 }) {
   await redirectLoopbackIpToLocalhost("/assets", searchParams);
-  if ((await getServices().auth.currentSession()) === null) redirect("/");
+  const services = getServices();
+  if ((await services.auth.currentSession()) === null) redirect("/");
+  const [storedSources, manualRecords] = await Promise.all([
+    services.assetSources.list(),
+    services.manualAssetRecords.list(),
+  ]);
+  const manualRecordsBySource = new Map<string, typeof manualRecords>();
+  for (const record of manualRecords) {
+    manualRecordsBySource.set(record.sourceId, [
+      ...(manualRecordsBySource.get(record.sourceId) ?? []),
+      record,
+    ]);
+  }
+  const sources = storedSources.map(
+    ({ credentialReference: _credentialReference, permissions: _permissions, ...source }) => ({
+      ...source,
+      manualRecords: source.kind === "manual"
+        ? manualRecordsBySource.get(source.id) ?? []
+        : [],
+    }),
+  );
 
   return (
     <SessionGuard>
-      <WorkbenchShell refreshEnabled={false}>
+      <WorkbenchShell
+        refreshEnabled={sources.some(
+          (source) =>
+            source.lifecycle !== "disconnected" && source.kind !== "manual",
+        )}
+      >
         <div className="page page-workbench-destination">
           <a className="skip-link" href="#main-content">
             跳到主要内容
           </a>
           <main id="main-content">
-            <p className="card-label">PORTFOLIO / HOLDINGS</p>
-            <h1>资产与持仓</h1>
-            <div className="empty-state">
-              <p className="empty-title">持仓观察正在迁移</p>
-              <p className="empty-hint">
-                此目的地将统一比较来源总额、持仓明细、价格观察与可获得的平台盈亏；现有来源详情仍可正常查看。
-              </p>
-            </div>
+            <AssetsHoldingsWorkspace sources={sources} />
           </main>
         </div>
       </WorkbenchShell>

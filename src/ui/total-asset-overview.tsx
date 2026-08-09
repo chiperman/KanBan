@@ -16,6 +16,11 @@ import {
 } from "@/domain/decimal";
 import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
 import {
+  daysForTrendRange,
+  totalTrendObservationStatus,
+  type TrendRange,
+} from "@/domain/daily-trend-observations";
+import {
   buildTotalValuation,
   type DistributionDimension,
   type ReportingCurrency,
@@ -59,7 +64,7 @@ const DIMENSION_OPTIONS: readonly VibeSelectOption<DistributionDimension>[] = [
 export const TREND_RANGE_STORAGE_KEY = "asset-trend-range";
 const DAILY_DETAIL_PAGE_SIZE = 30;
 
-export type TrendRange = "7d" | "30d" | "90d" | "1y" | "all";
+export type { TrendRange } from "@/domain/daily-trend-observations";
 
 const TREND_RANGE_OPTIONS: readonly VibeSelectOption<TrendRange>[] = [
   { value: "7d", label: "7日" },
@@ -174,45 +179,6 @@ function yesterdaySourceChanges(
     );
 }
 
-function daysEndingAt(day: string, count: number): string[] {
-  const [year, month, date] = day.split("-").map(Number);
-  const cursor = new Date(Date.UTC(year, month - 1, date));
-  return Array.from({ length: count }, (_, index) => {
-    const next = new Date(cursor);
-    next.setUTCDate(cursor.getUTCDate() - (count - index - 1));
-    return next.toISOString().slice(0, 10);
-  });
-}
-
-function dayCountBetween(startDay: string, endDay: string): number {
-  const [startYear, startMonth, startDate] = startDay.split("-").map(Number);
-  const [endYear, endMonth, endDate] = endDay.split("-").map(Number);
-  const start = Date.UTC(startYear, startMonth - 1, startDate);
-  const end = Date.UTC(endYear, endMonth - 1, endDate);
-  return Math.max(1, Math.round((end - start) / 86_400_000) + 1);
-}
-
-export function daysForTrendRange(
-  range: TrendRange,
-  currentDay: string,
-  firstTrendDay: string | undefined,
-): string[] {
-  if (range === "all" && firstTrendDay) {
-    return daysEndingAt(
-      currentDay,
-      dayCountBetween(firstTrendDay, currentDay),
-    );
-  }
-  const count = range === "7d"
-    ? 7
-    : range === "90d"
-      ? 90
-      : range === "1y"
-        ? 365
-        : 30;
-  return daysEndingAt(currentDay, count);
-}
-
 function trendStatusLabel(status: TotalTrendPoint["status"]): string {
   return status === "expired"
     ? "过期"
@@ -324,16 +290,7 @@ export function TotalAssetOverview({
     () => totalTrendDays.map((day, index) => {
       const observation = observationsByDay.get(day);
       if (observation !== undefined) {
-        const automatedSources = observation.sources.filter(
-          (source) => source.kind !== "manual",
-        );
-        const status = automatedSources.some(
-          (source) => source.status === "expired",
-        )
-          ? "expired"
-          : automatedSources.some((source) => source.status !== "complete")
-            ? "incomplete"
-            : "complete";
+        const status = totalTrendObservationStatus(observation.sources);
         return {
           day,
           index,
@@ -619,7 +576,7 @@ export function TotalAssetOverview({
             return (
               <p key={issue.sourceId}>
                 {issue.sourceLabel}：{showSensitiveInfo && issue.amount !== null
-                  ? `${prefix}持仓明细比账户总额高 ${amount(decimalSubtract("0", issue.amount))} ${valuation.currency}。`
+                  ? `${prefix}持仓明细与账户总额相差 ${amount(issue.amount)} ${valuation.currency}。`
                   : `${prefix}持仓明细与账户总额暂未对齐。`}
                 总资产以账户总额为准。
               </p>

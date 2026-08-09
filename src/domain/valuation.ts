@@ -87,6 +87,66 @@ export interface RawAssetPosition {
   changePercent: string | null;
 }
 
+/** 汇总可用于统一展示的汇率，保持长桥账户的 USD 观察优先。 */
+export function reportingExchangeRatesForSources(
+  sources: Array<{
+    kind: string;
+    hasManualRecord?: boolean;
+    snapshot: Pick<AssetSnapshot, "exchangeRates">;
+  }>,
+): AssetExchangeRate[] {
+  const recordedSources = sources.filter(hasManualAssetRecord);
+  return [
+    ...recordedSources.flatMap((source) =>
+      source.kind === "longbridge" ? source.snapshot.exchangeRates : []
+    ),
+    ...recordedSources.flatMap((source) => source.snapshot.exchangeRates),
+  ];
+}
+
+const REPORTING_CURRENCIES = new Set(["CNY", "HKD"]);
+
+function isLongbridgeReportingRate(rate: AssetExchangeRate): boolean {
+  return (
+    (rate.baseCurrency === "USD" &&
+      REPORTING_CURRENCIES.has(rate.quoteCurrency)) ||
+    (rate.quoteCurrency === "USD" &&
+      REPORTING_CURRENCIES.has(rate.baseCurrency))
+  );
+}
+
+/**
+ * CNY/HKD 只能使用长桥的 USD 参考观察。来源原生汇率仍可用于先折回 USD，
+ * 但不能成为报告货币的替代或后备汇率。
+ */
+export function longbridgeReportingExchangeRatesForSources(
+  sources: Array<{
+    kind: string;
+    hasManualRecord?: boolean;
+    snapshot: Pick<AssetSnapshot, "exchangeRates">;
+  }>,
+): AssetExchangeRate[] {
+  return sources
+    .filter((source) => source.kind === "longbridge")
+    .flatMap((source) => source.snapshot.exchangeRates)
+    .filter(isLongbridgeReportingRate)
+    .toSorted((left, right) => right.observedAt.localeCompare(left.observedAt));
+}
+
+export function sourceReportingConversionRates(
+  source: {
+    snapshot: Pick<AssetSnapshot, "exchangeRates">;
+  },
+  reportingRates: AssetExchangeRate[],
+): AssetExchangeRate[] {
+  return [
+    ...reportingRates,
+    ...source.snapshot.exchangeRates.filter(
+      (rate) => !isLongbridgeReportingRate(rate),
+    ),
+  ];
+}
+
 export function compareNullableDecimalDescending(
   left: string | null,
   right: string | null,
@@ -263,15 +323,11 @@ export function buildTotalValuation(
 ): TotalValuation {
   const recordedSources = sources.filter(hasManualAssetRecord);
   const recordedRateSources = rateSources.filter(hasManualAssetRecord);
-  const longbridgeRates = recordedRateSources.flatMap((source) =>
-    source.kind === "longbridge" ? source.snapshot.exchangeRates : [],
+  const reportingRates = longbridgeReportingExchangeRatesForSources(
+    recordedRateSources,
   );
-  const allRates = [
-    ...longbridgeRates,
-    ...recordedRateSources.flatMap((source) => source.snapshot.exchangeRates),
-  ];
   const displayRate = (quoteCurrency: "CNY" | "HKD") => {
-    const observation = rateFor(allRates, "USD", quoteCurrency);
+    const observation = rateFor(reportingRates, "USD", quoteCurrency);
     return observation
       ? {
           ...observation.rate,
@@ -325,10 +381,7 @@ export function buildTotalValuation(
         incomplete = true;
       }
     }
-    const sourceRates = [
-      ...longbridgeRates,
-      ...source.snapshot.exchangeRates,
-    ];
+    const sourceRates = sourceReportingConversionRates(source, reportingRates);
     const portfolioTotal = portfolioSourceTotal(source);
     const total = convertCurrencyAmount(
       portfolioTotal.amount,
@@ -357,10 +410,7 @@ export function buildTotalValuation(
   for (const source of recordedSources) {
     const activeHoldings = activeSourceHoldings(source);
     const sourceTotal = sourceTotals.get(source.id);
-    const sourceRates = [
-      ...longbridgeRates,
-      ...source.snapshot.exchangeRates,
-    ];
+    const sourceRates = sourceReportingConversionRates(source, reportingRates);
     const quoteUnavailableCount = activeHoldings.filter(
       (holding) => holding.valuation.status === "quote-unavailable",
     ).length;

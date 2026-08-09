@@ -151,7 +151,7 @@ export function AssetProductCoverage({
         >
           {label}
           {coverage?.unexplainedValue
-            ? ` · 未解释 ${money(coverage.unexplainedValue.amount)} ${coverage.unexplainedValue.currency}`
+            ? ` · ${coverage.totalIsAuthoritative ? "明细差额" : "未解释"} ${money(coverage.unexplainedValue.amount)} ${coverage.unexplainedValue.currency}`
             : ""}
           {coverage && coverage.excludedPositiveAccounts.length > 0
             ? ` · 未纳入 ${coverage.excludedPositiveAccounts.join("、")}`
