@@ -19,6 +19,7 @@ import {
   SqliteDashboardDatabase,
   createProductionServices,
 } from "@/server/production";
+import { InvestmentCashflowLedger } from "@/server/investment-cashflows";
 import type {
   AssetSnapshot,
   AssetSourceSummary,
@@ -251,6 +252,42 @@ function legacyLongbridgeOptionSource(): AssetSourceSummary {
   };
 }
 
+function longbridgeReferenceSource(): AssetSourceSummary {
+  const syncedAt = "2026-08-05T00:00:00.000Z";
+  return {
+    id: "longbridge-reference-source",
+    kind: "longbridge",
+    label: "长桥参考账户",
+    accountId: "longbridge:reference",
+    permissions: ["account", "positions", "market-data"],
+    credentialReference: "opaque-reference",
+    snapshot: {
+      total: { amount: "10000", currency: "USD" },
+      holdings: [],
+      exchangeRates: [{
+        baseCurrency: "USD",
+        quoteCurrency: "CNY",
+        rate: "7.2",
+        source: "Longbridge",
+        observedAt: syncedAt,
+      }, {
+        baseCurrency: "USD",
+        quoteCurrency: "HKD",
+        rate: "7.8",
+        source: "Longbridge",
+        observedAt: syncedAt,
+      }],
+      syncedAt,
+    },
+    sync: {
+      status: "current",
+      lastSuccessfulAt: syncedAt,
+      lastAttemptAt: syncedAt,
+      error: null,
+    },
+  };
+}
+
 function dailySnapshot(
   sourceId: string,
   usd: string,
@@ -448,6 +485,7 @@ export async function POST(request: Request) {
     action !== "complete-trend-survives-incomplete-refresh" &&
     action !== "schema-v6-hkd-fx-migration" &&
     action !== "schema-v8-manual-source-migration" &&
+    action !== "schema-v12-investment-cashflow-migration" &&
     action !== "display-name-persistence" &&
     action !== "evm-token-preference-persistence" &&
     action !== "longbridge-option-read-upgrade" &&
@@ -575,6 +613,82 @@ export async function POST(request: Request) {
           label: existing.label,
         },
         manual: sources.find((source) => source.id === manual.id),
+      });
+    }
+    if (action === "schema-v12-investment-cashflow-migration") {
+      await mkdir(dataDirectory, { recursive: true });
+      const databasePath = path.join(dataDirectory, "dashboard.sqlite");
+      const legacyDashboardPath = path.join(dataDirectory, "dashboard.json");
+      const legacyCardsPath = path.join(dataDirectory, "cards.json");
+      const first = new SqliteDashboardDatabase(
+        databasePath,
+        legacyDashboardPath,
+        legacyCardsPath,
+      );
+      const source = longbridgeReferenceSource();
+      await first.replaceSources([source]);
+      const snapshot = {
+        ...dailySnapshot(source.id, "10000", "72000"),
+        total: { USD: "10000", CNY: "72000", HKD: "78000" },
+        exchangeRates: source.snapshot.exchangeRates,
+        sources: [{
+          ...dailySnapshot(source.id, "10000", "72000").sources[0],
+          label: source.label,
+          kind: source.kind,
+          total: { USD: "10000", CNY: "72000", HKD: "78000" },
+        }],
+      };
+      await first.createDailyAssetSnapshotIfAbsent(snapshot);
+      const beforeSnapshots = await first.listDailyAssetSnapshots();
+
+      const downgrade = new DatabaseSync(databasePath);
+      downgrade.exec(`
+        DROP TABLE investment_cashflows;
+        UPDATE schema_metadata SET value = '12' WHERE key = 'schema_version';
+      `);
+      downgrade.close();
+
+      const migrated = new SqliteDashboardDatabase(
+        databasePath,
+        legacyDashboardPath,
+        legacyCardsPath,
+      );
+      const ledger = new InvestmentCashflowLedger(
+        migrated,
+        { list: () => migrated.listSources() },
+        { now: () => new Date("2026-08-05T12:00:00.000Z") },
+      );
+      const cashflow = await ledger.create({
+        kind: "initial-investment",
+        occurredAt: "2026-08-01T00:00:00.000Z",
+        amount: "10000",
+        currency: "USD",
+        note: "迁移后补录",
+      });
+      const afterSnapshots = await migrated.listDailyAssetSnapshots();
+      const inspection = new DatabaseSync(databasePath, { readOnly: true });
+      const schemaVersion = inspection
+        .prepare("SELECT value FROM schema_metadata WHERE key = 'schema_version'")
+        .get() as { value: string };
+      const tables = inspection
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'investment_cashflows'",
+        )
+        .all();
+      inspection.close();
+      return Response.json({
+        schemaVersion: schemaVersion.value,
+        cashflowTable: tables.length === 1,
+        cashflow: {
+          kind: cashflow.kind,
+          occurredAt: cashflow.occurredAt,
+          amount: cashflow.amount,
+          currency: cashflow.currency,
+          amounts: cashflow.amounts,
+          exchangeRateSources: cashflow.exchangeRates.map(({ source }) => source),
+        },
+        snapshotsUnchanged:
+          JSON.stringify(afterSnapshots) === JSON.stringify(beforeSnapshots),
       });
     }
     if (action === "schema-v2-migration") {

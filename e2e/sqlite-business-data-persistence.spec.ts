@@ -69,7 +69,7 @@ test("SQLite schema v2 自动迁移并持久化 Binance 覆盖证据", async ({ 
 
   expect(response.ok()).toBeTruthy();
   await expect(response.json()).resolves.toEqual({
-    schemaVersion: "12",
+    schemaVersion: "13",
     coverageColumn: true,
     displayNameColumn: true,
     coverageStatus: "partial",
@@ -86,7 +86,7 @@ test("SQLite schema v4 升级后分离日初基准与每日趋势观测并跨重
 
   expect(response.ok()).toBeTruthy();
   await expect(response.json()).resolves.toEqual({
-    schemaVersion: "12",
+    schemaVersion: "13",
     migratedTrend: {
       capturedAt: "2026-07-28T00:30:00.000Z",
       complete: false,
@@ -144,7 +144,7 @@ test("SQLite schema v6 升级后持久化 HKD 金额与观测时汇率", async (
 
   expect(response.ok()).toBeTruthy();
   await expect(response.json()).resolves.toEqual({
-    schemaVersion: "12",
+    schemaVersion: "13",
     hkdColumns: true,
     baseline: {
       total: { USD: "10", CNY: "72", HKD: "78" },
@@ -210,7 +210,7 @@ test("SQLite schema v8 升级后可创建并记录手工资产来源", async ({
 
   expect(response.ok()).toBeTruthy();
   await expect(response.json()).resolves.toEqual({
-    schemaVersion: "12",
+    schemaVersion: "13",
     hasManualRecordColumn: true,
     manualAssetClassColumn: true,
     existing: {
@@ -226,6 +226,29 @@ test("SQLite schema v8 升级后可创建并记录手工资产来源", async ({
         total: { amount: "108000", currency: "CNY" },
       }),
     }),
+  });
+});
+
+test("SQLite schema v12 增量迁移保存资金账本且不改写资产观测", async ({
+  request,
+}) => {
+  const response = await request.post(
+    "/test-doubles/sqlite-business-data-persistence?action=schema-v12-investment-cashflow-migration",
+  );
+
+  expect(response.ok()).toBeTruthy();
+  await expect(response.json()).resolves.toEqual({
+    schemaVersion: "13",
+    cashflowTable: true,
+    cashflow: {
+      kind: "initial-investment",
+      occurredAt: "2026-08-01T00:00:00.000Z",
+      amount: "10000",
+      currency: "USD",
+      amounts: { USD: "10000", CNY: "72000", HKD: "78000" },
+      exchangeRateSources: ["Longbridge", "Longbridge"],
+    },
+    snapshotsUnchanged: true,
   });
 });
 

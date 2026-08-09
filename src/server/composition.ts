@@ -15,6 +15,7 @@ import type {
   ExternalServiceConfiguration,
   FormalDailySettlementRunner,
   FormalDailySettlements,
+  InvestmentCashflows,
   LongbridgeOAuth,
   OwnerAuth,
   OwnerCredentialStore,
@@ -59,6 +60,7 @@ export interface AppServices {
   evm: EvmWatchWalletReadOnly;
   assetSourceConnections: AssetSourceConnections;
   manualAssetRecords: ManualAssetRecords;
+  investmentCashflows: InvestmentCashflows;
   assetSourceOnboarding: AssetSourceOnboarding;
   businessDataBackups: BusinessDataBackup;
 }
@@ -88,6 +90,7 @@ function hasCurrentServices(
     services.externalServices !== undefined &&
     typeof services.assetSourceLifecycle.setEvmTokenPreference === "function" &&
     typeof services.manualAssetRecords.record === "function" &&
+    typeof services.investmentCashflows?.create === "function" &&
     typeof services.assetSourceOnboarding?.reauthorize === "function"
   );
 }

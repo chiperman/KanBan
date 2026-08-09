@@ -94,6 +94,34 @@ function backupState(): BusinessDataState {
       trendObservation("2026-07-27"),
       trendObservation("2026-07-28"),
     ],
+    investmentCashflows: [],
+  };
+}
+
+function cashflow() {
+  return {
+    id: "backup-initial-investment",
+    kind: "initial-investment" as const,
+    occurredAt: "2026-07-27T00:00:00.000Z",
+    amount: "100",
+    currency: "USD" as const,
+    note: "备份本金",
+    amounts: { USD: "100", CNY: "720", HKD: "780" },
+    exchangeRates: [{
+      baseCurrency: "USD",
+      quoteCurrency: "CNY",
+      rate: "7.2",
+      source: "Longbridge",
+      observedAt: "2026-07-27T00:00:00.000Z",
+    }, {
+      baseCurrency: "USD",
+      quoteCurrency: "HKD",
+      rate: "7.8",
+      source: "Longbridge",
+      observedAt: "2026-07-27T00:00:00.000Z",
+    }],
+    createdAt: "2026-07-28T10:00:00.000Z",
+    updatedAt: "2026-07-28T10:00:00.000Z",
   };
 }
 
@@ -127,6 +155,7 @@ export async function POST(request: Request) {
     action !== "export-security" &&
     action !== "validation" &&
     action !== "legacy-version" &&
+    action !== "v2-version" &&
     action !== "repeat-restore" &&
     action !== "rollback"
   ) {
@@ -146,6 +175,7 @@ export async function POST(request: Request) {
       { now: () => new Date("2026-07-28T10:00:00.000Z") },
     );
     await database.replaceBusinessData(backupState());
+    await database.createInvestmentCashflow(cashflow());
     const exported = await backups.exportBackup("round-trip.json");
     const backupPath = path.join(root, "backups", exported.fileName);
     if (action === "export-security") {
@@ -243,6 +273,18 @@ export async function POST(request: Request) {
       updateChecksum(brokenReference);
       const brokenReferenceRejected = await rejects(JSON.stringify(brokenReference));
 
+      const cashflowEvidence = changedDocument();
+      const cashflowPayload = cashflowEvidence.payload as {
+        investmentCashflows: Array<{
+          amounts: { CNY: string };
+        }>;
+      };
+      cashflowPayload.investmentCashflows[0].amounts.CNY = "721";
+      updateChecksum(cashflowEvidence);
+      const cashflowEvidenceRejected = await rejects(
+        JSON.stringify(cashflowEvidence),
+      );
+
       const currentDataPreserved =
         (await database.listSources()).map(({ id }) => id).join(",") ===
           "backup-source" &&
@@ -255,6 +297,7 @@ export async function POST(request: Request) {
         sensitiveFieldRejected,
         duplicateSourceRejected,
         brokenReferenceRejected,
+        cashflowEvidenceRejected,
         currentDataPreserved,
       });
     }
@@ -282,6 +325,7 @@ export async function POST(request: Request) {
         assetSources: [],
         dailyAssetSnapshots: [],
         dailyAssetTrendObservations: [],
+        investmentCashflows: [],
       });
       await backups.restore(exported.fileName);
       const [restoredSource] = await database.listSources();
@@ -290,6 +334,30 @@ export async function POST(request: Request) {
         cardCount: (await database.listAssetCards()).length,
         lifecycle: restoredSource.lifecycle,
         credentialReference: restoredSource.credentialReference,
+      });
+    }
+    if (action === "v2-version") {
+      const legacy = JSON.parse(
+        await readFile(backupPath, "utf8"),
+      ) as Record<string, unknown>;
+      const payload = legacy.payload as Record<string, unknown>;
+      legacy.formatVersion = 2;
+      delete payload.investmentCashflows;
+      updateChecksum(legacy);
+      await writeFile(backupPath, JSON.stringify(legacy), { mode: 0o600 });
+      await database.replaceBusinessData({
+        assetCards: [],
+        assetSources: [],
+        dailyAssetSnapshots: [],
+        dailyAssetTrendObservations: [],
+        investmentCashflows: [],
+      });
+      await backups.restore(exported.fileName);
+      const [restoredSource] = await database.listSources();
+      return Response.json({
+        sourceCount: (await database.listSources()).length,
+        cashflowCount: (await database.listInvestmentCashflows()).length,
+        lifecycle: restoredSource.lifecycle,
       });
     }
     if (action === "repeat-restore") {
@@ -340,6 +408,7 @@ export async function POST(request: Request) {
       assetSources: [],
       dailyAssetSnapshots: [],
       dailyAssetTrendObservations: [],
+      investmentCashflows: [],
     });
     const preview = await backups.previewRestore(exported.fileName);
     await backups.restore(exported.fileName);
@@ -360,6 +429,14 @@ export async function POST(request: Request) {
         },
         lifecycle: restoredSource.lifecycle,
         credentialReference: restoredSource.credentialReference,
+        cashflows: (await database.listInvestmentCashflows()).map((item) => ({
+          kind: item.kind,
+          occurredAt: item.occurredAt,
+          amount: item.amount,
+          currency: item.currency,
+          amounts: item.amounts,
+          exchangeRateSources: item.exchangeRates.map(({ source }) => source),
+        })),
       },
     });
   } finally {

@@ -55,6 +55,7 @@ import type {
   DailyAssetSnapshots,
   FormalDailySettlement,
   FormalDailySettlements,
+  InvestmentCashflow,
   ManualAssetRecord,
   ManualAssetClass,
   ManualAssetRecordInput,
@@ -118,6 +119,8 @@ import {
 } from "@/server/business-data-backup";
 import { AssetSourceOnboarding } from "@/server/asset-source-onboarding";
 import { createAssetSourceProviderAdapters } from "@/server/asset-source-provider-adapters";
+import type { InvestmentCashflowStore } from "@/server/investment-cashflows";
+import { InvestmentCashflowLedger } from "@/server/investment-cashflows";
 
 class SystemClock implements Clock {
   now(): Date {
@@ -135,7 +138,7 @@ interface DashboardState {
 }
 
 const DASHBOARD_SCHEMA_VERSION = 9 as const;
-const SQLITE_SCHEMA_VERSION = 12;
+const SQLITE_SCHEMA_VERSION = 13;
 
 type SourceConnectionKind =
   | "longbridge"
@@ -1366,7 +1369,9 @@ function parseLegacyDashboardStateSync(
 }
 
 /** SQLite 只保存业务数据与不透明凭证引用；秘密正文仍由 SecretStore 持有。 */
-export class SqliteDashboardDatabase implements DashboardDatabase {
+export class SqliteDashboardDatabase
+  implements DashboardDatabase, InvestmentCashflowStore
+{
   private database!: InstanceType<typeof DatabaseSync>;
 
   constructor(
@@ -1562,6 +1567,7 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
     `);
     let schemaVersion = this.metadata("schema_version");
     if (schemaVersion === null) {
+      this.createInvestmentCashflowSchema();
       this.database
         .prepare("INSERT INTO schema_metadata (key, value) VALUES (?, ?)")
         .run("schema_version", String(SQLITE_SCHEMA_VERSION));
@@ -1611,9 +1617,37 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
       this.migrateSchemaVersionEleven();
       schemaVersion = "12";
     }
+    if (schemaVersion === "12") {
+      this.migrateSchemaVersionTwelve();
+      schemaVersion = "13";
+    }
     if (schemaVersion !== String(SQLITE_SCHEMA_VERSION)) {
       throw new Error(`不支持的 SQLite schema 版本: ${schemaVersion}`);
     }
+  }
+
+  private createInvestmentCashflowSchema(): void {
+    this.database.exec(`
+      CREATE TABLE IF NOT EXISTS investment_cashflows (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL CHECK (
+          kind IN ('initial-investment', 'external-deposit', 'external-withdrawal')
+        ),
+        occurred_at TEXT NOT NULL,
+        amount TEXT NOT NULL,
+        currency TEXT NOT NULL CHECK (currency IN ('USD', 'CNY', 'HKD')),
+        note TEXT,
+        amount_usd TEXT,
+        amount_cny TEXT,
+        amount_hkd TEXT,
+        exchange_rates_json TEXT NOT NULL CHECK (json_valid(exchange_rates_json)),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      ) STRICT;
+      CREATE UNIQUE INDEX IF NOT EXISTS investment_cashflows_one_initial
+        ON investment_cashflows(kind)
+        WHERE kind = 'initial-investment';
+    `);
   }
 
   private migrateSchemaVersionOne(): void {
@@ -1855,6 +1889,15 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
     });
   }
 
+  private migrateSchemaVersionTwelve(): void {
+    this.transaction(() => {
+      this.createInvestmentCashflowSchema();
+      this.database
+        .prepare("UPDATE schema_metadata SET value = ? WHERE key = ?")
+        .run("13", "schema_version");
+    });
+  }
+
   private initializeLegacyData(): void {
     if (this.metadata("json_import_complete") === "1") return;
     const state = parseLegacyDashboardStateSync(
@@ -1939,6 +1982,7 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
 
   private replaceState(state: DashboardState | BusinessDataState): void {
     this.database.exec(`
+      DELETE FROM investment_cashflows;
       DELETE FROM daily_asset_source_trend_observations;
       DELETE FROM daily_asset_trend_observations;
       DELETE FROM daily_asset_source_snapshots;
@@ -1959,6 +2003,11 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
     state.dailyAssetTrendObservations.forEach((observation) =>
       this.upsertDailyTrendObservation(migrateDailyObservation(observation)),
     );
+    const cashflows = "investmentCashflows" in state
+      ? (state as { investmentCashflows: InvestmentCashflow[] })
+        .investmentCashflows
+      : [];
+    cashflows.forEach((cashflow) => this.insertInvestmentCashflow(cashflow));
   }
 
   private insertSource(source: AssetSourceSummary, position: number): void {
@@ -2049,6 +2098,31 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
         card.hidden === undefined ? null : Number(card.hidden),
         card.span,
         card.startsNewRow === undefined ? null : Number(card.startsNewRow),
+      );
+  }
+
+  private insertInvestmentCashflow(cashflow: InvestmentCashflow): void {
+    this.database
+      .prepare(`
+        INSERT INTO investment_cashflows (
+          id, kind, occurred_at, amount, currency, note,
+          amount_usd, amount_cny, amount_hkd, exchange_rates_json,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      .run(
+        cashflow.id,
+        cashflow.kind,
+        cashflow.occurredAt,
+        cashflow.amount,
+        cashflow.currency,
+        cashflow.note,
+        cashflow.amounts.USD,
+        cashflow.amounts.CNY,
+        cashflow.amounts.HKD,
+        JSON.stringify(cashflow.exchangeRates),
+        cashflow.createdAt,
+        cashflow.updatedAt,
       );
   }
 
@@ -2461,6 +2535,31 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
     }));
   }
 
+  private listInvestmentCashflowsSync(): InvestmentCashflow[] {
+    const rows = this.database
+      .prepare(`
+        SELECT * FROM investment_cashflows
+        ORDER BY occurred_at DESC, created_at DESC, id DESC
+      `)
+      .all() as SqliteRow[];
+    return rows.map((row) => ({
+      id: row.id as string,
+      kind: row.kind as InvestmentCashflow["kind"],
+      occurredAt: row.occurred_at as string,
+      amount: row.amount as string,
+      currency: row.currency as InvestmentCashflow["currency"],
+      note: row.note as string | null,
+      amounts: {
+        USD: row.amount_usd as string | null,
+        CNY: row.amount_cny as string | null,
+        HKD: row.amount_hkd as string | null,
+      },
+      exchangeRates: JSON.parse(row.exchange_rates_json as string),
+      createdAt: row.created_at as string,
+      updatedAt: row.updated_at as string,
+    }));
+  }
+
   private listDailyAssetSnapshotsSync(): DailyAssetSnapshot[] {
     return this.listDailyObservationsSync(
       "daily_asset_snapshots",
@@ -2596,6 +2695,56 @@ export class SqliteDashboardDatabase implements DashboardDatabase {
 
   async listManualAssetRecords(): Promise<ManualAssetRecord[]> {
     return this.listManualAssetRecordsSync();
+  }
+
+  async listInvestmentCashflows(): Promise<InvestmentCashflow[]> {
+    return this.listInvestmentCashflowsSync();
+  }
+
+  async createInvestmentCashflow(
+    cashflow: InvestmentCashflow,
+  ): Promise<void> {
+    this.transaction(() => {
+      this.insertInvestmentCashflow(cashflow);
+    });
+  }
+
+  async updateInvestmentCashflow(
+    cashflow: InvestmentCashflow,
+  ): Promise<void> {
+    this.transaction(() => {
+      const result = this.database
+        .prepare(`
+          UPDATE investment_cashflows
+          SET kind = ?, occurred_at = ?, amount = ?, currency = ?, note = ?,
+              amount_usd = ?, amount_cny = ?, amount_hkd = ?,
+              exchange_rates_json = ?, updated_at = ?
+          WHERE id = ?
+        `)
+        .run(
+          cashflow.kind,
+          cashflow.occurredAt,
+          cashflow.amount,
+          cashflow.currency,
+          cashflow.note,
+          cashflow.amounts.USD,
+          cashflow.amounts.CNY,
+          cashflow.amounts.HKD,
+          JSON.stringify(cashflow.exchangeRates),
+          cashflow.updatedAt,
+          cashflow.id,
+        );
+      if (result.changes !== 1) throw new Error("资金记录不存在");
+    });
+  }
+
+  async deleteInvestmentCashflow(id: string): Promise<void> {
+    this.transaction(() => {
+      const result = this.database
+        .prepare("DELETE FROM investment_cashflows WHERE id = ?")
+        .run(id);
+      if (result.changes !== 1) throw new Error("资金记录不存在");
+    });
   }
 
   async listFormalDailySettlements(): Promise<FormalDailySettlement[]> {
@@ -3861,6 +4010,11 @@ export function createProductionServices(
   void secretRecovery.catch(() => undefined);
   const assetSources = new DatabaseAssetSources(database);
   const manualAssetRecords = new DatabaseManualAssetRecords(database, clock);
+  const investmentCashflows = new InvestmentCashflowLedger(
+    database,
+    assetSources,
+    clock,
+  );
   const dailyAssetSnapshots = new DatabaseDailyAssetSnapshots(database);
   const readySecrets = new ReadySecretStore(secrets, secretRecovery);
   const externalServices: ExternalServiceConfiguration =
@@ -3908,6 +4062,7 @@ export function createProductionServices(
     assetCards: new DatabaseAssetCardStore(database),
     assetSources,
     manualAssetRecords,
+    investmentCashflows,
     assetSourceLifecycle: new DatabaseAssetSourceLifecycle(
       database,
       readySecrets,

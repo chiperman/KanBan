@@ -32,6 +32,7 @@ import type {
   FormalDailySettlement,
   FormalDailySettlementRunner,
   FormalDailySettlements,
+  InvestmentCashflow,
   LongbridgeAuthorizationResult,
   Card,
   AssetCardStore,
@@ -82,6 +83,10 @@ import {
 import { bitgetFixtureSnapshot } from "@/server/testing/bitget-fixtures";
 import { AssetSourceOnboarding } from "@/server/asset-source-onboarding";
 import { createAssetSourceProviderAdapters } from "@/server/asset-source-provider-adapters";
+import {
+  InvestmentCashflowLedger,
+  type InvestmentCashflowStore,
+} from "@/server/investment-cashflows";
 
 export class FakeClock implements Clock {
   private current = new Date("2026-01-01T00:00:00.000Z");
@@ -104,6 +109,32 @@ export class InMemoryAssetCardStore implements AssetCardStore {
 
   async replaceAll(cards: Card[]): Promise<void> {
     this.cards = cards;
+  }
+}
+
+export class InMemoryInvestmentCashflowStore
+  implements InvestmentCashflowStore
+{
+  private cashflows: InvestmentCashflow[] = [];
+
+  async listInvestmentCashflows(): Promise<InvestmentCashflow[]> {
+    return structuredClone(this.cashflows);
+  }
+
+  async createInvestmentCashflow(cashflow: InvestmentCashflow): Promise<void> {
+    this.cashflows.push(structuredClone(cashflow));
+  }
+
+  async updateInvestmentCashflow(cashflow: InvestmentCashflow): Promise<void> {
+    const index = this.cashflows.findIndex(({ id }) => id === cashflow.id);
+    if (index === -1) throw new Error("资金记录不存在");
+    this.cashflows[index] = structuredClone(cashflow);
+  }
+
+  async deleteInvestmentCashflow(id: string): Promise<void> {
+    const count = this.cashflows.length;
+    this.cashflows = this.cashflows.filter((cashflow) => cashflow.id !== id);
+    if (this.cashflows.length === count) throw new Error("资金记录不存在");
   }
 }
 
@@ -1683,6 +1714,7 @@ export interface TestServices extends AppServices {
   evm: FakeEvmWatchWallet;
   assetSourceConnections: InMemoryAssetSourceConnections;
   manualAssetRecords: InMemoryManualAssetRecords;
+  investmentCashflows: InvestmentCashflowLedger;
   assetSourceOnboarding: AssetSourceOnboarding;
   assetSourceLifecycle: InMemoryAssetSourceLifecycle;
 }
@@ -1691,6 +1723,12 @@ export function createTestServices(): TestServices {
   const clock = new FakeClock();
   const assetCards = new InMemoryAssetCardStore();
   const assetSources = new FakeAssetSources();
+  const investmentCashflowStore = new InMemoryInvestmentCashflowStore();
+  const investmentCashflows = new InvestmentCashflowLedger(
+    investmentCashflowStore,
+    assetSources,
+    clock,
+  );
   const dailyAssetSnapshots = new InMemoryDailyAssetSnapshots();
   const formalDailySettlements = new InMemoryFormalDailySettlements();
   const secrets = new InMemorySecretStore();
@@ -1772,6 +1810,7 @@ export function createTestServices(): TestServices {
     assetCards,
     assetSources,
     manualAssetRecords,
+    investmentCashflows,
     assetSourceLifecycle,
     dailyAssetSnapshots,
     formalDailySettlements,

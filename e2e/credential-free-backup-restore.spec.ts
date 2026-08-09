@@ -43,6 +43,14 @@ test("导出后可以恢复业务数据且来源默认断开", async ({ request 
       },
       lifecycle: "disconnected",
       credentialReference: null,
+      cashflows: [{
+        kind: "initial-investment",
+        occurredAt: "2026-07-27T00:00:00.000Z",
+        amount: "100",
+        currency: "USD",
+        amounts: { USD: "100", CNY: "720", HKD: "780" },
+        exchangeRateSources: ["Longbridge", "Longbridge"],
+      }],
     },
   });
 });
@@ -74,6 +82,7 @@ test("损坏或不完整备份在预演阶段被拒绝且不覆盖当前数据",
     sensitiveFieldRejected: true,
     duplicateSourceRejected: true,
     brokenReferenceRejected: true,
+    cashflowEvidenceRejected: true,
     currentDataPreserved: true,
   });
 });
@@ -89,6 +98,19 @@ test("旧版备份可以迁移并按当前断开规则恢复", async ({ request 
     cardCount: 1,
     lifecycle: "disconnected",
     credentialReference: null,
+  });
+});
+
+test("v2 备份恢复为空资金账本，且不影响来源断开语义", async ({ request }) => {
+  const response = await request.post(
+    "/test-doubles/credential-free-backup-restore?action=v2-version",
+  );
+
+  expect(response.ok()).toBeTruthy();
+  await expect(response.json()).resolves.toEqual({
+    sourceCount: 1,
+    cashflowCount: 0,
+    lifecycle: "disconnected",
   });
 });
 

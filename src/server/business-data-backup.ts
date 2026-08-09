@@ -7,7 +7,15 @@ import type {
   Clock,
   DailyAssetSnapshot,
   DailyAssetTrendObservation,
+  InvestmentCashflow,
+  InvestmentCashflowCurrency,
 } from "@/server/ports";
+import {
+  assertInvestmentCashflowSequence,
+  normalizeInvestmentCashflowInput,
+} from "@/domain/investment-performance";
+import { decimalCompare } from "@/domain/decimal";
+import { convertCurrencyAmount } from "@/domain/valuation";
 import {
   atomicWritePrivateFile,
   ensurePrivateDirectory,
@@ -15,8 +23,8 @@ import {
 } from "@/server/local-data-permissions";
 
 const BACKUP_FORMAT = "personal-asset-dashboard-business-data";
-const BACKUP_FORMAT_VERSION = 2;
-const SUPPORTED_BACKUP_VERSIONS = new Set([1, BACKUP_FORMAT_VERSION]);
+const BACKUP_FORMAT_VERSION = 3;
+const SUPPORTED_BACKUP_VERSIONS = new Set([1, 2, BACKUP_FORMAT_VERSION]);
 
 export const SENSITIVE_ASSET_DATA_WARNING =
   "备份仍包含敏感资产数据，请仅存放在受保护的位置。";
@@ -48,6 +56,7 @@ export interface BusinessDataState {
   assetSources: AssetSourceSummary[];
   dailyAssetSnapshots: DailyAssetSnapshot[];
   dailyAssetTrendObservations: DailyAssetTrendObservation[];
+  investmentCashflows: InvestmentCashflow[];
 }
 
 export interface BackupRestorePreview {
@@ -77,6 +86,7 @@ export interface BusinessDataBackupStore {
   listSources(): Promise<AssetSourceSummary[]>;
   listDailyAssetSnapshots(): Promise<DailyAssetSnapshot[]>;
   listDailyAssetTrendObservations(): Promise<DailyAssetTrendObservation[]>;
+  listInvestmentCashflows(): Promise<InvestmentCashflow[]>;
   validateBusinessData(state: BusinessDataState): Promise<void>;
   replaceBusinessData(state: BusinessDataState): Promise<void>;
 }
@@ -86,6 +96,7 @@ type BackupPayload = {
   assetSources: Array<Omit<AssetSourceSummary, "credentialReference">>;
   dailyAssetSnapshots: DailyAssetSnapshot[];
   dailyAssetTrendObservations: DailyAssetTrendObservation[];
+  investmentCashflows: InvestmentCashflow[];
 };
 
 type BackupDocument = {
@@ -189,6 +200,152 @@ function assertUnique(values: string[], label: string): void {
   }
 }
 
+function assertIsoTime(value: unknown, label: string): asserts value is string {
+  assertString(value, label);
+  if (Number.isNaN(new Date(value).valueOf())) {
+    throw new Error(`备份字段无效: ${label}`);
+  }
+}
+
+function nullableAmount(
+  value: unknown,
+  label: string,
+): string | null {
+  if (value === null) return null;
+  assertString(value, label);
+  if (!/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value) || decimalCompare(value, "0") <= 0) {
+    throw new Error(`备份字段无效: ${label}`);
+  }
+  return value;
+}
+
+function isLongbridgeReferencePair(
+  baseCurrency: string,
+  quoteCurrency: string,
+): boolean {
+  return (
+    (baseCurrency === "USD" &&
+      (quoteCurrency === "CNY" || quoteCurrency === "HKD")) ||
+    (quoteCurrency === "USD" &&
+      (baseCurrency === "CNY" || baseCurrency === "HKD"))
+  );
+}
+
+function restoredCashflows(value: unknown): InvestmentCashflow[] {
+  assertArray(value, "payload.investmentCashflows");
+  const cashflows = value.map((raw, index) => {
+    if (!isRecord(raw)) {
+      throw new Error(`备份字段无效: payload.investmentCashflows[${index}]`);
+    }
+    assertString(raw.id, `investmentCashflows[${index}].id`);
+    assertString(raw.kind, `investmentCashflows[${index}].kind`);
+    assertString(raw.occurredAt, `investmentCashflows[${index}].occurredAt`);
+    assertString(raw.amount, `investmentCashflows[${index}].amount`);
+    assertString(raw.currency, `investmentCashflows[${index}].currency`);
+    if (raw.note !== null && typeof raw.note !== "string") {
+      throw new Error(`备份字段无效: investmentCashflows[${index}].note`);
+    }
+    const normalized = normalizeInvestmentCashflowInput({
+      kind: raw.kind as InvestmentCashflow["kind"],
+      occurredAt: raw.occurredAt,
+      amount: raw.amount,
+      currency: raw.currency as InvestmentCashflowCurrency,
+      note: raw.note,
+    });
+    if (!isRecord(raw.amounts)) {
+      throw new Error(`备份字段无效: investmentCashflows[${index}].amounts`);
+    }
+    const amounts = {
+      USD: nullableAmount(raw.amounts.USD, `investmentCashflows[${index}].amounts.USD`),
+      CNY: nullableAmount(raw.amounts.CNY, `investmentCashflows[${index}].amounts.CNY`),
+      HKD: nullableAmount(raw.amounts.HKD, `investmentCashflows[${index}].amounts.HKD`),
+    };
+    assertArray(raw.exchangeRates, `investmentCashflows[${index}].exchangeRates`);
+    const exchangeRates = raw.exchangeRates.map((rate, rateIndex) => {
+      if (!isRecord(rate)) {
+        throw new Error(
+          `备份字段无效: investmentCashflows[${index}].exchangeRates[${rateIndex}]`,
+        );
+      }
+      assertString(
+        rate.baseCurrency,
+        `investmentCashflows[${index}].exchangeRates[${rateIndex}].baseCurrency`,
+      );
+      assertString(
+        rate.quoteCurrency,
+        `investmentCashflows[${index}].exchangeRates[${rateIndex}].quoteCurrency`,
+      );
+      assertString(
+        rate.rate,
+        `investmentCashflows[${index}].exchangeRates[${rateIndex}].rate`,
+      );
+      assertString(
+        rate.source,
+        `investmentCashflows[${index}].exchangeRates[${rateIndex}].source`,
+      );
+      assertIsoTime(
+        rate.observedAt,
+        `investmentCashflows[${index}].exchangeRates[${rateIndex}].observedAt`,
+      );
+      if (
+        !rate.source.startsWith("Longbridge") ||
+        !isLongbridgeReferencePair(rate.baseCurrency, rate.quoteCurrency) ||
+        !/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(rate.rate) ||
+        decimalCompare(rate.rate, "0") <= 0
+      ) {
+        throw new Error(
+          `备份字段无效: investmentCashflows[${index}].exchangeRates[${rateIndex}]`,
+        );
+      }
+      return {
+        baseCurrency: rate.baseCurrency,
+        quoteCurrency: rate.quoteCurrency,
+        rate: rate.rate,
+        source: rate.source,
+        observedAt: rate.observedAt,
+      };
+    });
+    assertUnique(
+      exchangeRates.map(({ baseCurrency, quoteCurrency }) =>
+        `USD/${baseCurrency === "USD" ? quoteCurrency : baseCurrency}`,
+      ),
+      `investmentCashflows[${index}].exchangeRates 货币对重复`,
+    );
+    const expectedAmounts = (["USD", "CNY", "HKD"] as const).reduce(
+      (expected, currency) => {
+        expected[currency] = convertCurrencyAmount(
+          normalized.amount,
+          normalized.currency,
+          currency,
+          exchangeRates,
+        );
+        return expected;
+      },
+      {} as Record<InvestmentCashflowCurrency, string | null>,
+    );
+    if (
+      (["USD", "CNY", "HKD"] as const).some(
+        (currency) => amounts[currency] !== expectedAmounts[currency],
+      )
+    ) {
+      throw new Error(`备份字段无效: investmentCashflows[${index}].amounts`);
+    }
+    assertIsoTime(raw.createdAt, `investmentCashflows[${index}].createdAt`);
+    assertIsoTime(raw.updatedAt, `investmentCashflows[${index}].updatedAt`);
+    return {
+      id: raw.id,
+      ...normalized,
+      amounts,
+      exchangeRates,
+      createdAt: raw.createdAt,
+      updatedAt: raw.updatedAt,
+    };
+  });
+  assertUnique(cashflows.map(({ id }) => id), "资金记录 ID 重复");
+  assertInvestmentCashflowSequence(cashflows);
+  return cashflows;
+}
+
 function validateReferences(state: BusinessDataState): void {
   assertUnique(state.assetSources.map(({ id }) => id), "资产来源 ID 重复");
   assertUnique(state.assetCards.map(({ id }) => id), "资产卡片 ID 重复");
@@ -229,6 +386,11 @@ function validateReferences(state: BusinessDataState): void {
       }
     }
   }
+  assertUnique(
+    state.investmentCashflows.map(({ id }) => id),
+    "资金记录 ID 重复",
+  );
+  assertInvestmentCashflowSequence(state.investmentCashflows);
 }
 
 function parseDocument(contents: string): BackupDocument {
@@ -272,6 +434,7 @@ function parseDocument(contents: string): BackupDocument {
         assetSources: legacy.data.sources,
         dailyAssetSnapshots: legacy.data.snapshots,
         dailyAssetTrendObservations: legacy.data.snapshots,
+        investmentCashflows: [],
       },
     };
   }
@@ -284,6 +447,9 @@ function parseDocument(contents: string): BackupDocument {
     document.payload.dailyAssetTrendObservations = structuredClone(
       document.payload.dailyAssetSnapshots,
     );
+  }
+  if (!Array.isArray(document.payload.investmentCashflows)) {
+    document.payload.investmentCashflows = [];
   }
   return document;
 }
@@ -316,6 +482,7 @@ function restoredState(document: BackupDocument): BusinessDataState {
     assetSources: sources,
     dailyAssetSnapshots: document.payload.dailyAssetSnapshots,
     dailyAssetTrendObservations: document.payload.dailyAssetTrendObservations,
+    investmentCashflows: restoredCashflows(document.payload.investmentCashflows),
   };
   validateReferences(state);
   return state;
@@ -371,11 +538,18 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
   async exportBackup(fileName?: string) {
     const createdAt = this.clock.now().toISOString();
     const resolvedFileName = fileName ?? `asset-dashboard-${createdAt.replace(/[:.]/g, "-")}.json`;
-    const [assetCards, sources, dailyAssetSnapshots, dailyAssetTrendObservations] = await Promise.all([
+    const [
+      assetCards,
+      sources,
+      dailyAssetSnapshots,
+      dailyAssetTrendObservations,
+      investmentCashflows,
+    ] = await Promise.all([
       this.store.listAssetCards(),
       this.store.listSources(),
       this.store.listDailyAssetSnapshots(),
       this.store.listDailyAssetTrendObservations(),
+      this.store.listInvestmentCashflows(),
     ]);
     const assetSources = sources.map(
       ({ credentialReference: _credentialReference, ...source }) => source,
@@ -389,6 +563,7 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
         assetSources,
         dailyAssetSnapshots,
         dailyAssetTrendObservations,
+        investmentCashflows,
       },
     } satisfies Pick<BackupDocument, "format" | "formatVersion" | "createdAt" | "payload">;
     const checksum = checksumFor(base);
