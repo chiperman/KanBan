@@ -6,6 +6,8 @@
 
 **Status:** resolved
 
+**Adjusted by:** `.scratch/personal-asset-dashboard-rebuild/issues/04-overview-confidence-and-today-judgment.md`
+
 - [x] 已认证所有者进入总览时，只看到阅读信息和已确认的快捷查看控制，不看到来源接入表单、凭证配置或断开/永久删除操作。
 - [x] 所有者可明确进入和退出布局管理模式；非编辑状态下卡片不表现为可拖拽管理界面。
 - [x] 布局管理模式中排序、宽度、强制换行和隐藏卡片每次操作立即保存；刷新或重新打开后保持结果。

@@ -8,6 +8,8 @@
 
 **Status:** resolved
 
+**Adjusted by:** `.scratch/personal-asset-dashboard-rebuild/issues/07-security-settings-backup-and-locked-surface.md`
+
 - [x] 所有者可以导出包含资产卡片、来源身份、历史快照、布局和隐藏状态的版本化备份。
 - [x] 备份不得包含 API Key、API Secret、Passphrase、OAuth Token、PKCE 材料、SecretStore 密文/引用、Passkey、密码派生材料或 TOTP 密钥。
 - [x] 备份明确提示其仍包含敏感资产数据，并以 `0600` 创建本地文件。

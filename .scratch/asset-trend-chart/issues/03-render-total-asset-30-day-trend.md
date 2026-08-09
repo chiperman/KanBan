@@ -6,6 +6,8 @@
 
 **Status:** resolved
 
+**Adjusted by:** `.scratch/personal-asset-dashboard-rebuild/issues/04-overview-confidence-and-today-judgment.md`
+
 - [x] 首页现有“总资产趋势”区域展示最近 30 个上海自然日的总资产折线图，不新增卡片或页面。
 - [x] 折线使用直线连接，不平滑，不使用面积填充。
 - [x] 纵轴按当前可见有效金额自动缩放，不强制从零开始。

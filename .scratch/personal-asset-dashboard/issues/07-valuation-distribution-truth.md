@@ -6,6 +6,8 @@
 
 **Status:** resolved
 
+**Adjusted by:** `.scratch/personal-asset-dashboard-rebuild/issues/04-overview-confidence-and-today-judgment.md`, `.scratch/personal-asset-dashboard-rebuild/issues/05-assets-holdings-and-source-observation.md`
+
 - [x] 总资产概览默认使用 USD，并允许切换为 CNY 后保持选择。
 - [x] 每项持仓保留原始币种、原始价值和估值来源，计价货币切换不覆盖源数据。
 - [x] 总资产使用来源原生定价，同一种资产在不同来源允许出现可解释的小幅价格差异。

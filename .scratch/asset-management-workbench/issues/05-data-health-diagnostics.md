@@ -6,6 +6,8 @@
 
 **Status:** resolved
 
+**Adjusted by:** `.scratch/personal-asset-dashboard-rebuild/issues/06-source-health-and-recovery-experience.md`
+
 - [x] 数据健康显示来源同步状态、最后成功时间、过期数据、估值完整性和人可理解的失败原因。
 - [x] 所有者可按时间范围、来源和完整性查看既有历史观测与数据缺口，而总览仍只呈现简洁总资产趋势。
 - [x] 数据健康可进入相应来源详情，但不提供全局刷新、单来源刷新、自动修复、调度或通知能力。

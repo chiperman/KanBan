@@ -1,5 +1,7 @@
 Status: ready-for-human
 
+Superseded by: `../personal-asset-dashboard-rebuild/spec.md`
+
 # Personal Asset Dashboard
 
 ## Problem Statement

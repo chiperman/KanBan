@@ -6,6 +6,8 @@
 
 **Status:** resolved
 
+**Adjusted by:** `.scratch/personal-asset-dashboard-rebuild/issues/05-assets-holdings-and-source-observation.md`
+
 - [x] 资产来源页在同一列表中展示自动账户、观察钱包和手工资产记录，并能明确识别来源类型和生命周期状态。
 - [x] 来源摘要、列表项均可进入受所有者会话保护的来源详情。
 - [x] 自动来源详情展示来源身份、持仓、状态、最后更新时间和单来源刷新；手工资产记录展示其日期记录与允许的编辑操作。

@@ -8,6 +8,8 @@
 
 **Status:** ready-for-human
 
+**Adjusted by:** `.scratch/personal-asset-dashboard-rebuild/issues/04-overview-confidence-and-today-judgment.md`, `.scratch/personal-asset-dashboard-rebuild/issues/05-assets-holdings-and-source-observation.md`
+
 ## 范围
 
 - OKX：

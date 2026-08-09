@@ -1,5 +1,7 @@
 Status: ready-for-agent
 
+Adjusted by: `../personal-asset-dashboard-rebuild/spec.md`
+
 # 首页资产趋势图
 
 ## Problem Statement

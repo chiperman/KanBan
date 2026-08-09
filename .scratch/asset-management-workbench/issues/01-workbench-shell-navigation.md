@@ -6,6 +6,8 @@
 
 **Status:** resolved
 
+**Adjusted by:** `.scratch/personal-asset-dashboard-rebuild/issues/03-five-destination-app-shell.md`
+
 - [x] 已认证所有者在桌面与手机宽度都能通过可访问的显式导航到达四个一级入口，Command-K 保持为补充快捷方式。
 - [x] 未认证、主动锁定、会话超时和浏览器会话结束时，不渲染工作台导航、资产、来源、快照或凭证信息。
 - [x] 已认证根入口进入总览；路由切换保留现有所有者会话与安全边界。

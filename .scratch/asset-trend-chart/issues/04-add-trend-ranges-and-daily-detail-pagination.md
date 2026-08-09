@@ -6,6 +6,8 @@
 
 **Status:** resolved
 
+**Adjusted by:** `.scratch/personal-asset-dashboard-rebuild/issues/02-return-analysis-and-funding-records.md`
+
 - [x] 趋势区间支持 `7日`、`30日`、`90日`、`1年` 和 `全部`。
 - [x] 首次使用默认选择 `30日`，之后恢复所有者上一次选择。
 - [x] 区间按连续上海自然日计算，而不是按已有观测条数计算。

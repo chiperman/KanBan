@@ -6,6 +6,8 @@
 
 **Status:** resolved
 
+**Adjusted by:** `.scratch/personal-asset-dashboard-rebuild/issues/08-rebuild-migration-and-release-acceptance.md`
+
 - [x] 移动端保留现有“查看分布与趋势”折叠入口，不新增第二套导航。
 - [x] 移动端打开该入口后，总资产图和每日明细均直接展开，不要求二次展开。
 - [x] 来源趋势在移动端来源卡片中保持可读，不造成横向页面溢出。

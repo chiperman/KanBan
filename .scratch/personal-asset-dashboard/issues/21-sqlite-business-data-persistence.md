@@ -8,6 +8,8 @@
 
 **Status:** resolved
 
+**Adjusted by:** `.scratch/personal-asset-dashboard-rebuild/issues/01-financial-truth-ledger-foundation.md`
+
 - [x] 生产环境不再把 `data/dashboard.json` 作为业务数据真相源；资产卡片、来源、当前快照和每日快照由 SQLite 读取和写入。
 - [x] 保持现有 `AssetCardStore`、`AssetSources`、`DailyAssetSnapshots` 和 `AssetSourceLifecycle` 接口，使用 SQLite adapter 替换文件实现，不把数据库细节泄露给页面和来源 adapter。
 - [x] 连接来源、保存凭证引用、写入资产卡片和首份快照在一个事务中完成；失败不得留下半连接来源、孤立卡片或部分快照。

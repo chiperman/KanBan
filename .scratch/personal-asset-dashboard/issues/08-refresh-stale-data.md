@@ -6,6 +6,8 @@
 
 **Status:** resolved
 
+**Adjusted by:** `.scratch/personal-asset-dashboard-rebuild/issues/06-source-health-and-recovery-experience.md`
+
 - [x] 打开所有者页面时立即触发一次资产同步。
 - [x] 页面可见时行情每 30 秒刷新，余额和持仓每 5 分钟刷新。
 - [x] 页面隐藏时暂停定时刷新，恢复可见后按需要重新同步。

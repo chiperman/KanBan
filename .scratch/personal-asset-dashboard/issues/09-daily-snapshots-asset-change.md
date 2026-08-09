@@ -6,6 +6,8 @@
 
 **Status:** resolved
 
+**Adjusted by:** `.scratch/personal-asset-dashboard-rebuild/issues/01-financial-truth-ledger-foundation.md`, `.scratch/personal-asset-dashboard-rebuild/issues/02-return-analysis-and-funding-records.md`
+
 - [x] 系统以 Asia/Shanghai 为唯一日期边界，并以北京时间 00:00 建立每日基准。
 - [x] 每个自然日只生成一个有效日快照，重复同步不会产生重复日记录。
 - [x] 历史从首次成功同步开始，不自动回填此前日期。

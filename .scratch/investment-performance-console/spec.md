@@ -1,5 +1,7 @@
 Status: ready-for-agent
 
+Superseded by: `../personal-asset-dashboard-rebuild/spec.md`
+
 # 外部资金流水与投资分析运营台
 
 ## Problem Statement

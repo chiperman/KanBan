@@ -6,6 +6,8 @@
 
 **Status:** resolved
 
+**Adjusted by:** `.scratch/personal-asset-dashboard-rebuild/issues/07-security-settings-backup-and-locked-surface.md`
+
 - [x] 未认证首页只显示所有者登录入口，不渲染公开内容、资产占位或资产布局。
 - [x] 删除身份、Now、链接和 Markdown 普通卡片的领域类型、编辑器、渲染器与创建/编辑/删除能力。
 - [x] 删除普通卡片的公开/私密访问级别、发布/撤回能力和对应接口。

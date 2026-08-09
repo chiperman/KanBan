@@ -6,6 +6,8 @@
 
 **Status:** resolved
 
+**Adjusted by:** `.scratch/personal-asset-dashboard-rebuild/issues/06-source-health-and-recovery-experience.md`
+
 ## 验收标准
 
 - [x] 每个已连接资产来源卡片都有明确且可访问的“刷新”入口。

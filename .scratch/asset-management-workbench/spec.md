@@ -1,5 +1,7 @@
 Status: ready-for-agent
 
+Adjusted by: `../personal-asset-dashboard-rebuild/spec.md`
+
 # 个人资产看板：资产管理工作台重组
 
 ## Problem Statement

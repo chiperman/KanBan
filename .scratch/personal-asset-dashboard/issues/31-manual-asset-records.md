@@ -6,6 +6,8 @@
 
 **Status:** resolved
 
+**Adjusted by:** `.scratch/personal-asset-dashboard-rebuild/issues/05-assets-holdings-and-source-observation.md`
+
 ## 领域边界
 
 - 手工资产记录是资产来源，但不使用外部凭证，也不进行自动或手动刷新。

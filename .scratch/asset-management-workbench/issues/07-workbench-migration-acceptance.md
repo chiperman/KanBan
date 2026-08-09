@@ -6,6 +6,8 @@
 
 **Status:** resolved
 
+**Adjusted by:** `.scratch/personal-asset-dashboard-rebuild/issues/08-rebuild-migration-and-release-acceptance.md`
+
 - [x] 既有自动来源、观察钱包和手工资产记录在重组后仍可从对应工作台入口访问，无需重新接入或重新授权。
 - [x] 既有来源身份、持仓、快照、趋势、手工日期记录、卡片布局和凭证引用保持原有业务语义。
 - [x] 既有只读权限检查、断开、永久删除、估值真实性、刷新和备份凭证隔离回归仍通过。

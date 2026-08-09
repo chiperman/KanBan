@@ -6,6 +6,8 @@
 
 **Status:** resolved
 
+**Adjusted by:** `.scratch/personal-asset-dashboard-rebuild/issues/07-security-settings-backup-and-locked-surface.md`
+
 - [x] 设置与安全集中提供既有 Passkey、TOTP、备份恢复、本机数据和默认偏好入口。
 - [x] 显示币种切换与隐藏/显示金额继续属于总览快捷控制，不被埋入设置。
 - [x] 备份和恢复继续只处理业务数据与安全元数据边界内的信息，不导出或回显外部来源凭证。
