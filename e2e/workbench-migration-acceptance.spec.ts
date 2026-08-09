@@ -14,6 +14,8 @@ const MIGRATED_SENSITIVE_VALUES = [
 ];
 
 const PROTECTED_PATHS = [
+  "/assets",
+  "/performance",
   "/asset-sources",
   "/asset-sources/new",
   "/asset-sources/test-binance-source-2",
@@ -25,8 +27,9 @@ const PROTECTED_PATHS = [
 
 const PRIMARY_DESTINATIONS = [
   { label: "总览", path: "/", heading: null },
+  { label: "资产与持仓", path: "/assets", heading: "资产与持仓" },
+  { label: "收益分析", path: "/performance", heading: "收益分析" },
   { label: "资产来源", path: "/asset-sources", heading: "资产来源" },
-  { label: "数据健康", path: "/data-health", heading: "数据健康" },
   { label: "设置与安全", path: "/settings", heading: "设置与安全" },
 ] as const;
 
@@ -174,7 +177,7 @@ test("锁定态及所有工作台认证入口不泄露迁移前存量数据", as
   }
 });
 
-test("桌面、中等宽度与手机在四个工作台入口保持键盘焦点和无横向溢出", async ({
+test("桌面、中等宽度与手机在五个工作台入口保持键盘焦点和无横向溢出", async ({
   page,
 }) => {
   await loginAsOwner(page);
@@ -189,7 +192,10 @@ test("桌面、中等宽度与手机在四个工作台入口保持键盘焦点�
     await expect(navigation).toBeVisible();
 
     for (const destination of PRIMARY_DESTINATIONS) {
-      const link = navigation.getByRole("link", { name: destination.label });
+      const link = navigation.getByRole("link", {
+        name: destination.label,
+        exact: true,
+      });
       await link.focus();
       await expect(link).toBeFocused();
       await expect(link).toHaveCSS("outline-style", "solid");
@@ -211,7 +217,10 @@ test("桌面、中等宽度与手机在四个工作台入口保持键盘焦点�
   const mobileNavigation = page.getByTestId("workbench-mobile-navigation");
   await expect(mobileNavigation).toBeVisible();
   for (const destination of PRIMARY_DESTINATIONS) {
-    const link = mobileNavigation.getByRole("link", { name: destination.label });
+    const link = mobileNavigation.getByRole("link", {
+      name: destination.label,
+      exact: true,
+    });
     await link.focus();
     await expect(link).toBeFocused();
     await page.keyboard.press("Enter");

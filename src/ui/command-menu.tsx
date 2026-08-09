@@ -15,6 +15,8 @@ interface NavigationTarget {
 
 const WORKBENCH_DESTINATIONS = [
   { href: "/", label: "总览" },
+  { href: "/assets", label: "资产与持仓" },
+  { href: "/performance", label: "收益分析" },
   { href: "/asset-sources", label: "资产来源" },
   { href: "/data-health", label: "数据健康" },
   { href: "/settings", label: "设置与安全" },

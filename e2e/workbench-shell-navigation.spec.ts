@@ -5,8 +5,9 @@ const SENSITIVE_BODY = "SENSITIVE-WORKBENCH-BODY-123456.78";
 
 const PRIMARY_DESTINATIONS = [
   { label: "总览", path: "/" },
+  { label: "资产与持仓", path: "/assets" },
+  { label: "收益分析", path: "/performance" },
   { label: "资产来源", path: "/asset-sources" },
-  { label: "数据健康", path: "/data-health" },
   { label: "设置与安全", path: "/settings" },
 ] as const;
 
@@ -59,14 +60,16 @@ test.beforeEach(async ({ request }) => {
 test("锁定状态和受保护入口不渲染工作台导航或资产数据", async ({
   page,
 }) => {
-  await page.goto("/asset-sources");
-  await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByTestId("workbench-shell")).toHaveCount(0);
-  await expect(
-    page.getByRole("navigation", { name: "工作台主导航" }),
-  ).toHaveCount(0);
-  expect(await page.content()).not.toContain(SENSITIVE_TITLE);
-  expect(await page.content()).not.toContain(SENSITIVE_BODY);
+  for (const protectedPath of ["/assets", "/performance", "/asset-sources"]) {
+    await page.goto(protectedPath);
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByTestId("workbench-shell")).toHaveCount(0);
+    await expect(
+      page.getByRole("navigation", { name: "工作台主导航" }),
+    ).toHaveCount(0);
+    expect(await page.content()).not.toContain(SENSITIVE_TITLE);
+    expect(await page.content()).not.toContain(SENSITIVE_BODY);
+  }
 
   await page.goto("/");
   await expect(page.getByTestId("login-gate")).toBeVisible();
@@ -93,7 +96,7 @@ test("所有者主动锁定后立即移除工作台壳和敏感数据", async ({
   await page.unroute("**/api/auth/logout");
 });
 
-test("已认证所有者在桌面可通过左侧主导航和键盘到达四个入口", async ({
+test("已认证所有者在桌面可通过左侧主导航和键盘到达五个入口", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -106,6 +109,7 @@ test("已认证所有者在桌面可通过左侧主导航和键盘到达四个�
   for (const destination of PRIMARY_DESTINATIONS) {
     const link = desktopNavigation.getByRole("link", {
       name: destination.label,
+      exact: true,
     });
     await expect(link).toBeVisible();
     await link.focus();
@@ -135,7 +139,7 @@ test("已认证所有者在手机可通过底部主导航和 Command-K 到达入
 
   for (const destination of PRIMARY_DESTINATIONS) {
     await mobileNavigation
-      .getByRole("link", { name: destination.label })
+      .getByRole("link", { name: destination.label, exact: true })
       .click();
     await expect(page).toHaveURL(new RegExp(`${destination.path.replace("/", "\\/")}$`));
   }
