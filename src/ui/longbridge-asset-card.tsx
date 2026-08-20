@@ -42,6 +42,7 @@ import {
   assetHoldingDisplayName,
   AssetProductCoverage,
 } from "@/ui/asset-product-coverage";
+import { formatAssetUnitPrice } from "@/ui/asset-price-display";
 import type { ProfitColorScheme } from "@/ui/profit-color-scheme";
 import {
   VibeMetric,
@@ -310,11 +311,19 @@ function HoldingCostPrice({
 }: {
   holding: AssetHolding;
   showSensitiveInfo: boolean;
-  formatDisplayPrice: (value: string, currency: string) => string | null;
+  formatDisplayPrice: (
+    value: string,
+    currency: string,
+    assetClass: AssetHolding["assetClass"],
+  ) => string | null;
 }) {
   if (holding.costPrice === null) return "—";
   if (!showSensitiveInfo) return "••••••";
-  const price = formatDisplayPrice(holding.costPrice, holding.currency);
+  const price = formatDisplayPrice(
+    holding.costPrice,
+    holding.currency,
+    holding.assetClass,
+  );
   if (price === null) return "无法折算";
   return (
     <>
@@ -392,7 +401,11 @@ function HoldingCurrentPrice({
   holding: AssetHolding;
   quoteUnavailable: boolean;
   showSensitiveInfo: boolean;
-  formatDisplayPrice: (value: string, currency: string) => string | null;
+  formatDisplayPrice: (
+    value: string,
+    currency: string,
+    assetClass: AssetHolding["assetClass"],
+  ) => string | null;
 }) {
   const masked = "••••••";
   const currentPrice = holding.currentPrice
@@ -401,6 +414,7 @@ function HoldingCurrentPrice({
       : formatDisplayPrice(
         holding.currentPrice.amount,
         holding.currentPrice.currency,
+        holding.assetClass,
       ) ?? "无法折算"
     : quoteUnavailable
       ? "现价不可用"
@@ -425,7 +439,11 @@ function HoldingCurrentCostPriceCell({
   holding: AssetHolding;
   quoteUnavailable: boolean;
   showSensitiveInfo: boolean;
-  formatDisplayPrice: (value: string, currency: string) => string | null;
+  formatDisplayPrice: (
+    value: string,
+    currency: string,
+    assetClass: AssetHolding["assetClass"],
+  ) => string | null;
 }) {
   return (
     <td className="holding-current-cost-price">
@@ -461,7 +479,11 @@ function HoldingDetailRow({
   compactProfitColumns: boolean;
   showSensitiveInfo: boolean;
   formatDisplayMoney: (value: string, currency: string) => string | null;
-  formatDisplayPrice: (value: string, currency: string) => string | null;
+  formatDisplayPrice: (
+    value: string,
+    currency: string,
+    assetClass: AssetHolding["assetClass"],
+  ) => string | null;
 }) {
   const masked = "••••••";
   const quoteUnavailable = holding.valuation.status === "quote-unavailable";
@@ -850,7 +872,11 @@ export function AssetSourceCard({
     );
     return converted === null ? null : moneyAmount(converted);
   };
-  const formatDisplayPrice = (value: string, currency: string) => {
+  const formatDisplayPrice = (
+    value: string,
+    currency: string,
+    assetClass: AssetHolding["assetClass"],
+  ) => {
     const converted = convertCurrencyAmount(
       value,
       currency,
@@ -859,7 +885,7 @@ export function AssetSourceCard({
     );
     return converted === null
       ? null
-      : amount(decimalToFixed(converted, source.kind === "longbridge" ? 3 : 2));
+      : formatAssetUnitPrice(converted, assetClass);
   };
   const effectiveSourceTotal = portfolioSourceTotal(source);
   const sourceTotal = formatDisplayMoney(

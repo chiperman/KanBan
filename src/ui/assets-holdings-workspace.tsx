@@ -24,6 +24,8 @@ import {
   assetHoldingKey,
   AssetProductCoverage,
 } from "@/ui/asset-product-coverage";
+import { formatAssetUnitPrice } from "@/ui/asset-price-display";
+import { sourceSyncStatus } from "@/ui/asset-source-status";
 import { formatShanghaiDateTime } from "@/ui/shanghai-date-time";
 import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
 import {
@@ -96,6 +98,24 @@ function displayAmount(
   return converted === null ? "无法折算" : `${money(converted)} ${reportingCurrency}`;
 }
 
+function displayPrice(
+  value: string,
+  fromCurrency: string,
+  reportingCurrency: ReportingCurrency,
+  rates: WorkspaceSource["snapshot"]["exchangeRates"],
+  assetClass: AssetHolding["assetClass"],
+): string {
+  const converted = convertCurrencyAmount(
+    value,
+    fromCurrency,
+    reportingCurrency,
+    rates,
+  );
+  return converted === null
+    ? "无法折算"
+    : `${formatAssetUnitPrice(converted, assetClass)} ${reportingCurrency}`;
+}
+
 function holdingMarketValue(
   holding: AssetHolding,
   reportingCurrency: ReportingCurrency,
@@ -122,12 +142,8 @@ function sourceStatus(source: WorkspaceSource): {
   if (source.lifecycle === "disconnected") {
     return { label: "已断开 · 保留最后快照", tone: "warning" };
   }
-  if (source.sync.error !== null) {
-    return { label: "同步失败 · 保留最后成功数据", tone: "error" };
-  }
-  if (source.sync.status === "expired") {
-    return { label: "数据过期 · 可手动刷新", tone: "warning" };
-  }
+  const sync = sourceSyncStatus(source);
+  if (sync !== null) return sync;
   if (source.snapshot.coverage?.status === "unknown") {
     return { label: "总额可读 · 覆盖待确认", tone: "warning" };
   }
@@ -136,7 +152,7 @@ function sourceStatus(source: WorkspaceSource): {
       ? { label: "总额为准 · 明细覆盖不完整", tone: "warning" }
       : { label: "总额覆盖不完整", tone: "warning" };
   }
-  return { label: "当前来源总额", tone: "success" };
+  return { label: "总额有效", tone: "success" };
 }
 
 function holdingStatus(holding: AssetHolding): {
@@ -503,12 +519,12 @@ export function AssetsHoldingsWorkspace({
                         <strong>
                           {showSensitiveInfo
                             ? holding.currentPrice
-                              ? displayAmount(
+                              ? displayPrice(
                                 holding.currentPrice.amount,
                                 holding.currentPrice.currency,
                                 currency,
                                 sourceRates,
-                                false,
+                                holding.assetClass,
                               )
                               : "现价不可用"
                             : "••••••"}
