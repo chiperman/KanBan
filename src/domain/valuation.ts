@@ -11,6 +11,7 @@ import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
 import {
   activeSourceHoldings,
   portfolioSourceTotal,
+  unrecognizedEvmTokenCandidates,
 } from "@/domain/evm-token-preferences";
 import { hasManualAssetRecord } from "@/domain/manual-asset-records";
 import type {
@@ -399,6 +400,17 @@ export function buildTotalValuation(
     if (source.snapshot.coverage?.status !== "complete") {
       unvaluedCount += activeHoldings.filter(
         holdingMakesTotalIncomplete,
+      ).length;
+      const activeAssetKeys = new Set(
+        activeHoldings.flatMap(({ sourceAsset }) =>
+          sourceAsset === undefined ? [] : [sourceAsset],
+        ),
+      );
+      const ignoredAssetKeys = new Set(source.ignoredAssetKeys ?? []);
+      unvaluedCount += unrecognizedEvmTokenCandidates(source).filter(
+        ({ sourceAsset }) =>
+          !ignoredAssetKeys.has(sourceAsset) &&
+          !activeAssetKeys.has(sourceAsset),
       ).length;
     }
   }

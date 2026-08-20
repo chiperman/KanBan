@@ -31,15 +31,14 @@ export function shanghaiDay(value: Date | string): string {
 function sourceValue(
   source: AssetSourceSummary,
   currency: ReportingCurrency,
-  exchangeRates: AssetSourceSummary["snapshot"]["exchangeRates"],
+  rateSources: AssetSourceSummary[],
 ): string | null {
-  const valuation = buildTotalValuation([{
-    ...source,
-    snapshot: {
-      ...source.snapshot,
-      exchangeRates,
-    },
-  }], currency, "source");
+  const valuation = buildTotalValuation(
+    [source],
+    currency,
+    "source",
+    rateSources,
+  );
   const hasKnownValue = valuation.groups.some(
     (group) => group.key === source.id && group.amount !== null,
   );
@@ -56,24 +55,18 @@ function sourceValue(
 function sourceSnapshot(
   source: AssetSourceSummary,
   capturedAt: string,
-  exchangeRates: AssetSourceSummary["snapshot"]["exchangeRates"],
+  rateSources: AssetSourceSummary[],
 ): DailyAssetSourceSnapshot {
-  const sourceWithSharedRates = {
-    ...source,
-    snapshot: {
-      ...source.snapshot,
-      exchangeRates,
-    },
-  };
   const total = {
-    USD: sourceValue(source, "USD", exchangeRates),
-    CNY: sourceValue(source, "CNY", exchangeRates),
-    HKD: sourceValue(source, "HKD", exchangeRates),
+    USD: sourceValue(source, "USD", rateSources),
+    CNY: sourceValue(source, "CNY", rateSources),
+    HKD: sourceValue(source, "HKD", rateSources),
   };
   const valuation = buildTotalValuation(
-    [sourceWithSharedRates],
+    [source],
     "USD",
     "source",
+    rateSources,
   );
   const complete =
     source.sync.status === "current" &&
@@ -117,7 +110,7 @@ export function buildDailyAssetSnapshot(
     (source) => source.snapshot.exchangeRates,
   );
   const sourceSnapshots = recordedSources.map((source) =>
-    sourceSnapshot(source, capturedAt, exchangeRates),
+    sourceSnapshot(source, capturedAt, recordedSources),
   );
   const total = {
     USD: totalValue(recordedSources, "USD"),

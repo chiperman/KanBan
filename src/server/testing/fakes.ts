@@ -261,10 +261,6 @@ export class InMemoryDailyAssetSnapshots implements DailyAssetSnapshots {
       this.snapshots = [...this.snapshots, structuredClone(snapshot)].sort(
         (left, right) => left.day.localeCompare(right.day),
       );
-    } else {
-      this.snapshots[baselineIndex] = replaceManualSource(
-        this.snapshots[baselineIndex],
-      );
     }
     const trendIndex = this.trendObservations.findIndex(
       (snapshot) => snapshot.day === day,
@@ -442,7 +438,12 @@ export class InMemoryManualAssetRecords implements ManualAssetRecords {
       item.id === sourceId ? updatedManualSource : item,
     );
     await this.sources.replaceAll(updatedSources);
-    const manualSource: DailyAssetSourceSnapshot = {
+    const currentObservation = input.day === shanghaiDay(capturedAt)
+      ? buildDailyAssetSnapshot(updatedSources, capturedAt)
+      : null;
+    const manualSource: DailyAssetSourceSnapshot = currentObservation?.sources.find(
+      (item) => item.sourceId === sourceId,
+    ) ?? {
       sourceId,
       label: updatedManualSource.label,
       kind: "manual",
@@ -458,9 +459,7 @@ export class InMemoryManualAssetRecords implements ManualAssetRecords {
     await this.dailySnapshots.recordManual(
       manualSource,
       input.day,
-      input.day === shanghaiDay(capturedAt)
-        ? buildDailyAssetSnapshot(updatedSources, capturedAt)
-        : null,
+      currentObservation,
     );
   }
 

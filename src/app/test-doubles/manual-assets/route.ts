@@ -4,7 +4,10 @@ import path from "node:path";
 
 import { getTestServices, isTestEnv } from "@/server/composition";
 import type { AssetSourceSummary } from "@/server/ports";
-import { FileDashboardDatabase } from "@/server/production";
+import {
+  FileDashboardDatabase,
+  SqliteDashboardDatabase,
+} from "@/server/production";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +28,45 @@ function currentManualState() {
     baselines,
     trendObservations,
   }));
+}
+
+function longbridgeRateSource(capturedAt: string): AssetSourceSummary {
+  return {
+    id: "manual-assets-longbridge-rates",
+    kind: "longbridge",
+    label: "长桥汇率观测",
+    accountId: "fixture:manual-assets-longbridge-rates",
+    permissions: ["account"],
+    credentialReference: null,
+    lifecycle: "disconnected",
+    snapshot: {
+      total: { amount: "0", currency: "USD" },
+      holdings: [],
+      exchangeRates: [
+        {
+          baseCurrency: "CNY",
+          quoteCurrency: "USD",
+          rate: "0.14",
+          source: "长桥测试汇率",
+          observedAt: capturedAt,
+        },
+        {
+          baseCurrency: "USD",
+          quoteCurrency: "HKD",
+          rate: "7.8",
+          source: "长桥测试汇率",
+          observedAt: capturedAt,
+        },
+      ],
+      syncedAt: capturedAt,
+    },
+    sync: {
+      status: "current",
+      lastSuccessfulAt: capturedAt,
+      lastAttemptAt: capturedAt,
+      error: null,
+    },
+  };
 }
 
 export async function GET() {
@@ -69,6 +111,43 @@ export async function POST(request: Request) {
           (item) => item.sourceId === source.id,
         ),
         trend: trend?.sources.filter((item) => item.sourceId === source.id),
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+  if (body?.action === "sqlite-same-day-cny-observation") {
+    const root = await mkdtemp(path.join(tmpdir(), "pad-manual-assets-sqlite-"));
+    try {
+      const database = new SqliteDashboardDatabase(
+        path.join(root, "dashboard.sqlite"),
+        path.join(root, "dashboard.json"),
+        path.join(root, "cards.json"),
+      );
+      const firstCapturedAt = "2026-03-04T12:00:00.000Z";
+      await database.replaceSources([longbridgeRateSource(firstCapturedAt)]);
+      await database.createManualAssetSource({ label: "A股" }, firstCapturedAt);
+      const source = (await database.listSources()).find(
+        ({ kind, label }) => kind === "manual" && label === "A股",
+      );
+      if (!source) throw new Error("手工资产来源创建失败");
+      await database.recordManualAssetSource(
+        source.id,
+        { day: "2026-03-04", amount: "100000", currency: "CNY" },
+        firstCapturedAt,
+      );
+      await database.recordManualAssetSource(
+        source.id,
+        { day: "2026-03-04", amount: "108000", currency: "CNY" },
+        "2026-03-04T12:05:00.000Z",
+      );
+      const sourceTotal = (snapshot: Awaited<ReturnType<typeof database.listDailyAssetSnapshots>>[number]) =>
+        snapshot.sources.find(({ sourceId }) => sourceId === source.id)?.total ?? null;
+      const [baseline] = await database.listDailyAssetSnapshots();
+      const [trend] = await database.listDailyAssetTrendObservations();
+      return Response.json({
+        baseline: baseline === undefined ? null : sourceTotal(baseline),
+        trend: trend === undefined ? null : sourceTotal(trend),
       });
     } finally {
       await rm(root, { recursive: true, force: true });

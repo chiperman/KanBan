@@ -967,21 +967,18 @@ export class FileDashboardDatabase {
     record: ManualAssetRecord,
     capturedAt: string,
   ): void {
-    const manualSource = manualDailySource(source, record);
     const isCurrentDay = record.day === shanghaiDay(capturedAt);
     const currentObservation = isCurrentDay
       ? buildDailyAssetSnapshot(state.assetSources, capturedAt)
       : null;
+    const manualSource = currentObservation?.sources.find(
+      (item) => item.sourceId === source.id,
+    ) ?? manualDailySource(source, record);
     const baselineIndex = state.dailyAssetSnapshots.findIndex(
       ({ day }) => day === record.day,
     );
     if (baselineIndex === -1 && currentObservation !== null) {
       state.dailyAssetSnapshots.push(structuredClone(currentObservation));
-    } else if (baselineIndex !== -1) {
-      state.dailyAssetSnapshots[baselineIndex] = mergeManualSourceObservation(
-        state.dailyAssetSnapshots[baselineIndex],
-        manualSource,
-      );
     }
     const trendIndex = state.dailyAssetTrendObservations.findIndex(
       ({ day }) => day === record.day,
@@ -2327,27 +2324,19 @@ export class SqliteDashboardDatabase
     record: ManualAssetRecord,
     capturedAt: string,
   ): void {
-    const manualSource = manualDailySource(source, record);
     const isCurrentDay = record.day === shanghaiDay(capturedAt);
     const currentObservation = isCurrentDay
       ? buildDailyAssetSnapshot(this.listSourcesSync(), capturedAt)
       : null;
+    const manualSource = currentObservation?.sources.find(
+      (item) => item.sourceId === source.id,
+    ) ?? manualDailySource(source, record);
 
     const hasBaseline = this.database
       .prepare("SELECT day FROM daily_asset_snapshots WHERE day = ?")
       .get(record.day) !== undefined;
     if (!hasBaseline && currentObservation !== null) {
       this.insertDailyBaseline(currentObservation);
-    } else if (hasBaseline) {
-      this.upsertDailySourceObservation(
-        "daily_asset_source_snapshots",
-        record.day,
-        manualSource,
-      );
-      this.recalculateDailySnapshot(record.day, {
-        snapshot: "daily_asset_snapshots",
-        source: "daily_asset_source_snapshots",
-      });
     }
 
     const hasTrend = this.database
