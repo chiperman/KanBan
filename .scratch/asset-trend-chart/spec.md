@@ -8,7 +8,7 @@ Adjusted by: `../personal-asset-dashboard-rebuild/spec.md`
 
 首页已经保存并展示每日资产数据，但目前以逐日列表为主，所有者难以快速判断总资产和各资产来源在不同时间跨度内的变化方向。现有历史口径还把“今日资产变动”所需的稳定日初基准与持续更新的趋势观测混在一起，无法同时满足当天比较和历史走势。
 
-所有者需要在同一首页中查看总资产及各资产来源的折线趋势，自由调整区间，并在 USD、CNY、HKD 之间切换。趋势必须真实反映缺失、不完整、过期和汇率状态，不能通过补零、跨日复制或使用当前汇率重算历史制造连续或精确的假象。
+所有者需要在同一首页中查看总资产及各资产来源的折线趋势，自由调整区间，并在 USD、CNY、HKD 之间切换。趋势必须真实反映缺失、不完整、过期和汇率状态，不能通过补零、跨日复制或使用当前汇率重算历史制造不存在的金额；视觉连续不等于数据连续。
 
 ## Solution
 
@@ -19,7 +19,7 @@ Adjusted by: `../personal-asset-dashboard-rebuild/spec.md`
 - 图表下方保留默认展开、每页 30 条的每日明细。
 - 将不可改写的日初基准与可随成功刷新更新的每日趋势观测分开。
 - 历史金额使用观测当时的可靠汇率，支持 USD、CNY 和 HKD。
-- 缺失日期断线；不完整或过期观测可以展示已知金额，但必须明确标记。
+- 缺失日期保留为空值，自动观测折线跨过空值用直线连接相邻真实观测；不完整或过期观测可以展示已知金额，但必须明确标记。
 - 隐藏敏感信息时，同时隐藏金额、坐标和可推断资产变化的曲线形状。
 
 本规格补充并覆盖个人资产看板总规格中与每日快照、趋势区间及计价货币有关的旧描述。
@@ -35,7 +35,7 @@ Adjusted by: `../personal-asset-dashboard-rebuild/spec.md`
 7. As an 所有者, I want my last selected range remembered, so that I do not need to restore it on every visit.
 8. As an 所有者, I want all trend charts to share the same selected range, so that total and source views remain comparable.
 9. As an 所有者, I want trend ranges calculated by consecutive Shanghai calendar days, so that missing observations do not silently shorten the period.
-10. As an 所有者, I want missing dates rendered as gaps, so that absent data is never mistaken for unchanged or zero assets.
+10. As an 所有者, I want missing dates retained as unavailable data while the line remains visually continuous between adjacent real observations, so that the chart is readable without inventing unchanged or zero assets.
 11. As an 所有者, I want straight line segments without smoothing or area fill, so that the chart does not imply data that was never observed.
 12. As an 所有者, I want the vertical axis fitted to visible data rather than forced to zero, so that meaningful changes remain readable.
 13. As an 所有者, I want normal point details to contain only date and amount, so that the chart remains low-noise.
@@ -82,7 +82,7 @@ Adjusted by: `../personal-asset-dashboard-rebuild/spec.md`
 - Use one global trend-range preference for the total chart and all source charts. Supported values are 7 days, 30 days, 90 days, 1 year, and all; default to 30 days.
 - Calculate ranges as consecutive Shanghai dates. “All” starts at the first available trend-observation date and extends through the current Shanghai date.
 - Render straight line segments with no smoothing and no area fill. Automatically scale the vertical axis to visible valid values without forcing zero.
-- Break the line across missing dates. Do not bridge gaps or copy values from another date.
+- Keep missing dates as null values, but bridge them visually with a straight segment between adjacent real observations. Do not interpolate, copy, or persist an amount for the missing date.
 - Clearly distinguish complete, incomplete, and expired observations using the existing visual status vocabulary and runtime tokens.
 - Normal point details contain only date and reporting-currency amount. Abnormal points add one concise status. Do not display clock time.
 - Place daily details below the total chart, expanded by default, newest first, with 30 rows per page.
@@ -107,7 +107,7 @@ Adjusted by: `../personal-asset-dashboard-rebuild/spec.md`
   - default and remembered ranges;
   - synchronized total and source charts;
   - same-day trend updates without baseline mutation;
-  - cross-day gaps and no zero or copied values;
+  - cross-day null values, visually continuous paths, and no zero or copied values;
   - observation-time currency conversion;
   - interval endpoints, amount, percentage, and insufficient-data state;
   - tooltip information density;
@@ -116,8 +116,8 @@ Adjusted by: `../personal-asset-dashboard-rebuild/spec.md`
   - sensitive-value and trend-geometry hiding, plus unauthenticated history-data isolation;
   - desktop, medium, and mobile interaction behavior.
 - Use the existing production-persistence test path through the same acceptance fixture to verify schema migration, idempotency, legacy first-daily compatibility, same-day updates, reload persistence, and backup/restore compatibility.
-- Assert external behavior and durable records, not SVG path implementation, internal component state, chart-library APIs, or private helper functions.
-- Keep visual acceptance separate: manually inspect straight segments, gap rendering, automatic vertical scaling, dense labels, focus visibility, light/dark themes, and reduced-motion behavior.
+- Assert external behavior and durable records rather than internal component state, chart-library APIs, or private helper functions. A minimal SVG path-segment assertion may lock down whether a missing date incorrectly splits the rendered line, but must not depend on exact coordinates.
+- Keep visual acceptance separate: manually inspect straight segments across missing dates, automatic vertical scaling, dense labels, focus visibility, light/dark themes, and reduced-motion behavior.
 - Treat real Longbridge USD/CNY and USD/HKD observations as separate owner-authorized manual acceptance. Automated tests must not require real credentials or network access.
 - Reuse the existing daily-snapshot browser tests and test-source conventions as prior art rather than creating a second independent testing framework.
 

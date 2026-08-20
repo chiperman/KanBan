@@ -738,7 +738,7 @@ test("趋势区间会记忆，且每日明细分页独立于图表区间", async
   ).toBeVisible();
 });
 
-test("来源详情保留各自的来源趋势", async ({ page, request }) => {
+test("来源详情趋势跨过缺失日期连接已有观测", async ({ page, request }) => {
   await configure(request);
   const seeded = await request.post("/test-doubles/daily-snapshots", {
     data: { action: "seed-source-trend-gap" },
@@ -751,6 +751,14 @@ test("来源详情保留各自的来源趋势", async ({ page, request }) => {
   await expect(
     alphaTrend.getByRole("img", { name: "Alpha Securities来源总额趋势" }),
   ).toHaveCount(1);
+  await expect(alphaTrend).toContainText(
+    /缺少 \d+ 天观测，趋势线已跨过缺口连接/,
+  );
+  const alphaPath = await alphaTrend
+    .locator(".recharts-line-curve")
+    .getAttribute("d");
+  // 三个有效观测应位于同一条路径：一个起点加两段直线。
+  expect(alphaPath?.match(/[ML]/g)).toHaveLength(3);
 
   await openSourceDetail(page, "Beta Crypto");
   const betaTrend = page.getByTestId("asset-source-trend-source-beta");

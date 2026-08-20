@@ -106,6 +106,7 @@ function QualitySummary({
 
 export function AssetTrendChart({
   ariaLabel,
+  chartHeight,
   currency,
   formatAmount,
   formatDay,
@@ -118,6 +119,7 @@ export function AssetTrendChart({
   variant = "total",
 }: {
   ariaLabel: string;
+  chartHeight?: number;
   currency: string;
   formatAmount(value: string): string;
   formatDay(day: string): string;
@@ -178,7 +180,7 @@ export function AssetTrendChart({
       <div className="total-trend-chart-wrap">
         <ResponsiveContainer
           width="100%"
-          height={variant === "source" ? 168 : 300}
+          height={chartHeight ?? (variant === "source" ? 168 : 300)}
         >
           <LineChart
             accessibilityLayer
@@ -243,7 +245,7 @@ export function AssetTrendChart({
             ) : null}
             <Line
               activeDot={false}
-              connectNulls={false}
+              connectNulls
               dataKey="value"
               dot={false}
               isAnimationActive={false}

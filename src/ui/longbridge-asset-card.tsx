@@ -793,7 +793,7 @@ export function AssetSourceCard({
     isManual
       ? "手工数据按最近记录延用，不影响同步完整性"
       : missingSourceTrendDayCount > 0
-      ? `缺少 ${missingSourceTrendDayCount} 天观测，折线已断开`
+      ? `缺少 ${missingSourceTrendDayCount} 天观测，趋势线已跨过缺口连接`
       : null,
     abnormalSourceTrendPoints.length > 0 || unavailableSourceTrendPoints.length > 0
       ? `数据受限：${
