@@ -351,8 +351,10 @@ test("长桥 OAuth 先预览后原子保存，并展示总额与紧凑持仓", a
   ).toBeVisible();
   await page.getByRole("radio", { name: /绿涨红跌/ }).check();
   await expect(page.getByRole("radio", { name: /绿涨红跌/ })).toBeChecked();
-  await page.getByRole("link", { name: "返回资产看板" }).click();
-  await expect(page).toHaveURL("/");
+  await expect(
+    page.getByRole("link", { name: "返回资产看板" }),
+  ).toHaveCount(0);
+  await page.goto("/");
 
   const updatedProfitCells = page
     .getByTestId("longbridge-card")

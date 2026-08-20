@@ -27,13 +27,17 @@ import {
 import { formatAssetUnitPrice } from "@/ui/asset-price-display";
 import { sourceSyncStatus } from "@/ui/asset-source-status";
 import { formatShanghaiDateTime } from "@/ui/shanghai-date-time";
-import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
+import { VibeLink } from "@/ui/vibe/vibe-button";
 import {
   VibeSelect,
   type VibeSelectOption,
 } from "@/ui/vibe/vibe-field";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
 import { VibeMetric, VibeStatusTag } from "@/ui/vibe/vibe-data-instrument";
+import {
+  useWorkbenchDisplayPreferences,
+} from "@/ui/workbench-display-preferences";
+import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
 
 type WorkspaceSource = Omit<
   AssetSourceSummary,
@@ -212,11 +216,14 @@ export function AssetsHoldingsWorkspace({
 }: {
   sources: WorkspaceSource[];
 }) {
-  const [currency, setCurrency] = useState<ReportingCurrency>("USD");
+  const {
+    currency,
+    setCurrency,
+    showSensitiveInfo,
+  } = useWorkbenchDisplayPreferences();
   const [sourceId, setSourceId] = useState("all");
   const [assetClass, setAssetClass] = useState<AssetClassFilter>("all");
   const [valuation, setValuation] = useState<ValuationFilter>("all");
-  const [showSensitiveInfo, setShowSensitiveInfo] = useState(true);
 
   const recordedSources = useMemo(
     () =>
@@ -294,33 +301,23 @@ export function AssetsHoldingsWorkspace({
       data-testid="assets-holdings-workspace"
       aria-labelledby="assets-holdings-title"
     >
-      <header className="assets-holdings__header">
-        <div>
-          <p className="card-label">PORTFOLIO / HOLDINGS</p>
-          <h1 id="assets-holdings-title">资产与持仓</h1>
-          <p>
-            账户或平台返回的来源总额是组合汇总真相；下方持仓仅作价格与市值观察，不以明细合计改写来源总额。
-          </p>
-        </div>
-        <div className="assets-holdings__actions">
+      <WorkbenchPageHeader
+        actions={
+          <>
           <VibeSelect
             fieldId="assets-reporting-currency"
             label="计价货币"
-            onValueChange={(value) => setCurrency(value as ReportingCurrency)}
+            onValueChange={setCurrency}
             options={CURRENCY_OPTIONS}
             value={currency}
             variant="compact"
           />
-          <VibeButton
-            aria-pressed={showSensitiveInfo}
-            onClick={() => setShowSensitiveInfo((current) => !current)}
-            type="button"
-            variant="outline"
-          >
-            {showSensitiveInfo ? "隐藏关键信息" : "显示关键信息"}
-          </VibeButton>
-        </div>
-      </header>
+          </>
+        }
+        eyebrow="PORTFOLIO / HOLDINGS"
+        title="资产与持仓"
+        titleId="assets-holdings-title"
+      />
 
       <section
         className="assets-holdings__source-totals"
@@ -331,7 +328,6 @@ export function AssetsHoldingsWorkspace({
             <p className="card-label">SOURCE / TRUTH</p>
             <h2 id="assets-source-totals-title">来源账户与平台总额</h2>
           </div>
-          <span>持仓明细不会取代这一列</span>
         </header>
         {sources.length === 0 ? (
           <div className="empty-state">
@@ -344,58 +340,86 @@ export function AssetsHoldingsWorkspace({
             </VibeLink>
           </div>
         ) : (
-          <ol data-testid="assets-source-totals">
-            {sources.map((source) => {
-              const sourceRates = sourceReportingConversionRates(
-                source,
-                reportingRates,
-              );
-              const total = sourceTotal(source, currency, sourceRates);
-              const status = sourceStatus(source);
-              const coverage = source.snapshot.coverage;
-              return (
-                <li key={source.id} data-testid={`assets-source-total-${source.id}`}>
-                  <article>
-                    <div>
-                      <strong>{assetSourceDisplayName(source)}</strong>
-                      <span>
-                        {source.kind === "manual"
-                          ? source.hasManualRecord === false
-                            ? "手工资产组 · 暂无记录"
-                            : "手工资产组 · 仅总额"
-                          : `${sourceHoldingCount(source)} 项持仓观察`}
-                      </span>
-                    </div>
-                    <div className="assets-holdings__source-state">
-                      <VibeStatusTag tone={status.tone}>{status.label}</VibeStatusTag>
-                      {coverage ? (
-                        <AssetProductCoverage
-                          coverage={coverage}
-                          sourceKind={`assets-${source.id}`}
-                        />
-                      ) : null}
-                    </div>
-                    <div className="assets-holdings__source-value">
-                      {showSensitiveInfo && total !== null ? (
-                        <VibeMetric unit={currency} value={money(total)} />
-                      ) : (
-                        <strong>
-                          {showSensitiveInfo ? "无法折算" : "••••••"}
-                        </strong>
-                      )}
-                      <VibeLink
-                        aria-label={`查看 ${assetSourceDisplayName(source)} 来源详情`}
-                        href={`/asset-sources/${encodeURIComponent(source.id)}`}
-                        variant="text"
-                      >
-                        详情
-                      </VibeLink>
-                    </div>
-                  </article>
-                </li>
-              );
-            })}
-          </ol>
+          <div
+            className="assets-holdings__source-list"
+            data-testid="assets-source-totals"
+          >
+            <div
+              aria-hidden="true"
+              className="assets-holdings__source-columns"
+            >
+              <span>来源</span>
+              <span>状态与覆盖</span>
+              <span>来源总额</span>
+            </div>
+            <ol>
+              {sources.map((source) => {
+                const sourceRates = sourceReportingConversionRates(
+                  source,
+                  reportingRates,
+                );
+                const total = sourceTotal(source, currency, sourceRates);
+                const status = sourceStatus(source);
+                const coverage = source.snapshot.coverage;
+                return (
+                  <li
+                    key={source.id}
+                    data-testid={`assets-source-total-${source.id}`}
+                  >
+                    <article>
+                      <div>
+                        <strong>{assetSourceDisplayName(source)}</strong>
+                        <span>
+                          {source.kind === "manual"
+                            ? source.hasManualRecord === false
+                              ? "手工资产组 · 暂无记录"
+                              : "手工资产组 · 仅总额"
+                            : `${sourceHoldingCount(source)} 项持仓观察`}
+                        </span>
+                      </div>
+                      <div className="assets-holdings__source-state">
+                        <VibeStatusTag tone={status.tone}>
+                          {status.label}
+                        </VibeStatusTag>
+                        <div className="assets-holdings__source-coverage">
+                          {coverage ? (
+                            <AssetProductCoverage
+                              coverage={coverage}
+                              sourceKind={`assets-${source.id}`}
+                              variant="source-row"
+                            />
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="assets-holdings__source-value">
+                        {showSensitiveInfo && total !== null ? (
+                          <VibeMetric unit={currency} value={money(total)} />
+                        ) : (
+                          <strong
+                            className={
+                              showSensitiveInfo
+                                ? undefined
+                                : "assets-holdings__source-value-hidden"
+                            }
+                          >
+                            {showSensitiveInfo ? "无法折算" : "金额已隐藏"}
+                          </strong>
+                        )}
+                        <VibeLink
+                          aria-label={`查看 ${assetSourceDisplayName(source)} 来源详情`}
+                          className="assets-holdings__source-detail"
+                          href={`/asset-sources/${encodeURIComponent(source.id)}`}
+                          variant="text"
+                        >
+                          查看
+                        </VibeLink>
+                      </div>
+                    </article>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
         )}
       </section>
 

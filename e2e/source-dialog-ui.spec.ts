@@ -122,7 +122,7 @@ test("移动端来源配置采用全屏 sheet，页头设置操作收进本机�
   await page.setViewportSize({ width: 390, height: 844 });
   await loginAsOwner(page);
 
-  await expect(page.getByText("EXTERNAL ACCESS / READ ONLY")).toHaveCount(1);
+  await expect(page.getByText("EXTERNAL ACCESS / READ ONLY")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "立即锁定（退出登录）" })).toBeVisible();
   await expect(page.getByRole("button", { name: "本机设置" })).toBeVisible();
   await expect(page.getByRole("button", { name: "打开快捷命令" })).toBeVisible();

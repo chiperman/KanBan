@@ -52,6 +52,9 @@ test("来源总额、严格长桥汇率与未估值明细在新工作区分层�
   const confidence = workspace.getByTestId("overview-confidence");
   const sources = workspace.getByTestId("overview-source-summary");
   await expect(total).toContainText("561.34 USD");
+  await expect(
+    total.getByRole("heading", { name: "总资产", exact: true }),
+  ).toBeVisible();
   await expect(total.locator(".vibe-metric__value")).toHaveCSS(
     "font-family",
     /Doto/,
@@ -59,9 +62,6 @@ test("来源总额、严格长桥汇率与未估值明细在新工作区分层�
   await expect(total.locator(".vibe-metric__unit")).toHaveCSS(
     "font-family",
     /Geist Mono/,
-  );
-  await expect(total).toContainText(
-    "来源账户/平台总额是组合汇总真相；持仓明细只用于观察",
   );
   await expect(confidence).toContainText("需要留意数据状态");
   await expect(confidence).toContainText("未估值 1 项");
@@ -72,7 +72,9 @@ test("来源总额、严格长桥汇率与未估值明细在新工作区分层�
 
   await chooseOption(page, "计价货币", "CNY");
   await expect(total).toContainText("数据不足");
-  await expect(confidence).toContainText("长桥参考汇率");
+  await expect(total).toContainText(
+    "默认以 USD 计价；CNY、HKD 按长桥参考汇率折算。",
+  );
   await page.reload();
   await expect(overview(page).getByTestId("overview-current-total")).toContainText(
     "数据不足",
@@ -173,8 +175,8 @@ test("非长桥反向汇率不会回退用于报告货币，缺失时不显示�
   await expect(overview(page).getByTestId("overview-current-total")).toContainText(
     "数据不足",
   );
-  await expect(overview(page).getByTestId("overview-confidence")).toContainText(
-    "长桥参考汇率",
+  await expect(overview(page).getByTestId("overview-current-total")).toContainText(
+    "默认以 USD 计价；CNY、HKD 按长桥参考汇率折算。",
   );
 
   const missing = await request.post(
@@ -276,6 +278,12 @@ test("平台账户总额与持仓明细存在差异时，总览保留总额并�
   const workspace = overview(page);
   await expect(workspace.getByTestId("overview-current-total")).toContainText(
     "17,165.60 USD",
+  );
+  await expect(workspace.getByTestId("overview-source-summary")).toContainText(
+    "17,165.60 USD",
+  );
+  await expect(workspace.getByTestId("overview-source-summary")).not.toContainText(
+    "无法折算",
   );
   await expect(workspace.getByTestId("overview-confidence")).toContainText(
     "总额完整",

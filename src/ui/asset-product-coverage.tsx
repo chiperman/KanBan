@@ -1,3 +1,5 @@
+import { useId, useState } from "react";
+
 import { decimalToFixed } from "@/domain/decimal";
 import type {
   AssetHolding,
@@ -80,10 +82,14 @@ export { assetHoldingDisplayName };
 export function AssetProductCoverage({
   coverage,
   sourceKind,
+  variant = "default",
 }: {
   coverage: AssetSnapshotCoverage | undefined;
   sourceKind: string;
+  variant?: "default" | "source-row";
 }) {
+  const [isSourceRowOpen, setIsSourceRowOpen] = useState(false);
+  const panelId = useId();
   const aggregateOnlyCount = coverage?.products.filter(
     ({ capability, freshness }) =>
       capability === "aggregate-only" && freshness === "current",
@@ -109,6 +115,65 @@ export function AssetProductCoverage({
         return products.length > 0 ? [{ capability, products }] : [];
       })
     : [];
+  const summary = (
+    <>
+      <span className="vibe-coverage-summary-label">产品覆盖</span>
+      <strong className="vibe-coverage-summary-count">
+        {String(coverage?.products.length ?? 0).padStart(2, "0")} PRODUCTS
+      </strong>
+      <span
+        className="vibe-coverage-summary-freshness"
+        data-freshness={expiredProductCount > 0 ? "expired" : "current"}
+      >
+        {String(currentProductCount).padStart(2, "0")} CURRENT
+        {expiredProductCount > 0
+          ? ` / ${String(expiredProductCount).padStart(2, "0")} STALE`
+          : ""}
+      </span>
+      <span aria-hidden="true" className="vibe-coverage-summary-toggle" />
+    </>
+  );
+  const panel = (
+    <>
+      {capabilityGroups.map(({ capability, products }, groupIndex) => (
+        <section
+          className="vibe-coverage-group"
+          data-capability={capability}
+          key={capability}
+        >
+          <header className="vibe-coverage-group-head">
+            <span>{String(groupIndex + 1).padStart(2, "0")}</span>
+            <strong>{CAPABILITY_LABELS[capability]}</strong>
+            <span>
+              {String(products.length).padStart(2, "0")} PRODUCTS
+            </span>
+          </header>
+          <ul className="vibe-coverage-products">
+            {products.map((product, productIndex) => (
+              <li className="vibe-coverage-product" key={product.product}>
+                <span className="vibe-coverage-product-index">
+                  {String(productIndex + 1).padStart(2, "0")}
+                </span>
+                <div className="vibe-coverage-product-copy">
+                  <div className="vibe-coverage-product-head">
+                    <strong>
+                      {assetProductDisplayName(product.product)}
+                    </strong>
+                    {product.freshness === "expired" ? (
+                      <span className="vibe-coverage-product-stale">
+                        STALE
+                      </span>
+                    ) : null}
+                  </div>
+                  {product.message ? <p>{product.message}</p> : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </>
+  );
   return (
     <>
       {label ? (
@@ -131,66 +196,40 @@ export function AssetProductCoverage({
         </VibeStatusTag>
       ) : null}
       {coverage && coverage.products.length > 0 ? (
-        <details
-          className="vibe-coverage"
-          data-testid={`${sourceKind}-product-coverage`}
-        >
-          <summary>
-            <span className="vibe-coverage-summary-label">产品覆盖</span>
-            <strong className="vibe-coverage-summary-count">
-              {String(coverage.products.length).padStart(2, "0")} PRODUCTS
-            </strong>
-            <span
-              className="vibe-coverage-summary-freshness"
-              data-freshness={expiredProductCount > 0 ? "expired" : "current"}
+        variant === "source-row" ? (
+          <div
+            className="vibe-coverage-inline"
+            data-testid={`${sourceKind}-product-coverage`}
+          >
+            <button
+              aria-controls={panelId}
+              aria-expanded={isSourceRowOpen}
+              className={`vibe-coverage-summary-trigger${
+                isSourceRowOpen ? " is-open" : ""
+              }`}
+              onClick={() => setIsSourceRowOpen((open) => !open)}
+              type="button"
             >
-              {String(currentProductCount).padStart(2, "0")} CURRENT
-              {expiredProductCount > 0
-                ? ` / ${String(expiredProductCount).padStart(2, "0")} STALE`
-                : ""}
-            </span>
-            <span aria-hidden="true" className="vibe-coverage-summary-toggle" />
-          </summary>
-          <div className="vibe-coverage-panel">
-            {capabilityGroups.map(({ capability, products }, groupIndex) => (
-              <section
-                className="vibe-coverage-group"
-                data-capability={capability}
-                key={capability}
+              {summary}
+            </button>
+            {isSourceRowOpen ? (
+              <div
+                className="vibe-coverage-panel vibe-coverage-panel--inline"
+                id={panelId}
               >
-                <header className="vibe-coverage-group-head">
-                  <span>{String(groupIndex + 1).padStart(2, "0")}</span>
-                  <strong>{CAPABILITY_LABELS[capability]}</strong>
-                  <span>
-                    {String(products.length).padStart(2, "0")} PRODUCTS
-                  </span>
-                </header>
-                <ul className="vibe-coverage-products">
-                  {products.map((product, productIndex) => (
-                    <li className="vibe-coverage-product" key={product.product}>
-                      <span className="vibe-coverage-product-index">
-                        {String(productIndex + 1).padStart(2, "0")}
-                      </span>
-                      <div className="vibe-coverage-product-copy">
-                        <div className="vibe-coverage-product-head">
-                          <strong>
-                            {assetProductDisplayName(product.product)}
-                          </strong>
-                          {product.freshness === "expired" ? (
-                            <span className="vibe-coverage-product-stale">
-                              STALE
-                            </span>
-                          ) : null}
-                        </div>
-                        {product.message ? <p>{product.message}</p> : null}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))}
+                {panel}
+              </div>
+            ) : null}
           </div>
-        </details>
+        ) : (
+          <details
+            className="vibe-coverage"
+            data-testid={`${sourceKind}-product-coverage`}
+          >
+            <summary>{summary}</summary>
+            <div className="vibe-coverage-panel">{panel}</div>
+          </details>
+        )
       ) : null}
     </>
   );

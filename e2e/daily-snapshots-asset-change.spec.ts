@@ -44,9 +44,12 @@ async function unlockAsOwner(page: Page): Promise<void> {
   await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
 }
 
-async function configure(request: APIRequestContext) {
+async function configure(
+  request: APIRequestContext,
+  action = "configure",
+) {
   const response = await request.post("/test-doubles/daily-snapshots", {
-    data: { action: "configure" },
+    data: { action },
   });
   expect(response.ok()).toBeTruthy();
 }
@@ -122,6 +125,94 @@ test.beforeEach(async ({ request }) => {
   await request.post("/test-doubles/reset");
 });
 
+test("今日资产变化使用昨日最后一条完整趋势快照，不依赖正式日结任务", async ({
+  page,
+  request,
+}) => {
+  await configure(request);
+  await setServerTime(request, "2026-08-05T12:00:00.000Z");
+  const yesterdayObservation = await request.post("/test-doubles/daily-snapshots", {
+    data: { action: "record-complete-observation" },
+  });
+  expect(yesterdayObservation.ok()).toBeTruthy();
+  expect((await history(request)).trendObservations).toMatchObject([{
+    day: "2026-08-05",
+    complete: true,
+    status: "complete",
+    total: { USD: "300", HKD: "2340" },
+  }]);
+  await setServerTime(request, "2026-08-06T12:00:00.000Z");
+
+  await loginAsOwner(page);
+  await manualRefresh(page);
+  await expect(page.getByTestId("overview-current-total")).toContainText(
+    "302.00 USD",
+  );
+
+  const change = page.getByRole("heading", { name: "今日资产变化" }).locator("..");
+  await expect(change).toContainText("+2.00 USD");
+  await expect(change).toContainText("相对昨日最后完整记录（08月05日）");
+});
+
+test("今日资产变化直接列出不参与计算的问题来源", async ({
+  page,
+  request,
+}) => {
+  await configure(request);
+  await setServerTime(request, "2026-08-05T12:00:00.000Z");
+  const yesterdayObservation = await request.post("/test-doubles/daily-snapshots", {
+    data: { action: "record-complete-observation" },
+  });
+  expect(yesterdayObservation.ok()).toBeTruthy();
+  await setServerTime(request, "2026-08-06T12:00:00.000Z");
+  await request.post("/test-doubles/daily-snapshots", {
+    data: { action: "partial-failure" },
+  });
+
+  await loginAsOwner(page);
+  await manualRefresh(page, 1);
+
+  const change = page.getByRole("heading", { name: "今日资产变化" }).locator("..");
+  const issues = change.getByTestId("overview-today-change-issues");
+  await expect(change).toContainText("数据不足");
+  await expect(issues).toContainText("影响本次计算的来源");
+  await expect(issues).toContainText("Beta Crypto");
+  await expect(issues).toContainText("同步失败 · 数据过期");
+  await expect(issues).toContainText("200.00 USD");
+  await expect(issues).toContainText("以上数据不参与今日资产变化。");
+
+  await page.getByRole("button", { name: "隐藏关键信息" }).click();
+  await expect(issues).toContainText(
+    "已隐藏 1 个问题来源；不参与今日资产变化。",
+  );
+  await expect(issues).not.toContainText("Beta Crypto");
+  await expect(issues).not.toContainText("200.00 USD");
+});
+
+test("缺少昨日观测时回退到最近完整记录，并明确累计间隔", async ({
+  page,
+  request,
+}) => {
+  await configure(request);
+  await setServerTime(request, "2026-08-15T12:00:00.000Z");
+  const priorObservation = await request.post("/test-doubles/daily-snapshots", {
+    data: { action: "record-complete-observation" },
+  });
+  expect(priorObservation.ok()).toBeTruthy();
+  await setServerTime(request, "2026-08-18T12:00:00.000Z");
+
+  await loginAsOwner(page);
+  await manualRefresh(page);
+
+  const change = page
+    .getByRole("heading", { name: "自上次完整记录以来资产变化" })
+    .locator("..");
+  await expect(change).toContainText("+2.00 USD");
+  await expect(change).toContainText(
+    "相对上次完整记录（08月15日，间隔 3 天）以来",
+  );
+});
+
 test("没有每日趋势观测时提示首次成功同步", async ({ page, request }) => {
   await configure(request);
   const disabled = await request.post("/test-doubles/daily-snapshots", {
@@ -170,6 +261,14 @@ test("来源趋势位于总资产金额下方且先于持仓仪表", async ({ pa
   expect(order.total).toBeGreaterThanOrEqual(0);
   expect(order.trend).toBeGreaterThan(order.total);
   expect(order.sourceMeter).toBeGreaterThan(order.trend);
+
+  await page.getByRole("button", { name: "隐藏关键信息" }).click();
+  const privateTrend = trend.locator(".asset-trend-private--source");
+  const privateCopy = privateTrend.locator(".asset-trend-private-copy");
+  await expect(privateCopy).toHaveJSProperty(
+    "offsetWidth",
+    await privateTrend.evaluate((element) => element.clientWidth),
+  );
 });
 
 test("同次观测可共享可靠汇率，不把来源单独缺少展示币种误判为不完整", async ({
@@ -630,7 +729,7 @@ test("未认证状态收不到日快照或来源趋势", async ({ page, request 
   expect((await page.content())).not.toContain("dailySnapshots");
 });
 
-test("总资产趋势默认展示 30 日直线、断点与区间资产变动", async ({
+test("总资产趋势默认展示 30 日连续直线、缺失提示与区间资产变动", async ({
   page,
   request,
 }) => {
@@ -643,7 +742,7 @@ test("总资产趋势默认展示 30 日直线、断点与区间资产变动", a
   await loginAsOwner(page);
   const trend = page.getByTestId("total-asset-trend");
   await expect(
-    trend.getByRole("button", { name: "趋势区间" }),
+    page.getByRole("button", { name: "趋势区间" }),
   ).toBeVisible();
   await expect(
     trend.getByRole("img", { name: /最近30个上海自然日总资产趋势/ }),
@@ -657,9 +756,10 @@ test("总资产趋势默认展示 30 日直线、断点与区间资产变动", a
   await expect(trend.getByTestId("daily-trend-detail").first()).toBeHidden();
   await trend.getByText("观测明细（3）").click();
   await expect(trend.getByTestId("daily-trend-detail")).toHaveCount(3);
-  await expect(
-    trend.locator(".recharts-line-curve"),
-  ).toHaveCount(1);
+  const trendPath = trend.locator(".recharts-line-curve");
+  await expect(trendPath).toHaveCount(1);
+  const trendPathData = await trendPath.getAttribute("d");
+  expect(trendPathData?.match(/M/g)).toHaveLength(1);
   await expect(trend.locator(".total-trend-point-dot")).toHaveCount(0);
   await page.getByTestId("sensitive-info-toggle").click();
   await expect(

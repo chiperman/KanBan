@@ -140,6 +140,9 @@
   --vibe-space-12: 48px;
   --vibe-space-16: 64px;
   --vibe-space-24: 96px;
+  --vibe-control-height-compact: 40px;
+  --vibe-control-height: 44px;
+  --vibe-control-padding-inline: var(--vibe-space-4);
   --vibe-duration-fast: 200ms;
   --vibe-duration-theme: 350ms;
 }

@@ -14,7 +14,7 @@ async function seedPerformanceHistory(page: Page): Promise<void> {
       data: { action: "set-time", iso },
     });
     await page.request.post("/test-doubles/daily-snapshots", {
-      data: { action: "record-current-observation" },
+      data: { action: "record-complete-observation" },
     });
   }
   await page.request.post("/test-doubles/clock", {
@@ -57,11 +57,78 @@ async function chooseOption(page: Page, label: string, option: string) {
   await page.getByRole("option", { name: option, exact: true }).click();
 }
 
+test("收益分析直接提供六个分析区间并默认选择本月", async ({ page }) => {
+  await seedPerformanceHistory(page);
+  await page.goto("/performance");
+
+  const trend = page.getByTestId("performance-trend");
+  const rangeGroup = trend.getByRole("group", { name: "分析区间" });
+  await expect(rangeGroup.getByRole("button")).toHaveText([
+    "本月",
+    "近 1 月",
+    "近 6 月",
+    "本年",
+    "近 1 年",
+    "全部",
+  ]);
+  await expect(
+    rangeGroup.getByRole("button", { name: "本月", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("region", { name: "收益分析范围" })).toHaveCount(0);
+  await expect(trend).toContainText(
+    "可绘制 3 / 4 天",
+  );
+
+  for (const [label, totalDays] of [
+    ["本月", 4],
+    ["近 1 月", 29],
+    ["近 6 月", 182],
+    ["本年", 63],
+    ["近 1 年", 366],
+    ["全部", 4],
+  ] as const) {
+    const option = rangeGroup.getByRole("button", { name: label, exact: true });
+    await option.click();
+    await expect(option).toHaveAttribute("aria-pressed", "true");
+    await expect(trend).toContainText(
+      `可绘制 3 / ${totalDays} 天`,
+    );
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator("body")).toHaveJSProperty(
+    "scrollWidth",
+    await page.locator("body").evaluate((body) => body.clientWidth),
+  );
+});
+
+test("收益分析趋势跨过缺失日期连接已有观测", async ({ page }) => {
+  await seedPerformanceHistory(page);
+  await page.goto("/performance");
+  await page
+    .getByTestId("performance-trend")
+    .getByRole("button", { name: "本年", exact: true })
+    .click();
+
+  const trend = page.getByTestId("performance-trend");
+  await expect(trend).toContainText("缺少 60 天资产观测");
+  await expect(trend).toContainText("趋势线已跨过缺口连接");
+  const trendPath = trend.locator(".recharts-line-curve");
+  await expect(trendPath).toHaveCount(1);
+  const trendPathData = await trendPath.getAttribute("d");
+  expect(trendPathData?.match(/M/g)).toHaveLength(1);
+});
+
 test("收益分析按真实资产观测和资金账本解释收益，并支持安全维护历史记录", async ({
   page,
 }) => {
   await seedPerformanceHistory(page);
   await page.goto("/performance");
+  const fullYear = page
+    .getByTestId("performance-trend")
+    .getByRole("button", { name: "本年", exact: true });
+  await fullYear.click();
+  await expect(fullYear).toHaveAttribute("aria-pressed", "true");
 
   const workspace = page.getByTestId("investment-performance-workspace");
   await expect(page.getByRole("heading", { name: "收益分析" })).toBeVisible();
@@ -81,10 +148,10 @@ test("收益分析按真实资产观测和资金账本解释收益，并支持�
     "-15.00 USD",
   );
   await expect(workspace.getByTestId("performance-trend")).toContainText(
-    "可绘制 3 / 7 天",
+    "可绘制 3 / 63 天",
   );
   await expect(workspace.getByTestId("performance-trend")).toContainText(
-    "缺少 4 天资产观测",
+    "缺少 60 天资产观测",
   );
 
   await page.getByRole("button", { name: "新增资金记录" }).click();
@@ -129,6 +196,14 @@ test("收益分析按真实资产观测和资金账本解释收益，并支持�
   await expect(workspace).not.toContainText("185.00");
   await expect(workspace.getByTestId("performance-trend")).toContainText(
     "趋势已隐藏",
+  );
+  const hiddenTrend = workspace
+    .getByTestId("performance-trend")
+    .locator(".asset-trend-private--total");
+  const hiddenTrendCopy = hiddenTrend.locator(".asset-trend-private-copy");
+  await expect(hiddenTrendCopy).toHaveJSProperty(
+    "offsetWidth",
+    await hiddenTrend.evaluate((element) => element.clientWidth),
   );
 
   await page.setViewportSize({ width: 390, height: 844 });

@@ -27,6 +27,12 @@ export function formatShanghaiDateTime(value: string | Date): string {
   return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
 }
 
+export function formatShanghaiShortDateTime(value: string | Date): string {
+  const parts = dateTimeParts(shanghaiDateTimeFormatter, value);
+
+  return `${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
+}
+
 export function formatShanghaiDayLabel(day: string): string {
   return `${day.slice(5, 7)}月${day.slice(8, 10)}日`;
 }

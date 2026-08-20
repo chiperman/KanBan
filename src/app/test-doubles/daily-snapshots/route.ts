@@ -14,6 +14,7 @@ const INITIAL_AT = "2026-04-01T15:59:50.000Z";
 
 function sourceFixture(input: {
   id: string;
+  kind?: string;
   label: string;
   amount: string;
   credentialReference: string;
@@ -22,7 +23,7 @@ function sourceFixture(input: {
 }): AssetSourceSummary {
   return {
     id: input.id,
-    kind: "daily-fixture",
+    kind: input.kind ?? "daily-fixture",
     label: input.label,
     accountId: input.id,
     permissions: ["market-data", "account", "positions"],
@@ -435,6 +436,35 @@ export async function POST(request: Request) {
     );
     return Response.json({ ok: true });
   }
+  if (body?.action === "record-complete-observation") {
+    const capturedAt = services.clock.now().toISOString();
+    const snapshot = buildDailyAssetSnapshot(
+      await services.assetSources.list(),
+      capturedAt,
+    );
+    const sourceTotals = [
+      { USD: "100", CNY: "720", HKD: "780" },
+      { USD: "200", CNY: "1440", HKD: "1560" },
+    ];
+    await services.dailyAssetSnapshots.record(
+      {
+        ...snapshot,
+        capturedAt,
+        complete: true,
+        status: "complete",
+        total: { USD: "300", CNY: "2160", HKD: "2340" },
+        sources: snapshot.sources.map((source, index) => ({
+          ...source,
+          capturedAt,
+          complete: true,
+          status: "complete",
+          total: sourceTotals[index] ?? source.total,
+        })),
+      },
+      true,
+    );
+    return Response.json({ ok: true });
+  }
   if (body?.action === "fail-all") {
     services.assetSynchronization.reset("all-failure");
     return Response.json({ ok: true });
@@ -576,7 +606,10 @@ export async function POST(request: Request) {
     ]);
     return Response.json({ ok: true });
   }
-  if (body?.action !== "configure") {
+  if (
+    body?.action !== "configure" &&
+    body?.action !== "configure-longbridge"
+  ) {
     return Response.json({ error: "每日快照测试配置无效" }, { status: 400 });
   }
 
@@ -584,9 +617,13 @@ export async function POST(request: Request) {
   services.assetSynchronization.reset("schedule");
   const alphaReference = await services.secrets.put("alpha-readonly");
   const betaReference = await services.secrets.put("beta-readonly");
+  const sourceKind = body.action === "configure-longbridge"
+    ? "longbridge"
+    : undefined;
   const sources = [
     sourceFixture({
       id: "source-alpha",
+      kind: sourceKind,
       label: "Alpha Securities",
       amount: "100",
       credentialReference: alphaReference,
@@ -594,6 +631,7 @@ export async function POST(request: Request) {
     }),
     sourceFixture({
       id: "source-beta",
+      kind: sourceKind,
       label: "Beta Crypto",
       amount: "200",
       credentialReference: betaReference,

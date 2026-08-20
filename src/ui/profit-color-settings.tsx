@@ -79,7 +79,7 @@ export function ProfitColorSettings({
     >
       <legend>盈亏颜色</legend>
       <p className="settings-description" id="profit-color-description">
-        应用于浮动盈亏与持仓盈亏率。零值始终使用中性色。
+        应用于资产变化、浮动盈亏与持仓盈亏率。零值始终使用中性色。
       </p>
       <div className="settings-choice-list">
         {OPTIONS.map((option) => (

@@ -62,6 +62,7 @@ test("盈亏颜色设置首屏不会先显示错误的默认选项", async ({ br
 test("看板时间、来源状态和普通卡片遵守 Vibe 视觉层级", async ({ page }) => {
   await loginAsOwner(page)
 
+  await expect(page.getByText("EXTERNAL ACCESS / READ ONLY")).toHaveCount(0)
   await expect(page.getByTestId("local-time")).toBeVisible()
   await expect(page.getByTestId("local-time")).not.toContainText("LOCAL")
   await expect(page.getByTestId("local-time")).toHaveCSS("font-size", "12px")
@@ -108,7 +109,7 @@ test("看板时间、来源状态和普通卡片遵守 Vibe 视觉层级", async
   const themeToggle = page.getByRole("button", { name: /^当前主题：/ })
   await expect(themeToggle).toHaveCSS("width", "44px")
   await expect(themeToggle).toHaveCSS("height", "44px")
-  await expect(themeToggle).toHaveCSS("border-radius", "999px")
+  await expect(themeToggle).toHaveCSS("border-radius", "6px")
   const systemThemeIcon = themeToggle.locator('[data-vibe-dot="computer"]')
   await expect(systemThemeIcon).toHaveCount(1)
   await expect(systemThemeIcon.locator("> .is-lit")).toHaveCount(30)

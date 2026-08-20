@@ -35,7 +35,7 @@ test.beforeEach(async ({ request }) => {
   });
 });
 
-test("设置与安全集中低频入口，计价货币与金额显示仍属于总览", async ({
+test("设置与安全集中低频入口，计价货币属于总览且隐私开关全局可用", async ({
   page,
 }) => {
   await loginAsOwner(page);
@@ -55,11 +55,11 @@ test("设置与安全集中低频入口，计价货币与金额显示仍属于�
   ).toBeVisible();
 
   await expect(page.getByLabel("计价货币")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "隐藏关键信息" })).toHaveCount(0);
+  await expect(page.getByTestId("global-sensitive-info-toggle")).toBeVisible();
 
   await page.goto("/");
   await expect(page.getByLabel("计价货币")).toBeVisible();
-  await expect(page.getByRole("button", { name: "隐藏关键信息" })).toBeVisible();
+  await expect(page.getByTestId("global-sensitive-info-toggle")).toBeVisible();
 });
 
 test("备份与恢复入口不回显外部来源凭证，且可用键盘预演恢复", async ({

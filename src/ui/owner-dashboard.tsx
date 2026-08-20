@@ -244,6 +244,7 @@ export function OwnerDashboard({
   }, [cards]);
 
   useEffect(() => {
+    if (demoMode) return;
     const savedCurrency = window.localStorage.getItem(reportingCurrencyStorageKey);
     if (
       savedCurrency === "USD" ||
@@ -252,9 +253,10 @@ export function OwnerDashboard({
     ) {
       setReportingCurrency(savedCurrency);
     }
-  }, [reportingCurrencyStorageKey]);
+  }, [demoMode, reportingCurrencyStorageKey]);
 
   useEffect(() => {
+    if (demoMode) return;
     const savedRange = window.localStorage.getItem(trendRangeStorageKey);
     if (
       savedRange === "7d" ||
@@ -265,7 +267,7 @@ export function OwnerDashboard({
     ) {
       setTrendRange(savedRange);
     }
-  }, [trendRangeStorageKey]);
+  }, [demoMode, trendRangeStorageKey]);
 
   function sourceForCard(card: Card) {
     return card.sourceId
@@ -275,12 +277,16 @@ export function OwnerDashboard({
 
   function changeReportingCurrency(currency: ReportingCurrency) {
     setReportingCurrency(currency);
-    window.localStorage.setItem(reportingCurrencyStorageKey, currency);
+    if (!demoMode) {
+      window.localStorage.setItem(reportingCurrencyStorageKey, currency);
+    }
   }
 
   function changeTrendRange(range: TrendRange) {
     setTrendRange(range);
-    window.localStorage.setItem(trendRangeStorageKey, range);
+    if (!demoMode) {
+      window.localStorage.setItem(trendRangeStorageKey, range);
+    }
   }
 
   async function persistLayout(nextCards: Card[], previousCards: Card[]) {
@@ -590,6 +596,7 @@ export function OwnerDashboard({
             history={dailyAssetTrendObservations}
             formalDailySettlements={formalDailySettlements}
             currentDay={currentDay}
+            persistPreferences={!demoMode}
             showSensitiveInfo={showSensitiveInfo}
             storageNamespace={demoMode ? "demo" : "owner"}
           />

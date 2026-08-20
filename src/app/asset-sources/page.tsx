@@ -7,6 +7,8 @@ import {
 import { getServices } from "@/server/composition";
 import { AssetSourceDirectory } from "@/ui/asset-source-directory";
 import { SessionGuard } from "@/ui/session-guard";
+import { VibeLink } from "@/ui/vibe/vibe-button";
+import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
 import { WorkbenchShell } from "@/ui/workbench-shell";
 
 export const dynamic = "force-dynamic";
@@ -33,8 +35,21 @@ export default async function AssetSourcesPage({
           跳到主要内容
         </a>
           <main id="main-content">
-            <p className="card-label">WORKBENCH / 02</p>
-            <h1>资产来源</h1>
+            <WorkbenchPageHeader
+              actions={
+                <>
+                  <VibeLink href="/data-health" variant="outline">
+                    查看数据健康
+                  </VibeLink>
+                  <VibeLink href="/asset-sources/new" variant="primary">
+                    新增来源
+                  </VibeLink>
+                </>
+              }
+              description="自动账户、观察钱包与手工资产记录统一在此查看；详情才提供单来源数据与生命周期操作。"
+              eyebrow="PORTFOLIO / SOURCES"
+              title="资产来源"
+            />
             <AssetSourceDirectory cards={cards} sources={sources} />
           </main>
         </div>

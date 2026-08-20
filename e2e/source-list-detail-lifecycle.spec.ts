@@ -107,7 +107,7 @@ test("自动来源详情展示持仓、趋势、单来源刷新与脱敏授权�
   await expect(page.getByText("只读授权摘要", { exact: true })).toHaveCount(0);
 });
 
-test("手工 CNY 来源详情使用可靠的全局汇率折算 USD", async ({
+test("来源详情可以切换 USD、CNY 与 HKD 计价货币", async ({
   page,
   request,
 }) => {
@@ -132,6 +132,19 @@ test("手工 CNY 来源详情使用可靠的全局汇率折算 USD", async ({
 
   await expect(page.getByTestId("asset-source-total")).toContainText("10,000.00 USD");
   await expect(page.getByTestId("asset-source-total")).not.toContainText("无法折算");
+
+  const currency = page.getByRole("button", { name: "计价货币" });
+  await currency.click();
+  await page.getByRole("option", { name: "CNY", exact: true }).click();
+  await expect(page.getByTestId("asset-source-total")).toContainText("72,000.00 CNY");
+
+  await currency.click();
+  await page.getByRole("option", { name: "HKD", exact: true }).click();
+  await expect(page.getByTestId("asset-source-total")).toContainText("78,000.00 HKD");
+
+  await currency.click();
+  await page.getByRole("option", { name: "USD", exact: true }).click();
+  await expect(page.getByTestId("asset-source-total")).toContainText("10,000.00 USD");
 });
 
 test("来源详情保留隐藏、断开、恢复与永久删除的确认保护", async ({

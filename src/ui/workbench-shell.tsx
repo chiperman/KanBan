@@ -1,10 +1,14 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { type ReactNode } from "react";
+import { type ReactNode, useLayoutEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { CommandMenu } from "@/ui/command-menu";
-import { VibeLink } from "@/ui/vibe/vibe-button";
+import {
+  useWorkbenchDisplayPreferences,
+} from "@/ui/workbench-display-preferences";
+import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
 
 const PRIMARY_DESTINATIONS = [
   { href: "/", label: "总览" },
@@ -42,6 +46,85 @@ function WorkbenchDestinationLinks() {
   );
 }
 
+function WorkbenchPrivacyToggle() {
+  const { showSensitiveInfo, toggleSensitiveInfo } =
+    useWorkbenchDisplayPreferences();
+
+  return (
+    <VibeButton
+      aria-pressed={!showSensitiveInfo}
+      className="workbench-privacy-toggle"
+      data-testid="global-sensitive-info-toggle"
+      onClick={toggleSensitiveInfo}
+      type="button"
+      variant="outline"
+    >
+      {showSensitiveInfo ? "隐藏关键信息" : "显示关键信息"}
+    </VibeButton>
+  );
+}
+
+function WorkbenchUtilities({
+  commandMenu,
+  refreshEnabled,
+}: {
+  commandMenu: boolean;
+  refreshEnabled: boolean;
+}) {
+  return (
+    <div className="workbench-utilities" data-testid="workbench-utilities">
+      <WorkbenchPrivacyToggle />
+      {commandMenu ? (
+        <div className="workbench-command">
+          <CommandMenu refreshEnabled={refreshEnabled} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function WorkbenchUtilitiesMount({
+  commandMenu,
+  refreshEnabled,
+}: {
+  commandMenu: boolean;
+  refreshEnabled: boolean;
+}) {
+  const pathname = usePathname();
+  const [utilitySlot, setUtilitySlot] = useState<HTMLElement | null>(null);
+  const [useHeaderUtilities, setUseHeaderUtilities] = useState(false);
+
+  useLayoutEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 1199px)");
+    const updatePlacement = () => setUseHeaderUtilities(mediaQuery.matches);
+    updatePlacement();
+    mediaQuery.addEventListener("change", updatePlacement);
+    return () => mediaQuery.removeEventListener("change", updatePlacement);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!useHeaderUtilities) {
+      setUtilitySlot(null);
+      return;
+    }
+
+    setUtilitySlot(
+      document.querySelector<HTMLElement>("[data-workbench-utilities-slot]"),
+    );
+  }, [pathname, useHeaderUtilities]);
+
+  const utilities = (
+    <WorkbenchUtilities
+      commandMenu={commandMenu}
+      refreshEnabled={refreshEnabled}
+    />
+  );
+
+  return useHeaderUtilities && utilitySlot !== null
+    ? createPortal(utilities, utilitySlot)
+    : utilities;
+}
+
 export function WorkbenchShell({
   children,
   commandMenu = true,
@@ -77,11 +160,10 @@ export function WorkbenchShell({
         </div>
       </nav>
       <div className="workbench-shell-content">{children}</div>
-      {commandMenu ? (
-        <div className="workbench-command">
-          <CommandMenu refreshEnabled={refreshEnabled} />
-        </div>
-      ) : null}
+      <WorkbenchUtilitiesMount
+        commandMenu={commandMenu}
+        refreshEnabled={refreshEnabled}
+      />
       <nav
         aria-label="工作台主导航"
         className="workbench-navigation workbench-mobile-navigation"

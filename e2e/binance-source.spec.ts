@@ -618,7 +618,7 @@ test("Binance 不重复展示已由 Flexible Earn 总额包含的 LD 抵押凭�
   ]));
 });
 
-test("Binance 默认隐藏低于 1 USDT 的持仓，并允许手动展示全部", async ({
+test("Binance 默认隐藏低于 1 USDT 的持仓，并提供可见的手动展示控制", async ({
   page,
 }) => {
   await configure(page, "dust");
@@ -629,22 +629,11 @@ test("Binance 默认隐藏低于 1 USDT 的持仓，并允许手动展示全部"
   await preview.getByRole("button", { name: "确认并保存" }).click();
 
   const card = page.getByTestId("binance-card");
-  const toggle = card.getByRole("checkbox", { name: /隐藏低于 1 USDT/ });
-  await expect(toggle).toBeHidden();
+  const toggle = card.getByRole("checkbox", { name: /隐藏低于 1 的持仓/ });
+  await expect(toggle).toBeVisible();
+  await expect(toggle).toBeChecked();
   await expect(card).not.toContainText("DUST");
 
-  const resizeHandle = page.getByRole("button", { name: /调整\s*Binance 资产宽度/ });
-  for (const _ of [0, 1]) {
-    const widened = page.waitForResponse(
-      (response) =>
-        response.url().endsWith("/api/asset-cards/layout") &&
-        response.request().method() === "PUT",
-    );
-    await resizeHandle.press("ArrowRight");
-    await widened;
-  }
-
-  await expect(toggle).toBeChecked();
   await toggle.uncheck();
   await expect(card).toContainText("DUST");
   await expect(card.getByTestId("asset-source-total")).toHaveText(

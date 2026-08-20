@@ -14,15 +14,27 @@ import {
   AssetSourceCard,
   type AssetSourceView,
 } from "@/ui/longbridge-asset-card";
+import { useWorkbenchDisplayPreferences } from "@/ui/workbench-display-preferences";
 import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
 import { VibeDateField } from "@/ui/vibe/vibe-date-field";
 import { VibeDialog } from "@/ui/vibe/vibe-dialog";
-import { VibeField, VibeSelectField } from "@/ui/vibe/vibe-field";
+import {
+  VibeField,
+  VibeSelect,
+  VibeSelectField,
+  type VibeSelectOption,
+} from "@/ui/vibe/vibe-field";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
 
 type DetailSource = AssetSourceView & {
   permissions: AssetPermission[];
 };
+
+const REPORTING_CURRENCY_OPTIONS: readonly VibeSelectOption<"USD" | "CNY" | "HKD">[] = [
+  { value: "USD", label: "USD" },
+  { value: "CNY", label: "CNY" },
+  { value: "HKD", label: "HKD" },
+];
 
 async function sourceRequest(
   url: string,
@@ -410,6 +422,11 @@ export function AssetSourceDetail({
   reportingExchangeRates: AssetExchangeRate[];
   source: DetailSource;
 }) {
+  const {
+    currency,
+    setCurrency,
+    showSensitiveInfo,
+  } = useWorkbenchDisplayPreferences();
   const [editingRecord, setEditingRecord] = useState<ManualAssetRecord | null | undefined>(
     null,
   );
@@ -428,9 +445,19 @@ export function AssetSourceDetail({
             <h1>来源详情</h1>
             <p>{manual ? "手工资产记录只维护日期总额，不含凭证、持仓或同步操作。" : "查看单一来源的持仓、趋势、同步与只读授权摘要。"}</p>
           </div>
-          <VibeLink href="/asset-sources" variant="outline">
-            返回资产来源
-          </VibeLink>
+          <div className="asset-source-detail__actions">
+            <VibeSelect
+              fieldId="asset-source-detail-reporting-currency"
+              label="计价货币"
+              onValueChange={setCurrency}
+              options={REPORTING_CURRENCY_OPTIONS}
+              value={currency}
+              variant="compact"
+            />
+            <VibeLink href="/asset-sources" variant="outline">
+              返回资产来源
+            </VibeLink>
+          </div>
         </div>
       </section>
 
@@ -502,9 +529,9 @@ export function AssetSourceDetail({
           if (current.id === source.id) setDeletingRecord(record);
         }}
         profitColorScheme="red-up"
-        reportingCurrency="USD"
+        reportingCurrency={currency}
         reportingExchangeRates={reportingExchangeRates}
-        showSensitiveInfo
+        showSensitiveInfo={showSensitiveInfo}
         source={source}
         trendRange="30d"
       />

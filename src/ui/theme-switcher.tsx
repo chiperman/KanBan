@@ -41,12 +41,18 @@ function readSavedChoice(): ThemeChoice {
   }
 }
 
+function isDemoModeLocation(): boolean {
+  return new URLSearchParams(window.location.search).get("mode") === "demo";
+}
+
 export function ThemeInitializer() {
   useLayoutEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const applySavedTheme = () => applyTheme(readSavedChoice());
+    const initialChoice = () =>
+      isDemoModeLocation() ? "system" : readSavedChoice();
+    const applySavedTheme = () => applyTheme(initialChoice());
     const updateSystemTheme = () => {
-      if (readSavedChoice() === "system") applySavedTheme();
+      if (initialChoice() === "system") applySavedTheme();
     };
 
     applySavedTheme();
@@ -74,20 +80,22 @@ function ThemeIcon({ choice }: { choice: ThemeChoice }) {
   return <VibeDotIcon name={THEME_ICONS[choice]} size={24} />;
 }
 
-export function ThemeSwitcher() {
+export function ThemeSwitcher({ persist = true }: { persist?: boolean }) {
   const [choice, setChoice] = useState<ThemeChoice>("system");
 
   useEffect(() => {
-    const savedChoice = readSavedChoice();
+    const savedChoice = persist ? readSavedChoice() : "system";
     setChoice(savedChoice);
     applyTheme(savedChoice);
-  }, []);
+  }, [persist]);
 
   function selectTheme(nextChoice: ThemeChoice) {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, nextChoice);
-    } catch {
-      // The current page can still use the selected theme when storage is unavailable.
+    if (persist) {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, nextChoice);
+      } catch {
+        // The current page can still use the selected theme when storage is unavailable.
+      }
     }
     setChoice(nextChoice);
     applyTheme(nextChoice);

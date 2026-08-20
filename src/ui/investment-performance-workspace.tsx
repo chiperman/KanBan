@@ -35,8 +35,18 @@ import {
   type VibeSelectOption,
 } from "@/ui/vibe/vibe-field";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
+import {
+  useWorkbenchDisplayPreferences,
+} from "@/ui/workbench-display-preferences";
+import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
 
-type IntervalPreset = "3d" | "7d" | "30d" | "quarter" | "1y" | "all" | "custom";
+type IntervalPreset =
+  | "month-to-date"
+  | "1m"
+  | "6m"
+  | "year-to-date"
+  | "1y"
+  | "all";
 
 type CurrentTotals = Record<ReportingCurrency, PortfolioObservation | null>;
 
@@ -55,13 +65,12 @@ const CURRENCY_OPTIONS: readonly VibeSelectOption<ReportingCurrency>[] = [
 ];
 
 const INTERVAL_OPTIONS: readonly VibeSelectOption<IntervalPreset>[] = [
-  { value: "3d", label: "近3日" },
-  { value: "7d", label: "近7日" },
-  { value: "30d", label: "近30日" },
-  { value: "quarter", label: "近一季" },
-  { value: "1y", label: "近1年" },
+  { value: "month-to-date", label: "本月" },
+  { value: "1m", label: "近 1 月" },
+  { value: "6m", label: "近 6 月" },
+  { value: "year-to-date", label: "本年" },
+  { value: "1y", label: "近 1 年" },
   { value: "all", label: "全部" },
-  { value: "custom", label: "自定义" },
 ];
 
 const CASHFLOW_KIND_OPTIONS: readonly VibeSelectOption<InvestmentCashflowKind>[] = [
@@ -88,27 +97,36 @@ function daysBetween(start: string, end: string): string[] {
   return days;
 }
 
+function dayAtMonthOffset(day: string, offset: number): string {
+  const [year, month, date] = day.split("-").map(Number);
+  const targetMonth = new Date(Date.UTC(year, month - 1 + offset, 1));
+  const targetYear = targetMonth.getUTCFullYear();
+  const targetMonthIndex = targetMonth.getUTCMonth();
+  const lastDate = new Date(
+    Date.UTC(targetYear, targetMonthIndex + 1, 0),
+  ).getUTCDate();
+  return new Date(
+    Date.UTC(targetYear, targetMonthIndex, Math.min(date, lastDate)),
+  ).toISOString().slice(0, 10);
+}
+
 function rangeDays(
   preset: IntervalPreset,
   currentDay: string,
   firstTrendDay: string | undefined,
-  customStart: string,
-  customEnd: string,
 ): string[] {
-  if (preset === "custom") return daysBetween(customStart, customEnd);
   if (preset === "all") {
     return firstTrendDay === undefined ? [] : daysBetween(firstTrendDay, currentDay);
   }
-  const count = preset === "3d"
-    ? 3
-    : preset === "7d"
-      ? 7
-      : preset === "30d"
-        ? 30
-        : preset === "quarter"
-          ? 90
-          : 365;
-  return daysBetween(dayAtOffset(currentDay, -(count - 1)), currentDay);
+  const start = preset === "month-to-date"
+    ? `${currentDay.slice(0, 7)}-01`
+    : preset === "year-to-date"
+      ? `${currentDay.slice(0, 4)}-01-01`
+      : dayAtMonthOffset(
+          currentDay,
+          preset === "1m" ? -1 : preset === "6m" ? -6 : -12,
+        );
+  return daysBetween(start, currentDay);
 }
 
 function amount(value: string): string {
@@ -446,13 +464,12 @@ export function InvestmentPerformanceWorkspace({
   trendObservations: DailyAssetTrendObservation[];
 }) {
   const [cashflows, setCashflows] = useState(() => sortCashflows(initialCashflows));
-  const [currency, setCurrency] = useState<ReportingCurrency>("USD");
-  const [preset, setPreset] = useState<IntervalPreset>("7d");
-  const [customStart, setCustomStart] = useState(
-    trendObservations.at(0)?.day ?? currentDay,
-  );
-  const [customEnd, setCustomEnd] = useState(currentDay);
-  const [showSensitiveInfo, setShowSensitiveInfo] = useState(true);
+  const {
+    currency,
+    setCurrency,
+    showSensitiveInfo,
+  } = useWorkbenchDisplayPreferences();
+  const [preset, setPreset] = useState<IntervalPreset>("month-to-date");
   const [editing, setEditing] = useState<InvestmentCashflow | null | undefined>(
     undefined,
   );
@@ -466,8 +483,6 @@ export function InvestmentPerformanceWorkspace({
       preset,
       currentDay,
       firstTrendDay,
-      customStart,
-      customEnd,
     );
     const byDay = new Map(trendObservations.map((observation) => [
       observation.day,
@@ -514,8 +529,6 @@ export function InvestmentPerformanceWorkspace({
   }, [
     currency,
     currentDay,
-    customEnd,
-    customStart,
     preset,
     trendObservations,
   ]);
@@ -558,75 +571,32 @@ export function InvestmentPerformanceWorkspace({
       className="investment-performance"
       data-testid="investment-performance-workspace"
     >
-      <header className="investment-performance__header">
-        <div>
-          <p className="card-label">PORTFOLIO / PERFORMANCE</p>
-          <h1>收益分析</h1>
-          <p>
-            将资金进出与资产变化分开阅读。账本只记录本金事实，不会伪造交易、换仓或历史净值。
-          </p>
-        </div>
-        <div className="investment-performance__actions">
-          <VibeButton
-            aria-pressed={!showSensitiveInfo}
-            onClick={() => setShowSensitiveInfo((current) => !current)}
-            type="button"
-            variant="outline"
-          >
-            {showSensitiveInfo ? "隐藏关键信息" : "显示关键信息"}
-          </VibeButton>
+      <WorkbenchPageHeader
+        actions={
+          <>
+          <VibeSelect
+            fieldId="performance-currency"
+            label="计价货币"
+            onValueChange={(value) => setCurrency(value)}
+            options={CURRENCY_OPTIONS}
+            value={currency}
+            variant="wide"
+          />
           <VibeButton onClick={() => setEditing(null)} type="button" variant="primary">
             新增资金记录
           </VibeButton>
-        </div>
-      </header>
-
-      <section className="investment-performance__controls" aria-label="收益分析范围">
-        <VibeSelect
-          fieldId="performance-currency"
-          label="计价货币"
-          onValueChange={(value) => setCurrency(value)}
-          options={CURRENCY_OPTIONS}
-          value={currency}
-          variant="wide"
-        />
-        <VibeSelect
-          fieldId="performance-interval"
-          label="分析区间"
-          onValueChange={(value) => setPreset(value)}
-          options={INTERVAL_OPTIONS}
-          value={preset}
-          variant="wide"
-        />
-        {preset === "custom" ? (
-          <>
-            <VibeField
-              fieldId="performance-custom-start"
-              label="起始日期"
-              max={currentDay}
-              onChange={(event) => setCustomStart(event.target.value)}
-              type="date"
-              value={customStart}
-            />
-            <VibeField
-              fieldId="performance-custom-end"
-              label="结束日期"
-              max={currentDay}
-              min={customStart}
-              onChange={(event) => setCustomEnd(event.target.value)}
-              type="date"
-              value={customEnd}
-            />
           </>
-        ) : null}
-      </section>
+        }
+        description="将资金进出与资产变化分开阅读。账本只记录本金事实，不会伪造交易、换仓或历史净值。"
+        eyebrow="PORTFOLIO / PERFORMANCE"
+        title="收益分析"
+      />
 
       <section className="investment-performance__current" aria-label="当前组合结论">
         <article data-testid="performance-current-total">
           <p className="card-label">CURRENT / TOTAL</p>
           <h2>当前总资产</h2>
           <MetricValue amount={current?.amount ?? null} currency={currency} hidden={showSensitiveInfo === false} />
-          <p>来源账户/平台总额是组合汇总真相。</p>
         </article>
         <article data-testid="performance-net-investment">
           <p className="card-label">PRINCIPAL / NET</p>
@@ -667,9 +637,31 @@ export function InvestmentPerformanceWorkspace({
             <VibeStatusTag tone="warning">尚无完整端点</VibeStatusTag>
           )}
         </header>
+        <div className="investment-performance__range" aria-label="分析区间" role="group">
+          <span aria-hidden="true" className="vibe-field__label">
+            分析区间
+          </span>
+          <div className="investment-performance__range-options">
+            {INTERVAL_OPTIONS.map((option) => {
+              const selected = option.value === preset;
+              return (
+                <VibeButton
+                  key={option.value}
+                  aria-pressed={selected}
+                  className="investment-performance__range-option"
+                  onClick={() => setPreset(option.value)}
+                  type="button"
+                  variant={selected ? "primary" : "outline"}
+                >
+                  {option.label}
+                </VibeButton>
+              );
+            })}
+          </div>
+        </div>
         {trend.missingCount > 0 ? (
           <VibeNotice tone="info">
-            缺少 {trend.missingCount} 天资产观测；图表保留断点，区间端点仅使用实际完整观测。
+            缺少 {trend.missingCount} 天资产观测；趋势线已跨过缺口连接，区间端点仅使用实际完整观测。
           </VibeNotice>
         ) : null}
         <AssetTrendChart

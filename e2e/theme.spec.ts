@@ -18,6 +18,37 @@ test("主题默认跟随系统", async ({ browser }) => {
   await lightContext.close();
 });
 
+test("保存的主题会在页面切换的应用脚本加载前生效", async ({ browser }) => {
+  const context = await browser.newContext({ colorScheme: "dark" });
+  await context.addInitScript(() => {
+    window.localStorage.setItem("pad-theme", "light");
+  });
+  const page = await context.newPage();
+  await page.route("**/*", async (route) => {
+    if (route.request().resourceType() === "script") {
+      await route.abort();
+      return;
+    }
+    await route.continue();
+  });
+
+  for (const pathname of ["/", "/settings", "/asset-sources"]) {
+    await page.goto(pathname, { waitUntil: "domcontentloaded" });
+
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await expect(page.locator("html")).toHaveAttribute(
+      "data-theme-choice",
+      "light",
+    );
+    await expect(page.locator("body")).toHaveCSS(
+      "background-color",
+      "rgb(242, 242, 242)",
+    );
+  }
+
+  await context.close();
+});
+
 test("点阵背景在浅色和深色模式下保持局部反相", async ({ browser }) => {
   for (const colorScheme of ["light", "dark"] as const) {
     const context = await browser.newContext({ colorScheme });

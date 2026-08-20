@@ -155,6 +155,7 @@ export function AssetSourceRefreshButton({
 
 export function AssetRefreshControls({
   automaticRefresh = true,
+  disabled = false,
   enabled,
   hasEvmSources,
   hasNonEvmSources,
@@ -162,6 +163,7 @@ export function AssetRefreshControls({
   onPendingChange,
 }: {
   automaticRefresh?: boolean;
+  disabled?: boolean;
   enabled: boolean;
   hasEvmSources: boolean;
   hasNonEvmSources: boolean;
@@ -195,7 +197,7 @@ export function AssetRefreshControls({
     manual: boolean,
     scope: AssetRefreshScope = "all",
   ): Promise<boolean> => {
-    if (inFlight.current) return false;
+    if (disabled || inFlight.current) return false;
     if (completionReset.current !== null) {
       window.clearTimeout(completionReset.current);
       completionReset.current = null;
@@ -237,7 +239,7 @@ export function AssetRefreshControls({
       setPending(false);
       onPendingChange?.(false);
     }
-  }, [onPendingChange, router]);
+  }, [disabled, onPendingChange, router]);
 
   const runAndMark = useCallback(async (
     mode: AssetRefreshMode,
@@ -256,7 +258,12 @@ export function AssetRefreshControls({
   }, [refresh]);
 
   useEffect(() => {
-    if (!automaticRefresh || !enabled || automaticRefreshAttempted.current) return;
+    if (
+      !automaticRefresh ||
+      disabled ||
+      !enabled ||
+      automaticRefreshAttempted.current
+    ) return;
     automaticRefreshAttempted.current = true;
     const plan = initialAutomaticPlan.current;
     void (async () => {
@@ -267,10 +274,10 @@ export function AssetRefreshControls({
         await runAndMark("prices", false, "evm");
       }
     })();
-  }, [automaticRefresh, enabled, runAndMark]);
+  }, [automaticRefresh, disabled, enabled, runAndMark]);
 
   useEffect(() => {
-    if (!automaticRefresh || !hasNonEvmSources) return;
+    if (!automaticRefresh || disabled || !hasNonEvmSources) return;
     const tick = () => {
       if (document.visibilityState === "hidden" || inFlight.current) return;
       const now = Date.now();
@@ -282,10 +289,10 @@ export function AssetRefreshControls({
     };
     const timer = window.setInterval(tick, 30_000);
     return () => window.clearInterval(timer);
-  }, [automaticRefresh, hasNonEvmSources, runAndMark]);
+  }, [automaticRefresh, disabled, hasNonEvmSources, runAndMark]);
 
   useEffect(() => {
-    if (!automaticRefresh || !enabled) return;
+    if (!automaticRefresh || disabled || !enabled) return;
     const visibilityChanged = () => {
       if (document.visibilityState === "visible") {
         void runAndMark("all");
@@ -293,14 +300,14 @@ export function AssetRefreshControls({
     };
     document.addEventListener("visibilitychange", visibilityChanged);
     return () => document.removeEventListener("visibilitychange", visibilityChanged);
-  }, [automaticRefresh, enabled, runAndMark]);
+  }, [automaticRefresh, disabled, enabled, runAndMark]);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || disabled) return;
     const manualRefresh = () => void runAndMark("all", true);
     window.addEventListener(ASSET_MANUAL_REFRESH_EVENT, manualRefresh);
     return () => window.removeEventListener(ASSET_MANUAL_REFRESH_EVENT, manualRefresh);
-  }, [enabled, runAndMark]);
+  }, [disabled, enabled, runAndMark]);
 
   if (!enabled) return null;
   return (
@@ -308,7 +315,8 @@ export function AssetRefreshControls({
       <VibeButton
         type="button"
         aria-label="立即刷新资产"
-        disabled={pending}
+        aria-description={disabled ? "演示数据不可刷新" : undefined}
+        disabled={disabled || pending}
         onClick={() => void runAndMark("all", true)}
         variant="primary"
       >

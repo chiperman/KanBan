@@ -323,7 +323,7 @@ test("低频手工记录不降低完整性，并按最近记录延用趋势金�
         action: "manual-record",
         day: "2026-01-01",
         amount: "100000",
-        currency: "CNY",
+        currency: "USD",
       },
     },
   );
@@ -336,7 +336,7 @@ test("低频手工记录不降低完整性，并按最近记录延用趋势金�
         action: "manual-record",
         day: "2026-01-04",
         amount: "108000",
-        currency: "CNY",
+        currency: "USD",
       },
     },
   );
@@ -351,28 +351,27 @@ test("低频手工记录不降低完整性，并按最近记录延用趋势金�
     expect.objectContaining({
       complete: true,
       status: "complete",
-      total: { USD: null, CNY: "100000", HKD: null },
+      total: { USD: "100000", CNY: null, HKD: null },
     }),
     expect.objectContaining({
       complete: true,
       status: "complete",
-      total: { USD: null, CNY: "108000", HKD: null },
+      total: { USD: "108000", CNY: null, HKD: null },
     }),
   ]);
 
-  await page.goto("/");
-  await chooseOverviewOption(page, "计价货币", "CNY");
-  await chooseOverviewOption(page, "趋势区间", "全部");
+  await page.goto(`/asset-sources/${encodeURIComponent(manualSource.id)}`);
 
-  const totalTrend = page.getByTestId("total-asset-trend");
   const sourceTrend = page.getByTestId(
     `asset-source-trend-${manualSource.id}`,
   );
-  await expect(totalTrend).toContainText("可绘制 4 / 4 天");
   await expect(sourceTrend).toContainText(
     "手工数据按最近记录延用，不影响同步完整性",
   );
-  await expect(sourceTrend).not.toContainText("缺少 2 天观测，折线已断开");
+  const sourceTrendPath = sourceTrend.locator(".recharts-line-curve");
+  await expect(sourceTrendPath).toHaveCount(1);
+  const sourceTrendPathData = await sourceTrendPath.getAttribute("d");
+  expect(sourceTrendPathData?.match(/M/g)).toHaveLength(1);
 });
 
 test("手工记录拒绝非法金额和非手工来源编辑，并在文件存储中覆盖当天记录", async ({

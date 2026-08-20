@@ -196,6 +196,7 @@ export function TotalAssetOverview({
   history,
   formalDailySettlements,
   currentDay,
+  persistPreferences = true,
   showSensitiveInfo,
   storageNamespace = "owner",
 }: {
@@ -207,6 +208,7 @@ export function TotalAssetOverview({
   history: DailyAssetTrendObservation[];
   formalDailySettlements: FormalDailySettlement[];
   currentDay: string;
+  persistPreferences?: boolean;
   showSensitiveInfo: boolean;
   storageNamespace?: "demo" | "owner";
 }) {
@@ -214,6 +216,7 @@ export function TotalAssetOverview({
   const [detailPage, setDetailPage] = useState(1);
 
   useEffect(() => {
+    if (!persistPreferences) return;
     const savedDimension = window.localStorage.getItem(
       `${storageNamespace}-distribution-dimension`,
     );
@@ -224,7 +227,7 @@ export function TotalAssetOverview({
     ) {
       setDimension(savedDimension);
     }
-  }, [storageNamespace]);
+  }, [persistPreferences, storageNamespace]);
 
   const valuation = useMemo(
     () => buildTotalValuation(sources, currency, dimension),
@@ -446,10 +449,12 @@ export function TotalAssetOverview({
 
   function changeDimension(value: DistributionDimension) {
     setDimension(value);
-    window.localStorage.setItem(
-      `${storageNamespace}-distribution-dimension`,
-      value,
-    );
+    if (persistPreferences) {
+      window.localStorage.setItem(
+        `${storageNamespace}-distribution-dimension`,
+        value,
+      );
+    }
   }
 
   function changeTrendRange(value: TrendRange) {

@@ -20,6 +20,8 @@ import type {
   AssetSourceSummary,
   DailyAssetTrendObservation,
 } from "@/server/ports";
+import { sourceSyncStatus } from "@/ui/asset-source-status";
+import { formatShanghaiDateTime } from "@/ui/shanghai-date-time";
 import { VibeLink } from "@/ui/vibe/vibe-button";
 import { VibeSelect } from "@/ui/vibe/vibe-field";
 
@@ -64,20 +66,6 @@ const COMPLETENESS_OPTIONS = [
   { value: "complete", label: "仅完整" },
   { value: "incomplete", label: "仅不完整" },
 ] as const;
-
-function formatTime(value: string): string {
-  return new Intl.DateTimeFormat("zh-CN", {
-    timeZone: "Asia/Shanghai",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  })
-    .format(new Date(value))
-    .replaceAll("/", "-");
-}
 
 function historyStatusLabel(state: HistoryState): string {
   if (state === "complete") return "完整";
@@ -166,10 +154,7 @@ function syncLabels(source: DataHealthSource): string[] {
   if (source.kind === "manual") {
     return hasManualAssetRecord(source) ? ["手工记录"] : ["等待首条记录"];
   }
-  const labels = source.sync.error === null ? [] : ["同步失败"];
-  if (source.sync.status === "expired") labels.push("数据过期");
-  if (labels.length === 0) labels.push("数据当前");
-  return labels;
+  return [sourceSyncStatus(source)?.label ?? "数据当前"];
 }
 
 function observationDetail(
@@ -540,7 +525,7 @@ export function DataHealthDiagnostics({
                           <p>
                             {manualWithoutRecord
                               ? "尚无记录"
-                              : formatTime(source.sync.lastSuccessfulAt)}
+                              : formatShanghaiDateTime(source.sync.lastSuccessfulAt)}
                           </p>
                         </div>
                         <div className="data-health-source__fact">

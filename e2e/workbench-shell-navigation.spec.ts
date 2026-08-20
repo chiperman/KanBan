@@ -1,4 +1,10 @@
-import { expect, test, type CDPSession, type Page } from "@playwright/test";
+import {
+  expect,
+  test,
+  type CDPSession,
+  type Page,
+  type TestInfo,
+} from "@playwright/test";
 
 const SENSITIVE_TITLE = "SENSITIVE-WORKBENCH-ASSET";
 const SENSITIVE_BODY = "SENSITIVE-WORKBENCH-BODY-123456.78";
@@ -38,6 +44,33 @@ async function expectNoHorizontalOverflow(page: Page): Promise<void> {
       document.documentElement.clientWidth,
   );
   expect(overflow).toBeLessThanOrEqual(0);
+}
+
+async function expectUtilitiesInHeader(
+  page: Page,
+  testInfo: TestInfo,
+  screenshotName: string,
+) {
+  const utilities = page.getByTestId("workbench-utilities");
+  const header = page.getByTestId("workbench-page-header");
+  const [utilitiesBox, headerBox] = await Promise.all([
+    utilities.boundingBox(),
+    header.boundingBox(),
+  ]);
+
+  expect(utilitiesBox).not.toBeNull();
+  expect(headerBox).not.toBeNull();
+  expect(utilitiesBox!.x).toBeGreaterThanOrEqual(headerBox!.x);
+  expect(utilitiesBox!.x + utilitiesBox!.width).toBeLessThanOrEqual(
+    headerBox!.x + headerBox!.width,
+  );
+  expect(utilitiesBox!.y).toBeGreaterThanOrEqual(headerBox!.y);
+  expect(utilitiesBox!.y + utilitiesBox!.height).toBeLessThanOrEqual(
+    headerBox!.y + headerBox!.height,
+  );
+  await page.screenshot({
+    path: testInfo.outputPath(screenshotName),
+  });
 }
 
 test.beforeEach(async ({ request }) => {
@@ -103,8 +136,19 @@ test("已认证所有者在桌面可通过左侧主导航和键盘到达五个�
   await loginAsOwner(page);
 
   const desktopNavigation = page.getByTestId("workbench-desktop-navigation");
+  const commandContainer = page.locator(".workbench-command");
+  const commandTrigger = page.getByRole("button", {
+    name: "打开快捷命令",
+  });
+  const commandKeycap = commandTrigger.locator("kbd");
   await expect(desktopNavigation).toBeVisible();
   await expect(page.getByTestId("workbench-mobile-navigation")).toBeHidden();
+  await expect(commandContainer).toHaveCSS("border-radius", "6px");
+  await expect(commandTrigger).toHaveCSS(
+    "background-color",
+    "rgba(0, 0, 0, 0)",
+  );
+  await expect(commandKeycap).toBeVisible();
 
   for (const destination of PRIMARY_DESTINATIONS) {
     const link = desktopNavigation.getByRole("link", {
@@ -121,21 +165,192 @@ test("已认证所有者在桌面可通过左侧主导航和键盘到达五个�
   }
 });
 
+test("全局工具按三档宽度放入侧栏、标题区和顶部操作区", async ({
+  page,
+}, testInfo) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await loginAsOwner(page);
+
+  const utilities = page.getByTestId("workbench-utilities");
+  const desktopNavigation = page.getByTestId("workbench-desktop-navigation");
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const [desktopUtilities, desktopNavigationBox] = await Promise.all([
+    utilities.boundingBox(),
+    desktopNavigation.boundingBox(),
+  ]);
+  expect(desktopUtilities).not.toBeNull();
+  expect(desktopNavigationBox).not.toBeNull();
+  expect(
+    desktopUtilities!.x + desktopUtilities!.width,
+  ).toBeLessThanOrEqual(
+    desktopNavigationBox!.x + desktopNavigationBox!.width,
+  );
+  expect(desktopUtilities!.y + desktopUtilities!.height).toBeGreaterThan(
+    desktopNavigationBox!.y + desktopNavigationBox!.height - 180,
+  );
+  await page.screenshot({
+    path: testInfo.outputPath("utilities-wide.png"),
+  });
+
+  await page.setViewportSize({ width: 975, height: 900 });
+  await expect(page.getByTestId("workbench-mobile-navigation")).toBeVisible();
+  await expectUtilitiesInHeader(page, testInfo, "utilities-medium.png");
+  const mediumUtilities = await utilities.boundingBox();
+  const mediumHeader = await page.getByTestId("workbench-page-header").boundingBox();
+  expect(mediumUtilities!.x).toBeGreaterThan(
+    mediumHeader!.x + mediumHeader!.width / 2,
+  );
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectUtilitiesInHeader(page, testInfo, "utilities-mobile.png");
+  const [mobileUtilities, mobileNavigation] = await Promise.all([
+    utilities.boundingBox(),
+    page.getByTestId("workbench-mobile-navigation").boundingBox(),
+  ]);
+  expect(mobileUtilities!.y + mobileUtilities!.height).toBeLessThanOrEqual(
+    mobileNavigation!.y - 8,
+  );
+  await expectNoHorizontalOverflow(page);
+
+  await page
+    .getByRole("button", { name: "隐藏关键信息", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "显示关键信息", exact: true }),
+  ).toBeVisible();
+});
+
+test("窄窗口切换主页面时不闪现底部全局工具", async ({ page }) => {
+  await page.addInitScript(() => {
+    const flashes: string[] = [];
+
+    window.addEventListener("load", () => {
+      const inspectFallback = () => {
+        const fallback = document.querySelector(
+          ".workbench-shell > .workbench-utilities",
+        );
+        if (
+          fallback !== null &&
+          getComputedStyle(fallback).display !== "none"
+        ) {
+          flashes.push(window.location.pathname);
+        }
+      };
+
+      new MutationObserver(inspectFallback).observe(document.body, {
+        childList: true,
+        subtree: true,
+      });
+      inspectFallback();
+    });
+
+    Object.defineProperty(window, "__workbenchUtilityFlashes", {
+      configurable: true,
+      value: flashes,
+    });
+  });
+  await page.setViewportSize({ width: 975, height: 844 });
+  await loginAsOwner(page);
+
+  const mobileNavigation = page.getByTestId("workbench-mobile-navigation");
+  for (const destination of PRIMARY_DESTINATIONS.slice(1)) {
+    await mobileNavigation
+      .getByRole("link", { name: destination.label, exact: true })
+      .click();
+    await expect(page).toHaveURL(
+      new RegExp(`${destination.path.replace("/", "\\/")}$`),
+    );
+  }
+
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (
+            window as typeof window & {
+              __workbenchUtilityFlashes: string[];
+            }
+          ).__workbenchUtilityFlashes,
+      ),
+    )
+    .toEqual([]);
+});
+
+test("五个工作台页面共享统一的页面抬头", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await loginAsOwner(page);
+
+  for (const destination of [
+    {
+      label: "PORTFOLIO / TODAY",
+      path: "/",
+      title: "总览",
+    },
+    {
+      label: "PORTFOLIO / HOLDINGS",
+      path: "/assets",
+      title: "资产与持仓",
+    },
+    {
+      label: "PORTFOLIO / PERFORMANCE",
+      path: "/performance",
+      title: "收益分析",
+    },
+    {
+      label: "PORTFOLIO / SOURCES",
+      path: "/asset-sources",
+      title: "资产来源",
+    },
+    {
+      label: "LOCAL / SETTINGS",
+      path: "/settings",
+      title: "设置与安全",
+    },
+  ]) {
+    await page.goto(destination.path);
+    const header = page.getByTestId("workbench-page-header");
+    await expect(header).toHaveCount(1);
+    await expect(header.locator(".card-label")).toHaveText(destination.label);
+    await expect(
+      header.getByRole("heading", { name: destination.title }),
+    ).toBeVisible();
+  }
+});
+
 test("已认证所有者在手机可通过底部主导航和 Command-K 到达入口", async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
   await loginAsOwner(page);
 
   const mobileNavigation = page.getByTestId("workbench-mobile-navigation");
   const commandTrigger = page.getByRole("button", {
     name: "打开快捷命令",
   });
-  await expect(mobileNavigation).toBeVisible();
-  await expect(page.getByTestId("workbench-desktop-navigation")).toBeHidden();
-  await expect(commandTrigger).toBeVisible();
-  await expect(commandTrigger.locator("kbd")).toBeHidden();
-  await expectNoHorizontalOverflow(page);
+  const commandContainer = page.locator(".workbench-command");
+  const commandKeycap = commandTrigger.locator("kbd");
+
+  for (const width of [975, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect(mobileNavigation).toBeVisible();
+    await expect(page.getByTestId("workbench-desktop-navigation")).toBeHidden();
+    await expect(commandContainer).toBeVisible();
+    await expect(commandTrigger).toBeVisible();
+    await expect(commandKeycap).toBeVisible();
+    await expect(commandContainer).toHaveCSS("border-radius", "6px");
+    expect(
+      await commandContainer.evaluate(
+        (element) => getComputedStyle(element).backgroundColor,
+      ),
+    ).not.toBe("rgba(0, 0, 0, 0)");
+    await expect(commandTrigger).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    expect(
+      await commandKeycap.evaluate(
+        (element) => getComputedStyle(element).backgroundColor,
+      ),
+    ).not.toBe("rgba(0, 0, 0, 0)");
+    await expectNoHorizontalOverflow(page);
+  }
 
   for (const destination of PRIMARY_DESTINATIONS) {
     await mobileNavigation

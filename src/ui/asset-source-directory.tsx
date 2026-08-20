@@ -1,5 +1,6 @@
 import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
 import type { AssetSourceSummary, Card } from "@/server/ports";
+import { sourceSyncStatus } from "@/ui/asset-source-status";
 import { VibeLink } from "@/ui/vibe/vibe-button";
 
 function sourceType(source: AssetSourceSummary): string {
@@ -12,8 +13,8 @@ function sourceStatus(source: AssetSourceSummary, card?: Card): string {
   const visibility = card?.hidden ? " · 已隐藏" : "";
   if (source.kind === "manual") return `无凭证${visibility}`;
   if (source.lifecycle === "disconnected") return `已断开${visibility}`;
-  if (source.sync.error) return `同步异常${visibility}`;
-  if (source.sync.status === "expired") return `数据过期${visibility}`;
+  const sync = sourceSyncStatus(source);
+  if (sync !== null) return `${sync.label}${visibility}`;
   return `已连接${visibility}`;
 }
 
@@ -30,20 +31,6 @@ export function AssetSourceDirectory({
 
   return (
     <section aria-label="资产来源列表" className="asset-source-directory">
-      <p className="asset-source-directory__intro">
-        自动账户、观察钱包与手工资产记录统一在此查看；详情才提供单来源数据与生命周期操作。
-      </p>
-      <VibeLink href="/data-health" variant="text">
-        查看数据健康
-      </VibeLink>
-      <VibeLink
-        aria-label="新增来源"
-        className="asset-source-directory__create"
-        href="/asset-sources/new"
-        variant="outline"
-      >
-        新增来源
-      </VibeLink>
       {sources.length === 0 ? (
         <div className="empty-state">
           <p className="empty-title">暂无资产来源</p>

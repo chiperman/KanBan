@@ -18,8 +18,8 @@ import { RecoverySetup } from "@/ui/recovery-setup";
 import { ExternalServiceSettings } from "@/ui/external-service-settings";
 import { SessionGuard } from "@/ui/session-guard";
 import { ThemeSwitcher } from "@/ui/theme-switcher";
-import { VibeLink } from "@/ui/vibe/vibe-button";
 import { WorkbenchShell } from "@/ui/workbench-shell";
+import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
 
 export const dynamic = "force-dynamic";
 
@@ -63,21 +63,16 @@ export default async function SettingsPage({
             </div>
             <div className="header-side">
               <LocalClock initialTime={now.toISOString()} compact />
-              <VibeLink className="header-action-button" href="/" variant="outline">
-                返回资产看板
-              </VibeLink>
               <LogoutButton />
               <ThemeSwitcher />
             </div>
           </header>
           <main className="settings-main" id="main-content">
-            <header className="settings-page-head">
-              <p className="card-label">LOCAL / SETTINGS</p>
-              <h1>设置与安全</h1>
-              <p>
-                集中管理所有者登录保护、备份恢复、本机数据和默认偏好。
-              </p>
-            </header>
+            <WorkbenchPageHeader
+              description="集中管理所有者登录保护、备份恢复、本机数据和默认偏好。"
+              eyebrow="LOCAL / SETTINGS"
+              title="设置与安全"
+            />
             <section
               className="settings-section security-settings"
               aria-labelledby="owner-security-title"
