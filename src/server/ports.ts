@@ -384,9 +384,21 @@ export interface AssetHolding {
   changePercent: string | null;
 }
 
+/** 已发现正余额但无法按 ERC-20 规则读取数量的 EVM 合约。 */
+export interface EvmUnrecognizedToken {
+  sourceAsset: string;
+  symbol: string | null;
+  name: string | null;
+  /** 合约不返回可靠 decimals 时不能伪造数量。 */
+  quantity: string | null;
+  reason: string;
+}
+
 export interface AssetSnapshot {
   total: AssetMoney;
   holdings: AssetHolding[];
+  /** 仅 EVM 观察钱包使用；不计入来源总额，供所有者决定关注或忽略。 */
+  unrecognizedEvmTokens?: EvmUnrecognizedToken[];
   exchangeRates: AssetExchangeRate[];
   syncedAt: string;
   /** 可选以兼容旧快照；缺省表示尚未证明产品覆盖范围。 */

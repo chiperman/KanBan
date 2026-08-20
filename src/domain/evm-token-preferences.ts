@@ -1,4 +1,8 @@
-import type { AssetHolding, AssetSourceSummary } from "@/server/ports";
+import type {
+  AssetHolding,
+  AssetSourceSummary,
+  EvmUnrecognizedToken,
+} from "@/server/ports";
 import { decimalAdd } from "@/domain/decimal";
 
 const EVM_TOKEN_ASSET_KEY_PATTERN =
@@ -36,6 +40,49 @@ export function isUnrecognizedEvmTokenHolding(
     holding.valuation.status === "unvalued" &&
     !ignoredAssetKeySet(source).has(holding.sourceAsset) &&
     !includedAssetKeySet(source).has(holding.sourceAsset)
+  );
+}
+
+function candidateFromHolding(holding: AssetHolding): EvmUnrecognizedToken | null {
+  if (
+    holding.sourceAsset === undefined ||
+    holding.valuation.status !== "unvalued"
+  ) {
+    return null;
+  }
+  return {
+    sourceAsset: holding.sourceAsset,
+    symbol: holding.symbol,
+    name: holding.name,
+    quantity: holding.quantity,
+    reason: holding.valuation.reason,
+  };
+}
+
+export function unrecognizedEvmTokenCandidates(
+  source: SourceWithEvmTokenPreferences,
+): EvmUnrecognizedToken[] {
+  if (!source.kind.startsWith("evm-watch-")) return [];
+  const candidates = new Map<string, EvmUnrecognizedToken>();
+  for (const token of source.snapshot.unrecognizedEvmTokens ?? []) {
+    if (isEvmTokenAssetKey(token.sourceAsset)) {
+      candidates.set(token.sourceAsset, token);
+    }
+  }
+  for (const holding of source.snapshot.holdings) {
+    if (
+      !isEvmTokenHolding(source.kind, holding) ||
+      holding.valuation.status !== "unvalued"
+    ) {
+      continue;
+    }
+    const candidate = candidateFromHolding(holding);
+    if (candidate !== null && !candidates.has(candidate.sourceAsset)) {
+      candidates.set(candidate.sourceAsset, candidate);
+    }
+  }
+  return [...candidates.values()].sort((left, right) =>
+    left.sourceAsset.localeCompare(right.sourceAsset),
   );
 }
 
@@ -139,6 +186,9 @@ export function updateEvmTokenPreferences(
       holding.sourceAsset
         ? [holding.sourceAsset]
         : [],
+    ),
+    ...unrecognizedEvmTokenCandidates(source).map(
+      ({ sourceAsset }) => sourceAsset,
     ),
     ...(source.ignoredAssetKeys ?? []),
     ...(source.includedAssetKeys ?? []),

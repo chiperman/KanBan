@@ -11,8 +11,11 @@ import {
   decimalToFixed,
 } from "@/domain/decimal";
 import {
+  ignoredAssetKeySet,
+  includedAssetKeySet,
   isUnrecognizedEvmTokenHolding,
   portfolioSourceTotal,
+  unrecognizedEvmTokenCandidates,
 } from "@/domain/evm-token-preferences";
 import {
   compareNullableDecimalDescending,
@@ -45,7 +48,7 @@ import {
   VibeSegmentedBar,
   VibeStatusTag,
 } from "@/ui/vibe/vibe-data-instrument";
-import { VibeButton } from "@/ui/vibe/vibe-button";
+import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
 import { AssetTrendChart } from "@/ui/asset-trend-chart";
 import {
@@ -596,6 +599,7 @@ export function AssetSourceCard({
   onManualAssetRecord,
   onManualAssetRecordDelete,
   onReadOnlyAction,
+  assetScopeHref,
   profitColorScheme,
   showSensitiveInfo,
 }: {
@@ -611,6 +615,7 @@ export function AssetSourceCard({
   onManualAssetRecord?: (source: AssetSourceView, record?: ManualAssetRecord) => void;
   onManualAssetRecordDelete?: (source: AssetSourceView, record: ManualAssetRecord) => void;
   onReadOnlyAction?: () => void;
+  assetScopeHref?: string;
   profitColorScheme: ProfitColorScheme;
   showSensitiveInfo: boolean;
 }) {
@@ -641,7 +646,8 @@ export function AssetSourceCard({
   const positionHoldings = orderedHoldings.filter(
     ({ assetClass }) => assetClass !== "cash",
   );
-  const ignoredAssetKeys = new Set(source.ignoredAssetKeys ?? []);
+  const ignoredAssetKeys = ignoredAssetKeySet(source);
+  const includedAssetKeys = includedAssetKeySet(source);
   const activePositionHoldings = positionHoldings.filter(
     (holding) =>
       holding.sourceAsset === undefined ||
@@ -1160,7 +1166,7 @@ export function AssetSourceCard({
               <strong>
                 {holding.marketValue === null
                   ? holding.valuation.status === "quote-unavailable"
-                    ? "期权行情未接入"
+                    ? "持仓行情未接入"
                     : "未估值"
                   : showSensitiveInfo
                     ? formatDisplayMoney(holding.marketValue, holding.currency) ?? "无法折算"
@@ -1259,6 +1265,53 @@ export function AssetSourceCard({
             )}
           </div>
         </section>
+        {unreadableEvmTokens.length > 0 ? (
+          <section
+            aria-labelledby={`evm-unreadable-assets-title-${source.id}`}
+            className="evm-unreadable-assets"
+            data-testid="evm-unreadable-assets"
+          >
+            <div className="evm-unreadable-assets__head">
+              <div>
+                <p className="card-label">EVM / READ LIMITED</p>
+                <h3 id={`evm-unreadable-assets-title-${source.id}`}>
+                  读取受限资产
+                </h3>
+                <p>
+                  这些合约已被发现，但无法可靠读取数量；不计入普通持仓数量或估值。
+                </p>
+              </div>
+              {assetScopeHref ? (
+                <VibeLink href={assetScopeHref} variant="outline">
+                  管理资产范围
+                </VibeLink>
+              ) : null}
+            </div>
+            <ol>
+              {unreadableEvmTokens.map((token) => {
+                const isIncluded = includedAssetKeys.has(token.sourceAsset);
+                const displayName = token.name ?? token.symbol ?? "未识别代币";
+                return (
+                  <li key={token.sourceAsset}>
+                    <div className="evm-unreadable-assets__identity">
+                      <strong>{displayName}</strong>
+                      {token.symbol && token.name ? (
+                        <span>{token.symbol}</span>
+                      ) : null}
+                      <small>{token.sourceAsset}</small>
+                    </div>
+                    <div className="evm-unreadable-assets__status">
+                      <VibeStatusTag tone="warning">
+                        {isIncluded ? "已关注 · 数量无法读取" : "待确认 · 数量无法读取"}
+                      </VibeStatusTag>
+                      <p>{token.reason}</p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          </section>
+        ) : null}
         {unvaluedCount > 0 ? (
           <VibeStatusTag className="asset-sync-status" tone="warning">
             含 {unvaluedCount} 项未估值资产

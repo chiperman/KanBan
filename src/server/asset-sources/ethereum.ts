@@ -11,6 +11,7 @@ import type {
   AssetSourceRefreshResult,
   AssetSourceRefresher,
   EvmChain,
+  EvmUnrecognizedToken,
   ExternalServiceConfiguration,
   EvmWatchAuthorizationResult,
   EvmWatchWalletReadOnly,
@@ -75,6 +76,10 @@ function text(value: unknown, field: string): string {
   return value;
 }
 
+function optionalText(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
 function decimal(value: unknown, field: string): string {
   const output = typeof value === "number" && Number.isFinite(value)
     ? String(value)
@@ -126,6 +131,36 @@ interface ReferencePrice {
   price: string;
   quotedAt: string;
   source: string;
+}
+
+interface TokenMetadata {
+  symbol: string;
+  name: string;
+  decimals: number;
+}
+
+type TokenMetadataResult =
+  | { kind: "available"; metadata: TokenMetadata }
+  | { kind: "unrecognized"; token: EvmUnrecognizedToken };
+
+class EvmTokenMetadataUnavailableError extends Error {}
+
+function tokenAssetKey(config: EvmChainConfig, contract: string): string {
+  return `evm:${config.chainId}:${contract}`;
+}
+
+function unrecognizedToken(
+  config: EvmChainConfig,
+  contract: string,
+  input: Pick<EvmUnrecognizedToken, "symbol" | "name" | "reason">,
+): EvmUnrecognizedToken {
+  return {
+    sourceAsset: tokenAssetKey(config, contract),
+    symbol: input.symbol,
+    name: input.name,
+    quantity: null,
+    reason: input.reason,
+  };
 }
 
 function buildSnapshot(
@@ -189,6 +224,76 @@ function buildSnapshot(
   };
 }
 
+function snapshotTokenCandidates(
+  snapshot: AssetSnapshot,
+  config: EvmChainConfig,
+  candidates: EvmUnrecognizedToken[],
+): AssetSnapshot {
+  const prefix = `evm:${config.chainId}:0x`;
+  const merged = new Map<string, EvmUnrecognizedToken>();
+  for (const candidate of candidates) {
+    if (candidate.sourceAsset.startsWith(prefix)) {
+      merged.set(candidate.sourceAsset, candidate);
+    }
+  }
+  for (const holding of snapshot.holdings) {
+    if (
+      !holding.sourceAsset?.startsWith(prefix) ||
+      holding.valuation.status !== "unvalued"
+    ) {
+      continue;
+    }
+    merged.set(holding.sourceAsset, {
+      sourceAsset: holding.sourceAsset,
+      symbol: holding.symbol,
+      name: holding.name,
+      quantity: holding.quantity,
+      reason: holding.valuation.reason,
+    });
+  }
+  return merged.size === 0
+    ? snapshot
+    : {
+        ...snapshot,
+        unrecognizedEvmTokens: [...merged.values()].sort((left, right) =>
+          left.sourceAsset.localeCompare(right.sourceAsset),
+        ),
+      };
+}
+
+function previousUnrecognizedToken(
+  snapshot: AssetSnapshot | undefined,
+  sourceAsset: string,
+): EvmUnrecognizedToken {
+  const existing = snapshot?.unrecognizedEvmTokens?.find(
+    (token) => token.sourceAsset === sourceAsset,
+  );
+  if (existing) return existing;
+  const holding = snapshot?.holdings.find(
+    (item) =>
+      item.sourceAsset === sourceAsset &&
+      item.valuation.status === "unvalued",
+  );
+  if (holding) {
+    return {
+      sourceAsset,
+      symbol: holding.symbol,
+      name: holding.name,
+      quantity: holding.quantity,
+      reason: holding.valuation.status === "unvalued"
+        ? holding.valuation.reason
+        : "已忽略代币缺少可靠 USD 参考价格",
+    };
+  }
+  return {
+    sourceAsset,
+    symbol: null,
+    name: null,
+    quantity: null,
+    reason: "已忽略代币缺少可读取的元数据",
+  };
+}
+
 class EvmRpcClient {
   private id = 0;
 
@@ -229,6 +334,15 @@ class EvmRpcClient {
       const error = typeof body.error === "object" && body.error !== null
         ? body.error as { message?: unknown }
         : null;
+      const message = typeof error?.message === "string"
+        ? error.message
+        : `HTTP ${response.status}`;
+      if (
+        method === "alchemy_getTokenMetadata" &&
+        /execution reverted|revert/i.test(message)
+      ) {
+        throw new EvmTokenMetadataUnavailableError(message);
+      }
       throw new Error(
         `EVM RPC 读取失败${typeof error?.message === "string" ? `：${error.message}` : `（HTTP ${response.status}）`}`,
       );
@@ -281,20 +395,59 @@ class EvmRpcClient {
     throw new Error("Alchemy Token Balances 分页超过安全上限");
   }
 
-  async tokenMetadata(contract: string, config: EvmChainConfig): Promise<{ symbol: string; name: string; decimals: number }> {
-    const metadata = record(
-      await this.call("alchemy_getTokenMetadata", [contract]),
-      "Alchemy Token Metadata 响应",
-    );
+  async tokenMetadata(
+    contract: string,
+    config: EvmChainConfig,
+  ): Promise<TokenMetadataResult> {
+    let metadata: JsonRecord;
+    try {
+      metadata = record(
+        await this.call("alchemy_getTokenMetadata", [contract]),
+        "Alchemy Token Metadata 响应",
+      );
+    } catch (error) {
+      if (error instanceof EvmTokenMetadataUnavailableError) {
+        return {
+          kind: "unrecognized",
+          token: unrecognizedToken(config, contract, {
+            symbol: null,
+            name: null,
+            reason: "代币合约未返回可读取的元数据",
+          }),
+        };
+      }
+      throw error;
+    }
+    const symbol = optionalText(metadata.symbol)?.slice(0, 40) ?? null;
+    const name = optionalText(metadata.name)?.slice(0, 120) ?? null;
     const decimals = metadata.decimals;
     if (!Number.isSafeInteger(decimals) || Number(decimals) < 0 || Number(decimals) > 255) {
-      throw new Error(`Alchemy 代币 decimals 无效：${contract}`);
+      return {
+        kind: "unrecognized",
+        token: unrecognizedToken(config, contract, {
+          symbol,
+          name,
+          reason: "代币合约未返回可靠 decimals，数量无法读取",
+        }),
+      };
     }
-    const symbol = text(metadata.symbol, "symbol").slice(0, 40);
+    if (symbol === null) {
+      return {
+        kind: "unrecognized",
+        token: unrecognizedToken(config, contract, {
+          symbol: null,
+          name,
+          reason: "代币合约未返回可靠 symbol，暂无法识别",
+        }),
+      };
+    }
     return {
-      symbol,
-      name: `${symbol} · ${config.label} ${config.tokenStandard}`,
-      decimals: Number(decimals),
+      kind: "available",
+      metadata: {
+        symbol,
+        name: `${symbol} · ${config.label} ${config.tokenStandard}`,
+        decimals: Number(decimals),
+      },
     };
   }
 }
@@ -427,6 +580,8 @@ async function readFullSnapshot(input: {
   services: ExternalServiceConfiguration;
   request: EvmFetch;
   signal?: AbortSignal;
+  ignoredAssetKeys?: string[];
+  previousSnapshot?: AssetSnapshot;
 }): Promise<AssetSnapshot> {
   const client = new EvmRpcClient(input.rpcUrl, input.request, input.signal);
   const returnedChainId = text(await client.chainId(), "eth_chainId");
@@ -449,9 +604,14 @@ async function readFullSnapshot(input: {
     if (!/^0x[0-9a-fA-F]+$/.test(balance)) throw new Error("Alchemy 返回无效代币余额");
     return BigInt(balance) > 0n;
   });
-  const contracts = [...new Set(positiveTokens.map(({ contract }) => contract))];
+  const ignoredAssetKeys = new Set(input.ignoredAssetKeys ?? []);
+  const visibleTokens = positiveTokens.filter(
+    ({ contract }) => !ignoredAssetKeys.has(tokenAssetKey(input.config, contract)),
+  );
+  const contracts = [...new Set(visibleTokens.map(({ contract }) => contract))];
   if (contracts.length > 500) throw new Error("EVM 同质化代币数量超过安全上限");
-  const metadata = new Map<string, { symbol: string; name: string; decimals: number }>();
+  const metadata = new Map<string, TokenMetadata>();
+  const unreadableTokens: EvmUnrecognizedToken[] = [];
   for (let index = 0; index < contracts.length; index += 8) {
     const batch = contracts.slice(index, index + 8);
     const values = await Promise.all(
@@ -460,30 +620,47 @@ async function readFullSnapshot(input: {
         await client.tokenMetadata(contract, input.config),
       ] as const),
     );
-    for (const value of values) metadata.set(...value);
+    for (const [contract, result] of values) {
+      if (result.kind === "available") {
+        metadata.set(contract, result.metadata);
+      } else {
+        unreadableTokens.push(result.token);
+      }
+    }
   }
-  const tokenBalances = positiveTokens.map(({ contract, balance }) => {
+  const tokenBalances = visibleTokens.flatMap(({ contract, balance }) => {
     const token = metadata.get(contract);
-    if (!token) throw new Error(`EVM 代币元数据缺失：${contract}`);
-    return {
-      sourceAsset: `evm:${input.config.chainId}:${contract}`,
+    if (!token) return [];
+    return [{
+      sourceAsset: tokenAssetKey(input.config, contract),
       contractAddress: contract,
       symbol: token.symbol,
       name: token.name,
       quantity: units(balance, token.decimals, `${contract} balance`),
-    };
+    }];
   });
+  const ignoredTokens = [...new Set(
+    positiveTokens
+      .filter(({ contract }) => ignoredAssetKeys.has(tokenAssetKey(input.config, contract)))
+      .map(({ contract }) => tokenAssetKey(input.config, contract)),
+  )].map((sourceAsset) =>
+    previousUnrecognizedToken(input.previousSnapshot, sourceAsset)
+  );
   const prices = await new CoinGeckoEvmPrices(
     input.services,
     input.request,
   ).read(
     input.config,
-    contracts,
+    [...metadata.keys()],
     input.observedAt,
     input.signal,
     nativeBalances.some(({ quantity }) => decimalCompare(quantity, "0") > 0),
   );
-  return buildSnapshot([...nativeBalances, ...tokenBalances], prices, input.observedAt);
+  return snapshotTokenCandidates(
+    buildSnapshot([...nativeBalances, ...tokenBalances], prices, input.observedAt),
+    input.config,
+    [...unreadableTokens, ...ignoredTokens],
+  );
 }
 
 export class ProductionEvmWatchWallet implements EvmWatchWalletReadOnly {
@@ -562,7 +739,15 @@ export class ProductionEvmWatchSourceRefresher implements AssetSourceRefresher {
         name: holding.name,
         quantity: holding.quantity,
       }));
-      return { snapshot: buildSnapshot(balances, prices, attemptedAt) };
+      return {
+        snapshot: snapshotTokenCandidates(
+          buildSnapshot(balances, prices, attemptedAt),
+          config,
+          (source.snapshot.unrecognizedEvmTokens ?? []).filter(
+            ({ quantity }) => quantity === null,
+          ),
+        ),
+      };
     }
     return {
       snapshot: await readFullSnapshot({
@@ -573,6 +758,8 @@ export class ProductionEvmWatchSourceRefresher implements AssetSourceRefresher {
         services: this.services,
         request: this.request,
         signal,
+        ignoredAssetKeys: source.ignoredAssetKeys,
+        previousSnapshot: source.snapshot,
       }),
     };
   }

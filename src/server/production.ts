@@ -138,7 +138,7 @@ interface DashboardState {
 }
 
 const DASHBOARD_SCHEMA_VERSION = 9 as const;
-const SQLITE_SCHEMA_VERSION = 13;
+const SQLITE_SCHEMA_VERSION = 14;
 
 type SourceConnectionKind =
   | "longbridge"
@@ -1437,6 +1437,8 @@ export class SqliteDashboardDatabase
         total_amount TEXT NOT NULL,
         total_currency TEXT NOT NULL,
         holdings_json TEXT NOT NULL CHECK (json_valid(holdings_json)),
+        unrecognized_evm_tokens_json TEXT NOT NULL DEFAULT '[]'
+          CHECK (json_valid(unrecognized_evm_tokens_json)),
         exchange_rates_json TEXT NOT NULL CHECK (json_valid(exchange_rates_json)),
         coverage_json TEXT CHECK (coverage_json IS NULL OR json_valid(coverage_json)),
         synced_at TEXT NOT NULL
@@ -1620,6 +1622,10 @@ export class SqliteDashboardDatabase
     if (schemaVersion === "12") {
       this.migrateSchemaVersionTwelve();
       schemaVersion = "13";
+    }
+    if (schemaVersion === "13") {
+      this.migrateSchemaVersionThirteen();
+      schemaVersion = "14";
     }
     if (schemaVersion !== String(SQLITE_SCHEMA_VERSION)) {
       throw new Error(`不支持的 SQLite schema 版本: ${schemaVersion}`);
@@ -1898,6 +1904,24 @@ export class SqliteDashboardDatabase
     });
   }
 
+  private migrateSchemaVersionThirteen(): void {
+    this.transaction(() => {
+      const columns = this.database
+        .prepare("PRAGMA table_info(asset_source_snapshots)")
+        .all() as Array<{ name: string }>;
+      if (!columns.some(({ name }) => name === "unrecognized_evm_tokens_json")) {
+        this.database.exec(`
+          ALTER TABLE asset_source_snapshots
+          ADD COLUMN unrecognized_evm_tokens_json TEXT NOT NULL DEFAULT '[]'
+            CHECK (json_valid(unrecognized_evm_tokens_json));
+        `);
+      }
+      this.database
+        .prepare("UPDATE schema_metadata SET value = ? WHERE key = ?")
+        .run("14", "schema_version");
+    });
+  }
+
   private initializeLegacyData(): void {
     if (this.metadata("json_import_complete") === "1") return;
     const state = parseLegacyDashboardStateSync(
@@ -2052,14 +2076,15 @@ export class SqliteDashboardDatabase
       .prepare(`
         INSERT OR REPLACE INTO asset_source_snapshots (
           source_id, total_amount, total_currency, holdings_json,
-          exchange_rates_json, coverage_json, synced_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+          unrecognized_evm_tokens_json, exchange_rates_json, coverage_json, synced_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `)
       .run(
         source.id,
         source.snapshot.total.amount,
         source.snapshot.total.currency,
         JSON.stringify(source.snapshot.holdings),
+        JSON.stringify(source.snapshot.unrecognizedEvmTokens ?? []),
         JSON.stringify(source.snapshot.exchangeRates),
         source.snapshot.coverage === undefined
           ? null
@@ -2454,6 +2479,9 @@ export class SqliteDashboardDatabase
     return rows.map((row) => {
       const snapshot = snapshotStatement.get(row.id as string) as SqliteRow;
       const sync = syncStatement.get(row.id as string) as SqliteRow;
+      const unrecognizedEvmTokens = JSON.parse(
+        (snapshot.unrecognized_evm_tokens_json as string | null) ?? "[]",
+      );
       return migrateAssetSource({
         id: row.id as string,
         kind: row.kind as string,
@@ -2494,6 +2522,9 @@ export class SqliteDashboardDatabase
             currency: snapshot.total_currency as string,
           },
           holdings: JSON.parse(snapshot.holdings_json as string),
+          ...(unrecognizedEvmTokens.length === 0
+            ? {}
+            : { unrecognizedEvmTokens }),
           exchangeRates: JSON.parse(snapshot.exchange_rates_json as string),
           ...(snapshot.coverage_json === null
             ? {}

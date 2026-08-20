@@ -315,6 +315,55 @@ test("Alchemy RPC 单次网络瞬断会重试并继续预览", async ({ request 
   });
 });
 
+test("单个 ERC-20 合约无法读取 decimals 时仍返回待确认资产", async ({ request }) => {
+  const response = await request.post("/test-doubles/ethereum/production-start", {
+    data: { action: "metadata-decimals-failure" },
+  });
+  expect(response.ok()).toBeTruthy();
+  const body = await response.json();
+  expect(body.snapshot.total).toEqual({ amount: "5519", currency: "USD" });
+  expect(body.snapshot.holdings).not.toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      sourceAsset: "evm:1:0xcccccccccccccccccccccccccccccccccccccccc",
+    }),
+  ]));
+  expect(body.snapshot.unrecognizedEvmTokens).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      sourceAsset: "evm:1:0xcccccccccccccccccccccccccccccccccccccccc",
+      symbol: "WstETH",
+      name: "Lido: stETH Withdrawal NFT",
+      quantity: null,
+    }),
+  ]));
+});
+
+test("代币元数据 RPC 故障仍使整条 Ethereum 读取失败", async ({ request }) => {
+  const response = await request.post("/test-doubles/ethereum/production-start", {
+    data: { action: "metadata-rpc-failure" },
+  });
+  expect(response.status()).toBe(400);
+  await expect(response.json()).resolves.toMatchObject({
+    error: expect.stringContaining("metadata temporary failure"),
+  });
+});
+
+test("已忽略的异常合约在完整刷新时不再读取元数据", async ({ request }) => {
+  const response = await request.post("/test-doubles/ethereum/production-start", {
+    data: { action: "refresh-ignored-unreadable" },
+  });
+  expect(response.ok()).toBeTruthy();
+  const body = await response.json();
+  expect(body.snapshot.unrecognizedEvmTokens).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      sourceAsset: "evm:1:0xcccccccccccccccccccccccccccccccccccccccc",
+      quantity: null,
+    }),
+  ]));
+  expect(body.metadataContracts).not.toContain(
+    "0xcccccccccccccccccccccccccccccccccccccccc",
+  );
+});
+
 test("Ethereum 行情刷新不读取链上余额，完整刷新恢复读取持仓", async ({ request }) => {
   const prices = await request.post("/test-doubles/ethereum/production-start", {
     data: { action: "refresh-prices" },

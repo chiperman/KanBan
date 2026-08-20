@@ -1005,6 +1005,16 @@ export class FakeEvmWatchWallet implements EvmWatchWalletReadOnly {
         changePercent: null,
       },
     ];
+    const unrecognizedEvmTokens =
+      this.scenario === "metadata-decimals-failure" && config.chainId === "1"
+        ? [{
+          sourceAsset: "evm:1:0x889edc2edab5f40e902b864ad4d7ade8e412f9b1",
+          symbol: "unstETH",
+          name: "unstETH",
+          quantity: null,
+          reason: "代币合约未返回可靠 decimals，数量无法读取",
+        }]
+        : [];
     return {
       credentials: JSON.stringify({ chain: input.chain, addresses }),
       chain: input.chain,
@@ -1016,6 +1026,7 @@ export class FakeEvmWatchWallet implements EvmWatchWalletReadOnly {
       snapshot: {
         total: { amount: this.scenario === "empty" ? "0" : config.total, currency: "USD" },
         holdings,
+        ...(unrecognizedEvmTokens.length > 0 ? { unrecognizedEvmTokens } : {}),
         exchangeRates: [],
         syncedAt: input.observedAt,
       },

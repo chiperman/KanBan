@@ -469,16 +469,29 @@ export function AssetSourceDetail({
               <dd>{permissionSummary(source.permissions)}</dd>
             </div>
           </dl>
-          <VibeLink
-            href={`/asset-sources/${encodeURIComponent(source.id)}/reauthorize`}
-            variant="outline"
-          >
-            更换授权 / 重新授权
-          </VibeLink>
+          <div className="asset-source-detail__metadata-actions">
+            <VibeLink
+              href={`/asset-sources/${encodeURIComponent(source.id)}/reauthorize`}
+              variant="outline"
+            >
+              更换授权 / 重新授权
+            </VibeLink>
+            {source.kind.startsWith("evm-watch-") ? (
+              <VibeLink
+                href={`/asset-sources/${encodeURIComponent(source.id)}/settings`}
+                variant="outline"
+              >
+                管理资产范围
+              </VibeLink>
+            ) : null}
+          </div>
         </section>
       ) : null}
 
       <AssetSourceCard
+        assetScopeHref={source.kind.startsWith("evm-watch-")
+          ? `/asset-sources/${encodeURIComponent(source.id)}/settings`
+          : undefined}
         currentDay={currentDay}
         history={history}
         holdingsSearchQuery=""

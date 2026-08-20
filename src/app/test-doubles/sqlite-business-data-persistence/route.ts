@@ -488,6 +488,7 @@ export async function POST(request: Request) {
     action !== "schema-v12-investment-cashflow-migration" &&
     action !== "display-name-persistence" &&
     action !== "evm-token-preference-persistence" &&
+    action !== "evm-unrecognized-token-persistence" &&
     action !== "longbridge-option-read-upgrade" &&
     action !== "manual-source-record-persistence"
   ) {
@@ -957,6 +958,31 @@ export async function POST(request: Request) {
           ignoredAssetKeys: includedSource.ignoredAssetKeys ?? [],
           includedAssetKeys: includedSource.includedAssetKeys ?? [],
         },
+      });
+    }
+
+    if (action === "evm-unrecognized-token-persistence") {
+      const candidate = {
+        sourceAsset: "evm:56:0xdddddddddddddddddddddddddddddddddddddddd",
+        symbol: "WstETH",
+        name: "Lido: stETH Withdrawal NFT",
+        quantity: null,
+        reason: "代币合约未返回可靠 decimals，数量无法读取",
+      };
+      const authorization = evmAuthorization();
+      authorization.snapshot = {
+        ...authorization.snapshot,
+        unrecognizedEvmTokens: [candidate],
+      };
+      const first = createProductionServices(dataDirectory);
+      await first.secrets.get("startup-ready");
+      await first.assetSourceConnections.connectEvm(authorization);
+
+      const restarted = createProductionServices(dataDirectory);
+      await restarted.secrets.get("startup-ready");
+      const [source] = await restarted.assetSources.list();
+      return Response.json({
+        unrecognizedEvmTokens: source.snapshot.unrecognizedEvmTokens ?? [],
       });
     }
 

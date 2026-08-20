@@ -44,9 +44,10 @@ export async function POST(request: Request) {
   if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
   const body = (await request.json().catch(() => ({}))) as {
     chain?: "ethereum" | "bsc";
-    action?: "preview" | "empty" | "partial-failure" | "index-failure" | "price-failure" | "price-network-failure" | "rpc-network-once" | "refresh-prices" | "refresh-holdings";
+    action?: "preview" | "empty" | "partial-failure" | "index-failure" | "price-failure" | "price-network-failure" | "rpc-network-once" | "metadata-decimals-failure" | "metadata-rpc-failure" | "refresh-ignored-unreadable" | "refresh-prices" | "refresh-holdings";
   };
   const rpcMethods: string[] = [];
+  const metadataContracts: string[] = [];
   const priceRequests: string[] = [];
   let remainingRpcNetworkFailures = body.action === "rpc-network-once" ? 1 : 0;
   const mockFetch = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
@@ -131,13 +132,43 @@ export async function POST(request: Request) {
     }
     if (payload.method === "alchemy_getTokenMetadata") {
       const contract = String(payload.params[0]);
+      metadataContracts.push(contract);
+      if (body.action === "metadata-rpc-failure" && contract === C) {
+        return Response.json({
+          jsonrpc: "2.0",
+          id: payload.id,
+          error: { code: -32000, message: "metadata temporary failure" },
+        });
+      }
       return Response.json({
         jsonrpc: "2.0",
         id: payload.id,
         result: {
-          decimals: contract === A ? 6 : contract === B ? 2 : 3,
-          symbol: contract === C ? "UNKNOWN" : "SAME",
-          name: contract === C ? "Unknown" : "Same Symbol",
+          decimals: (
+            (
+              body.action === "metadata-decimals-failure" ||
+              body.action === "refresh-ignored-unreadable"
+            ) &&
+            contract === C
+          )
+            ? null
+            : contract === A ? 6 : contract === B ? 2 : 3,
+          symbol: contract === C
+            ? (
+              body.action === "metadata-decimals-failure" ||
+              body.action === "refresh-ignored-unreadable"
+            )
+              ? "WstETH"
+              : "UNKNOWN"
+            : "SAME",
+          name: contract === C
+            ? (
+              body.action === "metadata-decimals-failure" ||
+              body.action === "refresh-ignored-unreadable"
+            )
+              ? "Lido: stETH Withdrawal NFT"
+              : "Unknown"
+            : "Same Symbol",
         },
       });
     }
@@ -154,8 +185,13 @@ export async function POST(request: Request) {
       addresses: [ADDRESS_ONE, ADDRESS_TWO],
       observedAt: "2026-02-01T00:00:00.000Z",
     });
-    if (body.action === "refresh-prices" || body.action === "refresh-holdings") {
+    if (
+      body.action === "refresh-prices" ||
+      body.action === "refresh-holdings" ||
+      body.action === "refresh-ignored-unreadable"
+    ) {
       rpcMethods.length = 0;
+      metadataContracts.length = 0;
       priceRequests.length = 0;
       const refreshed = await new ProductionEvmWatchSourceRefresher(
         testExternalServices,
@@ -175,6 +211,13 @@ export async function POST(request: Request) {
             lastAttemptAt: result.snapshot.syncedAt,
             error: null,
           },
+          ...(body.action === "refresh-ignored-unreadable"
+            ? {
+                ignoredAssetKeys: [
+                  "evm:1:0xcccccccccccccccccccccccccccccccccccccccc",
+                ],
+              }
+            : {}),
         },
         credentials: result.credentials,
         mode: body.action === "refresh-prices" ? "prices" : "holdings",
@@ -182,13 +225,23 @@ export async function POST(request: Request) {
         signal: new AbortController().signal,
         persistCredentials: async () => undefined,
       });
-      return Response.json({ snapshot: refreshed.snapshot, rpcMethods, priceRequests });
+      return Response.json({
+        snapshot: refreshed.snapshot,
+        rpcMethods,
+        metadataContracts,
+        priceRequests,
+      });
     }
     const { credentials: _credentials, ...safe } = result;
-    return Response.json({ ...safe, rpcMethods, priceRequests });
+    return Response.json({ ...safe, rpcMethods, metadataContracts, priceRequests });
   } catch (error) {
     return Response.json(
-      { error: error instanceof Error ? error.message : "Ethereum 测试失败", rpcMethods, priceRequests },
+      {
+        error: error instanceof Error ? error.message : "Ethereum 测试失败",
+        rpcMethods,
+        metadataContracts,
+        priceRequests,
+      },
       { status: 400 },
     );
   }

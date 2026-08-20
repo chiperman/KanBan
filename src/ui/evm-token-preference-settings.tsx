@@ -3,10 +3,14 @@
 import { useState } from "react";
 
 import {
-  ignoredSourceHoldings,
-  isUnrecognizedEvmTokenHolding,
+  ignoredAssetKeySet,
+  includedAssetKeySet,
+  unrecognizedEvmTokenCandidates,
 } from "@/domain/evm-token-preferences";
-import type { AssetHolding, AssetSnapshot } from "@/server/ports";
+import type {
+  AssetSnapshot,
+  EvmUnrecognizedToken,
+} from "@/server/ports";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
 
@@ -23,25 +27,24 @@ type PreferenceStatus = "included" | "ignored" | "unrecognized";
 
 interface TokenGroup {
   source: EvmTokenPreferenceSettingsSource;
-  holdings: AssetHolding[];
+  tokens: EvmUnrecognizedToken[];
 }
 
 function sourceCode(source: EvmTokenPreferenceSettingsSource): string {
   return source.kind === "evm-watch-bsc" ? "BSC" : "ETH";
 }
 
-function tokenAssetKey(holding: AssetHolding): string {
-  if (!holding.sourceAsset) throw new Error("观察钱包代币缺少合约标识");
-  return holding.sourceAsset;
+function tokenAssetKey(token: EvmUnrecognizedToken): string {
+  return token.sourceAsset;
 }
 
 function tokenGroups(
   sources: EvmTokenPreferenceSettingsSource[],
-  select: (source: EvmTokenPreferenceSettingsSource) => AssetHolding[],
+  select: (source: EvmTokenPreferenceSettingsSource) => EvmUnrecognizedToken[],
 ): TokenGroup[] {
   return sources.flatMap((source) => {
-    const holdings = select(source);
-    return holdings.length > 0 ? [{ source, holdings }] : [];
+    const tokens = select(source);
+    return tokens.length > 0 ? [{ source, tokens }] : [];
   });
 }
 
@@ -53,26 +56,41 @@ export function EvmTokenPreferenceSettings({
   const [pendingAssetKey, setPendingAssetKey] = useState<string | null>(null);
   const [error, setError] = useState("");
   const pendingGroups = tokenGroups(sources, (source) =>
-    source.snapshot.holdings.filter((holding) =>
-      isUnrecognizedEvmTokenHolding(source, holding)
+    unrecognizedEvmTokenCandidates(source).filter(
+      ({ sourceAsset }) =>
+        !ignoredAssetKeySet(source).has(sourceAsset) &&
+        !includedAssetKeySet(source).has(sourceAsset),
     )
   );
-  const ignoredGroups = tokenGroups(sources, ignoredSourceHoldings);
+  const ignoredGroups = tokenGroups(sources, (source) =>
+    unrecognizedEvmTokenCandidates(source).filter(({ sourceAsset }) =>
+      ignoredAssetKeySet(source).has(sourceAsset)
+    )
+  );
+  const includedGroups = tokenGroups(sources, (source) =>
+    unrecognizedEvmTokenCandidates(source).filter(({ sourceAsset }) =>
+      includedAssetKeySet(source).has(sourceAsset)
+    )
+  );
   const pendingCount = pendingGroups.reduce(
-    (count, group) => count + group.holdings.length,
+    (count, group) => count + group.tokens.length,
     0,
   );
   const ignoredCount = ignoredGroups.reduce(
-    (count, group) => count + group.holdings.length,
+    (count, group) => count + group.tokens.length,
+    0,
+  );
+  const includedCount = includedGroups.reduce(
+    (count, group) => count + group.tokens.length,
     0,
   );
 
   async function updatePreference(
     sourceId: string,
-    holding: AssetHolding,
+    token: EvmUnrecognizedToken,
     status: PreferenceStatus,
   ) {
-    const assetKey = tokenAssetKey(holding);
+    const assetKey = tokenAssetKey(token);
     if (pendingAssetKey !== null) return;
     setPendingAssetKey(assetKey);
     setError("");
@@ -140,28 +158,32 @@ export function EvmTokenPreferenceSettings({
             </div>
             <span>{pendingCount} 项</span>
           </div>
-          {pendingGroups.map(({ source, holdings }) => (
+          {pendingGroups.map(({ source, tokens }) => (
             <div className="evm-token-settings__source" key={source.id}>
               <p>
                 <strong>{source.name}</strong>
                 <span>{sourceCode(source)}</span>
               </p>
               <ol>
-                {holdings.map((holding) => {
-                  const assetKey = tokenAssetKey(holding);
+                {tokens.map((token) => {
+                  const assetKey = tokenAssetKey(token);
                   const pending = pendingAssetKey === assetKey;
                   return (
                     <li key={assetKey}>
                       <div>
-                        <strong>{holding.symbol}</strong>
+                        <strong>{token.symbol ?? "未识别代币"}</strong>
                         <span>{assetKey}</span>
-                        <small>数量：{holding.quantity}</small>
+                        <small>
+                          {token.quantity === null
+                            ? "数量无法读取"
+                            : `数量：${token.quantity}`}
+                        </small>
                       </div>
                       <div className="evm-token-settings__actions">
                         <VibeButton
                           disabled={pendingAssetKey !== null}
                           onClick={() =>
-                            void updatePreference(source.id, holding, "included")
+                            void updatePreference(source.id, token, "included")
                           }
                           type="button"
                           variant="outline"
@@ -171,7 +193,7 @@ export function EvmTokenPreferenceSettings({
                         <VibeButton
                           disabled={pendingAssetKey !== null}
                           onClick={() =>
-                            void updatePreference(source.id, holding, "ignored")
+                            void updatePreference(source.id, token, "ignored")
                           }
                           type="button"
                           variant="text"
@@ -200,26 +222,29 @@ export function EvmTokenPreferenceSettings({
             </div>
             <span>{ignoredCount} 项</span>
           </div>
-          {ignoredGroups.map(({ source, holdings }) => (
+          {ignoredGroups.map(({ source, tokens }) => (
             <div className="evm-token-settings__source" key={source.id}>
               <p>
                 <strong>{source.name}</strong>
                 <span>{sourceCode(source)}</span>
               </p>
               <ol>
-                {holdings.map((holding) => {
-                  const assetKey = tokenAssetKey(holding);
+                {tokens.map((token) => {
+                  const assetKey = tokenAssetKey(token);
                   const pending = pendingAssetKey === assetKey;
                   return (
                     <li key={assetKey}>
                       <div>
-                        <strong>{holding.symbol}</strong>
+                        <strong>{token.symbol ?? "未识别代币"}</strong>
                         <span>{assetKey}</span>
+                        {token.quantity === null ? (
+                          <small>数量无法读取</small>
+                        ) : null}
                       </div>
                       <VibeButton
                         disabled={pendingAssetKey !== null}
                         onClick={() =>
-                          void updatePreference(source.id, holding, "unrecognized")
+                          void updatePreference(source.id, token, "unrecognized")
                         }
                         type="button"
                         variant="outline"
@@ -235,9 +260,62 @@ export function EvmTokenPreferenceSettings({
         </section>
       ) : null}
 
-      {sources.length > 0 && pendingCount === 0 && ignoredCount === 0 ? (
+      {includedCount > 0 ? (
+        <section
+          className="evm-token-settings__group"
+          aria-labelledby="included-evm-token-settings-title"
+        >
+          <div className="evm-token-settings__group-head">
+            <div>
+              <h3 id="included-evm-token-settings-title">已关注资产</h3>
+              <p>取消关注后，资产会重新回到待确认资产；不会触发任何链上操作。</p>
+            </div>
+            <span>{includedCount} 项</span>
+          </div>
+          {includedGroups.map(({ source, tokens }) => (
+            <div className="evm-token-settings__source" key={source.id}>
+              <p>
+                <strong>{source.name}</strong>
+                <span>{sourceCode(source)}</span>
+              </p>
+              <ol>
+                {tokens.map((token) => {
+                  const assetKey = tokenAssetKey(token);
+                  const pending = pendingAssetKey === assetKey;
+                  return (
+                    <li key={assetKey}>
+                      <div>
+                        <strong>{token.symbol ?? "未识别代币"}</strong>
+                        <span>{assetKey}</span>
+                        {token.quantity === null ? (
+                          <small>数量无法读取</small>
+                        ) : null}
+                      </div>
+                      <VibeButton
+                        disabled={pendingAssetKey !== null}
+                        onClick={() =>
+                          void updatePreference(source.id, token, "unrecognized")
+                        }
+                        type="button"
+                        variant="outline"
+                      >
+                        {pending ? "正在保存…" : "取消关注"}
+                      </VibeButton>
+                    </li>
+                  );
+                })}
+              </ol>
+            </div>
+          ))}
+        </section>
+      ) : null}
+
+      {sources.length > 0 &&
+      pendingCount === 0 &&
+      ignoredCount === 0 &&
+      includedCount === 0 ? (
         <p className="evm-token-settings__empty">
-          当前没有需要确认或已忽略的代币。
+          当前没有需要确认、已关注或已忽略的代币。
         </p>
       ) : null}
 

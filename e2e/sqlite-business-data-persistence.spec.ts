@@ -69,7 +69,7 @@ test("SQLite schema v2 自动迁移并持久化 Binance 覆盖证据", async ({ 
 
   expect(response.ok()).toBeTruthy();
   await expect(response.json()).resolves.toEqual({
-    schemaVersion: "13",
+    schemaVersion: "14",
     coverageColumn: true,
     displayNameColumn: true,
     coverageStatus: "partial",
@@ -86,7 +86,7 @@ test("SQLite schema v4 升级后分离日初基准与每日趋势观测并跨重
 
   expect(response.ok()).toBeTruthy();
   await expect(response.json()).resolves.toEqual({
-    schemaVersion: "13",
+    schemaVersion: "14",
     migratedTrend: {
       capturedAt: "2026-07-28T00:30:00.000Z",
       complete: false,
@@ -144,7 +144,7 @@ test("SQLite schema v6 升级后持久化 HKD 金额与观测时汇率", async (
 
   expect(response.ok()).toBeTruthy();
   await expect(response.json()).resolves.toEqual({
-    schemaVersion: "13",
+    schemaVersion: "14",
     hkdColumns: true,
     baseline: {
       total: { USD: "10", CNY: "72", HKD: "78" },
@@ -210,7 +210,7 @@ test("SQLite schema v8 升级后可创建并记录手工资产来源", async ({
 
   expect(response.ok()).toBeTruthy();
   await expect(response.json()).resolves.toEqual({
-    schemaVersion: "13",
+    schemaVersion: "14",
     hasManualRecordColumn: true,
     manualAssetClassColumn: true,
     existing: {
@@ -238,7 +238,7 @@ test("SQLite schema v12 增量迁移保存资金账本且不改写资产观测",
 
   expect(response.ok()).toBeTruthy();
   await expect(response.json()).resolves.toEqual({
-    schemaVersion: "13",
+    schemaVersion: "14",
     cashflowTable: true,
     cashflow: {
       kind: "initial-investment",
@@ -295,6 +295,23 @@ test("EVM 代币忽略与保留状态跨 SQLite 重启持久化", async ({
         "evm:56:0xcccccccccccccccccccccccccccccccccccccccc",
       ],
     },
+  });
+});
+
+test("EVM 待确认代币跨 SQLite 重启持久化", async ({ request }) => {
+  const response = await request.post(
+    "/test-doubles/sqlite-business-data-persistence?action=evm-unrecognized-token-persistence",
+  );
+
+  expect(response.ok()).toBeTruthy();
+  await expect(response.json()).resolves.toEqual({
+    unrecognizedEvmTokens: [{
+      sourceAsset: "evm:56:0xdddddddddddddddddddddddddddddddddddddddd",
+      symbol: "WstETH",
+      name: "Lido: stETH Withdrawal NFT",
+      quantity: null,
+      reason: "代币合约未返回可靠 decimals，数量无法读取",
+    }],
   });
 });
 

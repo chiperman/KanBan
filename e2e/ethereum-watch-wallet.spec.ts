@@ -32,7 +32,7 @@ async function loginAsOwner(page: Page): Promise<void> {
 async function openEthereumAssetScope(page: Page): Promise<void> {
   await page.goto("/asset-sources");
   await page.getByRole("link", { name: /Ethereum 观察钱包.*观察钱包/ }).click();
-  await page.goto(`${page.url()}/settings`);
+  await page.getByRole("link", { name: "管理资产范围" }).click();
   await expect(page).toHaveURL(/\/asset-sources\/.+\/settings$/);
 }
 
@@ -145,6 +145,34 @@ test("待确认 EVM 资产在对应钱包的设置页中管理", async ({
   await expect(refreshedCard).not.toContainText("待确认资产");
 });
 
+test("来源详情清楚列出数量无法读取的 EVM 资产", async ({ page }) => {
+  await page.request.post("/test-doubles/ethereum", {
+    data: { scenario: "metadata-decimals-failure" },
+  });
+  await loginAsOwner(page);
+  await connectEthereum(page);
+
+  await page.getByRole("link", { name: /Ethereum 观察钱包.*观察钱包/ }).click();
+  const card = page.getByTestId("ethereum-watch-card");
+  const unreadableAssets = card.getByTestId("evm-unreadable-assets");
+
+  await expect(unreadableAssets).toContainText("读取受限资产");
+  await expect(unreadableAssets).toContainText("unstETH");
+  await expect(unreadableAssets).toContainText(
+    "evm:1:0x889edc2edab5f40e902b864ad4d7ade8e412f9b1",
+  );
+  await expect(unreadableAssets).toContainText("数量无法读取");
+  await expect(unreadableAssets).toContainText(
+    "代币合约未返回可靠 decimals，数量无法读取",
+  );
+  await expect(
+    unreadableAssets.getByRole("link", { name: "管理资产范围" }),
+  ).toBeVisible();
+  await expect(card.getByTestId("asset-holdings-detail")).not.toContainText(
+    "unstETH",
+  );
+});
+
 test("钱包设置页可按合约忽略和恢复待确认 EVM 资产", async ({
   page,
 }) => {
@@ -197,4 +225,22 @@ test("钱包设置页可按合约忽略和恢复待确认 EVM 资产", async ({
   await expect(page.getByTestId("ethereum-watch-card").getByTestId(
     "holding-top-list",
   )).toContainText("UNKNOWN");
+});
+
+test("钱包设置页可取消关注已确认的 EVM 资产并恢复待确认", async ({
+  page,
+}) => {
+  await page.request.post("/test-doubles/ethereum", {
+    data: { scenario: "valid" },
+  });
+  await loginAsOwner(page);
+  await connectEthereum(page);
+
+  await openEthereumAssetScope(page);
+  const scopeSettings = page.getByTestId("evm-token-preference-settings");
+  await scopeSettings.getByRole("button", { name: "需要关注" }).click();
+
+  await expect(scopeSettings).toContainText("已关注资产");
+  await scopeSettings.getByRole("button", { name: "取消关注" }).click();
+  await expect(scopeSettings).toContainText("待确认资产");
 });

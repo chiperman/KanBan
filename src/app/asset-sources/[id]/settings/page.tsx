@@ -68,7 +68,7 @@ export default async function AssetSourceSettingsPage({
           <header className="settings-page-head">
             <p className="card-label">WALLET / ASSET SCOPE</p>
             <h1>{name}</h1>
-            <p>仅管理这个观察钱包的待确认资产和已忽略代币。</p>
+            <p>仅管理这个观察钱包的待确认、已关注和已忽略资产。</p>
           </header>
           <EvmTokenPreferenceSettings
             sources={[{
