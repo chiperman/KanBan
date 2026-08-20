@@ -1,11 +1,13 @@
 node_modules/
 .DS_Store
 .next/
+.next-*/
 data/
 test-results/
 playwright-report/
 .playwright-cli/
 output/
+tmp/
 .env*
 *.tsbuildinfo
 next-env.d.ts
