@@ -449,6 +449,8 @@ test("生产 Binance 适配器只调用允许的读取端点并覆盖权限、�
           quantity: "1.0310215",
           currency: "USD",
           assetClass: "securities",
+          costPrice: "360.354122101236492158",
+          costPriceSource: "Binance Stocks 订单成交计算（含费用）",
           currentPrice: { amount: "371", currency: "USD" },
           marketValue: "382.5089765",
           sourceMarketValue: { amount: "382.5089765", currency: "USD" },
@@ -460,9 +462,13 @@ test("生产 Binance 适配器只调用允许的读取端点并覆盖权限、�
         }),
       ]),
     },
+    privateRequests: expect.arrayContaining([
+      "GET /sapi/v1/equity/order/history?current=1&size=100&symbol=GLD&startTime=0&endTime=1767225600000",
+    ]),
     stockRequests: [
       "GET /sapi/v1/equity/market/quote?symbol=GLD",
     ],
+    allRequestsSigned: true,
     stockRequestsAuthenticated: true,
   });
 

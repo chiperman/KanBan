@@ -170,6 +170,16 @@ interface BinanceEquityQuote {
   askPrice: string;
 }
 
+interface BinanceEquityOrder {
+  id: string;
+  symbol: string;
+  side: "BUY" | "SELL";
+  quantity: string;
+  filledTotal: string;
+  fee: string;
+  updatedAt: number;
+}
+
 interface BinanceSpotTrade {
   id: number;
   symbol: string;
@@ -920,6 +930,77 @@ function equityMidPrice(quote: BinanceEquityQuote): string {
   return decimalDivide(decimalAdd(quote.bidPrice, quote.askPrice), "2");
 }
 
+function equityOrder(value: JsonRecord, expectedSymbol: string): BinanceEquityOrder {
+  const symbol = text(value.symbol, "symbol");
+  if (symbol !== expectedSymbol) {
+    throw new Error(
+      `Binance Stocks 返回的订单标的不匹配：期望 ${expectedSymbol}，实际 ${symbol}`,
+    );
+  }
+  const side = text(value.side, "side");
+  if (side !== "BUY" && side !== "SELL") {
+    throw new Error(`Binance Stocks 返回了不支持的订单方向：${side}`);
+  }
+  const quantity = decimal(value.filledQty, "filledQty");
+  const filledTotal = decimal(value.filledTotal, "filledTotal");
+  if (positive(quantity) && !positive(filledTotal)) {
+    throw new Error("Binance Stocks 已成交订单缺少有效成交总额");
+  }
+  return {
+    id: identifier(value.orderId, "orderId"),
+    symbol,
+    side,
+    quantity,
+    filledTotal,
+    fee: decimal(value.fee, "fee"),
+    updatedAt: integer(value.updatedAt, "updatedAt"),
+  };
+}
+
+function equityCostPrice(input: {
+  quantity: string;
+  orders: readonly BinanceEquityOrder[];
+}): string | null {
+  if (!positive(input.quantity)) return null;
+
+  let heldQuantity = "0";
+  let heldCost = "0";
+  for (const order of [...input.orders].sort(
+    (left, right) => left.updatedAt - right.updatedAt || left.id.localeCompare(right.id),
+  )) {
+    if (!positive(order.quantity)) continue;
+
+    if (order.side === "BUY") {
+      heldQuantity = decimalAdd(heldQuantity, order.quantity);
+      heldCost = decimalAdd(
+        heldCost,
+        decimalAdd(order.filledTotal, order.fee),
+      );
+      continue;
+    }
+
+    if (decimalCompare(order.quantity, heldQuantity) > 0) return null;
+    if (decimalCompare(order.quantity, heldQuantity) === 0) {
+      heldQuantity = "0";
+      heldCost = "0";
+      continue;
+    }
+    heldCost = decimalSubtract(
+      heldCost,
+      decimalMultiply(
+        heldCost,
+        decimalDivide(order.quantity, heldQuantity),
+      ),
+    );
+    heldQuantity = decimalSubtract(heldQuantity, order.quantity);
+  }
+
+  if (decimalCompare(heldQuantity, input.quantity) !== 0 || !positive(heldCost)) {
+    return null;
+  }
+  return decimalDivide(heldCost, heldQuantity);
+}
+
 function stocksSymbolForAsset(asset: string): string | null {
   if (!asset.startsWith("EQ_")) return null;
   const symbol = asset.slice("EQ_".length);
@@ -994,11 +1075,105 @@ async function readBinanceStocksMarketData(input: {
   };
 }
 
+async function collectBinanceStocksOrders(input: {
+  client: BinanceClient;
+  symbol: string;
+  observedAt: string;
+}): Promise<BinanceEquityOrder[]> {
+  const endTime = Date.parse(input.observedAt);
+  if (!Number.isSafeInteger(endTime) || endTime <= 0) {
+    throw new Error("Binance Stocks 成本读取时间无效");
+  }
+  const output: BinanceEquityOrder[] = [];
+  const seenIds = new Set<string>();
+  let expectedTotal: number | null = null;
+  for (let current = 1; current <= 100; current += 1) {
+    const response = record(
+      await input.client.equityOrderHistory(
+        input.symbol,
+        0,
+        endTime,
+        current,
+        100,
+      ),
+      `Binance Stocks ${input.symbol} 订单历史`,
+    );
+    const total = integer(response.total, "total");
+    const returnedCurrent = integer(response.page, "page");
+    const size = integer(response.size, "size");
+    if (returnedCurrent !== current || size > 100) {
+      throw new Error(`Binance Stocks ${input.symbol} 订单历史分页无效`);
+    }
+    if (expectedTotal === null) expectedTotal = total;
+    if (total !== expectedTotal) {
+      throw new Error(`Binance Stocks ${input.symbol} 订单历史 total 发生变化`);
+    }
+    const orders = list(
+      response.rows,
+      `Binance Stocks ${input.symbol} 订单历史 rows`,
+    ).map((row) => equityOrder(row, input.symbol));
+    if (orders.length > 100) {
+      throw new Error(`Binance Stocks ${input.symbol} 订单历史单页数量超过 100`);
+    }
+    for (const order of orders) {
+      if (seenIds.has(order.id)) {
+        throw new Error(`Binance Stocks ${input.symbol} 订单历史分页重复`);
+      }
+      seenIds.add(order.id);
+      output.push(order);
+    }
+    if (output.length >= total) {
+      if (output.length !== total) {
+        throw new Error(`Binance Stocks ${input.symbol} 订单历史数量超过 total`);
+      }
+      return output;
+    }
+    if (orders.length === 0) {
+      throw new Error(`Binance Stocks ${input.symbol} 订单历史分页提前结束`);
+    }
+  }
+  throw new Error(`Binance Stocks ${input.symbol} 订单历史超过安全分页上限`);
+}
+
+async function readBinanceStocksCostPrices(input: {
+  client: BinanceClient;
+  positions: readonly BinancePosition[];
+  observedAt: string;
+}): Promise<Map<string, string>> {
+  const symbols = new Map<string, string>();
+  for (const position of input.positions) {
+    const symbol = stocksSymbolForAsset(position.asset);
+    if (symbol === null) continue;
+    symbols.set(
+      symbol,
+      decimalAdd(symbols.get(symbol) ?? "0", position.quantity),
+    );
+  }
+  const costs = new Map<string, string>();
+  for (const [symbol, quantity] of symbols) {
+    try {
+      const cost = equityCostPrice({
+        quantity,
+        orders: await collectBinanceStocksOrders({
+          client: input.client,
+          symbol,
+          observedAt: input.observedAt,
+        }),
+      });
+      if (cost !== null) costs.set(symbol, cost);
+    } catch {
+      // Binance Stocks 历史不足或无法严格换算时，保留成本价为空而不影响当前资产同步。
+    }
+  }
+  return costs;
+}
+
 function valuePositions(input: {
   positions: BinancePosition[];
   exchangeInfo: unknown;
   tickers: unknown;
   equityQuotes?: ReadonlyMap<string, BinanceEquityQuote>;
+  equityCostPrices?: ReadonlyMap<string, string>;
   spotCostPrices?: ReadonlyMap<string, string>;
   observedAt: string;
   usdtUsdQuote: PriceQuote | null;
@@ -1007,6 +1182,7 @@ function valuePositions(input: {
 }): AssetSnapshot {
   const eligible = eligibleUsdtSymbols(input.exchangeInfo);
   const equityQuotes = input.equityQuotes ?? new Map<string, BinanceEquityQuote>();
+  const equityCostPrices = input.equityCostPrices ?? new Map<string, string>();
   const spotCostPrices = input.spotCostPrices ?? new Map<string, string>();
   const neededSymbols = new Set(
     input.positions.flatMap((position) => {
@@ -1076,6 +1252,9 @@ function valuePositions(input: {
     }
     const stocksSymbol = stocksSymbolForAsset(position.asset);
     if (position.asset.startsWith("EQ_")) {
+      const costPrice = stocksSymbol === null
+        ? null
+        : equityCostPrices.get(stocksSymbol) ?? null;
       const base = {
         symbol: position.asset,
         name: `${position.asset} · ${scopeLabel(position.account)}`,
@@ -1093,7 +1272,10 @@ function valuePositions(input: {
         quantity: position.quantity,
         currency: "USD",
         assetClass: "securities" as const,
-        costPrice: null,
+        costPrice,
+        ...(costPrice === null
+          ? {}
+          : { costPriceSource: "Binance Stocks 订单成交计算（含费用）" }),
         platformProfit: null,
         changePercent: null,
       };
@@ -1253,6 +1435,7 @@ export function mapBinanceSnapshot(input: {
   exchangeInfo: unknown;
   tickers: unknown;
   equityQuotes?: ReadonlyMap<string, BinanceEquityQuote>;
+  equityCostPrices?: ReadonlyMap<string, string>;
   spotCostPrices?: ReadonlyMap<string, string>;
   observedAt: string;
   usdtUsdQuote: PriceQuote | null;
@@ -1262,6 +1445,7 @@ export function mapBinanceSnapshot(input: {
     exchangeInfo: input.exchangeInfo,
     tickers: input.tickers,
     equityQuotes: input.equityQuotes,
+    equityCostPrices: input.equityCostPrices,
     spotCostPrices: input.spotCostPrices,
     observedAt: input.observedAt,
     usdtUsdQuote: input.usdtUsdQuote,
@@ -1523,6 +1707,22 @@ class BinanceClient {
   equityQuote(symbol: string) {
     return this.apiKey("/sapi/v1/equity/market/quote", { symbol });
   }
+
+  equityOrderHistory(
+    symbol: string,
+    startTime: number,
+    endTime: number,
+    current: number,
+    size: number,
+  ) {
+    return this.signed("GET", "/sapi/v1/equity/order/history", {
+      symbol,
+      startTime: String(startTime),
+      endTime: String(endTime),
+      current: String(current),
+      size: String(size),
+    });
+  }
 }
 
 async function collectEarnPages(
@@ -1725,15 +1925,22 @@ async function readFullSnapshot(input: {
       failures,
     },
   );
-  const spotCostPrices = await readSpotCostPrices({
-    client: input.client,
-    positions: investment.positions,
-    exchangeInfo,
-  });
-  const equities = await readBinanceStocksMarketData({
-    client: input.client,
-    positions: investment.positions,
-  });
+  const [spotCostPrices, equityCostPrices, equities] = await Promise.all([
+    readSpotCostPrices({
+      client: input.client,
+      positions: investment.positions,
+      exchangeInfo,
+    }),
+    readBinanceStocksCostPrices({
+      client: input.client,
+      positions: investment.positions,
+      observedAt: input.observedAt,
+    }),
+    readBinanceStocksMarketData({
+      client: input.client,
+      positions: investment.positions,
+    }),
+  ]);
   return {
     account: record(spotAccount, "Binance 现货账户响应"),
     snapshot: reconcileWallet({
@@ -1742,6 +1949,7 @@ async function readFullSnapshot(input: {
         exchangeInfo,
         tickers,
         equityQuotes: equities.equityQuotes,
+        equityCostPrices,
         spotCostPrices,
         observedAt: input.observedAt,
         usdtUsdQuote: usdtUsd.quote,
@@ -1868,11 +2076,22 @@ export class ProductionBinanceSourceRefresher
             : []
         ),
       );
+      const equityCostPrices = new Map(
+        source.snapshot.holdings.flatMap((holding) => {
+          const symbol = holding.sourceAsset === undefined
+            ? null
+            : stocksSymbolForAsset(holding.sourceAsset);
+          return symbol !== null && holding.costPrice !== null
+            ? [[symbol, holding.costPrice] as const]
+            : [];
+        }),
+      );
       const snapshot = valuePositions({
         positions,
         exchangeInfo,
         tickers,
         equityQuotes: equities.equityQuotes,
+        equityCostPrices,
         spotCostPrices,
         observedAt: attemptedAt,
         usdtUsdQuote: usdtUsd.quote,

@@ -55,6 +55,8 @@ function businessLabel(method: string, url: URL, body: URLSearchParams | null) {
     "pageIndex",
     "pageSize",
     "symbol",
+    "startTime",
+    "endTime",
     "fromId",
     "limit",
   ];
@@ -183,6 +185,7 @@ export async function POST(request: Request) {
       "/sapi/v1/onchain-yields/locked/position",
       "/sapi/v1/soft-staking/list",
       "/api/v3/myTrades",
+      "/sapi/v1/equity/order/history",
     ].includes(url.pathname);
     if (privatePath) {
       privateRequests.push(businessLabel(method, url, requestBody));
@@ -278,6 +281,18 @@ export async function POST(request: Request) {
       response = symbol === null
         ? []
         : fixture.spotTrades[symbol as keyof typeof fixture.spotTrades] ?? [];
+    } else if (url.pathname === "/sapi/v1/equity/order/history") {
+      const symbol = url.searchParams.get("symbol");
+      const current = Number(url.searchParams.get("current"));
+      const orders = symbol === null
+        ? []
+        : fixture.equityOrders[symbol as keyof typeof fixture.equityOrders] ?? [];
+      response = {
+        page: current,
+        rows: current === 1 ? orders : [],
+        size: Number(url.searchParams.get("size")),
+        total: orders.length,
+      };
     } else if (url.pathname === "/sapi/v1/equity/market/quote") {
       const symbol = url.searchParams.get("symbol");
       response = symbol === "GLD" ? fixture.equityQuotes.get("GLD") ?? null : null;

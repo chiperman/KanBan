@@ -306,6 +306,25 @@ export function binanceFixture(
         isBuyer: true,
       }],
     },
+    equityOrders: {
+      GLD: [{
+        orderId: "gld-order-1",
+        symbol: "GLD",
+        side: "BUY",
+        filledQty: "1",
+        filledTotal: "360",
+        fee: "0.20",
+        updatedAt: Date.parse(BINANCE_OBSERVED_AT) - 2_000,
+      }, {
+        orderId: "gld-order-2",
+        symbol: "GLD",
+        side: "BUY",
+        filledQty: "0.0310215",
+        filledTotal: "11.3228475",
+        fee: "0.01",
+        updatedAt: Date.parse(BINANCE_OBSERVED_AT) - 1_000,
+      }],
+    },
     equityQuotes: new Map([
       ["GLD", {
         symbol: "GLD",
