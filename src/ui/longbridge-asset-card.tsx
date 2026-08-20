@@ -668,6 +668,12 @@ export function AssetSourceCard({
       holding.sourceAsset === undefined ||
       !unrecognizedAssetKeys.has(holding.sourceAsset),
   );
+  const unreadableEvmTokens = supportsEvmTokenPreferences
+    ? unrecognizedEvmTokenCandidates(source).filter(
+      (token) =>
+        token.quantity === null && !ignoredAssetKeys.has(token.sourceAsset),
+    )
+    : [];
   const cashBalances = cashHoldings.flatMap((holding) =>
     holding.cashBalances ?? [{
       amount: holding.marketValue ?? holding.quantity,
