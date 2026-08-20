@@ -4,6 +4,7 @@ import type {
   AssetProductCoverage,
   AssetSnapshotCoverage,
 } from "@/server/ports";
+import { assetHoldingDisplayName } from "@/ui/asset-holding-display";
 import { VibeStatusTag } from "@/ui/vibe/vibe-data-instrument";
 
 const ASSET_PRODUCT_LABELS: Record<string, string> = {
@@ -43,30 +44,6 @@ export function assetProductDisplayName(product: string): string {
   return ASSET_PRODUCT_LABELS[product] ?? product;
 }
 
-const HOLDING_PRODUCT_LABELS: Record<string, string> = {
-  spot: "现货",
-  funding: "资金",
-  "simple-earn-flexible": "活期 Earn",
-  "simple-earn-locked": "定期 Earn",
-  "dual-investment": "双币投资",
-  "discount-buy": "折价买币",
-  bfusd: "BFUSD",
-  rwusd: "RWUSD",
-  "eth-staking": "ETH 质押",
-  "sol-staking": "SOL 质押",
-  "onchain-yields": "链上收益",
-  "onchain-yields-locked": "链上收益（定期）",
-  "onchain-earn": "链上 Earn",
-  "onchain-elite": "On-chain Elite",
-  sharkfin: "SharkFin",
-  savings: "Savings",
-  "soft-staking": "软质押",
-  wallet: "Wallet",
-  "fixed-income": "Fixed Income",
-  "balance-plus": "Balance+",
-  dcp: "DCP",
-};
-
 const CAPABILITY_LABELS = {
   detailed: "明细",
   "aggregate-only": "仅汇总",
@@ -98,12 +75,7 @@ export function assetHoldingKey(holding: AssetHolding): string {
   ].join(":");
 }
 
-export function assetHoldingDisplayName(holding: AssetHolding): string {
-  const productLabel = holding.sourceProduct
-    ? HOLDING_PRODUCT_LABELS[holding.sourceProduct]
-    : undefined;
-  return productLabel ? `${holding.symbol} · ${productLabel}` : holding.name;
-}
+export { assetHoldingDisplayName };
 
 export function AssetProductCoverage({
   coverage,

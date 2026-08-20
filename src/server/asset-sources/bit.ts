@@ -29,10 +29,14 @@ const BIT_ORIGIN = "https://mapi.matrixport.com";
 const WALLET_BALANCE_PATH = "/mapi/v1/wallet/balance";
 const BALANCE_PLUS_PATH = "/flexible/api/v2/app/homepage";
 const DCP_PATH = "/dcp/api/v1/total-positions";
+const DCP_ORDERS_PATH = "/dcp/api/v1/orders";
+const DCP_ORDER_PAGE_SIZE = 100;
+const DCP_ORDER_PAGE_LIMIT = 100;
 const READ_ONLY_PATHS = new Set([
   WALLET_BALANCE_PATH,
   BALANCE_PLUS_PATH,
   DCP_PATH,
+  DCP_ORDERS_PATH,
 ]);
 
 function abortableSleep(milliseconds: number, signal?: AbortSignal): Promise<void> {
@@ -100,6 +104,28 @@ function decimal(value: unknown, field: string): string {
     throw new Error(`BIT 响应中的 ${field} 不是有效非负十进制数`);
   }
   return raw;
+}
+
+function integer(value: unknown, field: string): number {
+  const raw = typeof value === "number" && Number.isSafeInteger(value)
+    ? String(value)
+    : value;
+  if (
+    typeof raw !== "string" ||
+    !/^\d+$/.test(raw) ||
+    !Number.isSafeInteger(Number(raw))
+  ) {
+    throw new Error(`BIT 响应中的 ${field} 不是有效非负整数`);
+  }
+  return Number(raw);
+}
+
+function identifier(value: unknown, field: string): string {
+  if (typeof value === "string" && /^\d+$/.test(value)) return value;
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) {
+    return String(value);
+  }
+  throw new Error(`BIT 响应中的 ${field} 不是有效标识`);
 }
 
 function positive(value: string): boolean {
@@ -250,6 +276,90 @@ function usdAggregateHolding(input: {
   };
 }
 
+function dcpOrderState(status: number): string {
+  switch (status) {
+    case 0:
+    case 100:
+      return "处理中";
+    case 200:
+      return "进行中";
+    case 210:
+    case 220:
+      return "结算中";
+    case 230:
+      return "已结算";
+    case 240:
+      return "赎回处理中";
+    case 250:
+      return "已赎回";
+    default:
+      return `状态 ${status}`;
+  }
+}
+
+function dcpMaturityDay(value: unknown): string {
+  const timestamp = integer(value, "DCP order maturity_time");
+  if (timestamp === 0) {
+    throw new Error("BIT 响应中的 DCP order maturity_time 不能为零");
+  }
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error("BIT 响应中的 DCP order maturity_time 无效");
+  }
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((item) => item.type === type)?.value;
+  const year = part("year");
+  const month = part("month");
+  const day = part("day");
+  if (year === undefined || month === undefined || day === undefined) {
+    throw new Error("BIT 响应中的 DCP order maturity_time 无法格式化");
+  }
+  return `${year}-${month}-${day}`;
+}
+
+function dcpOrderHolding(item: JsonRecord): AssetHolding {
+  const id = identifier(item.id, "DCP order id");
+  const currency = text(item.invest_currency, "DCP order invest_currency")
+    .toUpperCase();
+  const amount = decimal(item.invest_amount, "DCP order invest_amount");
+  const underlyingPair = text(
+    item.underlying_pair,
+    "DCP order underlying_pair",
+  );
+  const state = dcpOrderState(integer(item.status, "DCP order status"));
+  const maturityDay = dcpMaturityDay(item.maturity_time);
+  return {
+    symbol: currency,
+    name: `DCP #${id} · ${underlyingPair} · ${state} · ${maturityDay} 到期`,
+    quantity: amount,
+    currency,
+    // DCP 是锁定中的加密理财订单，不是可用现金余额；归入持仓明细，
+    // 但不带订单级市值，避免与 USD 总头寸重复计入。
+    assetClass: "crypto",
+    sourceAsset: `bit:dcp:order:${id}`,
+    sourceAccount: "earn",
+    sourceProduct: "dcp",
+    providerPositionId: id,
+    providerPositionState: state,
+    currentPrice: null,
+    marketValue: null,
+    sourceMarketValue: null,
+    valuation: {
+      status: "quote-unavailable",
+      reason: "BIT / Matrixport DCP 已含入 USD 总头寸，订单级当前估值未提供",
+    },
+    costPrice: null,
+    platformProfit: null,
+    changePercent: null,
+  };
+}
+
 function productCoverage(
   product: string,
   capability: "detailed" | "aggregate-only",
@@ -344,6 +454,7 @@ export async function mapBitSnapshot(input: {
   wallet: unknown;
   balancePlus: ProductRead;
   dcp: ProductRead;
+  dcpOrders: ProductRead;
   observedAt: string;
   prices: Prices;
 }): Promise<AssetSnapshot> {
@@ -392,7 +503,8 @@ export async function mapBitSnapshot(input: {
     }
   }
 
-  let dcpMessage: string | null = "仅读取 USD 总头寸，不读取订单、PnL 或赎回能力";
+  let dcpCapability: "detailed" | "aggregate-only" = "aggregate-only";
+  let dcpMessage: string | null = "仅读取 USD 总头寸，订单明细本次未读取";
   if (input.dcp.value !== null) {
     const dcp = record(input.dcp.value, "BIT DCP total-positions data");
     if (dcp.ask_price_status === 1 || dcp.ask_price_status === "1") {
@@ -405,6 +517,15 @@ export async function mapBitSnapshot(input: {
         observedAt: input.observedAt,
       });
       if (holding) holdings.push(holding);
+      if (input.dcpOrders.value !== null) {
+        const dcpOrders = record(input.dcpOrders.value, "BIT DCP orders data");
+        const orders = list(dcpOrders.items, "BIT DCP order items");
+        for (const order of orders) holdings.push(dcpOrderHolding(order));
+        dcpCapability = "detailed";
+        dcpMessage = `已读取 ${orders.length} 个活跃订单；总额仍以平台 USD 总头寸为准`;
+      } else if (input.dcpOrders.error !== null) {
+        dcpMessage = `订单明细本次未读取；保留 USD 总头寸：${input.dcpOrders.error}`;
+      }
     }
   }
 
@@ -440,7 +561,7 @@ export async function mapBitSnapshot(input: {
           input.balancePlus,
           "逐币余额；total_balance_amount 未作为总资产口径",
         ),
-        productCoverage("dcp", "aggregate-only", input.dcp, dcpMessage),
+        productCoverage("dcp", dcpCapability, input.dcp, dcpMessage),
       ],
       unexplainedValue: null,
       excludedPositiveAccounts: [],
@@ -480,6 +601,7 @@ class BitClient {
     apiPath: string,
     query: URLSearchParams = new URLSearchParams(),
     extraHeaders: HeadersInit = {},
+    parseJson: (raw: string) => unknown = JSON.parse,
   ): Promise<JsonRecord> {
     if (!READ_ONLY_PATHS.has(apiPath)) {
       throw new Error(`BIT 只读适配器拒绝未白名单路径：${apiPath}`);
@@ -519,7 +641,13 @@ class BitClient {
         `BIT ${apiPath} 网络请求失败（${networkErrorMessage(error)}）`,
       );
     }
-    const body = await response.json().catch(() => null);
+    const raw = await response.text().catch(() => "");
+    let body: unknown = null;
+    try {
+      body = parseJson(raw);
+    } catch {
+      body = null;
+    }
     if (!response.ok) {
       const message = body && typeof body === "object" && "message" in body &&
         typeof body.message === "string"
@@ -548,6 +676,53 @@ class BitClient {
     return this.get(DCP_PATH);
   }
 
+  private dcpOrderPage(offset: number) {
+    return this.get(
+      DCP_ORDERS_PATH,
+      new URLSearchParams([
+        ["status_category", "1"],
+        ["order_sort_by", "4"],
+        ["limit", String(DCP_ORDER_PAGE_SIZE)],
+        ["offset", String(offset)],
+      ]),
+      {},
+      (raw) =>
+        JSON.parse(
+          raw.replace(
+            /("id"\s*:\s*)(\d{16,})(?=\s*[,}])/g,
+            "$1\"$2\"",
+          ),
+        ),
+    );
+  }
+
+  async dcpOrders(): Promise<JsonRecord> {
+    const items: JsonRecord[] = [];
+    let total: number | null = null;
+    for (let page = 0; page < DCP_ORDER_PAGE_LIMIT; page += 1) {
+      const response = await this.dcpOrderPage(items.length);
+      const pageTotal = integer(response.total, "DCP order total");
+      if (total === null) {
+        total = pageTotal;
+      } else if (total !== pageTotal) {
+        throw new Error("BIT DCP 订单总数在分页期间变化");
+      }
+      const pageItems = list(response.items, "BIT DCP order items");
+      if (pageItems.length === 0) {
+        if (items.length !== total) {
+          throw new Error("BIT DCP 订单分页提前结束");
+        }
+        return { total, items };
+      }
+      items.push(...pageItems);
+      if (items.length === total) return { total, items };
+      if (items.length > total) {
+        throw new Error("BIT DCP 订单分页超出平台总数");
+      }
+    }
+    throw new Error("BIT DCP 订单分页超过安全上限");
+  }
+
   async snapshot(observedAt: string): Promise<AssetSnapshot> {
     const wallet = await this.wallet();
     const optional = async (read: () => Promise<JsonRecord>): Promise<ProductRead> => {
@@ -559,10 +734,17 @@ class BitClient {
     };
     const balancePlus = await optional(() => this.balancePlus());
     const dcp = await optional(() => this.dcp());
+    const dcpOrders = dcp.value === null
+      ? {
+        value: null,
+        error: "DCP 总头寸未读取，未请求订单明细",
+      }
+      : await optional(() => this.dcpOrders());
     return mapBitSnapshot({
       wallet,
       balancePlus,
       dcp,
+      dcpOrders,
       observedAt,
       prices: this.prices,
     });
@@ -654,4 +836,5 @@ export const BIT_READ_ONLY_ENDPOINTS = [
   WALLET_BALANCE_PATH,
   BALANCE_PLUS_PATH,
   DCP_PATH,
+  DCP_ORDERS_PATH,
 ] as const;

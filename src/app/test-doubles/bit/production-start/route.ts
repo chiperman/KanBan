@@ -71,12 +71,22 @@ function response(data: unknown) {
   });
 }
 
+function rawResponse(body: string) {
+  return new Response(body, {
+    headers: { "content-type": "application/json" },
+  });
+}
+
 export async function POST(request: Request) {
   if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
   const body = (await request.json().catch(() => null)) as {
     action?: unknown;
   } | null;
-  if (body?.action !== "preview-valid" && body?.action !== "refresh-prices") {
+  if (
+    body?.action !== "preview-valid" &&
+    body?.action !== "preview-orders-failure" &&
+    body?.action !== "refresh-prices"
+  ) {
     return Response.json({ error: "BIT 生产测试场景无效" }, { status: 400 });
   }
 
@@ -134,6 +144,32 @@ export async function POST(request: Request) {
     }
     if (url.pathname === "/dcp/api/v1/total-positions") {
       return response({ total_position: "30", ask_price_status: 0 });
+    }
+    if (url.pathname === "/dcp/api/v1/orders") {
+      if (body.action === "preview-orders-failure") {
+        return new Response(JSON.stringify({
+          code: 503,
+          message: "DCP order list temporarily unavailable",
+        }), {
+          status: 503,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return rawResponse(`{
+        "code": 0,
+        "data": {
+          "total": 1,
+          "items": [{
+            "id": 7125082312731329000,
+            "invest_amount": "30",
+            "invest_currency": "USDT",
+            "underlying_pair": "BTC-USDT",
+            "status": 200,
+            "maturity_time": 1723132800000
+          }]
+        },
+        "message": ""
+      }`);
     }
     return new Response(JSON.stringify({ code: 404, message: "unexpected" }), {
       status: 404,

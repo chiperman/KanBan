@@ -756,6 +756,7 @@ export class FakeBitReadOnly implements BitReadOnly {
   }
 
   private snapshot(observedAt: string) {
+    const dcpOrdersAvailable = this.scenario !== "dcp-orders-failure";
     return {
       total: { amount: "160", currency: "USD" },
       holdings: [
@@ -823,6 +824,28 @@ export class FakeBitReadOnly implements BitReadOnly {
           platformProfit: null,
           changePercent: null,
         },
+        ...(dcpOrdersAvailable ? [{
+          symbol: "USDT",
+          name: "DCP #7125082312731329000 · BTC-USDT · 进行中 · 2024-08-09 到期",
+          sourceAsset: "bit:dcp:order:7125082312731329000",
+          sourceAccount: "earn" as const,
+          sourceProduct: "dcp",
+          providerPositionId: "7125082312731329000",
+          providerPositionState: "进行中",
+          quantity: "30",
+          currency: "USDT",
+          assetClass: "crypto" as const,
+          currentPrice: null,
+          marketValue: null,
+          sourceMarketValue: null,
+          valuation: {
+            status: "quote-unavailable" as const,
+            reason: "BIT / Matrixport DCP 已含入 USD 总头寸，订单级当前估值未提供",
+          },
+          costPrice: null,
+          platformProfit: null,
+          changePercent: null,
+        }] : []),
       ],
       exchangeRates: [],
       syncedAt: observedAt,
@@ -842,12 +865,19 @@ export class FakeBitReadOnly implements BitReadOnly {
             freshness: "current" as const,
             message: "逐币余额；total_balance_amount 未作为总资产口径",
           },
-          {
-            product: "dcp",
-            capability: "aggregate-only" as const,
-            freshness: "current" as const,
-            message: "仅读取 USD 总头寸，不读取订单、PnL 或赎回能力",
-          },
+          dcpOrdersAvailable
+            ? {
+              product: "dcp",
+              capability: "detailed" as const,
+              freshness: "current" as const,
+              message: "已读取 1 个活跃订单；总额仍以平台 USD 总头寸为准",
+            }
+            : {
+              product: "dcp",
+              capability: "aggregate-only" as const,
+              freshness: "current" as const,
+              message: "订单明细本次未读取；保留 USD 总头寸",
+            },
         ],
         unexplainedValue: null,
         excludedPositiveAccounts: [],

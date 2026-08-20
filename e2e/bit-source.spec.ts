@@ -92,8 +92,9 @@ test("BIT / Matrixport 以只读凭证保存 Wallet、Balance+ 与 DCP，且不�
   const card = page.getByTestId("bit-card");
   await expect(card.getByTestId("asset-source-total")).toHaveText("160.00 USD");
   await expect(card).toContainText("Wallet");
-  await expect(card.getByTestId("bit-coverage-status")).toContainText(
-    "当前总额完整 · 部分产品仅汇总",
+  await expect(card.getByTestId("bit-coverage-status")).toHaveCount(0);
+  await expect(card.getByTestId("asset-holdings-detail")).toContainText(
+    "DCP #7125082312731329000 · BTC-USDT · 进行中 · 2024-08-09 到期",
   );
   const coverage = card.getByTestId("bit-product-coverage");
   await expect(coverage).toContainText("03 PRODUCTS");
@@ -102,6 +103,7 @@ test("BIT / Matrixport 以只读凭证保存 Wallet、Balance+ 与 DCP，且不�
   await expect(coverage).not.toContainText("Fixed Income");
   await expect(coverage).toContainText("Balance+");
   await expect(coverage).toContainText("DCP");
+  await expect(coverage).toContainText("明细");
   expect(responseBodies.join("\n")).not.toContain(API_SECRET);
   expect(await state(page)).toEqual({ savedSources: 1, savedSecrets: 1 });
 });
@@ -120,6 +122,29 @@ test("BIT / Matrixport 同步异常时来源详情明确标记失败", async ({ 
   await configure(page, "refresh-failure");
   await page.getByRole("button", { name: /刷新 BIT \/ Matrixport/ }).click();
   await expect(card).toContainText("重试来源同步失败，已保留最后成功数据");
+});
+
+test("DCP 订单列表失败时保留总额并退回仅汇总", async ({ page }) => {
+  await configure(page, "dcp-orders-failure");
+  await loginAsOwner(page);
+  await startBitFlow(page);
+  await page.getByRole("button", { name: "确认并保存" }).click();
+  await page.getByRole("link", {
+    name: /BIT \/ Matrixport 账户.*自动账户/,
+  }).click();
+
+  const card = page.getByTestId("bit-card");
+  await expect(card.getByTestId("asset-source-total")).toHaveText("160.00 USD");
+  await expect(card.getByTestId("bit-coverage-status")).toContainText(
+    "当前总额完整 · 部分产品仅汇总",
+  );
+  await expect(card).not.toContainText("DCP #7125082312731329000");
+
+  const coverage = card.getByTestId("bit-product-coverage");
+  await coverage.locator("summary").click();
+  await expect(coverage).toContainText("DCP");
+  await expect(coverage).toContainText("仅汇总");
+  await expect(coverage).toContainText("订单明细本次未读取；保留 USD 总头寸");
 });
 
 test("BIT / Matrixport 确认前账户变化或保存失败不会遗留来源与凭证", async ({
@@ -144,7 +169,7 @@ test("BIT / Matrixport 确认前账户变化或保存失败不会遗留来源与
   expect(await state(page)).toEqual({ savedSources: 0, savedSecrets: 0 });
 });
 
-test("生产 BIT 适配器只调用三条 GET 白名单并使用 Matrixport V2 签名", async ({
+test("生产 BIT 适配器读取 DCP 活跃订单明细但不重复计入总额", async ({
   request,
 }) => {
   const response = await request.post("/test-doubles/bit/production-start", {
@@ -158,6 +183,7 @@ test("生产 BIT 适配器只调用三条 GET 白名单并使用 Matrixport V2 �
     "GET /mapi/v1/wallet/balance",
     "GET /flexible/api/v2/app/homepage?product_type=flexi_saving&subject_type=flexi_saving",
     "GET /dcp/api/v1/total-positions",
+    "GET /dcp/api/v1/orders?status_category=1&order_sort_by=4&limit=100&offset=0",
   ]);
   expect(body.account).toEqual({
     id: "bit:605788",
@@ -181,12 +207,35 @@ test("生产 BIT 适配器只调用三条 GET 白名单并使用 Matrixport V2 �
       marketValue: "30",
     }),
     expect.objectContaining({
+      symbol: "USDT",
+      name: "DCP #7125082312731329000 · BTC-USDT · 进行中 · 2024-08-09 到期",
+      sourceAsset: "bit:dcp:order:7125082312731329000",
+      sourceAccount: "earn",
+      sourceProduct: "dcp",
+      providerPositionId: "7125082312731329000",
+      providerPositionState: "进行中",
+      quantity: "30",
+      currentPrice: null,
+      marketValue: null,
+      sourceMarketValue: null,
+      valuation: {
+        status: "quote-unavailable",
+        reason: "BIT / Matrixport DCP 已含入 USD 总头寸，订单级当前估值未提供",
+      },
+    }),
+    expect.objectContaining({
       symbol: "BTC",
       currentPrice: { amount: "68000", currency: "USD" },
       marketValue: "13600",
       valuation: expect.objectContaining({ status: "valued" }),
     }),
   ]));
+  expect(body.snapshot.coverage.products).toContainEqual({
+    product: "dcp",
+    capability: "detailed",
+    freshness: "current",
+    message: "已读取 1 个活跃订单；总额仍以平台 USD 总头寸为准",
+  });
   expect(JSON.stringify(body)).not.toContain(API_SECRET);
 
   const prices = await request.post("/test-doubles/bit/production-start", {
@@ -208,5 +257,37 @@ test("生产 BIT 适配器只调用三条 GET 白名单并使用 Matrixport V2 �
         }),
       ]),
     },
+  });
+});
+
+test("生产 BIT 适配器在 DCP 订单列表失败时保留 USD 总头寸", async ({
+  request,
+}) => {
+  const response = await request.post("/test-doubles/bit/production-start", {
+    data: { action: "preview-orders-failure" },
+  });
+
+  expect(response.ok()).toBeTruthy();
+  const body = await response.json();
+  expect(body.authenticated).toBe(true);
+  expect(body.allowedPathsOnly).toBe(true);
+  expect(body.snapshot.total).toEqual({ amount: "13760", currency: "USD" });
+  expect(body.snapshot.holdings).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      sourceAsset: "bit:dcp:aggregate",
+      sourceProduct: "dcp",
+      marketValue: "30",
+    }),
+  ]));
+  expect(body.snapshot.holdings).not.toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      sourceAsset: "bit:dcp:order:7125082312731329000",
+    }),
+  ]));
+  expect(body.snapshot.coverage.products).toContainEqual({
+    product: "dcp",
+    capability: "aggregate-only",
+    freshness: "current",
+    message: expect.stringContaining("订单明细本次未读取；保留 USD 总头寸"),
   });
 });
