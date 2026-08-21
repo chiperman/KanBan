@@ -8,6 +8,10 @@ import {
   decimalMultiply,
   decimalSubtract,
 } from "@/domain/decimal";
+import {
+  createJsonDecoder,
+  type JsonRecord,
+} from "@/server/asset-sources/json";
 import type {
   AssetHolding,
   AssetPermission,
@@ -21,7 +25,6 @@ import type {
   Prices,
 } from "@/server/ports";
 
-type JsonRecord = Record<string, unknown>;
 type OkxFetch = (
   input: string | URL | Request,
   init?: RequestInit,
@@ -49,32 +52,12 @@ const OKX_ORIGINS: Record<OkxRegion, string> = {
   eea: "https://eea.okx.com",
 };
 const OKX_EQUITY_ROUNDING_TOLERANCE = "0.000000000001";
-
-function record(value: unknown, context: string): JsonRecord {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new Error(`${context}格式无效`);
-  }
-  return value as JsonRecord;
-}
-
-function list(value: unknown, context: string): JsonRecord[] {
-  if (!Array.isArray(value)) throw new Error(`${context}格式无效`);
-  return value.map((item) => record(item, context));
-}
-
-function text(value: unknown, field: string): string {
-  if (typeof value !== "string" || value.length === 0) {
-    throw new Error(`OKX 响应缺少 ${field}`);
-  }
-  return value;
-}
-
-function decimal(value: unknown, field: string): string {
-  if (typeof value !== "string" || !/^\d+(?:\.\d+)?$/.test(value)) {
-    throw new Error(`OKX 响应中的 ${field} 不是有效非负十进制数`);
-  }
-  return value;
-}
+const {
+  record,
+  list,
+  text,
+  nonNegativeDecimal: decimal,
+} = createJsonDecoder("OKX");
 
 function positive(value: string): boolean {
   return decimalCompare(value, "0") > 0;

@@ -11,6 +11,10 @@ import {
   decimalMultiply,
   decimalToFixed,
 } from "@/domain/decimal";
+import {
+  createJsonDecoder,
+  type JsonRecord,
+} from "@/server/asset-sources/json";
 import type {
   AssetHolding,
   AssetPermission,
@@ -24,7 +28,6 @@ import type {
   Prices,
 } from "@/server/ports";
 
-type JsonRecord = Record<string, unknown>;
 type BinanceFetch = (
   input: string | URL | Request,
   init?: RequestInit,
@@ -51,41 +54,13 @@ const READ_ONLY_PERMISSIONS: AssetPermission[] = [
   "account",
   "positions",
 ];
-
-function record(value: unknown, context = "Binance 响应"): JsonRecord {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new Error(`${context}格式无效`);
-  }
-  return value as JsonRecord;
-}
-
-function list(value: unknown, context: string): JsonRecord[] {
-  if (!Array.isArray(value)) throw new Error(`${context}格式无效`);
-  return value.map((item) => record(item, context));
-}
-
-function text(value: unknown, field: string): string {
-  if (typeof value !== "string" || value.length === 0) {
-    throw new Error(`Binance 响应缺少 ${field}`);
-  }
-  return value;
-}
-
-function identifier(value: unknown, field: string): string {
-  if (typeof value === "string" && value.length > 0) return value;
-  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) {
-    return String(value);
-  }
-  throw new Error(`Binance 响应缺少 ${field}`);
-}
-
-function decimal(value: unknown, field: string): string {
-  const output = typeof value === "string" ? value : "";
-  if (!/^\d+(?:\.\d+)?$/.test(output)) {
-    throw new Error(`Binance 响应中的 ${field} 不是有效非负十进制数`);
-  }
-  return output;
-}
+const {
+  record,
+  list,
+  text,
+  nonNegativeDecimal: decimal,
+  identifier,
+} = createJsonDecoder("Binance");
 
 function positive(value: string): boolean {
   return decimalCompare(value, "0") > 0;
