@@ -160,6 +160,15 @@ export function bitgetApiFixture() {
         { coin: "BNB", amount: "0.8" },
       ],
     },
+    cashPlusAccount: {
+      code: "00000",
+      msg: "success",
+      requestTime: Number(BITGET_OBSERVED_MS),
+      data: {
+        btcAmount: "0.004986",
+        usdtAmount: "299.15",
+      },
+    },
     flexible: {
       code: "00000",
       msg: "success",
@@ -263,13 +272,14 @@ export function bitgetFixtureSnapshot(
     ["USDT", "现货", "1000", "1", "1000", "spot"],
     ["ETH", "On-chain Elite", "0.1", "3000", "300", "staking", "onchain-elite", "elite-eth-1"],
     ["USDT", "SharkFin", "200", "1", "200", "earn", "sharkfin", "aggregate"],
+    ["USDT", "Cash+（现金宝）", "299.15", "1", "299.15", "earn", "cash-plus", "aggregate"],
     ["SOL", "活期 Earn", "5", "100", "500", "earn-flexible"],
     ["BNB", "定期 Earn", "0.8", "500", "400", "earn-locked"],
     ["USDC", "资金", "80", "0.999", "79.92", "funding"],
     ["XRP", "现货", "15.468642", "0.5", "7.734321", "spot"],
   ] as const;
   return {
-    total: { amount: "11641.98687228", currency: "USDT" },
+    total: { amount: "11941.13687228", currency: "USDT" },
     holdings: holdings.map(
       ([
         symbol,
@@ -337,6 +347,12 @@ export function bitgetFixtureSnapshot(
           capability: "detailed",
           freshness: "current",
           message: null,
+        },
+        {
+          product: "cash-plus",
+          capability: "aggregate-only",
+          freshness: "current",
+          message: "读取 Cash+ 账户 USDT 估值，不将 BTC 估值重复计入",
         },
         ...(accountMode === "classic"
           ? [

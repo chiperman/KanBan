@@ -270,6 +270,7 @@ function extractClassicPositions(input: {
   funding: unknown;
   botFutures: unknown;
   savingsOverview: unknown;
+  cashPlusAccount: unknown;
   flexiblePages: unknown[];
   fixedPages: unknown[];
   sharkfinAccount: unknown;
@@ -391,6 +392,27 @@ function extractClassicPositions(input: {
       { sourceProduct: "savings" },
     );
   }
+  const cashPlus = record(
+    input.cashPlusAccount,
+    "Bitget earn/savings/account data",
+  );
+  const cashPlusAmount = decimal(cashPlus.usdtAmount, "usdtAmount");
+  addPosition(
+    positions,
+    "USDT",
+    cashPlusAmount,
+    "earn",
+    {
+      amount: cashPlusAmount,
+      currency: "USDT",
+      pricedAt: input.observedAt,
+      source: "Bitget Cash+ usdtAmount",
+    },
+    {
+      sourceProduct: "cash-plus",
+      providerPositionId: "aggregate",
+    },
+  );
   const sharkfin = record(
     input.sharkfinAccount,
     "Bitget earn/sharkfin/account data",
@@ -452,6 +474,7 @@ function extractUtaPositions(input: {
   assets: unknown;
   funding: unknown;
   savingsOverview: unknown;
+  cashPlusAccount: unknown;
   flexiblePages: unknown[];
   fixedPages: unknown[];
   sharkfinAccount: unknown;
@@ -498,6 +521,7 @@ function extractUtaPositions(input: {
     })),
     botFutures: [],
     savingsOverview: input.savingsOverview,
+    cashPlusAccount: input.cashPlusAccount,
     flexiblePages: input.flexiblePages,
     fixedPages: input.fixedPages,
     sharkfinAccount: input.sharkfinAccount,
@@ -533,6 +557,12 @@ function scopeLabel(scope: AssetHolding["sourceAccount"]): string {
   if (scope === "earn") return "Earn";
   if (scope === "staking") return "On-chain Elite";
   return "Bitget";
+}
+
+function positionScopeLabel(position: BitgetPosition): string {
+  return position.sourceProduct === "cash-plus"
+    ? "Cash+（现金宝）"
+    : scopeLabel(position.account);
 }
 
 function bitgetCoverage(
@@ -579,6 +609,12 @@ function bitgetCoverage(
       capability: savingsCapability,
       freshness: "current",
       message: savingsMessage,
+    },
+    {
+      product: "cash-plus",
+      capability: "aggregate-only",
+      freshness: "current",
+      message: "读取 Cash+ 账户 USDT 估值，不将 BTC 估值重复计入",
     },
   ];
   if (accountMode === "classic") {
@@ -654,6 +690,11 @@ function classicAccountCoverage(input: {
     .map(([accountType]) => accountType);
   const total = decimalAdd(
     ...totalTypes.map((accountType) => balances.get(accountType) ?? "0"),
+    ...input.positions
+      .filter(({ sourceProduct }) => sourceProduct === "cash-plus")
+      .map(({ nativeValue }) =>
+        nativeValue?.currency === "USDT" ? nativeValue.amount : "0"
+      ),
   );
   const partitionByAccount = new Map<string, string>([
     ["spot", "spot"],
@@ -667,6 +708,7 @@ function classicAccountCoverage(input: {
   const detailedTotals = new Map<string, string>();
   const incompletePartitions = new Set<string>();
   for (const holding of input.snapshot.holdings) {
+    if (holding.sourceProduct === "cash-plus") continue;
     const partition = holding.sourceAccount
       ? partitionByAccount.get(holding.sourceAccount)
       : undefined;
@@ -940,7 +982,7 @@ function valuePositions(input: {
     if (price === null || marketValue === null) {
       return {
         symbol: displayAsset,
-        name: `${displayAsset} · ${scopeLabel(position.account)}`,
+        name: `${displayAsset} · ${positionScopeLabel(position)}`,
         sourceAsset: position.asset,
         sourceAccount: position.account,
         sourceProduct: position.sourceProduct,
@@ -970,7 +1012,7 @@ function valuePositions(input: {
     total = decimalAdd(total, marketValue);
     return {
       symbol: displayAsset,
-      name: `${displayAsset} · ${scopeLabel(position.account)}`,
+      name: `${displayAsset} · ${positionScopeLabel(position)}`,
       sourceAsset: position.asset,
       sourceAccount: position.account,
       sourceProduct: position.sourceProduct,
@@ -1242,6 +1284,10 @@ class BitgetClient {
     await this.waitForEarnSlot();
     return this.data("/api/v2/earn/account/assets");
   }
+  async cashPlusAccount() {
+    await this.waitForEarnSlot();
+    return this.data("/api/v2/earn/savings/account");
+  }
   async savings(
     periodType: "flexible" | "fixed",
     startTime: string,
@@ -1401,6 +1447,7 @@ async function readFullSnapshot(input: {
   const accountAssets = accountAssetsObservation.data;
   const funding = fundingObservation.data;
   const savingsOverview = await input.client.earnOverview();
+  const cashPlusAccount = await input.client.cashPlusAccount();
   const flexiblePages = await collectSavingsPages(
     input.client,
     "flexible",
@@ -1431,6 +1478,7 @@ async function readFullSnapshot(input: {
         funding,
         botFutures: botObservation?.data ?? [],
         savingsOverview,
+        cashPlusAccount,
         flexiblePages,
         fixedPages,
         sharkfinAccount,
@@ -1443,6 +1491,7 @@ async function readFullSnapshot(input: {
         assets: accountAssets,
         funding,
         savingsOverview,
+        cashPlusAccount,
         flexiblePages,
         fixedPages,
         sharkfinAccount,

@@ -151,8 +151,8 @@ export const ASSET_SOURCE_PROVIDERS: AssetSourceProviderDescription[] = [
     previewTitle: "Bitget 凭证预览",
     previewScope: (accountMode) =>
       accountMode === "uta"
-        ? "UTA 纯现金 · 现货、资金、Savings、SharkFin、On-chain Elite（只读）"
-        : "Classic Account · 现货、资金、Savings、SharkFin、On-chain Elite、普通 Futures（平台总额已含，不展开仓位）、合约交易机器人（只读）",
+        ? "UTA 纯现金 · 现货、资金、Savings、Cash+、SharkFin、On-chain Elite（只读）"
+        : "Classic Account · 现货、资金、Savings、Cash+、SharkFin、On-chain Elite、普通 Futures（平台总额已含，不展开仓位）、合约交易机器人（只读）",
     savedMaterial: "只读 API 凭证",
   },
   {

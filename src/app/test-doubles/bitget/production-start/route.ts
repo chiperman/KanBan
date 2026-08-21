@@ -55,6 +55,7 @@ export async function POST(request: Request) {
     "preview-uta-risk",
     "preview-uta-funding-mismatch",
     "preview-earn-mismatch",
+    "preview-cash-plus",
     "preview-offsetting-partition-drift",
     "preview-small-net-drift",
     "preview-all-account-residual",
@@ -244,6 +245,7 @@ export async function POST(request: Request) {
     "/api/v2/account/bot-assets",
     "/api/v2/account/all-account-balance",
     "/api/v2/earn/account/assets",
+    "/api/v2/earn/savings/account",
     "/api/v2/earn/savings/assets",
     "/api/v2/earn/sharkfin/account",
     "/api/v2/earn/elite/assets",
@@ -353,6 +355,8 @@ export async function POST(request: Request) {
       response = utaFixture.funding;
     } else if (url.pathname === "/api/v2/earn/account/assets") {
       response = fixture.earnOverview;
+    } else if (url.pathname === "/api/v2/earn/savings/account") {
+      response = fixture.cashPlusAccount;
     } else if (url.pathname === "/api/v2/earn/savings/assets") {
       if (body.action === "preview-earn-missing-end-id") {
         response = {

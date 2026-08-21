@@ -18,6 +18,7 @@ const ASSET_PRODUCT_LABELS: Record<string, string> = {
   "simple-earn-fixed": "Simple Earn Fixed",
   "savings-flexible": "Savings Flexible",
   "savings-fixed": "Savings Fixed",
+  "cash-plus": "Cash+（现金宝）",
   "futures-bot": "Futures Bots",
   futures: "Futures",
   "dual-investment": "Dual Investment",
