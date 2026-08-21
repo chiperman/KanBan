@@ -11,15 +11,17 @@ import {
   type PortfolioObservation,
 } from "@/domain/investment-performance";
 import {
+  projectInvestmentPerformanceTrend,
+  type InvestmentPerformanceAssetScope,
+  type InvestmentPerformanceIntervalPreset,
+} from "@/domain/investment-performance-trend";
+import {
   decimalCompare,
   decimalMultiply,
-  decimalSubtract,
   decimalToFixed,
 } from "@/domain/decimal";
-import { assetClassTrendObservation } from "@/domain/daily-asset-snapshots";
 import type { ReportingCurrency } from "@/domain/valuation";
 import type {
-  AssetTrendClass,
   DailyAssetTrendObservation,
   InvestmentCashflow,
   InvestmentCashflowCurrency,
@@ -43,20 +45,8 @@ import {
 } from "@/ui/workbench-display-preferences";
 import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
 
-type IntervalPreset =
-  | "month-to-date"
-  | "1m"
-  | "6m"
-  | "year-to-date"
-  | "1y"
-  | "all";
-
 type CurrentTotals = Record<ReportingCurrency, PortfolioObservation | null>;
-type AssetScope = "portfolio" | AssetTrendClass;
-type TrendValueObservation = Pick<
-  DailyAssetTrendObservation,
-  "capturedAt" | "complete" | "status" | "total"
->;
+type AssetScope = InvestmentPerformanceAssetScope;
 
 type CashflowDraft = {
   amount: string;
@@ -72,7 +62,7 @@ const CURRENCY_OPTIONS: readonly VibeSelectOption<ReportingCurrency>[] = [
   { value: "HKD", label: "HKD" },
 ];
 
-const INTERVAL_OPTIONS: readonly VibeSelectOption<IntervalPreset>[] = [
+const INTERVAL_OPTIONS: readonly VibeSelectOption<InvestmentPerformanceIntervalPreset>[] = [
   { value: "month-to-date", label: "本月" },
   { value: "1m", label: "近 1 月" },
   { value: "6m", label: "近 6 月" },
@@ -98,53 +88,6 @@ const CASHFLOW_KIND_OPTIONS: readonly VibeSelectOption<InvestmentCashflowKind>[]
 
 const CASHFLOW_CURRENCY_OPTIONS: readonly VibeSelectOption<InvestmentCashflowCurrency>[] =
   CURRENCY_OPTIONS;
-
-function dayAtOffset(day: string, offset: number): string {
-  const [year, month, date] = day.split("-").map(Number);
-  const value = new Date(Date.UTC(year, month - 1, date + offset));
-  return value.toISOString().slice(0, 10);
-}
-
-function daysBetween(start: string, end: string): string[] {
-  if (start > end) return [];
-  const days: string[] = [];
-  for (let day = start; day <= end; day = dayAtOffset(day, 1)) {
-    days.push(day);
-  }
-  return days;
-}
-
-function dayAtMonthOffset(day: string, offset: number): string {
-  const [year, month, date] = day.split("-").map(Number);
-  const targetMonth = new Date(Date.UTC(year, month - 1 + offset, 1));
-  const targetYear = targetMonth.getUTCFullYear();
-  const targetMonthIndex = targetMonth.getUTCMonth();
-  const lastDate = new Date(
-    Date.UTC(targetYear, targetMonthIndex + 1, 0),
-  ).getUTCDate();
-  return new Date(
-    Date.UTC(targetYear, targetMonthIndex, Math.min(date, lastDate)),
-  ).toISOString().slice(0, 10);
-}
-
-function rangeDays(
-  preset: IntervalPreset,
-  currentDay: string,
-  firstTrendDay: string | undefined,
-): string[] {
-  if (preset === "all") {
-    return firstTrendDay === undefined ? [] : daysBetween(firstTrendDay, currentDay);
-  }
-  const start = preset === "month-to-date"
-    ? `${currentDay.slice(0, 7)}-01`
-    : preset === "year-to-date"
-      ? `${currentDay.slice(0, 4)}-01-01`
-      : dayAtMonthOffset(
-          currentDay,
-          preset === "1m" ? -1 : preset === "6m" ? -6 : -12,
-        );
-  return daysBetween(start, currentDay);
-}
 
 function amount(value: string): string {
   const [integer, fraction] = decimalToFixed(value, 2).split(".");
@@ -203,26 +146,6 @@ function sortCashflows(cashflows: InvestmentCashflow[]): InvestmentCashflow[] {
       right.createdAt.localeCompare(left.createdAt) ||
       right.id.localeCompare(left.id),
   );
-}
-
-function observationStatus(
-  observation: Pick<TrendValueObservation, "complete" | "status">,
-): "complete" | "incomplete" | "expired" {
-  return observation.status ?? (observation.complete ? "complete" : "incomplete");
-}
-
-function completeObservation(
-  observation: TrendValueObservation,
-  currency: ReportingCurrency,
-): PortfolioObservation | null {
-  const amount = observation.total[currency] ?? null;
-  return observationStatus(observation) === "complete" && amount !== null
-    ? {
-        amount,
-        complete: true,
-        observedAt: observation.capturedAt,
-      }
-    : null;
 }
 
 function reasonForCurrent(
@@ -501,92 +424,30 @@ export function InvestmentPerformanceWorkspace({
     setCurrency,
     showSensitiveInfo,
   } = useWorkbenchDisplayPreferences();
-  const [preset, setPreset] = useState<IntervalPreset>("month-to-date");
+  const [preset, setPreset] = useState<InvestmentPerformanceIntervalPreset>("month-to-date");
   const [assetScope, setAssetScope] = useState<AssetScope>("portfolio");
   const [editing, setEditing] = useState<InvestmentCashflow | null | undefined>(
     undefined,
   );
   const [deleting, setDeleting] = useState<InvestmentCashflow | null>(null);
 
-  const trend = useMemo(() => {
-    const firstTrendDay = trendObservations
-      .map((observation) => observation.day)
-      .toSorted()[0];
-    const days = rangeDays(
-      preset,
-      currentDay,
-      firstTrendDay,
-    );
-    const byDay = new Map(trendObservations.map((observation) => [
-      observation.day,
-      observation,
-    ]));
-    const points = days.map((day) => {
-      const observation = byDay.get(day);
-      if (!observation) {
-        return {
-          amount: null,
-          day,
-          observed: false,
-          status: "incomplete" as const,
-        };
-      }
-      const scopedObservation = assetScope === "portfolio"
-        ? observation
-        : assetClassTrendObservation(observation, assetScope);
-      if (scopedObservation === null) {
-        return {
-          amount: null,
-          day,
-          observed: false,
-          status: "incomplete" as const,
-        };
-      }
-      return {
-        amount: scopedObservation.total[currency] ?? null,
-        day,
-        observed: true,
-        status: observationStatus(scopedObservation),
-      };
-    });
-    const complete = days.flatMap((day) => {
-      const observation = byDay.get(day);
-      if (!observation) return [];
-      const scopedObservation = assetScope === "portfolio"
-        ? observation
-        : assetClassTrendObservation(observation, assetScope);
-      if (scopedObservation === null) return [];
-      const value = completeObservation(
-        {
-          ...scopedObservation,
-          capturedAt: observation.capturedAt,
-        },
+  const trend = useMemo(
+    () =>
+      projectInvestmentPerformanceTrend({
+        assetScope,
         currency,
-      );
-      return value === null ? [] : [{ day, value }];
-    });
-    return {
-      days,
-      end: complete.at(-1)?.value ?? null,
-      endDay: complete.at(-1)?.day ?? null,
-      incompleteCount: points.filter(
-        (point) => point.observed && point.status !== "complete",
-      ).length,
-      missingCount: points.filter((point) => !point.observed).length,
-      points,
-      start: complete[0]?.value ?? null,
-      startDay: complete[0]?.day ?? null,
-      unavailableCount: points.filter(
-        (point) => point.observed && point.amount === null,
-      ).length,
-    };
-  }, [
-    assetScope,
-    currency,
-    currentDay,
-    preset,
-    trendObservations,
-  ]);
+        currentDay,
+        preset,
+        trendObservations,
+      }),
+    [
+      preset,
+      assetScope,
+      currency,
+      currentDay,
+      trendObservations,
+    ],
+  );
 
   const current = currentTotals[currency];
   const analysis = useMemo(
@@ -624,9 +485,7 @@ export function InvestmentPerformanceWorkspace({
       });
   const intervalAssetChange = assetScope === "portfolio"
     ? analysis.interval.assetChange
-    : trend.start !== null && trend.end !== null
-      ? decimalSubtract(trend.end.amount, trend.start.amount)
-      : null;
+    : trend.intervalAssetChange;
 
   function upsertCashflow(cashflow: InvestmentCashflow) {
     setCashflows((existing) =>
