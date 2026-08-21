@@ -650,9 +650,9 @@ export function AssetSourceCard({
   const supportsSmallHoldingFilter =
     !isManual && source.kind !== "longbridge";
   const supportsEvmTokenPreferences = source.kind.startsWith("evm-watch-");
-  const supportsProductCoverage = ["binance", "okx", "bitget", "bit"].includes(
-    source.kind,
-  );
+  const supportsProductCoverage =
+    ["binance", "okx", "bitget", "bit"].includes(source.kind) ||
+    source.kind.startsWith("evm-watch-");
   const orderedHoldings = useMemo(
     () => source.snapshot.holdings.toSorted((left, right) =>
       compareNullableDecimalDescending(
