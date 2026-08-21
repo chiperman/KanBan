@@ -1,8 +1,8 @@
 # 个人资产看板全站 UI/UX 与可访问性审查
 
 审查日期：2026-07-28
-审查范围：当前工作区、真实本地数据、暗色主题、桌面 Chrome、移动端 CSS 断点
-审查方式：实际页面截图、DOM 语义检查、只读样式测量与相关代码核对
+审查范围：当前工作区、本地受控会话、暗色主题、桌面 Chrome、移动端 CSS 断点
+审查方式：实际页面观察、DOM 语义检查、只读样式测量与相关代码核对
 
 ## 1. 结论
 
@@ -94,7 +94,7 @@
 
 ### P1-02：预置关闭后显示框架默认 404
 
-证据：[预置入口关闭截图](./assets/10-setup-closed-404.png)。`src/app/setup/page.tsx:11` 直接调用 `notFound()`，仓库没有产品化的 `not-found.tsx`。
+证据：受控会话中，已预置状态访问 `/setup` 显示框架默认 404；`src/app/setup/page.tsx:11` 直接调用 `notFound()`，仓库没有产品化的 `not-found.tsx`。
 
 影响：亮色背景、英文文案和默认排版造成强烈跳变；所有者无法判断是入口已关闭、服务故障还是地址错误。
 
@@ -124,7 +124,7 @@
 
 ### P1-04：来源卡片的 3px 高对比度顶边不符合当前设计规则
 
-证据：[桌面看板](./assets/03-dashboard-desktop.png)、[移动看板](./assets/08-dashboard-mobile.png)。`src/app/nothing-system.css:2064` 为每张普通卡片设置 `border-top: 3px solid var(--ink-display)`。
+证据：桌面与移动受控会话均观察到该顶边；`src/app/nothing-system.css:2064` 为每张普通卡片设置 `border-top: 3px solid var(--ink-display)`。
 
 影响：每张卡片都获得接近主数字的视觉权重；白线、分段条、Doto 金额和红色危险按钮同时竞争，破坏“三层层级”。
 
@@ -163,7 +163,7 @@
 
 ### P2-01：超宽桌面没有有效利用横向空间
 
-证据：[桌面看板](./assets/03-dashboard-desktop.png)。当前 `.page` 使用 `width: min(100%, 1280px)`，在超宽显示器上形成大面积左右空白，而来源卡片仍挤在 2+1 的窄列中。
+证据：桌面受控会话中，当前 `.page` 使用 `width: min(100%, 1280px)`，在超宽显示器上形成大面积左右空白，而来源卡片仍挤在 2+1 的窄列中。
 
 建议：
 
@@ -175,7 +175,7 @@
 
 ### P2-02：来源接入弹窗把“选择”和“填写”混成一个长步骤
 
-证据：[来源选择](./assets/05-source-onboarding-desktop.png)、[Binance 表单](./assets/06-source-binance-form-desktop.png)、[观察钱包表单](./assets/07-source-wallet-form-desktop.png)、[移动端来源弹窗](./assets/09-source-onboarding-mobile.png)。移动实测弹窗约为 `500×1125px`，高度与视口几乎完全相同。
+证据：来源选择、API 表单、观察钱包表单和移动端来源弹窗的受控会话均显示该问题；移动实测弹窗约为 `500×1125px`，高度与视口几乎完全相同。
 
 建议改为两个机械、短促的步骤：
 
@@ -233,59 +233,17 @@
 3. 宽屏来源网格扩展到 1440–1600px；
 4. 减少移动页头常驻操作。
 
-## 7. 截图证据
+## 7. 证据保护
 
-### 01 未预置锁定首页
-
-![未预置锁定首页](./assets/01-locked-first-run-desktop.png)
-
-### 02 首次 Passkey 预置
-
-![首次 Passkey 预置](./assets/02-setup-desktop.png)
-
-### 03 已登录桌面看板
-
-![已登录桌面看板](./assets/03-dashboard-desktop.png)
-
-### 04 快捷命令
-
-![快捷命令](./assets/04-command-menu-desktop.png)
-
-### 05 来源选择
-
-![来源选择](./assets/05-source-onboarding-desktop.png)
-
-### 06 API 凭证表单
-
-![Binance 凭证表单](./assets/06-source-binance-form-desktop.png)
-
-### 07 观察钱包表单
-
-![观察钱包表单](./assets/07-source-wallet-form-desktop.png)
-
-### 08 移动端看板
-
-![移动端看板](./assets/08-dashboard-mobile.png)
-
-### 09 移动端来源弹窗
-
-![移动端来源弹窗](./assets/09-source-onboarding-mobile.png)
-
-### 10 预置入口关闭后的默认 404
-
-![默认 404](./assets/10-setup-closed-404.png)
-
-### 11 永久删除第一阶段确认
-
-![永久删除第一阶段确认](./assets/11-delete-confirmation-desktop.png)
+审查截图包含真实资产和账户标识，已从 Git 历史中移除。本文件仅保留不含账户明细和金额的审查结论；后续视觉证据只能使用演示数据或已脱敏素材。
 
 ## 8. 证据限制
 
-- Chrome 的响应式视口覆盖实际落在约 500px，但已进入 `max-width: 639px` 的移动样式；本轮没有把真实资产会话截到 390px。
+- Chrome 的响应式视口覆盖实际落在约 500px，但已进入 `max-width: 639px` 的移动样式；本轮没有覆盖 390px。
 - 未提交 API 凭证、未启动 OAuth、未保存备用登录、未断开或删除来源、未执行备份恢复、未退出登录。
 - 备用登录弹窗包含真实 TOTP 密钥，因此相关截图已删除，文档只保留代码和可见行为结论。
 - 本轮检查了 DOM 结构、可见焦点样式规则、目标尺寸和颜色风险，但没有使用真实屏幕阅读器完成整条操作流程，不能宣称 WCAG 全量通过。
-- 页面在审查期间持续同步行情，截图金额与时间可能略有变化；这不影响布局与交互结论。
+- 页面在审查期间持续同步行情，观测金额与时间可能略有变化；这不影响布局与交互结论。
 - 当前工作区包含用户已有的未提交修改；审查采证阶段没有修改产品代码，后续第一轮实施改动见下一节。
 
 ## 9. 2026-07-28 第一轮实施状态
