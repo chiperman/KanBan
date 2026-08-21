@@ -17,7 +17,46 @@ const ADDRESS_TWO = "0x1111111111111111111111111111111111111111";
 const A = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const B = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const C = "0xcccccccccccccccccccccccccccccccccccccccc";
+const LIDO_WITHDRAWAL_QUEUE = "0x889edc2edab5f40e902b864ad4d7ade8e412f9b1";
 const RPC = "https://eth-mainnet.g.alchemy.com/v2/server-secret-test-key";
+const GET_WITHDRAWAL_REQUESTS = "0x7d031b65";
+const GET_WITHDRAWAL_STATUS = "0xb8c4b85a";
+const GET_LAST_CHECKPOINT_INDEX = "0x526eae3e";
+const FIND_CHECKPOINT_HINTS = "0x62abe3fa";
+const GET_CLAIMABLE_ETHER = "0xc97912d8";
+
+function word(value: bigint): string {
+  return value.toString(16).padStart(64, "0");
+}
+
+function lidoRequestIds(ids: bigint[]): string {
+  return `0x${word(32n)}${word(BigInt(ids.length))}${ids.map(word).join("")}`;
+}
+
+function lidoStatuses(owner: string): string {
+  const statuses = [
+    {
+      amountOfStEth: 1_500_000_000_000_000_000n,
+      amountOfShares: 1_500_000_000_000_000_000n,
+      timestamp: 1_769_904_000n,
+      isFinalized: false,
+    },
+    {
+      amountOfStEth: 500_000_000_000_000_000n,
+      amountOfShares: 500_000_000_000_000_000n,
+      timestamp: 1_769_904_100n,
+      isFinalized: true,
+    },
+  ];
+  return `0x${word(32n)}${word(BigInt(statuses.length))}${statuses.map((status) => [
+    word(status.amountOfStEth),
+    word(status.amountOfShares),
+    owner.slice(2).padStart(64, "0"),
+    word(status.timestamp),
+    word(status.isFinalized ? 1n : 0n),
+    word(0n),
+  ].join("")).join("")}`;
+}
 
 const testExternalServices: ExternalServiceConfiguration = {
   async status(): Promise<ExternalServiceConfigurationStatus> {
@@ -44,12 +83,15 @@ export async function POST(request: Request) {
   if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
   const body = (await request.json().catch(() => ({}))) as {
     chain?: "ethereum" | "bsc";
-    action?: "preview" | "empty" | "partial-failure" | "index-failure" | "price-failure" | "price-network-failure" | "rpc-network-once" | "metadata-decimals-failure" | "metadata-rpc-failure" | "refresh-ignored-unreadable" | "refresh-prices" | "refresh-holdings";
+    action?: "preview" | "empty" | "partial-failure" | "index-failure" | "price-failure" | "price-network-failure" | "rpc-network-once" | "metadata-decimals-failure" | "metadata-rpc-failure" | "refresh-ignored-unreadable" | "refresh-prices" | "refresh-holdings" | "preview-lido-withdrawal" | "preview-lido-failure" | "refresh-lido-prices";
   };
   const rpcMethods: string[] = [];
   const metadataContracts: string[] = [];
   const priceRequests: string[] = [];
   let remainingRpcNetworkFailures = body.action === "rpc-network-once" ? 1 : 0;
+  const lidoScenario = body.action === "preview-lido-withdrawal"
+    || body.action === "preview-lido-failure"
+    || body.action === "refresh-lido-prices";
   const mockFetch = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const url = new URL(input instanceof Request ? input.url : input.toString());
     if (url.origin === "https://api.coingecko.com") {
@@ -115,10 +157,15 @@ export async function POST(request: Request) {
       const tokenBalances = body.action === "empty" || address === ADDRESS_TWO
         ? []
         : options.pageKey
-          ? [{ contractAddress: C, tokenBalance: "0x1b58" }]
+          ? lidoScenario
+            ? []
+            : [{ contractAddress: C, tokenBalance: "0x1b58" }]
           : [
               { contractAddress: A, tokenBalance: "0x1dcd6500" },
               { contractAddress: B, tokenBalance: "0x3e8" },
+              ...(lidoScenario
+                ? [{ contractAddress: LIDO_WITHDRAWAL_QUEUE, tokenBalance: "0x2" }]
+                : []),
             ];
       return Response.json({
         jsonrpc: "2.0",
@@ -126,9 +173,69 @@ export async function POST(request: Request) {
         result: {
           address,
           tokenBalances,
-          ...(body.action !== "empty" && address === ADDRESS_ONE && !options.pageKey ? { pageKey: "next" } : {}),
+          ...(
+            body.action !== "empty" &&
+            !lidoScenario &&
+            address === ADDRESS_ONE &&
+            !options.pageKey
+              ? { pageKey: "next" }
+              : {}
+          ),
         },
       });
+    }
+    if (payload.method === "eth_call") {
+      const call = payload.params[0] as { to?: unknown; data?: unknown };
+      const to = typeof call.to === "string" ? call.to.toLowerCase() : "";
+      const data = typeof call.data === "string" ? call.data.toLowerCase() : "";
+      if (to !== LIDO_WITHDRAWAL_QUEUE) {
+        return Response.json({ error: "unexpected eth_call target" }, { status: 500 });
+      }
+      if (body.action === "preview-lido-failure" && data.startsWith(GET_WITHDRAWAL_REQUESTS)) {
+        return Response.json({
+          jsonrpc: "2.0",
+          id: payload.id,
+          error: { code: -32000, message: "Lido request status unavailable" },
+        });
+      }
+      if (data.startsWith(GET_WITHDRAWAL_REQUESTS)) {
+        return Response.json({
+          jsonrpc: "2.0",
+          id: payload.id,
+          result: data.endsWith(ADDRESS_ONE.slice(2))
+            ? lidoRequestIds([18n, 27n])
+            : lidoRequestIds([]),
+        });
+      }
+      if (data.startsWith(GET_WITHDRAWAL_STATUS)) {
+        return Response.json({
+          jsonrpc: "2.0",
+          id: payload.id,
+          result: lidoStatuses(ADDRESS_ONE),
+        });
+      }
+      if (data.startsWith(GET_LAST_CHECKPOINT_INDEX)) {
+        return Response.json({
+          jsonrpc: "2.0",
+          id: payload.id,
+          result: `0x${word(3n)}`,
+        });
+      }
+      if (data.startsWith(FIND_CHECKPOINT_HINTS)) {
+        return Response.json({
+          jsonrpc: "2.0",
+          id: payload.id,
+          result: lidoRequestIds([2n]),
+        });
+      }
+      if (data.startsWith(GET_CLAIMABLE_ETHER)) {
+        return Response.json({
+          jsonrpc: "2.0",
+          id: payload.id,
+          result: lidoRequestIds([490_000_000_000_000_000n]),
+        });
+      }
+      return Response.json({ error: "unexpected Lido eth_call" }, { status: 500 });
     }
     if (payload.method === "alchemy_getTokenMetadata") {
       const contract = String(payload.params[0]);
@@ -188,6 +295,7 @@ export async function POST(request: Request) {
     if (
       body.action === "refresh-prices" ||
       body.action === "refresh-holdings" ||
+      body.action === "refresh-lido-prices" ||
       body.action === "refresh-ignored-unreadable"
     ) {
       rpcMethods.length = 0;
@@ -220,7 +328,9 @@ export async function POST(request: Request) {
             : {}),
         },
         credentials: result.credentials,
-        mode: body.action === "refresh-prices" ? "prices" : "holdings",
+        mode: body.action === "refresh-prices" || body.action === "refresh-lido-prices"
+          ? "prices"
+          : "holdings",
         attemptedAt: "2026-02-01T00:00:30.000Z",
         signal: new AbortController().signal,
         persistCredentials: async () => undefined,

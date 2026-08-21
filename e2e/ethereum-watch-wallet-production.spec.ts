@@ -6,6 +6,7 @@ import {
 } from "@playwright/test";
 
 const ADDRESS = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
+const LIDO_WITHDRAWAL_QUEUE = "0x889edc2edab5f40e902b864ad4d7ade8e412f9b1";
 
 async function attachPasskey(page: Page): Promise<CDPSession> {
   const client = await page.context().newCDPSession(page);
@@ -91,6 +92,92 @@ test("生产 Ethereum 适配器读取 ETH 与 ERC-20 分页，按合约区分同
   expect(body.rpcMethods.join("\n")).not.toMatch(/send|sign|transaction|nft|transfer/i);
   expect(body.priceRequests).toHaveLength(2);
   expect(JSON.stringify(body)).not.toContain("server-secret-test-key");
+});
+
+test("生产 Ethereum 适配器把 Lido 提现申请作为独立 ETH 仓位读取，且不按 ERC-20 元数据处理", async ({ request }) => {
+  const response = await request.post("/test-doubles/ethereum/production-start", {
+    data: { action: "preview-lido-withdrawal" },
+  });
+  expect(response.ok()).toBeTruthy();
+  const body = await response.json();
+
+  expect(body.snapshot.total).toEqual({ amount: "9499", currency: "USD" });
+  expect(body.snapshot.holdings).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      symbol: "ETH",
+      sourceProduct: "lido-withdrawal-request",
+      providerPositionId: "18",
+      providerPositionState: "排队中",
+      quantity: "1.5",
+      marketValue: "3000",
+    }),
+    expect.objectContaining({
+      symbol: "ETH",
+      sourceProduct: "lido-withdrawal-request",
+      providerPositionId: "27",
+      providerPositionState: "可领取",
+      quantity: "0.49",
+      marketValue: "980",
+    }),
+  ]));
+  expect(body.snapshot.coverage).toMatchObject({
+    status: "complete",
+    products: [{
+      product: "lido-withdrawal-request",
+      capability: "detailed",
+      freshness: "current",
+    }],
+  });
+  expect(body.rpcMethods).toContain("eth_call");
+  expect(body.metadataContracts).not.toContain(LIDO_WITHDRAWAL_QUEUE);
+  expect(body.rpcMethods.join("\n")).not.toMatch(/send|sign|transaction|nft|transfer/i);
+});
+
+test("Lido 提现申请读取失败时保留其他钱包资产，并明确保留该合约为未估值", async ({ request }) => {
+  const response = await request.post("/test-doubles/ethereum/production-start", {
+    data: { action: "preview-lido-failure" },
+  });
+  expect(response.ok()).toBeTruthy();
+  const body = await response.json();
+
+  expect(body.snapshot.total).toEqual({ amount: "5519", currency: "USD" });
+  expect(body.snapshot.coverage).toMatchObject({
+    status: "partial",
+    products: [{
+      product: "lido-withdrawal-request",
+      capability: "unknown",
+      freshness: "current",
+    }],
+  });
+  expect(body.snapshot.unrecognizedEvmTokens).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      sourceAsset: `evm:1:${LIDO_WITHDRAWAL_QUEUE}`,
+      symbol: "unstETH",
+      reason: expect.stringContaining("Lido 提现申请读取失败"),
+    }),
+  ]));
+});
+
+test("Lido 提现申请在价格刷新中保留仓位身份，只重新读取 ETH 参考价", async ({ request }) => {
+  const response = await request.post("/test-doubles/ethereum/production-start", {
+    data: { action: "refresh-lido-prices" },
+  });
+  expect(response.ok()).toBeTruthy();
+  const body = await response.json();
+
+  expect(body.snapshot.holdings).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      sourceProduct: "lido-withdrawal-request",
+      providerPositionId: "18",
+      marketValue: "3000",
+    }),
+    expect.objectContaining({
+      sourceProduct: "lido-withdrawal-request",
+      providerPositionId: "27",
+      marketValue: "980",
+    }),
+  ]));
+  expect(body.rpcMethods).toEqual([]);
 });
 
 test("共享 EVM 适配器用 chain ID 56 独立映射 BNB 与 BEP-20", async ({ request }) => {

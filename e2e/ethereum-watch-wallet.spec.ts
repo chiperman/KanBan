@@ -145,32 +145,31 @@ test("待确认 EVM 资产在对应钱包的设置页中管理", async ({
   await expect(refreshedCard).not.toContainText("待确认资产");
 });
 
-test("来源详情清楚列出数量无法读取的 EVM 资产", async ({ page }) => {
+test("来源详情把 Lido 提现申请显示为带状态的 ETH 仓位", async ({ page }) => {
   await page.request.post("/test-doubles/ethereum", {
-    data: { scenario: "metadata-decimals-failure" },
+    data: { scenario: "lido-withdrawal" },
   });
   await loginAsOwner(page);
   await connectEthereum(page);
 
   await page.getByRole("link", { name: /Ethereum 观察钱包.*观察钱包/ }).click();
   const card = page.getByTestId("ethereum-watch-card");
-  const unreadableAssets = card.getByTestId("evm-unreadable-assets");
-
-  await expect(unreadableAssets).toContainText("读取受限资产");
-  await expect(unreadableAssets).toContainText("unstETH");
-  await expect(unreadableAssets).toContainText(
-    "evm:1:0x889edc2edab5f40e902b864ad4d7ade8e412f9b1",
+  await expect(card.getByTestId("asset-source-total")).toHaveText("9,499.00 USD");
+  await expect(card.getByTestId("holding-top-list")).toContainText(
+    "Lido 提现申请 #18 · 排队中",
   );
-  await expect(unreadableAssets).toContainText("数量无法读取");
-  await expect(unreadableAssets).toContainText(
-    "代币合约未返回可靠 decimals，数量无法读取",
+  await expect(card.getByTestId("asset-holdings-detail")).toContainText(
+    "Lido 提现申请 #27 · 可领取",
   );
-  await expect(
-    unreadableAssets.getByRole("link", { name: "管理资产范围" }),
-  ).toBeVisible();
-  await expect(card.getByTestId("asset-holdings-detail")).not.toContainText(
-    "unstETH",
+  await expect(card.getByTestId("asset-holdings-detail")).toContainText("1.5");
+  await expect(card.getByTestId("asset-holdings-detail")).toContainText("0.49");
+  await expect(card.getByTestId("asset-holdings-detail")).toContainText("3,000.00");
+  await expect(card.getByTestId("evm-watch-ethereum-product-coverage")).toBeVisible();
+  await card.getByTestId("evm-watch-ethereum-product-coverage").locator("summary").click();
+  await expect(card.getByTestId("evm-watch-ethereum-product-coverage")).toContainText(
+    "已读取 2 笔未领取申请",
   );
+  await expect(card.getByTestId("evm-unreadable-assets")).toHaveCount(0);
 });
 
 test("钱包设置页可按合约忽略和恢复待确认 EVM 资产", async ({

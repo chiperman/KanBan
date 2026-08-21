@@ -942,7 +942,7 @@ export class FakeEvmWatchWallet implements EvmWatchWalletReadOnly {
     const config = input.chain === "ethereum"
       ? { chainId: "1", label: "Ethereum", symbol: "ETH", standard: "ERC-20", nativePrice: "2000", nativeValue: "5000", total: "5519" }
       : { chainId: "56", label: "BNB Smart Chain", symbol: "BNB", standard: "BEP-20", nativePrice: "600", nativeValue: "1500", total: "2019" };
-    const holdings = this.scenario === "empty" ? [] : [
+    const holdings: EvmWatchAuthorizationResult["snapshot"]["holdings"] = this.scenario === "empty" ? [] : [
       {
         symbol: config.symbol,
         name: config.label,
@@ -1004,6 +1004,55 @@ export class FakeEvmWatchWallet implements EvmWatchWalletReadOnly {
         changePercent: null,
       },
     ];
+    const hasLidoWithdrawal = this.scenario === "lido-withdrawal" && config.chainId === "1";
+    if (hasLidoWithdrawal) {
+      const unknownIndex = holdings.findIndex(({ symbol }) => symbol === "UNKNOWN");
+      if (unknownIndex >= 0) holdings.splice(unknownIndex, 1);
+      holdings.push(
+        {
+          symbol: "ETH",
+          name: "Lido 提现申请 #18 · 排队中",
+          sourceAsset: "evm:1:lido-withdrawal:18",
+          sourceAccount: "wallet",
+          sourceProduct: "lido-withdrawal-request",
+          providerPositionId: "18",
+          providerPositionState: "排队中",
+          economicAssetKey: "lido-withdrawal:18",
+          positionState: "redeeming",
+          quantity: "1.5",
+          currency: "USD",
+          assetClass: "crypto",
+          currentPrice: { amount: "2000", currency: "USD" },
+          marketValue: "3000",
+          sourceMarketValue: { amount: "3000", currency: "USD" },
+          valuation: { status: "valued", priceSource: "CoinGecko Ethereum/USD 参考价格", pricedAt: input.observedAt },
+          costPrice: null,
+          platformProfit: null,
+          changePercent: null,
+        },
+        {
+          symbol: "ETH",
+          name: "Lido 提现申请 #27 · 可领取",
+          sourceAsset: "evm:1:lido-withdrawal:27",
+          sourceAccount: "wallet",
+          sourceProduct: "lido-withdrawal-request",
+          providerPositionId: "27",
+          providerPositionState: "可领取",
+          economicAssetKey: "lido-withdrawal:27",
+          positionState: "redeeming",
+          quantity: "0.49",
+          currency: "USD",
+          assetClass: "crypto",
+          currentPrice: { amount: "2000", currency: "USD" },
+          marketValue: "980",
+          sourceMarketValue: { amount: "980", currency: "USD" },
+          valuation: { status: "valued", priceSource: "CoinGecko Ethereum/USD 参考价格", pricedAt: input.observedAt },
+          costPrice: null,
+          platformProfit: null,
+          changePercent: null,
+        },
+      );
+    }
     const unrecognizedEvmTokens =
       this.scenario === "metadata-decimals-failure" && config.chainId === "1"
         ? [{
@@ -1023,9 +1072,31 @@ export class FakeEvmWatchWallet implements EvmWatchWalletReadOnly {
         label: `${config.label} 观察钱包 · ${addresses.length} 个地址`,
       },
       snapshot: {
-        total: { amount: this.scenario === "empty" ? "0" : config.total, currency: "USD" },
+        total: {
+          amount: this.scenario === "empty"
+            ? "0"
+            : hasLidoWithdrawal
+              ? "9499"
+              : config.total,
+          currency: "USD",
+        },
         holdings,
         ...(unrecognizedEvmTokens.length > 0 ? { unrecognizedEvmTokens } : {}),
+        ...(hasLidoWithdrawal
+          ? {
+              coverage: {
+                status: "complete" as const,
+                products: [{
+                  product: "lido-withdrawal-request",
+                  capability: "detailed" as const,
+                  freshness: "current" as const,
+                  message: "已读取 2 笔未领取申请 · 1 笔排队中、1 笔可领取",
+                }],
+                unexplainedValue: null,
+                excludedPositiveAccounts: [],
+              },
+            }
+          : {}),
         exchangeRates: [],
         syncedAt: input.observedAt,
       },

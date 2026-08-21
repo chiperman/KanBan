@@ -7,6 +7,7 @@ import {
 } from "@/domain/decimal";
 import type {
   AssetHolding,
+  AssetProductCoverage,
   AssetSnapshot,
   AssetSourceRefreshResult,
   AssetSourceRefresher,
@@ -27,6 +28,13 @@ const ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/;
 const RPC_PAGE_LIMIT = 100;
 const RPC_NETWORK_ATTEMPTS = 3;
 const COINGECKO_ORIGIN = "https://api.coingecko.com";
+const LIDO_WITHDRAWAL_QUEUE = "0x889edc2edab5f40e902b864ad4d7ade8e412f9b1";
+const LIDO_GET_WITHDRAWAL_REQUESTS = "0x7d031b65";
+const LIDO_GET_WITHDRAWAL_STATUS = "0xb8c4b85a";
+const LIDO_GET_LAST_CHECKPOINT_INDEX = "0x526eae3e";
+const LIDO_FIND_CHECKPOINT_HINTS = "0x62abe3fa";
+const LIDO_GET_CLAIMABLE_ETHER = "0xc97912d8";
+const LIDO_REQUEST_LIMIT = 100;
 
 interface EvmChainConfig {
   chain: EvmChain;
@@ -125,6 +133,13 @@ interface DiscoveredBalance {
   symbol: string;
   name: string;
   quantity: string;
+  priceAsset?: string;
+  sourceAccount?: AssetHolding["sourceAccount"];
+  sourceProduct?: string;
+  providerPositionId?: string;
+  providerPositionState?: string;
+  economicAssetKey?: string;
+  positionState?: AssetHolding["positionState"];
 }
 
 interface ReferencePrice {
@@ -180,24 +195,30 @@ function buildSnapshot(
     });
   }
   const holdings: AssetHolding[] = [...aggregated.values()].map((balance) => {
-    const quote = prices.get(balance.sourceAsset) ?? null;
-    const marketValue = quote
-      ? decimalMultiply(balance.quantity, quote.price)
+    const price = prices.get(balance.priceAsset ?? balance.sourceAsset) ?? null;
+    const marketValue = price
+      ? decimalMultiply(balance.quantity, price.price)
       : null;
     return {
       symbol: balance.symbol,
       name: balance.name,
       sourceAsset: balance.sourceAsset,
+      ...(balance.sourceAccount ? { sourceAccount: balance.sourceAccount } : {}),
+      ...(balance.sourceProduct ? { sourceProduct: balance.sourceProduct } : {}),
+      ...(balance.providerPositionId ? { providerPositionId: balance.providerPositionId } : {}),
+      ...(balance.providerPositionState ? { providerPositionState: balance.providerPositionState } : {}),
+      ...(balance.economicAssetKey ? { economicAssetKey: balance.economicAssetKey } : {}),
+      ...(balance.positionState ? { positionState: balance.positionState } : {}),
       quantity: balance.quantity,
       currency: "USD",
       assetClass: "crypto" as const,
-      currentPrice: quote ? { amount: quote.price, currency: "USD" } : null,
+      currentPrice: price ? { amount: price.price, currency: "USD" } : null,
       marketValue,
       sourceMarketValue: marketValue
         ? { amount: marketValue, currency: "USD" }
         : null,
-      valuation: quote
-        ? { status: "valued" as const, priceSource: quote.source, pricedAt: quote.quotedAt }
+      valuation: price
+        ? { status: "valued" as const, priceSource: price.source, pricedAt: price.quotedAt }
         : { status: "unvalued" as const, reason: "CoinGecko 未返回可靠 USD 参考价格" },
       costPrice: null,
       platformProfit: null,
@@ -359,6 +380,13 @@ class EvmRpcClient {
     return this.call("eth_chainId", []);
   }
 
+  ethCall(to: string, data: string) {
+    if (!ADDRESS_PATTERN.test(to) || !/^0x[0-9a-fA-F]*$/.test(data)) {
+      throw new Error("EVM eth_call 参数无效");
+    }
+    return this.call("eth_call", [{ to, data }, "latest"]);
+  }
+
   async tokenBalances(address: string): Promise<Array<{ contract: string; balance: string }>> {
     const balances: Array<{ contract: string; balance: string }> = [];
     const seenContracts = new Set<string>();
@@ -451,6 +479,312 @@ class EvmRpcClient {
     };
   }
 }
+
+interface EvmProtocolPositionRead {
+  balances: DiscoveredBalance[];
+  coverage: AssetProductCoverage;
+  consumedContracts: string[];
+}
+
+interface EvmProtocolPositionAdapter {
+  contracts: readonly string[];
+  matches(input: {
+    config: EvmChainConfig;
+    contracts: readonly string[];
+  }): boolean;
+  read(input: {
+    config: EvmChainConfig;
+    addresses: readonly string[];
+    client: EvmRpcClient;
+  }): Promise<EvmProtocolPositionRead>;
+  failure(input: {
+    config: EvmChainConfig;
+    error: unknown;
+  }): {
+    coverage: AssetProductCoverage;
+    candidates: EvmUnrecognizedToken[];
+  };
+}
+
+function abiWord(value: bigint): string {
+  if (value < 0n) throw new Error("EVM ABI 不支持负数");
+  return value.toString(16).padStart(64, "0");
+}
+
+function abiWords(value: unknown, context: string): string[] {
+  if (typeof value !== "string" || !/^0x(?:[0-9a-fA-F]{2})*$/.test(value)) {
+    throw new Error(`${context}不是有效 ABI 十六进制结果`);
+  }
+  const raw = value.slice(2);
+  if (raw.length % 64 !== 0) throw new Error(`${context}长度不是 ABI word 的整数倍`);
+  return raw.match(/.{64}/g) ?? [];
+}
+
+function abiOffset(words: string[], context: string): number {
+  if (words.length === 0) throw new Error(`${context}缺少 ABI offset`);
+  const bytes = BigInt(`0x${words[0]}`);
+  if (bytes % 32n !== 0n || bytes > BigInt(Number.MAX_SAFE_INTEGER * 32)) {
+    throw new Error(`${context}包含无效 ABI offset`);
+  }
+  const offset = Number(bytes / 32n);
+  if (offset >= words.length) throw new Error(`${context}ABI offset 超出范围`);
+  return offset;
+}
+
+function abiArrayLength(
+  words: string[],
+  offset: number,
+  context: string,
+  itemWords: number,
+): number {
+  const length = BigInt(`0x${words[offset] ?? ""}`);
+  if (
+    length > BigInt(LIDO_REQUEST_LIMIT) ||
+    length > BigInt(Number.MAX_SAFE_INTEGER) ||
+    offset + 1 + Number(length) * itemWords > words.length
+  ) {
+    throw new Error(`${context}数组长度无效`);
+  }
+  return Number(length);
+}
+
+function decodeUint256Array(value: unknown, context: string): bigint[] {
+  const words = abiWords(value, context);
+  const offset = abiOffset(words, context);
+  const length = abiArrayLength(words, offset, context, 1);
+  return words.slice(offset + 1, offset + 1 + length).map((word) => BigInt(`0x${word}`));
+}
+
+function decodeUint256(value: unknown, context: string): bigint {
+  const words = abiWords(value, context);
+  if (words.length !== 1) throw new Error(`${context}不是单个 uint256`);
+  return BigInt(`0x${words[0]}`);
+}
+
+interface LidoWithdrawalStatus {
+  amountOfStEth: bigint;
+  owner: string;
+  isFinalized: boolean;
+  isClaimed: boolean;
+}
+
+function decodeLidoWithdrawalStatuses(value: unknown): LidoWithdrawalStatus[] {
+  const words = abiWords(value, "Lido 提现申请状态");
+  const offset = abiOffset(words, "Lido 提现申请状态");
+  const length = abiArrayLength(words, offset, "Lido 提现申请状态", 6);
+  const statuses: LidoWithdrawalStatus[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const start = offset + 1 + index * 6;
+    const isFinalized = BigInt(`0x${words[start + 4]}`);
+    const isClaimed = BigInt(`0x${words[start + 5]}`);
+    if (
+      (isFinalized !== 0n && isFinalized !== 1n) ||
+      (isClaimed !== 0n && isClaimed !== 1n)
+    ) {
+      throw new Error("Lido 提现申请状态包含无效布尔值");
+    }
+    statuses.push({
+      amountOfStEth: BigInt(`0x${words[start]}`),
+      owner: `0x${words[start + 2].slice(-40)}`.toLowerCase(),
+      isFinalized: isFinalized === 1n,
+      isClaimed: isClaimed === 1n,
+    });
+  }
+  return statuses;
+}
+
+function encodeAddressCall(selector: string, address: string): string {
+  return `${selector}${address.slice(2).padStart(64, "0")}`;
+}
+
+function encodeUint256ArrayCall(selector: string, values: bigint[]): string {
+  return `${selector}${abiWord(32n)}${abiWord(BigInt(values.length))}${values.map(abiWord).join("")}`;
+}
+
+function encodeUint256ArrayWithBoundsCall(
+  selector: string,
+  values: bigint[],
+  first: bigint,
+  last: bigint,
+): string {
+  return `${selector}${abiWord(96n)}${abiWord(first)}${abiWord(last)}${abiWord(BigInt(values.length))}${values.map(abiWord).join("")}`;
+}
+
+function encodeTwoUint256ArraysCall(
+  selector: string,
+  first: bigint[],
+  second: bigint[],
+): string {
+  const firstOffset = 64n;
+  const secondOffset = firstOffset + BigInt((first.length + 1) * 32);
+  return `${selector}${abiWord(firstOffset)}${abiWord(secondOffset)}${abiWord(BigInt(first.length))}${first.map(abiWord).join("")}${abiWord(BigInt(second.length))}${second.map(abiWord).join("")}`;
+}
+
+async function lidoClaimableEth(
+  client: EvmRpcClient,
+  requestIds: bigint[],
+): Promise<Map<string, bigint>> {
+  if (requestIds.length === 0) return new Map();
+  const sortedRequestIds = [...requestIds].toSorted((left, right) =>
+    left < right ? -1 : left > right ? 1 : 0,
+  );
+  const lastCheckpointIndex = decodeUint256(
+    await client.ethCall(LIDO_WITHDRAWAL_QUEUE, LIDO_GET_LAST_CHECKPOINT_INDEX),
+    "Lido 最后检查点",
+  );
+  if (lastCheckpointIndex === 0n) throw new Error("Lido 可领取申请缺少检查点");
+  const hints = decodeUint256Array(
+    await client.ethCall(
+      LIDO_WITHDRAWAL_QUEUE,
+      encodeUint256ArrayWithBoundsCall(
+        LIDO_FIND_CHECKPOINT_HINTS,
+        sortedRequestIds,
+        1n,
+        lastCheckpointIndex,
+      ),
+    ),
+    "Lido 提现申请检查点",
+  );
+  if (hints.length !== sortedRequestIds.length) {
+    throw new Error("Lido 提现申请检查点数量不一致");
+  }
+  const amounts = decodeUint256Array(
+    await client.ethCall(
+      LIDO_WITHDRAWAL_QUEUE,
+      encodeTwoUint256ArraysCall(
+        LIDO_GET_CLAIMABLE_ETHER,
+        sortedRequestIds,
+        hints,
+      ),
+    ),
+    "Lido 可领取 ETH",
+  );
+  if (amounts.length !== sortedRequestIds.length || amounts.some((amount) => amount === 0n)) {
+    throw new Error("Lido 可领取 ETH 数量无效");
+  }
+  return new Map(sortedRequestIds.map((requestId, index) => [
+    requestId.toString(),
+    amounts[index],
+  ]));
+}
+
+function lidoWithdrawalReason(error: unknown): string {
+  const message = error instanceof Error ? error.message : "未知错误";
+  return `Lido 提现申请读取失败：${message}`;
+}
+
+const lidoWithdrawalAdapter: EvmProtocolPositionAdapter = {
+  contracts: [LIDO_WITHDRAWAL_QUEUE],
+
+  matches({ config, contracts }) {
+    return config.chain === "ethereum" && contracts.includes(LIDO_WITHDRAWAL_QUEUE);
+  },
+
+  async read({ config, addresses, client }) {
+    const balances: DiscoveredBalance[] = [];
+    const seenRequestIds = new Set<string>();
+    let pending = 0;
+    let claimable = 0;
+    for (const owner of addresses) {
+      const requestIds = decodeUint256Array(
+        await client.ethCall(
+          LIDO_WITHDRAWAL_QUEUE,
+          encodeAddressCall(LIDO_GET_WITHDRAWAL_REQUESTS, owner),
+        ),
+        "Lido 提现申请编号",
+      );
+      if (requestIds.length === 0) continue;
+      const statuses = decodeLidoWithdrawalStatuses(
+        await client.ethCall(
+          LIDO_WITHDRAWAL_QUEUE,
+          encodeUint256ArrayCall(LIDO_GET_WITHDRAWAL_STATUS, requestIds),
+        ),
+      );
+      if (statuses.length !== requestIds.length) {
+        throw new Error("Lido 提现申请状态数量与申请编号不一致");
+      }
+      const positions = statuses.map((status, index) => {
+        const requestId = requestIds[index];
+        const providerPositionId = requestId.toString();
+        if (status.owner !== owner || status.isClaimed || status.amountOfStEth === 0n) {
+          throw new Error(`Lido 提现申请 #${providerPositionId} 状态无效`);
+        }
+        return { requestId, providerPositionId, status };
+      });
+      const claimableEth = await lidoClaimableEth(
+        client,
+        positions
+          .filter(({ status }) => status.isFinalized)
+          .map(({ requestId }) => requestId),
+      );
+      for (const { requestId, providerPositionId, status } of positions) {
+        if (seenRequestIds.has(providerPositionId)) {
+          throw new Error(`Lido 返回重复提现申请 #${providerPositionId}`);
+        }
+        seenRequestIds.add(providerPositionId);
+        const providerPositionState = status.isFinalized ? "可领取" : "排队中";
+        if (status.isFinalized) claimable += 1;
+        else pending += 1;
+        const quantityInWei = status.isFinalized
+          ? claimableEth.get(providerPositionId)
+          : status.amountOfStEth;
+        if (quantityInWei === undefined) {
+          throw new Error(`Lido 提现申请 #${providerPositionId} 缺少可领取 ETH`);
+        }
+        balances.push({
+          sourceAsset: `evm:${config.chainId}:lido-withdrawal:${providerPositionId}`,
+          contractAddress: LIDO_WITHDRAWAL_QUEUE,
+          symbol: "ETH",
+          name: `Lido 提现申请 #${providerPositionId} · ${providerPositionState}`,
+          quantity: units(
+            `0x${quantityInWei.toString(16)}`,
+            18,
+            `Lido 提现申请 #${providerPositionId}`,
+          ),
+          priceAsset: `evm:${config.chainId}:native`,
+          sourceAccount: "wallet",
+          sourceProduct: "lido-withdrawal-request",
+          providerPositionId,
+          providerPositionState,
+          economicAssetKey: `lido-withdrawal:${providerPositionId}`,
+          positionState: "redeeming",
+        });
+      }
+    }
+    return {
+      balances,
+      coverage: {
+        product: "lido-withdrawal-request",
+        capability: "detailed",
+        freshness: "current",
+        message: balances.length === 0
+          ? "未发现未领取申请"
+          : `已读取 ${balances.length} 笔未领取申请 · ${pending} 笔排队中、${claimable} 笔可领取`,
+      },
+      consumedContracts: [LIDO_WITHDRAWAL_QUEUE],
+    };
+  },
+
+  failure({ config, error }) {
+    return {
+      coverage: {
+        product: "lido-withdrawal-request",
+        capability: "unknown",
+        freshness: "current",
+        message: lidoWithdrawalReason(error),
+      },
+      candidates: [unrecognizedToken(config, LIDO_WITHDRAWAL_QUEUE, {
+        symbol: "unstETH",
+        name: "Lido 提现申请",
+        reason: lidoWithdrawalReason(error),
+      })],
+    };
+  },
+};
+
+const EVM_PROTOCOL_POSITION_ADAPTERS: readonly EvmProtocolPositionAdapter[] = [
+  lidoWithdrawalAdapter,
+];
 
 class CoinGeckoEvmPrices {
   constructor(
@@ -604,9 +938,40 @@ async function readFullSnapshot(input: {
     if (!/^0x[0-9a-fA-F]+$/.test(balance)) throw new Error("Alchemy 返回无效代币余额");
     return BigInt(balance) > 0n;
   });
+  const matchedProtocolAdapters = EVM_PROTOCOL_POSITION_ADAPTERS.filter((adapter) =>
+    adapter.matches({
+      config: input.config,
+      contracts: [...new Set(positiveTokens.map(({ contract }) => contract))],
+    })
+  );
+  const protocolContracts = new Set(
+    matchedProtocolAdapters.flatMap(({ contracts }) => contracts),
+  );
+  const protocolBalances: DiscoveredBalance[] = [];
+  const protocolProducts: AssetProductCoverage[] = [];
+  const protocolCandidates: EvmUnrecognizedToken[] = [];
+  let protocolReadFailed = false;
+  for (const adapter of matchedProtocolAdapters) {
+    try {
+      const result = await adapter.read({
+        config: input.config,
+        addresses: input.addresses,
+        client,
+      });
+      protocolBalances.push(...result.balances);
+      protocolProducts.push(result.coverage);
+    } catch (error) {
+      protocolReadFailed = true;
+      const failure = adapter.failure({ config: input.config, error });
+      protocolProducts.push(failure.coverage);
+      protocolCandidates.push(...failure.candidates);
+    }
+  }
   const ignoredAssetKeys = new Set(input.ignoredAssetKeys ?? []);
   const visibleTokens = positiveTokens.filter(
-    ({ contract }) => !ignoredAssetKeys.has(tokenAssetKey(input.config, contract)),
+    ({ contract }) =>
+      !protocolContracts.has(contract) &&
+      !ignoredAssetKeys.has(tokenAssetKey(input.config, contract)),
   );
   const contracts = [...new Set(visibleTokens.map(({ contract }) => contract))];
   if (contracts.length > 500) throw new Error("EVM 同质化代币数量超过安全上限");
@@ -641,7 +1006,11 @@ async function readFullSnapshot(input: {
   });
   const ignoredTokens = [...new Set(
     positiveTokens
-      .filter(({ contract }) => ignoredAssetKeys.has(tokenAssetKey(input.config, contract)))
+      .filter(
+        ({ contract }) =>
+          !protocolContracts.has(contract) &&
+          ignoredAssetKeys.has(tokenAssetKey(input.config, contract)),
+      )
       .map(({ contract }) => tokenAssetKey(input.config, contract)),
   )].map((sourceAsset) =>
     previousUnrecognizedToken(input.previousSnapshot, sourceAsset)
@@ -654,13 +1023,31 @@ async function readFullSnapshot(input: {
     [...metadata.keys()],
     input.observedAt,
     input.signal,
-    nativeBalances.some(({ quantity }) => decimalCompare(quantity, "0") > 0),
+    nativeBalances.some(({ quantity }) => decimalCompare(quantity, "0") > 0) ||
+      protocolBalances.some(({ priceAsset }) => priceAsset === `evm:${input.config.chainId}:native`),
   );
-  return snapshotTokenCandidates(
-    buildSnapshot([...nativeBalances, ...tokenBalances], prices, input.observedAt),
+  const snapshot = snapshotTokenCandidates(
+    buildSnapshot(
+      [...nativeBalances, ...tokenBalances, ...protocolBalances],
+      prices,
+      input.observedAt,
+    ),
     input.config,
-    [...unreadableTokens, ...ignoredTokens],
+    [...unreadableTokens, ...ignoredTokens, ...protocolCandidates],
   );
+  if (matchedProtocolAdapters.length === 0) return snapshot;
+  const hasUnvalued = snapshot.holdings.some(
+    ({ valuation }) => valuation.status === "unvalued",
+  ) || (snapshot.unrecognizedEvmTokens?.length ?? 0) > 0;
+  return {
+    ...snapshot,
+    coverage: {
+      status: protocolReadFailed || hasUnvalued ? "partial" : "complete",
+      products: protocolProducts,
+      unexplainedValue: null,
+      excludedPositiveAccounts: [],
+    },
+  };
 }
 
 export class ProductionEvmWatchWallet implements EvmWatchWalletReadOnly {
@@ -728,7 +1115,11 @@ export class ProductionEvmWatchSourceRefresher implements AssetSourceRefresher {
         [...new Set(contracts)],
         attemptedAt,
         signal,
-        source.snapshot.holdings.some(({ sourceAsset }) => sourceAsset === `evm:${config.chainId}:native`),
+        source.snapshot.holdings.some(
+          ({ sourceAsset, sourceProduct }) =>
+            sourceAsset === `evm:${config.chainId}:native` ||
+            sourceProduct === "lido-withdrawal-request",
+        ),
       );
       const balances: DiscoveredBalance[] = source.snapshot.holdings.map((holding) => ({
         sourceAsset: holding.sourceAsset ?? `evm:${config.chainId}:${holding.symbol}`,
@@ -738,15 +1129,27 @@ export class ProductionEvmWatchSourceRefresher implements AssetSourceRefresher {
         symbol: holding.symbol,
         name: holding.name,
         quantity: holding.quantity,
+        ...(holding.sourceProduct === "lido-withdrawal-request"
+          ? { priceAsset: `evm:${config.chainId}:native` }
+          : {}),
+        ...(holding.sourceAccount ? { sourceAccount: holding.sourceAccount } : {}),
+        ...(holding.sourceProduct ? { sourceProduct: holding.sourceProduct } : {}),
+        ...(holding.providerPositionId ? { providerPositionId: holding.providerPositionId } : {}),
+        ...(holding.providerPositionState ? { providerPositionState: holding.providerPositionState } : {}),
+        ...(holding.economicAssetKey ? { economicAssetKey: holding.economicAssetKey } : {}),
+        ...(holding.positionState ? { positionState: holding.positionState } : {}),
       }));
-      return {
-        snapshot: snapshotTokenCandidates(
-          buildSnapshot(balances, prices, attemptedAt),
-          config,
-          (source.snapshot.unrecognizedEvmTokens ?? []).filter(
-            ({ quantity }) => quantity === null,
-          ),
+      const snapshot = snapshotTokenCandidates(
+        buildSnapshot(balances, prices, attemptedAt),
+        config,
+        (source.snapshot.unrecognizedEvmTokens ?? []).filter(
+          ({ quantity }) => quantity === null,
         ),
+      );
+      return {
+        snapshot: source.snapshot.coverage === undefined
+          ? snapshot
+          : { ...snapshot, coverage: source.snapshot.coverage },
       };
     }
     return {

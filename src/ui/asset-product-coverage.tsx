@@ -40,6 +40,7 @@ const ASSET_PRODUCT_LABELS: Record<string, string> = {
   "fixed-income": "Fixed Income",
   "balance-plus": "Balance+",
   dcp: "DCP",
+  "lido-withdrawal-request": "Lido 提现申请",
 };
 
 export function assetProductDisplayName(product: string): string {
