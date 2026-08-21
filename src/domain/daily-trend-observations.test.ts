@@ -2,10 +2,74 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  assetClassTrendObservation,
+  buildDailyAssetSnapshot,
+} from "@/domain/daily-asset-snapshots";
+import {
   daysForTrendRange,
   sourceTrendObservationStatus,
   totalTrendObservationStatus,
 } from "@/domain/daily-trend-observations";
+import type { AssetSourceSummary } from "@/server/ports";
+
+const CAPTURED_AT = "2026-08-20T04:00:00.000Z";
+
+function valuedSource(input: {
+  assetClass: "securities" | "crypto" | "cash";
+  id: string;
+  amount: string;
+  kind: "binance" | "longbridge";
+}): AssetSourceSummary {
+  return {
+    id: input.id,
+    kind: input.kind,
+    label: input.id,
+    accountId: input.id,
+    permissions: ["account", "positions", "market-data"],
+    credentialReference: `${input.id}-reference`,
+    snapshot: {
+      total: { amount: input.amount, currency: "USD" },
+      holdings: [{
+        symbol: input.id,
+        name: input.id,
+        quantity: "1",
+        currency: "USD",
+        assetClass: input.assetClass,
+        currentPrice: { amount: input.amount, currency: "USD" },
+        marketValue: input.amount,
+        sourceMarketValue: { amount: input.amount, currency: "USD" },
+        valuation: {
+          status: "valued",
+          priceSource: "测试行情",
+          pricedAt: CAPTURED_AT,
+        },
+        costPrice: null,
+        platformProfit: null,
+        changePercent: null,
+      }],
+      exchangeRates: [{
+        baseCurrency: "USD",
+        quoteCurrency: "CNY",
+        rate: "7.2",
+        source: "Longbridge",
+        observedAt: CAPTURED_AT,
+      }, {
+        baseCurrency: "USD",
+        quoteCurrency: "HKD",
+        rate: "7.8",
+        source: "Longbridge",
+        observedAt: CAPTURED_AT,
+      }],
+      syncedAt: CAPTURED_AT,
+    },
+    sync: {
+      status: "current",
+      lastSuccessfulAt: CAPTURED_AT,
+      lastAttemptAt: CAPTURED_AT,
+      error: null,
+    },
+  };
+}
 
 test("趋势区间保留连续上海自然日，包括没有观测的日期", () => {
   assert.deepEqual(
@@ -52,4 +116,48 @@ test("总资产趋势只由自动来源决定过期与不完整状态", () => {
     ]),
     "expired",
   );
+});
+
+test("每日快照按来源分类记录趋势，不为旧历史或不完整观测伪造端点", () => {
+  const snapshot = buildDailyAssetSnapshot([
+    valuedSource({
+      id: "证券来源",
+      kind: "longbridge",
+      assetClass: "cash",
+      amount: "100",
+    }),
+    valuedSource({
+      id: "加密来源",
+      kind: "binance",
+      assetClass: "cash",
+      amount: "50",
+    }),
+  ], CAPTURED_AT);
+
+  assert.deepEqual(assetClassTrendObservation(snapshot, "securities"), {
+    complete: true,
+    status: "complete",
+    total: { USD: "100", CNY: "720", HKD: "780" },
+  });
+  assert.deepEqual(assetClassTrendObservation(snapshot, "crypto"), {
+    complete: true,
+    status: "complete",
+    total: { USD: "50", CNY: "360", HKD: "390" },
+  });
+
+  const oldSnapshot = structuredClone(snapshot);
+  delete oldSnapshot.sources[0].assetClassTotals;
+  assert.equal(assetClassTrendObservation(oldSnapshot, "securities"), null);
+
+  const expiredSnapshot = structuredClone(snapshot);
+  expiredSnapshot.sources[0].assetClassTotals!.securities = {
+    complete: false,
+    status: "expired",
+    total: { USD: "100", CNY: "720", HKD: "780" },
+  };
+  assert.deepEqual(assetClassTrendObservation(expiredSnapshot, "securities"), {
+    complete: false,
+    status: "expired",
+    total: { USD: "100", CNY: "720", HKD: "780" },
+  });
 });

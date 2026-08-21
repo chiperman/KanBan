@@ -47,14 +47,21 @@ html {
   min-width: 0;
 }
 
-.investment-performance__range-options {
+.investment-performance__scope {
+  display: grid;
+  min-width: 0;
+}
+
+.investment-performance__range-options,
+.investment-performance__scope-options {
   display: flex;
   min-width: 0;
   flex-wrap: wrap;
   gap: var(--vibe-space-2);
 }
 
-.investment-performance__range-option.vibe-button {
+.investment-performance__range-option.vibe-button,
+.investment-performance__scope-option.vibe-button {
   min-width: 72px;
 }
 
@@ -334,12 +341,14 @@ html {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .investment-performance__range-options {
+  .investment-performance__range-options,
+  .investment-performance__scope-options {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .investment-performance__range-option.vibe-button {
+  .investment-performance__range-option.vibe-button,
+  .investment-performance__scope-option.vibe-button {
     width: 100%;
     min-width: 0;
   }

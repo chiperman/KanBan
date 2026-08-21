@@ -2,7 +2,10 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { buildDailyAssetSnapshot } from "@/domain/daily-asset-snapshots";
+import {
+  buildDailyAssetSnapshot,
+  sourceTrendClassTotals,
+} from "@/domain/daily-asset-snapshots";
 import { buildSnapshotFromPositions } from "@/domain/valuation";
 import { getTestServices, isTestEnv } from "@/server/composition";
 import type { AssetSourceSummary, Card } from "@/server/ports";
@@ -18,6 +21,7 @@ function sourceFixture(input: {
   label: string;
   amount: string;
   credentialReference: string;
+  assetClass?: "securities" | "crypto";
   platformProfit?: string | null;
   rate?: string;
 }): AssetSourceSummary {
@@ -34,7 +38,7 @@ function sourceFixture(input: {
         name: input.label,
         quantity: "1",
         currency: "USD",
-        assetClass: "securities",
+        assetClass: input.assetClass ?? "securities",
         currentPrice: { amount: input.amount, currency: "USD" },
         priceSource: `${input.label} 初始行情`,
         pricedAt: INITIAL_AT,
@@ -412,6 +416,89 @@ export async function POST(request: Request) {
     services.clock.set(body.iso);
     return Response.json({ ok: true });
   }
+  if (body?.action === "seed-classified-performance-history") {
+    const sourceList = await services.assetSources.list();
+    const observations = [
+      {
+        day: "2026-03-01",
+        capturedAt: "2026-03-01T04:00:00.000Z",
+        totals: [
+          { USD: "100", CNY: "720", HKD: "780" },
+          { USD: "200", CNY: "1440", HKD: "1560" },
+        ],
+      },
+      {
+        day: "2026-03-02",
+        capturedAt: "2026-03-02T04:00:00.000Z",
+        totals: [
+          { USD: "130", CNY: "936", HKD: "1014" },
+          { USD: "150", CNY: "1080", HKD: "1170" },
+        ],
+      },
+      {
+        day: "2026-03-04",
+        capturedAt: "2026-03-04T04:00:00.000Z",
+        totals: [
+          { USD: "120", CNY: "864", HKD: "936" },
+          { USD: "180", CNY: "1296", HKD: "1404" },
+        ],
+      },
+    ] as const;
+    for (const observation of observations) {
+      const base = buildDailyAssetSnapshot(sourceList, observation.capturedAt);
+      await services.dailyAssetSnapshots.record(
+        {
+          ...base,
+          day: observation.day,
+          capturedAt: observation.capturedAt,
+          total: {
+            USD: String(
+              observation.totals.reduce(
+                (sum, source) => sum + Number(source.USD),
+                0,
+              ),
+            ),
+            CNY: String(
+              observation.totals.reduce(
+                (sum, source) => sum + Number(source.CNY),
+                0,
+              ),
+            ),
+            HKD: String(
+              observation.totals.reduce(
+                (sum, source) => sum + Number(source.HKD),
+                0,
+              ),
+            ),
+          },
+          sources: base.sources.map((source, index) => {
+            const total = observation.totals[index] ?? source.total;
+            const sourceObservation = {
+              ...source,
+              capturedAt: observation.capturedAt,
+              total,
+            };
+            return {
+              ...sourceObservation,
+              assetClassTotals: sourceTrendClassTotals(
+                sourceList[index]!,
+                sourceObservation,
+              ),
+            };
+          }),
+        },
+        true,
+      );
+    }
+    services.clock.set("2026-03-04T12:00:00.000Z");
+    await services.assetSources.replaceAll(sourceList.map((source) => ({
+      ...source,
+      lifecycle: "disconnected",
+      credentialReference: null,
+    })));
+    services.assetSynchronization.reset("all-failure");
+    return Response.json({ ok: true });
+  }
   if (body?.action === "remove-beta-cross-currency-rates") {
     await services.assetSources.replaceAll(
       (await services.assetSources.list()).map((source) =>
@@ -608,7 +695,8 @@ export async function POST(request: Request) {
   }
   if (
     body?.action !== "configure" &&
-    body?.action !== "configure-longbridge"
+    body?.action !== "configure-longbridge" &&
+    body?.action !== "configure-classified"
   ) {
     return Response.json({ error: "每日快照测试配置无效" }, { status: 400 });
   }
@@ -623,7 +711,7 @@ export async function POST(request: Request) {
   const sources = [
     sourceFixture({
       id: "source-alpha",
-      kind: sourceKind,
+      kind: body.action === "configure-classified" ? "longbridge" : sourceKind,
       label: "Alpha Securities",
       amount: "100",
       credentialReference: alphaReference,
@@ -631,10 +719,11 @@ export async function POST(request: Request) {
     }),
     sourceFixture({
       id: "source-beta",
-      kind: sourceKind,
+      kind: body.action === "configure-classified" ? "binance" : sourceKind,
       label: "Beta Crypto",
       amount: "200",
       credentialReference: betaReference,
+      assetClass: "crypto",
       rate: "7.1",
     }),
   ];

@@ -336,6 +336,30 @@ function dailyTrendObservation(
   };
 }
 
+function classifiedDailyTrendObservation(
+  usd: string,
+  cny: string,
+  hkd: string,
+  capturedAt: string,
+): DailyAssetSnapshot {
+  const snapshot = dailyTrendObservation(usd, cny, capturedAt, true);
+  snapshot.total.HKD = hkd;
+  snapshot.sources[0].total.HKD = hkd;
+  snapshot.sources[0].assetClassTotals = {
+    securities: {
+      complete: true,
+      status: "complete",
+      total: { USD: usd, CNY: cny, HKD: hkd },
+    },
+    crypto: {
+      complete: true,
+      status: "complete",
+      total: { USD: "0", CNY: "0", HKD: "0" },
+    },
+  };
+  return snapshot;
+}
+
 function twoPartyBarrier(): () => Promise<void> {
   let arrivals = 0;
   let release!: () => void;
@@ -486,6 +510,8 @@ export async function POST(request: Request) {
     action !== "schema-v6-hkd-fx-migration" &&
     action !== "schema-v8-manual-source-migration" &&
     action !== "schema-v12-investment-cashflow-migration" &&
+    action !== "schema-v14-asset-class-trend-migration" &&
+    action !== "schema-v15-source-category-trend-backfill" &&
     action !== "display-name-persistence" &&
     action !== "evm-token-preference-persistence" &&
     action !== "evm-unrecognized-token-persistence" &&
@@ -667,6 +693,14 @@ export async function POST(request: Request) {
         note: "迁移后补录",
       });
       const afterSnapshots = await migrated.listDailyAssetSnapshots();
+      const snapshotValues = (snapshots: DailyAssetSnapshot[]) =>
+        snapshots.map((snapshot) => ({
+          ...snapshot,
+          sources: snapshot.sources.map((source) => {
+            const { assetClassTotals: _assetClassTotals, ...value } = source;
+            return value;
+          }),
+        }));
       const inspection = new DatabaseSync(databasePath, { readOnly: true });
       const schemaVersion = inspection
         .prepare("SELECT value FROM schema_metadata WHERE key = 'schema_version'")
@@ -688,8 +722,193 @@ export async function POST(request: Request) {
           amounts: cashflow.amounts,
           exchangeRateSources: cashflow.exchangeRates.map(({ source }) => source),
         },
-        snapshotsUnchanged:
-          JSON.stringify(afterSnapshots) === JSON.stringify(beforeSnapshots),
+        snapshotValuesUnchanged:
+          JSON.stringify(snapshotValues(afterSnapshots)) ===
+          JSON.stringify(snapshotValues(beforeSnapshots)),
+      });
+    }
+    if (action === "schema-v14-asset-class-trend-migration") {
+      await mkdir(dataDirectory, { recursive: true });
+      const databasePath = path.join(dataDirectory, "dashboard.sqlite");
+      const legacyDashboardPath = path.join(dataDirectory, "dashboard.json");
+      const legacyCardsPath = path.join(dataDirectory, "cards.json");
+      const first = new SqliteDashboardDatabase(
+        databasePath,
+        legacyDashboardPath,
+        legacyCardsPath,
+      );
+      const oldObservation = dailyTrendObservation(
+        "100",
+        "720",
+        "2026-08-20T04:00:00.000Z",
+        true,
+      );
+      oldObservation.total.HKD = "780";
+      oldObservation.sources[0].total.HKD = "780";
+      await first.createDailyAssetSnapshotIfAbsent(oldObservation);
+      await first.recordDailyAssetObservation(oldObservation, true);
+
+      const downgrade = new DatabaseSync(databasePath);
+      downgrade.exec(`
+        ALTER TABLE daily_asset_source_snapshots
+        DROP COLUMN asset_class_totals_json;
+        ALTER TABLE daily_asset_source_trend_observations
+        DROP COLUMN asset_class_totals_json;
+        UPDATE schema_metadata SET value = '14' WHERE key = 'schema_version';
+      `);
+      downgrade.close();
+
+      const migrated = new SqliteDashboardDatabase(
+        databasePath,
+        legacyDashboardPath,
+        legacyCardsPath,
+      );
+      const [oldTrend] = await migrated.listDailyAssetTrendObservations();
+      const classified = {
+        ...classifiedDailyTrendObservation(
+          "120",
+          "864",
+          "936",
+          "2026-08-21T04:00:00.000Z",
+        ),
+        day: "2026-08-21",
+      };
+      await migrated.createDailyAssetSnapshotIfAbsent(classified);
+      await migrated.recordDailyAssetObservation(classified, true);
+
+      const restarted = new SqliteDashboardDatabase(
+        databasePath,
+        legacyDashboardPath,
+        legacyCardsPath,
+      );
+      const trends = await restarted.listDailyAssetTrendObservations();
+      const inspection = new DatabaseSync(databasePath, { readOnly: true });
+      const schemaVersion = inspection
+        .prepare("SELECT value FROM schema_metadata WHERE key = 'schema_version'")
+        .get() as { value: string };
+      const assetClassColumns = [
+        "daily_asset_source_snapshots",
+        "daily_asset_source_trend_observations",
+      ].every((table) =>
+        (inspection.prepare(`PRAGMA table_info(${table})`).all() as Array<{
+          name: string;
+        }>).some(({ name }) => name === "asset_class_totals_json"),
+      );
+      inspection.close();
+      return Response.json({
+        schemaVersion: schemaVersion.value,
+        assetClassColumns,
+        oldTrendHasAssetClassTotals:
+          oldTrend.sources[0].assetClassTotals !== undefined,
+        persistedTrend: trends.find(
+          (trend) => trend.day === "2026-08-21",
+        )?.sources[0].assetClassTotals,
+      });
+    }
+    if (action === "schema-v15-source-category-trend-backfill") {
+      await mkdir(dataDirectory, { recursive: true });
+      const databasePath = path.join(dataDirectory, "dashboard.sqlite");
+      const legacyDashboardPath = path.join(dataDirectory, "dashboard.json");
+      const legacyCardsPath = path.join(dataDirectory, "cards.json");
+      const first = new SqliteDashboardDatabase(
+        databasePath,
+        legacyDashboardPath,
+        legacyCardsPath,
+      );
+      const capturedAt = "2026-08-20T04:00:00.000Z";
+      const source = (
+        id: string,
+        kind: "binance" | "longbridge",
+        amount: string,
+      ): AssetSourceSummary => ({
+        id,
+        kind,
+        label: id,
+        accountId: id,
+        permissions: ["account", "positions"],
+        credentialReference: `${id}-reference`,
+        snapshot: {
+          total: { amount, currency: "USD" },
+          holdings: [],
+          exchangeRates: [],
+          syncedAt: capturedAt,
+        },
+        sync: {
+          status: "current",
+          lastSuccessfulAt: capturedAt,
+          lastAttemptAt: capturedAt,
+          error: null,
+        },
+      });
+      await first.replaceSources([
+        source("longbridge-source", "longbridge", "100"),
+        source("binance-source", "binance", "50"),
+      ]);
+      const oldObservation: DailyAssetSnapshot = {
+        day: "2026-08-20",
+        capturedAt,
+        complete: true,
+        status: "complete",
+        total: { USD: "150", CNY: "1080", HKD: "1170" },
+        exchangeRates: [],
+        sources: [
+          {
+            sourceId: "longbridge-source",
+            label: "longbridge-source",
+            kind: "longbridge",
+            capturedAt,
+            complete: true,
+            status: "complete",
+            total: { USD: "100", CNY: "720", HKD: "780" },
+          },
+          {
+            sourceId: "binance-source",
+            label: "binance-source",
+            kind: "binance",
+            capturedAt,
+            complete: true,
+            status: "complete",
+            total: { USD: "50", CNY: "360", HKD: "390" },
+          },
+        ],
+      };
+      await first.createDailyAssetSnapshotIfAbsent(oldObservation);
+      await first.recordDailyAssetObservation(oldObservation, true);
+
+      const downgrade = new DatabaseSync(databasePath);
+      downgrade.exec(`
+        UPDATE daily_asset_source_snapshots
+        SET asset_class_totals_json = '{"securities":{"complete":true,"status":"complete","total":{"USD":"100","CNY":"720","HKD":"780"}},"crypto":{"complete":true,"status":"complete","total":{"USD":"0","CNY":"0","HKD":"0"}}}';
+        UPDATE daily_asset_source_trend_observations
+        SET asset_class_totals_json = '{"securities":{"complete":true,"status":"complete","total":{"USD":"100","CNY":"720","HKD":"780"}},"crypto":{"complete":true,"status":"complete","total":{"USD":"0","CNY":"0","HKD":"0"}}}';
+        UPDATE schema_metadata SET value = '15' WHERE key = 'schema_version';
+      `);
+      downgrade.close();
+
+      const migrated = new SqliteDashboardDatabase(
+        databasePath,
+        legacyDashboardPath,
+        legacyCardsPath,
+      );
+      const [baseline] = await migrated.listDailyAssetSnapshots();
+      const [trend] = await migrated.listDailyAssetTrendObservations();
+      const inspection = new DatabaseSync(databasePath, { readOnly: true });
+      const schemaVersion = inspection
+        .prepare("SELECT value FROM schema_metadata WHERE key = 'schema_version'")
+        .get() as { value: string };
+      inspection.close();
+      const totals = (observation: DailyAssetSnapshot) => ({
+        longbridge: observation.sources.find(
+          (source) => source.sourceId === "longbridge-source",
+        )?.assetClassTotals ?? null,
+        binance: observation.sources.find(
+          (source) => source.sourceId === "binance-source",
+        )?.assetClassTotals ?? null,
+      });
+      return Response.json({
+        schemaVersion: schemaVersion.value,
+        baseline: totals(baseline),
+        trend: totals(trend),
       });
     }
     if (action === "schema-v2-migration") {

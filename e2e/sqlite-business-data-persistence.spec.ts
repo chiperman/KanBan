@@ -69,7 +69,7 @@ test("SQLite schema v2 自动迁移并持久化 Binance 覆盖证据", async ({ 
 
   expect(response.ok()).toBeTruthy();
   await expect(response.json()).resolves.toEqual({
-    schemaVersion: "14",
+    schemaVersion: "16",
     coverageColumn: true,
     displayNameColumn: true,
     coverageStatus: "partial",
@@ -86,7 +86,7 @@ test("SQLite schema v4 升级后分离日初基准与每日趋势观测并跨重
 
   expect(response.ok()).toBeTruthy();
   await expect(response.json()).resolves.toEqual({
-    schemaVersion: "14",
+    schemaVersion: "16",
     migratedTrend: {
       capturedAt: "2026-07-28T00:30:00.000Z",
       complete: false,
@@ -144,7 +144,7 @@ test("SQLite schema v6 升级后持久化 HKD 金额与观测时汇率", async (
 
   expect(response.ok()).toBeTruthy();
   await expect(response.json()).resolves.toEqual({
-    schemaVersion: "14",
+    schemaVersion: "16",
     hkdColumns: true,
     baseline: {
       total: { USD: "10", CNY: "72", HKD: "78" },
@@ -210,7 +210,7 @@ test("SQLite schema v8 升级后可创建并记录手工资产来源", async ({
 
   expect(response.ok()).toBeTruthy();
   await expect(response.json()).resolves.toEqual({
-    schemaVersion: "14",
+    schemaVersion: "16",
     hasManualRecordColumn: true,
     manualAssetClassColumn: true,
     existing: {
@@ -238,7 +238,7 @@ test("SQLite schema v12 增量迁移保存资金账本且不改写资产观测",
 
   expect(response.ok()).toBeTruthy();
   await expect(response.json()).resolves.toEqual({
-    schemaVersion: "14",
+    schemaVersion: "16",
     cashflowTable: true,
     cashflow: {
       kind: "initial-investment",
@@ -248,7 +248,79 @@ test("SQLite schema v12 增量迁移保存资金账本且不改写资产观测",
       amounts: { USD: "10000", CNY: "72000", HKD: "78000" },
       exchangeRateSources: ["Longbridge", "Longbridge"],
     },
-    snapshotsUnchanged: true,
+    snapshotValuesUnchanged: true,
+  });
+});
+
+test("SQLite schema v14 升级后保留旧分类未知，并跨重启持久化新分类趋势", async ({
+  request,
+}) => {
+  const response = await request.post(
+    "/test-doubles/sqlite-business-data-persistence?action=schema-v14-asset-class-trend-migration",
+  );
+
+  expect(response.ok()).toBeTruthy();
+  await expect(response.json()).resolves.toEqual({
+    schemaVersion: "16",
+    assetClassColumns: true,
+    oldTrendHasAssetClassTotals: true,
+    persistedTrend: {
+      securities: {
+        complete: true,
+        status: "complete",
+        total: { USD: "120", CNY: "864", HKD: "936" },
+      },
+      crypto: {
+        complete: true,
+        status: "complete",
+        total: { USD: "0", CNY: "0", HKD: "0" },
+      },
+    },
+  });
+});
+
+test("SQLite schema v15 按来源类别回填历史证券与加密趋势", async ({
+  request,
+}) => {
+  const response = await request.post(
+    "/test-doubles/sqlite-business-data-persistence?action=schema-v15-source-category-trend-backfill",
+  );
+
+  expect(response.ok()).toBeTruthy();
+  const expected = {
+    securities: {
+      complete: true,
+      status: "complete",
+      total: { USD: "100", CNY: "720", HKD: "780" },
+    },
+    crypto: {
+      complete: true,
+      status: "complete",
+      total: { USD: "0", CNY: "0", HKD: "0" },
+    },
+  };
+  const expectedCrypto = {
+    securities: {
+      complete: true,
+      status: "complete",
+      total: { USD: "0", CNY: "0", HKD: "0" },
+    },
+    crypto: {
+      complete: true,
+      status: "complete",
+      total: { USD: "50", CNY: "360", HKD: "390" },
+    },
+  };
+  await expect(response.json()).resolves.toEqual({
+    schemaVersion: "16",
+    baseline: {
+      longbridge: expected,
+      binance: expectedCrypto,
+    },
+    trend: {
+      longbridge: expected,
+      binance: expectedCrypto,
+    },
   });
 });
 

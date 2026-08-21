@@ -24,6 +24,7 @@ import {
   buildDailyAssetSnapshot,
   mergeDailyTrendObservation,
   shanghaiDay,
+  sourceTrendClassTotals,
 } from "@/domain/daily-asset-snapshots";
 import { normalizeAssetSourceDisplayName } from "@/domain/asset-source-display-name";
 import {
@@ -138,7 +139,7 @@ interface DashboardState {
 }
 
 const DASHBOARD_SCHEMA_VERSION = 9 as const;
-const SQLITE_SCHEMA_VERSION = 14;
+const SQLITE_SCHEMA_VERSION = 16;
 
 type SourceConnectionKind =
   | "longbridge"
@@ -355,21 +356,29 @@ function withoutSnapshotSource(
 }
 
 function manualDailySource(
-  source: Pick<AssetSourceSummary, "id" | "label" | "kind">,
+  source: Pick<
+    AssetSourceSummary,
+    "id" | "kind" | "label" | "manualAssetClass"
+  >,
   record: ManualAssetRecord,
 ): DailyAssetSourceSnapshot {
-  return {
+  const total = {
+    USD: record.currency === "USD" ? record.amount : null,
+    CNY: record.currency === "CNY" ? record.amount : null,
+    HKD: record.currency === "HKD" ? record.amount : null,
+  };
+  const observation = {
     sourceId: source.id,
     label: source.label,
     kind: source.kind,
     capturedAt: record.recordedAt,
     complete: true,
     status: "complete",
-    total: {
-      USD: record.currency === "USD" ? record.amount : null,
-      CNY: record.currency === "CNY" ? record.amount : null,
-      HKD: record.currency === "HKD" ? record.amount : null,
-    },
+    total,
+  } satisfies DailyAssetSourceSnapshot;
+  return {
+    ...observation,
+    assetClassTotals: sourceTrendClassTotals(source, observation),
   };
 }
 
@@ -618,6 +627,24 @@ function migrateDailyObservation<T extends DailyAssetSnapshot>(
     const complete = manual || (
       source.complete && (source.total.HKD ?? null) !== null
     );
+    const assetClassTotals = source.assetClassTotals === undefined
+      ? undefined
+      : {
+          securities: {
+            ...source.assetClassTotals.securities,
+            total: {
+              ...source.assetClassTotals.securities.total,
+              HKD: source.assetClassTotals.securities.total.HKD ?? null,
+            },
+          },
+          crypto: {
+            ...source.assetClassTotals.crypto,
+            total: {
+              ...source.assetClassTotals.crypto.total,
+              HKD: source.assetClassTotals.crypto.total.HKD ?? null,
+            },
+          },
+        };
     return {
       ...source,
       complete,
@@ -632,6 +659,7 @@ function migrateDailyObservation<T extends DailyAssetSnapshot>(
         ...source.total,
         HKD: source.total.HKD ?? null,
       },
+      ...(assetClassTotals === undefined ? {} : { assetClassTotals }),
     };
   });
   const automatedSources = sources.filter((source) => source.kind !== "manual");
@@ -1487,6 +1515,11 @@ export class SqliteDashboardDatabase
         total_usd TEXT,
         total_cny TEXT,
         total_hkd TEXT,
+        asset_class_totals_json TEXT
+          CHECK (
+            asset_class_totals_json IS NULL OR
+            json_valid(asset_class_totals_json)
+          ),
         PRIMARY KEY (day, source_id)
       ) STRICT;
       CREATE TABLE IF NOT EXISTS daily_asset_trend_observations (
@@ -1510,6 +1543,11 @@ export class SqliteDashboardDatabase
         total_usd TEXT,
         total_cny TEXT,
         total_hkd TEXT,
+        asset_class_totals_json TEXT
+          CHECK (
+            asset_class_totals_json IS NULL OR
+            json_valid(asset_class_totals_json)
+          ),
         PRIMARY KEY (day, source_id)
       ) STRICT;
       CREATE TABLE IF NOT EXISTS formal_daily_settlements (
@@ -1623,6 +1661,14 @@ export class SqliteDashboardDatabase
     if (schemaVersion === "13") {
       this.migrateSchemaVersionThirteen();
       schemaVersion = "14";
+    }
+    if (schemaVersion === "14") {
+      this.migrateSchemaVersionFourteen();
+      schemaVersion = "15";
+    }
+    if (schemaVersion === "15") {
+      this.migrateSchemaVersionFifteen();
+      schemaVersion = "16";
     }
     if (schemaVersion !== String(SQLITE_SCHEMA_VERSION)) {
       throw new Error(`不支持的 SQLite schema 版本: ${schemaVersion}`);
@@ -1919,6 +1965,92 @@ export class SqliteDashboardDatabase
     });
   }
 
+  private migrateSchemaVersionFourteen(): void {
+    this.transaction(() => {
+      for (const table of [
+        "daily_asset_source_snapshots",
+        "daily_asset_source_trend_observations",
+      ] as const) {
+        const columns = this.database
+          .prepare(`PRAGMA table_info(${table})`)
+          .all() as Array<{ name: string }>;
+        if (!columns.some(({ name }) => name === "asset_class_totals_json")) {
+          this.database.exec(`
+            ALTER TABLE ${table}
+            ADD COLUMN asset_class_totals_json TEXT
+              CHECK (
+                asset_class_totals_json IS NULL OR
+                json_valid(asset_class_totals_json)
+              );
+          `);
+        }
+      }
+      this.database
+        .prepare("UPDATE schema_metadata SET value = ? WHERE key = ?")
+        .run("15", "schema_version");
+    });
+  }
+
+  private migrateSchemaVersionFifteen(): void {
+    this.transaction(() => {
+      const manualClasses = new Map(
+        (this.database
+          .prepare(
+            "SELECT id, manual_asset_class FROM asset_sources WHERE kind = 'manual'",
+          )
+          .all() as Array<SqliteRow>)
+          .map((source) => [
+            source.id as string,
+            source.manual_asset_class as ManualAssetClass | null,
+          ]),
+      );
+
+      for (const table of [
+        "daily_asset_source_snapshots",
+        "daily_asset_source_trend_observations",
+      ] as const) {
+        const rows = this.database
+          .prepare(`SELECT * FROM ${table}`)
+          .all() as Array<SqliteRow>;
+        const updateTable = this.database.prepare(`
+          UPDATE ${table}
+          SET asset_class_totals_json = ?
+          WHERE day = ? AND source_id = ?
+        `);
+        for (const row of rows) {
+          const manualAssetClass = manualClasses.get(row.source_id as string);
+          const source = {
+            kind: row.kind as AssetSourceSummary["kind"],
+            ...(manualAssetClass === null || manualAssetClass === undefined
+              ? {}
+              : { manualAssetClass }),
+          };
+          const observation = {
+            sourceId: row.source_id as string,
+            label: row.label as string,
+            kind: row.kind as AssetSourceSummary["kind"],
+            capturedAt: row.captured_at as string,
+            complete: row.complete === 1,
+            status: row.status as DailyAssetSourceSnapshot["status"],
+            total: {
+              USD: row.total_usd as string | null,
+              CNY: row.total_cny as string | null,
+              HKD: row.total_hkd as string | null,
+            },
+          } satisfies DailyAssetSourceSnapshot;
+          updateTable.run(
+            JSON.stringify(sourceTrendClassTotals(source, observation)),
+            row.day,
+            row.source_id,
+          );
+        }
+      }
+      this.database
+        .prepare("UPDATE schema_metadata SET value = ? WHERE key = ?")
+        .run("16", "schema_version");
+    });
+  }
+
   private initializeLegacyData(): void {
     if (this.metadata("json_import_complete") === "1") return;
     const state = parseLegacyDashboardStateSync(
@@ -2175,8 +2307,8 @@ export class SqliteDashboardDatabase
     const statement = this.database.prepare(`
       INSERT OR IGNORE INTO daily_asset_source_snapshots (
         day, source_id, label, kind, captured_at, complete, status, total_usd, total_cny,
-        total_hkd
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        total_hkd, asset_class_totals_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     for (const source of snapshot.sources) {
       statement.run(
@@ -2190,6 +2322,9 @@ export class SqliteDashboardDatabase
         source.total.USD,
         source.total.CNY,
         source.total.HKD ?? null,
+        source.assetClassTotals === undefined
+          ? null
+          : JSON.stringify(source.assetClassTotals),
       );
     }
   }
@@ -2249,8 +2384,8 @@ export class SqliteDashboardDatabase
     const statement = this.database.prepare(`
       INSERT INTO daily_asset_source_trend_observations (
         day, source_id, label, kind, captured_at, complete, status, total_usd, total_cny,
-        total_hkd
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        total_hkd, asset_class_totals_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(day, source_id) DO UPDATE SET
         label = excluded.label,
         kind = excluded.kind,
@@ -2259,7 +2394,8 @@ export class SqliteDashboardDatabase
         status = excluded.status,
         total_usd = excluded.total_usd,
         total_cny = excluded.total_cny,
-        total_hkd = excluded.total_hkd
+        total_hkd = excluded.total_hkd,
+        asset_class_totals_json = excluded.asset_class_totals_json
     `);
     for (const source of snapshot.sources) {
       statement.run(
@@ -2273,6 +2409,9 @@ export class SqliteDashboardDatabase
         source.total.USD,
         source.total.CNY,
         source.total.HKD ?? null,
+        source.assetClassTotals === undefined
+          ? null
+          : JSON.stringify(source.assetClassTotals),
       );
     }
     this.recalculateDailyTrendObservation(snapshot.day);
@@ -2289,8 +2428,8 @@ export class SqliteDashboardDatabase
       .prepare(`
         INSERT INTO ${table} (
           day, source_id, label, kind, captured_at, complete, status, total_usd, total_cny,
-          total_hkd
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          total_hkd, asset_class_totals_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(day, source_id) DO UPDATE SET
           label = excluded.label,
           kind = excluded.kind,
@@ -2299,7 +2438,8 @@ export class SqliteDashboardDatabase
           status = excluded.status,
           total_usd = excluded.total_usd,
           total_cny = excluded.total_cny,
-          total_hkd = excluded.total_hkd
+          total_hkd = excluded.total_hkd,
+          asset_class_totals_json = excluded.asset_class_totals_json
       `)
       .run(
         day,
@@ -2312,6 +2452,9 @@ export class SqliteDashboardDatabase
         source.total.USD,
         source.total.CNY,
         source.total.HKD ?? null,
+        source.assetClassTotals === undefined
+          ? null
+          : JSON.stringify(source.assetClassTotals),
       );
   }
 
@@ -2435,7 +2578,7 @@ export class SqliteDashboardDatabase
     return this.database
       .prepare(`
         SELECT source_id, label, kind, captured_at, complete, status, total_usd, total_cny,
-          total_hkd
+          total_hkd, asset_class_totals_json
         FROM ${table}
         WHERE day = ?
         ORDER BY rowid
@@ -2628,6 +2771,13 @@ export class SqliteDashboardDatabase
           CNY: source.total_cny as string | null,
           HKD: source.total_hkd as string | null,
         },
+        ...(source.asset_class_totals_json === null
+          ? {}
+          : {
+              assetClassTotals: JSON.parse(
+                source.asset_class_totals_json as string,
+              ),
+            }),
       })),
     }));
   }

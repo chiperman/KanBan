@@ -119,6 +119,44 @@ test("收益分析趋势跨过缺失日期连接已有观测", async ({ page }) 
   expect(trendPathData?.match(/M/g)).toHaveLength(1);
 });
 
+test("收益分析按证券或加密资产查看分类走势和资产变动，不伪造分类收益", async ({
+  page,
+}) => {
+  await page.request.post("/test-doubles/reset");
+  await page.request.post("/test-doubles/daily-snapshots", {
+    data: { action: "configure-classified" },
+  });
+  await page.request.post("/test-doubles/daily-snapshots", {
+    data: { action: "seed-classified-performance-history" },
+  });
+  await page.request.post("/test-doubles/owner-session");
+
+  await page.goto("/performance");
+  const trend = page.getByTestId("performance-trend");
+  const assetScope = trend.getByRole("group", { name: "资产范围" });
+  const interval = page.getByTestId("performance-interval");
+
+  await assetScope.getByRole("button", { name: "证券", exact: true }).click();
+  await expect(
+    assetScope.getByRole("button", { name: "证券", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(trend.getByRole("heading", { name: "证券走势" })).toBeVisible();
+  await expect(trend).toContainText("分类趋势按资产来源归类");
+  await expect(trend).toContainText("缺少 1 天证券观测");
+  await expect(interval.getByRole("heading", { name: "证券区间资产变动" })).toBeVisible();
+  await expect(interval).toContainText("+20.00 USD");
+  await expect(interval).not.toContainText("区间净外部投入");
+  await expect(interval).toContainText("不计算分类收益或收益率");
+
+  await assetScope.getByRole("button", { name: "加密资产", exact: true }).click();
+  await expect(
+    assetScope.getByRole("button", { name: "加密资产", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(trend.getByRole("heading", { name: "加密资产走势" })).toBeVisible();
+  await expect(interval.getByRole("heading", { name: "加密资产区间资产变动" })).toBeVisible();
+  await expect(interval).toContainText("-20.00 USD");
+});
+
 test("收益分析按真实资产观测和资金账本解释收益，并支持安全维护历史记录", async ({
   page,
 }) => {

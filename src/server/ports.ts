@@ -90,6 +90,21 @@ export interface DailyAssetSourceSnapshot {
   total: Record<"USD" | "CNY", string | null> & {
     HKD?: string | null;
   };
+  /**
+   * 按资产来源类别分配的趋势金额；历史来源总额按同一规则回填，
+   * 不代表其中每项持仓均有独立历史。
+   */
+  assetClassTotals?: Record<AssetTrendClass, DailyAssetClassTotal>;
+}
+
+export type AssetTrendClass = "securities" | "crypto";
+
+export interface DailyAssetClassTotal {
+  complete: boolean;
+  status?: "complete" | "incomplete" | "expired";
+  total: Record<"USD" | "CNY", string | null> & {
+    HKD?: string | null;
+  };
 }
 
 interface DailyAssetObservation {

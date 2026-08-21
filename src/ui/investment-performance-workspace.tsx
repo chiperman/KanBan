@@ -13,10 +13,13 @@ import {
 import {
   decimalCompare,
   decimalMultiply,
+  decimalSubtract,
   decimalToFixed,
 } from "@/domain/decimal";
+import { assetClassTrendObservation } from "@/domain/daily-asset-snapshots";
 import type { ReportingCurrency } from "@/domain/valuation";
 import type {
+  AssetTrendClass,
   DailyAssetTrendObservation,
   InvestmentCashflow,
   InvestmentCashflowCurrency,
@@ -49,6 +52,11 @@ type IntervalPreset =
   | "all";
 
 type CurrentTotals = Record<ReportingCurrency, PortfolioObservation | null>;
+type AssetScope = "portfolio" | AssetTrendClass;
+type TrendValueObservation = Pick<
+  DailyAssetTrendObservation,
+  "capturedAt" | "complete" | "status" | "total"
+>;
 
 type CashflowDraft = {
   amount: string;
@@ -71,6 +79,15 @@ const INTERVAL_OPTIONS: readonly VibeSelectOption<IntervalPreset>[] = [
   { value: "year-to-date", label: "本年" },
   { value: "1y", label: "近 1 年" },
   { value: "all", label: "全部" },
+];
+
+const ASSET_SCOPE_OPTIONS: ReadonlyArray<{
+  label: string;
+  value: AssetScope;
+}> = [
+  { value: "portfolio", label: "组合" },
+  { value: "securities", label: "证券" },
+  { value: "crypto", label: "加密资产" },
 ];
 
 const CASHFLOW_KIND_OPTIONS: readonly VibeSelectOption<InvestmentCashflowKind>[] = [
@@ -188,12 +205,14 @@ function sortCashflows(cashflows: InvestmentCashflow[]): InvestmentCashflow[] {
   );
 }
 
-function observationStatus(observation: DailyAssetTrendObservation): "complete" | "incomplete" | "expired" {
+function observationStatus(
+  observation: Pick<TrendValueObservation, "complete" | "status">,
+): "complete" | "incomplete" | "expired" {
   return observation.status ?? (observation.complete ? "complete" : "incomplete");
 }
 
 function completeObservation(
-  observation: DailyAssetTrendObservation,
+  observation: TrendValueObservation,
   currency: ReportingCurrency,
 ): PortfolioObservation | null {
   const amount = observation.total[currency] ?? null;
@@ -213,6 +232,19 @@ function reasonForCurrent(
   if (current === null) return "当前来源总额不完整、过期或无法折算，不能计算组合投资盈亏。";
   if (cumulativeNetInvestment === null) {
     return "至少一笔资金缺少该计价货币的长桥参考汇率证据，不能计算组合投资盈亏。";
+  }
+  return null;
+}
+
+function reasonForAssetClassInterval(input: {
+  assetClassLabel: string;
+  end: PortfolioObservation | null;
+  start: PortfolioObservation | null;
+  days: string[];
+}): string | null {
+  if (input.days.length === 0) return "请选择有效的起止日期。";
+  if (input.start === null || input.end === null) {
+    return `所选区间缺少两个完整的${input.assetClassLabel}资产观测，不能计算区间资产变动。`;
   }
   return null;
 }
@@ -470,6 +502,7 @@ export function InvestmentPerformanceWorkspace({
     showSensitiveInfo,
   } = useWorkbenchDisplayPreferences();
   const [preset, setPreset] = useState<IntervalPreset>("month-to-date");
+  const [assetScope, setAssetScope] = useState<AssetScope>("portfolio");
   const [editing, setEditing] = useState<InvestmentCashflow | null | undefined>(
     undefined,
   );
@@ -498,17 +531,38 @@ export function InvestmentPerformanceWorkspace({
           status: "incomplete" as const,
         };
       }
+      const scopedObservation = assetScope === "portfolio"
+        ? observation
+        : assetClassTrendObservation(observation, assetScope);
+      if (scopedObservation === null) {
+        return {
+          amount: null,
+          day,
+          observed: false,
+          status: "incomplete" as const,
+        };
+      }
       return {
-        amount: observation.total[currency] ?? null,
+        amount: scopedObservation.total[currency] ?? null,
         day,
         observed: true,
-        status: observationStatus(observation),
+        status: observationStatus(scopedObservation),
       };
     });
     const complete = days.flatMap((day) => {
       const observation = byDay.get(day);
       if (!observation) return [];
-      const value = completeObservation(observation, currency);
+      const scopedObservation = assetScope === "portfolio"
+        ? observation
+        : assetClassTrendObservation(observation, assetScope);
+      if (scopedObservation === null) return [];
+      const value = completeObservation(
+        {
+          ...scopedObservation,
+          capturedAt: observation.capturedAt,
+        },
+        currency,
+      );
       return value === null ? [] : [{ day, value }];
     });
     return {
@@ -527,6 +581,7 @@ export function InvestmentPerformanceWorkspace({
       ).length,
     };
   }, [
+    assetScope,
     currency,
     currentDay,
     preset,
@@ -551,12 +606,27 @@ export function InvestmentPerformanceWorkspace({
     current,
     analysis.current.cumulativeNetInvestment,
   );
-  const intervalReason = reasonForInterval({
-    days: trend.days,
-    end: trend.end,
-    netExternalCashflow: analysis.interval.netExternalCashflow,
-    start: trend.start,
-  });
+  const assetScopeLabel = ASSET_SCOPE_OPTIONS.find(
+    (option) => option.value === assetScope,
+  )?.label ?? "组合";
+  const intervalReason = assetScope === "portfolio"
+    ? reasonForInterval({
+        days: trend.days,
+        end: trend.end,
+        netExternalCashflow: analysis.interval.netExternalCashflow,
+        start: trend.start,
+      })
+    : reasonForAssetClassInterval({
+        assetClassLabel: assetScopeLabel,
+        days: trend.days,
+        end: trend.end,
+        start: trend.start,
+      });
+  const intervalAssetChange = assetScope === "portfolio"
+    ? analysis.interval.assetChange
+    : trend.start !== null && trend.end !== null
+      ? decimalSubtract(trend.end.amount, trend.start.amount)
+      : null;
 
   function upsertCashflow(cashflow: InvestmentCashflow) {
     setCashflows((existing) =>
@@ -627,7 +697,7 @@ export function InvestmentPerformanceWorkspace({
         <header>
           <div>
             <p className="card-label">HISTORY / ACTUAL OBSERVATIONS</p>
-            <h2>资产走势与区间解释</h2>
+            <h2>{assetScope === "portfolio" ? "资产走势与区间解释" : `${assetScopeLabel}走势`}</h2>
           </div>
           {trend.startDay && trend.endDay ? (
             <VibeStatusTag tone={trend.missingCount > 0 ? "warning" : "success"}>
@@ -659,13 +729,40 @@ export function InvestmentPerformanceWorkspace({
             })}
           </div>
         </div>
+        <div className="investment-performance__scope" aria-label="资产范围" role="group">
+          <span aria-hidden="true" className="vibe-field__label">
+            资产范围
+          </span>
+          <div className="investment-performance__scope-options">
+            {ASSET_SCOPE_OPTIONS.map((option) => {
+              const selected = option.value === assetScope;
+              return (
+                <VibeButton
+                  key={option.value}
+                  aria-pressed={selected}
+                  className="investment-performance__scope-option"
+                  onClick={() => setAssetScope(option.value)}
+                  type="button"
+                  variant={selected ? "primary" : "outline"}
+                >
+                  {option.label}
+                </VibeButton>
+              );
+            })}
+          </div>
+        </div>
+        {assetScope !== "portfolio" ? (
+          <VibeNotice tone="info">
+            分类趋势按资产来源归类：长桥计入证券，交易所与观察钱包计入加密，手工来源按已设置类别归类；历史来源总额已按相同规则回填。
+          </VibeNotice>
+        ) : null}
         {trend.missingCount > 0 ? (
           <VibeNotice tone="info">
-            缺少 {trend.missingCount} 天资产观测；趋势线已跨过缺口连接，区间端点仅使用实际完整观测。
+            缺少 {trend.missingCount} 天{assetScope === "portfolio" ? "资产" : assetScopeLabel}观测；趋势线已跨过缺口连接，区间端点仅使用实际完整观测。
           </VibeNotice>
         ) : null}
         <AssetTrendChart
-          ariaLabel="收益分析资产走势"
+          ariaLabel={`收益分析${assetScopeLabel}资产走势`}
           currency={currency}
           formatAmount={amount}
           formatDay={formatShanghaiDayLabel}
@@ -680,7 +777,7 @@ export function InvestmentPerformanceWorkspace({
         <header>
           <div>
             <p className="card-label">INTERVAL / EXPLAINED CHANGE</p>
-            <h2>区间结论</h2>
+            <h2>{assetScope === "portfolio" ? "区间结论" : `${assetScopeLabel}区间资产变动`}</h2>
           </div>
           {trend.startDay && trend.endDay ? (
             <VibeStatusTag tone={trend.missingCount > 0 ? "warning" : "success"}>
@@ -694,48 +791,54 @@ export function InvestmentPerformanceWorkspace({
           <article>
             <p>区间资产变化</p>
             <MetricValue
-              amount={analysis.interval.assetChange}
+              amount={intervalAssetChange}
               currency={currency}
               hidden={!showSensitiveInfo}
               signed
             />
           </article>
-          <article>
-            <p>区间净外部投入</p>
-            <MetricValue
-              amount={analysis.interval.netExternalCashflow}
-              currency={currency}
-              hidden={!showSensitiveInfo}
-              signed
-            />
-          </article>
-          <article>
-            <p>区间投资盈亏</p>
-            <MetricValue
-              amount={analysis.interval.investmentProfit}
-              currency={currency}
-              hidden={!showSensitiveInfo}
-              signed
-            />
-          </article>
-          <article>
-            <p>资金发生日加权比例</p>
-            {showSensitiveInfo === false ? (
-              <span className="investment-performance__private">••••••</span>
-            ) : analysis.interval.investmentProfitRatio === null ? (
-              <span className="investment-performance__unavailable">数据不足</span>
-            ) : (
-              <VibeMetric
-                unit="%"
-                value={signedAmount(
-                  decimalMultiply(analysis.interval.investmentProfitRatio, "100"),
+          {assetScope === "portfolio" ? (
+            <>
+              <article>
+                <p>区间净外部投入</p>
+                <MetricValue
+                  amount={analysis.interval.netExternalCashflow}
+                  currency={currency}
+                  hidden={!showSensitiveInfo}
+                  signed
+                />
+              </article>
+              <article>
+                <p>区间投资盈亏</p>
+                <MetricValue
+                  amount={analysis.interval.investmentProfit}
+                  currency={currency}
+                  hidden={!showSensitiveInfo}
+                  signed
+                />
+              </article>
+              <article>
+                <p>资金发生日加权比例</p>
+                {showSensitiveInfo === false ? (
+                  <span className="investment-performance__private">••••••</span>
+                ) : analysis.interval.investmentProfitRatio === null ? (
+                  <span className="investment-performance__unavailable">数据不足</span>
+                ) : (
+                  <VibeMetric
+                    unit="%"
+                    value={signedAmount(
+                      decimalMultiply(analysis.interval.investmentProfitRatio, "100"),
+                    )}
+                  />
                 )}
-              />
-            )}
-          </article>
+              </article>
+            </>
+          ) : null}
         </div>
         <p className="investment-performance__interval-formula">
-          区间投资盈亏 = 区间资产变化 − 区间内净外部投入；不是交易级或税务收益率。
+          {assetScope === "portfolio"
+            ? "区间投资盈亏 = 区间资产变化 − 区间内净外部投入；不是交易级或税务收益率。"
+            : `${assetScopeLabel}范围不分摊全组合资金账本，因此只显示资产变动，不计算分类收益或收益率。`}
         </p>
         {intervalReason ? <VibeNotice tone="info">{intervalReason}</VibeNotice> : null}
       </section>
