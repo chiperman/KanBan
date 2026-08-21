@@ -156,6 +156,8 @@ test("已认证所有者在桌面可通过左侧主导航和键盘到达五个�
       exact: true,
     });
     await expect(link).toBeVisible();
+    await expect(link).toHaveText(destination.label);
+    await expect(link.locator('svg[aria-hidden="true"]')).toBeVisible();
     await link.focus();
     await expect(link).toBeFocused();
     await expect(link).toHaveCSS("outline-style", "solid");
@@ -353,9 +355,14 @@ test("已认证所有者在手机可通过底部主导航和 Command-K 到达入
   }
 
   for (const destination of PRIMARY_DESTINATIONS) {
-    await mobileNavigation
-      .getByRole("link", { name: destination.label, exact: true })
-      .click();
+    const link = mobileNavigation.getByRole("link", {
+      name: destination.label,
+      exact: true,
+    });
+    await expect(link).toHaveAttribute("aria-label", destination.label);
+    await expect(link.locator('svg[aria-hidden="true"]')).toBeVisible();
+    await expect(link).toHaveText("");
+    await link.click();
     await expect(page).toHaveURL(new RegExp(`${destination.path.replace("/", "\\/")}$`));
   }
 

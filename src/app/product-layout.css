@@ -1800,6 +1800,24 @@ a {
   color: var(--bg);
 }
 
+.workbench-navigation-icon {
+  width: var(--vibe-space-5);
+  height: var(--vibe-space-5);
+  flex: 0 0 auto;
+}
+
+.workbench-desktop-navigation .workbench-navigation-link {
+  justify-content: flex-start;
+  gap: var(--vibe-space-2);
+  padding-inline: var(--vibe-space-3);
+  text-align: left;
+}
+
+.workbench-desktop-navigation .workbench-navigation-icon {
+  width: var(--vibe-space-4);
+  height: var(--vibe-space-4);
+}
+
 @media (hover: hover) {
   .workbench-navigation-link:hover {
     color: var(--primary);
@@ -5152,9 +5170,7 @@ body {
   .workbench-mobile-navigation .workbench-navigation-link {
     min-width: 0;
     min-height: 44px;
-    padding-inline: var(--vibe-space-1);
-    font-size: var(--vibe-type-label);
-    overflow-wrap: anywhere;
+    padding-inline: 0;
   }
 }
 
