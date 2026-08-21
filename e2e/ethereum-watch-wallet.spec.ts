@@ -172,6 +172,30 @@ test("来源详情把 Lido 提现申请显示为带状态的 ETH 仓位", async 
   await expect(card.getByTestId("evm-unreadable-assets")).toHaveCount(0);
 });
 
+test("来源详情把 Lista slisBNB 提现申请显示为带状态的 BNB 仓位", async ({ page }) => {
+  await page.request.post("/test-doubles/ethereum", {
+    data: { scenario: "lista-slisbnb-withdrawal" },
+  });
+  await loginAsOwner(page);
+  await connectEthereum(page, true);
+
+  await page.getByRole("link", { name: /BNB Smart Chain 观察钱包.*观察钱包/ }).click();
+  const card = page.getByTestId("bsc-watch-card");
+  await expect(card.getByTestId("asset-source-total")).toHaveText("5,449.00 USD");
+  await expect(card.getByTestId("holding-top-list")).toContainText(
+    "Lista slisBNB 提现申请 #101 · 锁仓中 · 最早预计可领取 2026-02-08",
+  );
+  await expect(card.getByTestId("asset-holdings-detail")).toContainText(
+    "Lista slisBNB 提现申请 #102 · 可领取",
+  );
+  await expect(card.getByTestId("asset-holdings-detail")).toContainText("slisBNB");
+  await expect(card).toContainText("Lista slisBNB 提现申请");
+  await card.getByTestId("evm-watch-bsc-product-coverage").locator("summary").click();
+  await expect(card.getByTestId("evm-watch-bsc-product-coverage")).toContainText(
+    "已读取 2 笔未领取申请",
+  );
+});
+
 test("钱包设置页可按合约忽略和恢复待确认 EVM 资产", async ({
   page,
 }) => {

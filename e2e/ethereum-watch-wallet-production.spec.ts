@@ -7,6 +7,7 @@ import {
 
 const ADDRESS = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
 const LIDO_WITHDRAWAL_QUEUE = "0x889edc2edab5f40e902b864ad4d7ade8e412f9b1";
+const LISTA_STAKE_MANAGER = "0x1adb950d8bb3da4be104211d5ab038628e477fe6";
 
 async function attachPasskey(page: Page): Promise<CDPSession> {
   const client = await page.context().newCDPSession(page);
@@ -198,6 +199,117 @@ test("共享 EVM 适配器用 chain ID 56 独立映射 BNB 与 BEP-20", async ({
   ]));
   expect(body.priceRequests.join("\n")).toContain("/networks/bsc/token_price/");
   expect(JSON.stringify(body)).not.toContain("server-secret-test-key");
+});
+
+test("生产 BSC 适配器把 Lista slisBNB 提现申请作为独立 BNB 仓位读取，并保留剩余 slisBNB", async ({ request }) => {
+  const response = await request.post("/test-doubles/ethereum/production-start", {
+    data: { action: "preview-lista-withdrawal", chain: "bsc" },
+  });
+  expect(response.ok()).toBeTruthy();
+  const body = await response.json();
+
+  expect(body.snapshot.holdings).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      sourceAsset: "evm:56:lista-slisbnb-withdrawal:101",
+      symbol: "BNB",
+      sourceProduct: "lista-slisbnb-withdrawal-request",
+      providerPositionId: "101",
+      providerPositionState: "锁仓中",
+      positionState: "redeeming",
+      quantity: "1.2",
+      marketValue: "720",
+    }),
+    expect.objectContaining({
+      sourceAsset: "evm:56:lista-slisbnb-withdrawal:102",
+      providerPositionState: "可领取",
+      quantity: "2.45",
+      marketValue: "1470",
+    }),
+    expect.objectContaining({
+      sourceAsset: "evm:56:lista-slisbnb-withdrawal:201",
+      providerPositionState: "锁仓中",
+      quantity: "0.7",
+      marketValue: "420",
+    }),
+    expect.objectContaining({
+      sourceAsset: "evm:56:0xdddddddddddddddddddddddddddddddddddddddd",
+      symbol: "slisBNB",
+      quantity: "2",
+    }),
+  ]));
+  expect(body.snapshot.coverage).toMatchObject({
+    status: "complete",
+    products: [{
+      product: "lista-slisbnb-withdrawal-request",
+      capability: "detailed",
+      freshness: "current",
+    }],
+  });
+  expect(body.rpcMethods).toContain("eth_call");
+  expect(body.metadataContracts).toContain("0xdddddddddddddddddddddddddddddddddddddddd");
+  expect(body.metadataContracts).not.toContain(LISTA_STAKE_MANAGER);
+  expect(body.rpcMethods.join("\n")).not.toMatch(/send|sign|transaction|nft|transfer/i);
+});
+
+test("BSC Lista 适配器明确覆盖空申请，读取失败时保留普通资产并标记部分覆盖", async ({ request }) => {
+  const empty = await request.post("/test-doubles/ethereum/production-start", {
+    data: { action: "preview-lista-empty", chain: "bsc" },
+  });
+  expect(empty.ok()).toBeTruthy();
+  await expect(empty.json()).resolves.toMatchObject({
+    snapshot: {
+      coverage: {
+        status: "complete",
+        products: [{
+          product: "lista-slisbnb-withdrawal-request",
+          capability: "detailed",
+          freshness: "current",
+          message: "未发现未领取申请",
+        }],
+      },
+    },
+  });
+
+  const failed = await request.post("/test-doubles/ethereum/production-start", {
+    data: { action: "preview-lista-failure", chain: "bsc" },
+  });
+  expect(failed.ok()).toBeTruthy();
+  const body = await failed.json();
+  expect(body.snapshot.holdings).toEqual(expect.arrayContaining([
+    expect.objectContaining({ sourceAsset: "evm:56:native", symbol: "BNB" }),
+    expect.objectContaining({
+      sourceAsset: "evm:56:0xdddddddddddddddddddddddddddddddddddddddd",
+      symbol: "slisBNB",
+    }),
+  ]));
+  expect(body.snapshot.coverage).toMatchObject({
+    status: "partial",
+    products: [{
+      product: "lista-slisbnb-withdrawal-request",
+      capability: "unknown",
+      freshness: "current",
+      message: expect.stringContaining("Lista slisBNB 提现申请读取失败"),
+    }],
+  });
+});
+
+test("BSC Lista 完整持仓刷新重新读取提现申请", async ({ request }) => {
+  const response = await request.post("/test-doubles/ethereum/production-start", {
+    data: { action: "refresh-lista-holdings", chain: "bsc" },
+  });
+  expect(response.ok()).toBeTruthy();
+  const body = await response.json();
+  expect(body.snapshot.holdings).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      sourceProduct: "lista-slisbnb-withdrawal-request",
+      providerPositionId: "101",
+    }),
+  ]));
+  expect(body.rpcMethods).toEqual(expect.arrayContaining([
+    "eth_getBalance",
+    "alchemy_getTokenBalances",
+    "eth_call",
+  ]));
 });
 
 test("加密持仓在现价区域显示 24h 而不伪造证券交易时段", async ({ page }) => {

@@ -18,12 +18,16 @@ const A = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const B = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const C = "0xcccccccccccccccccccccccccccccccccccccccc";
 const LIDO_WITHDRAWAL_QUEUE = "0x889edc2edab5f40e902b864ad4d7ade8e412f9b1";
+const LISTA_STAKE_MANAGER = "0x1adb950d8bb3da4be104211d5ab038628e477fe6";
+const SLIS_BNB = "0xdddddddddddddddddddddddddddddddddddddddd";
 const RPC = "https://eth-mainnet.g.alchemy.com/v2/server-secret-test-key";
 const GET_WITHDRAWAL_REQUESTS = "0x7d031b65";
 const GET_WITHDRAWAL_STATUS = "0xb8c4b85a";
 const GET_LAST_CHECKPOINT_INDEX = "0x526eae3e";
 const FIND_CHECKPOINT_HINTS = "0x62abe3fa";
 const GET_CLAIMABLE_ETHER = "0xc97912d8";
+const LISTA_GET_USER_WITHDRAWAL_REQUESTS = "0x6c930228";
+const LISTA_GET_USER_REQUEST_STATUS = "0x026e3e7b";
 
 function word(value: bigint): string {
   return value.toString(16).padStart(64, "0");
@@ -58,6 +62,22 @@ function lidoStatuses(owner: string): string {
   ].join("")).join("")}`;
 }
 
+function listaRequests(requests: Array<{
+  uuid: bigint;
+  amountInSnBnb: bigint;
+  startTime: bigint;
+}>): string {
+  return `0x${word(32n)}${word(BigInt(requests.length))}${requests.map((request) => [
+    word(request.uuid),
+    word(request.amountInSnBnb),
+    word(request.startTime),
+  ].join("")).join("")}`;
+}
+
+function listaStatus(isClaimable: boolean, amount: bigint): string {
+  return `0x${word(isClaimable ? 1n : 0n)}${word(amount)}`;
+}
+
 const testExternalServices: ExternalServiceConfiguration = {
   async status(): Promise<ExternalServiceConfigurationStatus> {
     return {
@@ -83,7 +103,7 @@ export async function POST(request: Request) {
   if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
   const body = (await request.json().catch(() => ({}))) as {
     chain?: "ethereum" | "bsc";
-    action?: "preview" | "empty" | "partial-failure" | "index-failure" | "price-failure" | "price-network-failure" | "rpc-network-once" | "metadata-decimals-failure" | "metadata-rpc-failure" | "refresh-ignored-unreadable" | "refresh-prices" | "refresh-holdings" | "preview-lido-withdrawal" | "preview-lido-failure" | "refresh-lido-prices";
+    action?: "preview" | "empty" | "partial-failure" | "index-failure" | "price-failure" | "price-network-failure" | "rpc-network-once" | "metadata-decimals-failure" | "metadata-rpc-failure" | "refresh-ignored-unreadable" | "refresh-prices" | "refresh-holdings" | "preview-lido-withdrawal" | "preview-lido-failure" | "refresh-lido-prices" | "preview-lista-withdrawal" | "preview-lista-empty" | "preview-lista-failure" | "refresh-lista-holdings";
   };
   const rpcMethods: string[] = [];
   const metadataContracts: string[] = [];
@@ -92,6 +112,13 @@ export async function POST(request: Request) {
   const lidoScenario = body.action === "preview-lido-withdrawal"
     || body.action === "preview-lido-failure"
     || body.action === "refresh-lido-prices";
+  const listaWithdrawalScenario = body.action === "preview-lista-withdrawal"
+    || body.action === "refresh-lista-holdings";
+  const listaFixtureScenario = listaWithdrawalScenario
+    || body.action === "preview-lista-empty"
+    || body.action === "preview-lista-failure";
+  const listaTokenScenario = listaWithdrawalScenario
+    || body.action === "preview-lista-failure";
   const mockFetch = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const url = new URL(input instanceof Request ? input.url : input.toString());
     if (url.origin === "https://api.coingecko.com") {
@@ -112,7 +139,7 @@ export async function POST(request: Request) {
       return Response.json({
         data: {
           type: "simple_token_price",
-          attributes: { token_prices: { [A]: "1", [B]: "1.9" } },
+          attributes: { token_prices: { [A]: "1", [B]: "1.9", [SLIS_BNB]: "620" } },
         },
       });
     }
@@ -157,7 +184,7 @@ export async function POST(request: Request) {
       const tokenBalances = body.action === "empty" || address === ADDRESS_TWO
         ? []
         : options.pageKey
-          ? lidoScenario
+          ? lidoScenario || listaFixtureScenario
             ? []
             : [{ contractAddress: C, tokenBalance: "0x1b58" }]
           : [
@@ -165,7 +192,9 @@ export async function POST(request: Request) {
               { contractAddress: B, tokenBalance: "0x3e8" },
               ...(lidoScenario
                 ? [{ contractAddress: LIDO_WITHDRAWAL_QUEUE, tokenBalance: "0x2" }]
-                : []),
+                : listaTokenScenario
+                  ? [{ contractAddress: SLIS_BNB, tokenBalance: "0x1bc16d674ec80000" }]
+                  : []),
             ];
       return Response.json({
         jsonrpc: "2.0",
@@ -176,6 +205,7 @@ export async function POST(request: Request) {
           ...(
             body.action !== "empty" &&
             !lidoScenario &&
+            !listaFixtureScenario &&
             address === ADDRESS_ONE &&
             !options.pageKey
               ? { pageKey: "next" }
@@ -188,6 +218,59 @@ export async function POST(request: Request) {
       const call = payload.params[0] as { to?: unknown; data?: unknown };
       const to = typeof call.to === "string" ? call.to.toLowerCase() : "";
       const data = typeof call.data === "string" ? call.data.toLowerCase() : "";
+      if (to === LISTA_STAKE_MANAGER) {
+        if (
+          body.action === "preview-lista-failure" &&
+          data.startsWith(LISTA_GET_USER_WITHDRAWAL_REQUESTS)
+        ) {
+          return Response.json({
+            jsonrpc: "2.0",
+            id: payload.id,
+            error: { code: -32000, message: "Lista request status unavailable" },
+          });
+        }
+        if (data.startsWith(LISTA_GET_USER_WITHDRAWAL_REQUESTS)) {
+          return Response.json({
+            jsonrpc: "2.0",
+            id: payload.id,
+            result: listaWithdrawalScenario && data.endsWith(ADDRESS_ONE.slice(2))
+              ? listaRequests([
+                {
+                  uuid: 101n,
+                  amountInSnBnb: 1_250_000_000_000_000_000n,
+                  startTime: 1_769_904_000n,
+                },
+                {
+                  uuid: 102n,
+                  amountInSnBnb: 2_500_000_000_000_000_000n,
+                  startTime: 1_769_990_400n,
+                },
+              ])
+              : listaWithdrawalScenario
+                ? listaRequests([{
+                  uuid: 201n,
+                  amountInSnBnb: 750_000_000_000_000_000n,
+                  startTime: 1_770_076_800n,
+                }])
+                : listaRequests([]),
+          });
+        }
+        if (data.startsWith(LISTA_GET_USER_REQUEST_STATUS)) {
+          const index = BigInt(`0x${data.slice(-64)}`);
+          const owner = data.slice(10, 74);
+          const firstAddress = owner.endsWith(ADDRESS_ONE.slice(2));
+          return Response.json({
+            jsonrpc: "2.0",
+            id: payload.id,
+            result: firstAddress
+              ? index === 0n
+                ? listaStatus(false, 1_200_000_000_000_000_000n)
+                : listaStatus(true, 2_450_000_000_000_000_000n)
+              : listaStatus(false, 700_000_000_000_000_000n),
+          });
+        }
+        return Response.json({ error: "unexpected Lista eth_call" }, { status: 500 });
+      }
       if (to !== LIDO_WITHDRAWAL_QUEUE) {
         return Response.json({ error: "unexpected eth_call target" }, { status: 500 });
       }
@@ -259,7 +342,7 @@ export async function POST(request: Request) {
             contract === C
           )
             ? null
-            : contract === A ? 6 : contract === B ? 2 : 3,
+            : contract === A ? 6 : contract === B ? 2 : 18,
           symbol: contract === C
             ? (
               body.action === "metadata-decimals-failure" ||
@@ -267,7 +350,7 @@ export async function POST(request: Request) {
             )
               ? "WstETH"
               : "UNKNOWN"
-            : "SAME",
+            : contract === SLIS_BNB ? "slisBNB" : "SAME",
           name: contract === C
             ? (
               body.action === "metadata-decimals-failure" ||
@@ -275,7 +358,7 @@ export async function POST(request: Request) {
             )
               ? "Lido: stETH Withdrawal NFT"
               : "Unknown"
-            : "Same Symbol",
+            : contract === SLIS_BNB ? "Lista Staked BNB" : "Same Symbol",
         },
       });
     }
@@ -296,6 +379,7 @@ export async function POST(request: Request) {
       body.action === "refresh-prices" ||
       body.action === "refresh-holdings" ||
       body.action === "refresh-lido-prices" ||
+      body.action === "refresh-lista-holdings" ||
       body.action === "refresh-ignored-unreadable"
     ) {
       rpcMethods.length = 0;

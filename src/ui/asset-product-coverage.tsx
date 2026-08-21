@@ -42,6 +42,7 @@ const ASSET_PRODUCT_LABELS: Record<string, string> = {
   "balance-plus": "Balance+",
   dcp: "DCP",
   "lido-withdrawal-request": "Lido 提现申请",
+  "lista-slisbnb-withdrawal-request": "Lista slisBNB 提现申请",
 };
 
 export function assetProductDisplayName(product: string): string {

@@ -23,12 +23,15 @@ const HOLDING_PRODUCT_LABELS: Record<string, string> = {
   "balance-plus": "Balance+",
   dcp: "DCP",
   "lido-withdrawal-request": "Lido 提现申请",
+  "lista-slisbnb-withdrawal-request": "Lista slisBNB 提现申请",
 };
 
 export function assetHoldingDisplayName(holding: AssetHolding): string {
   if (
     (holding.sourceProduct === "dcp" ||
-      holding.sourceProduct === "lido-withdrawal-request") &&
+      holding.sourceProduct === "lido-withdrawal-request" ||
+      holding.sourceProduct === "lista-slisbnb-withdrawal-request"
+    ) &&
     holding.providerPositionId !== undefined &&
     holding.providerPositionId !== "aggregate"
   ) {

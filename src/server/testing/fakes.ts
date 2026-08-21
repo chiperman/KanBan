@@ -1005,6 +1005,8 @@ export class FakeEvmWatchWallet implements EvmWatchWalletReadOnly {
       },
     ];
     const hasLidoWithdrawal = this.scenario === "lido-withdrawal" && config.chainId === "1";
+    const hasListaWithdrawal =
+      this.scenario === "lista-slisbnb-withdrawal" && config.chainId === "56";
     if (hasLidoWithdrawal) {
       const unknownIndex = holdings.findIndex(({ symbol }) => symbol === "UNKNOWN");
       if (unknownIndex >= 0) holdings.splice(unknownIndex, 1);
@@ -1053,6 +1055,70 @@ export class FakeEvmWatchWallet implements EvmWatchWalletReadOnly {
         },
       );
     }
+    if (hasListaWithdrawal) {
+      const unknownIndex = holdings.findIndex(({ symbol }) => symbol === "UNKNOWN");
+      if (unknownIndex >= 0) {
+        holdings.splice(unknownIndex, 1, {
+          symbol: "slisBNB",
+          name: "slisBNB · BNB Smart Chain BEP-20",
+          sourceAsset: "evm:56:0xdddddddddddddddddddddddddddddddddddddddd",
+          quantity: "2",
+          currency: "USD",
+          assetClass: "crypto",
+          currentPrice: { amount: "620", currency: "USD" },
+          marketValue: "1240",
+          sourceMarketValue: { amount: "1240", currency: "USD" },
+          valuation: { status: "valued", priceSource: "CoinGecko BNB Smart Chain slisBNB/USD 参考价格", pricedAt: input.observedAt },
+          costPrice: null,
+          platformProfit: null,
+          changePercent: null,
+        });
+      }
+      holdings.push(
+        {
+          symbol: "BNB",
+          name: "Lista slisBNB 提现申请 #101 · 锁仓中 · 最早预计可领取 2026-02-08",
+          sourceAsset: "evm:56:lista-slisbnb-withdrawal:101",
+          sourceAccount: "wallet",
+          sourceProduct: "lista-slisbnb-withdrawal-request",
+          providerPositionId: "101",
+          providerPositionState: "锁仓中",
+          economicAssetKey: "lista-slisbnb-withdrawal:101",
+          positionState: "redeeming",
+          quantity: "1.2",
+          currency: "USD",
+          assetClass: "crypto",
+          currentPrice: { amount: "600", currency: "USD" },
+          marketValue: "720",
+          sourceMarketValue: { amount: "720", currency: "USD" },
+          valuation: { status: "valued", priceSource: "CoinGecko BNB Smart Chain/USD 参考价格", pricedAt: input.observedAt },
+          costPrice: null,
+          platformProfit: null,
+          changePercent: null,
+        },
+        {
+          symbol: "BNB",
+          name: "Lista slisBNB 提现申请 #102 · 可领取",
+          sourceAsset: "evm:56:lista-slisbnb-withdrawal:102",
+          sourceAccount: "wallet",
+          sourceProduct: "lista-slisbnb-withdrawal-request",
+          providerPositionId: "102",
+          providerPositionState: "可领取",
+          economicAssetKey: "lista-slisbnb-withdrawal:102",
+          positionState: "redeeming",
+          quantity: "2.45",
+          currency: "USD",
+          assetClass: "crypto",
+          currentPrice: { amount: "600", currency: "USD" },
+          marketValue: "1470",
+          sourceMarketValue: { amount: "1470", currency: "USD" },
+          valuation: { status: "valued", priceSource: "CoinGecko BNB Smart Chain/USD 参考价格", pricedAt: input.observedAt },
+          costPrice: null,
+          platformProfit: null,
+          changePercent: null,
+        },
+      );
+    }
     const unrecognizedEvmTokens =
       this.scenario === "metadata-decimals-failure" && config.chainId === "1"
         ? [{
@@ -1077,20 +1143,26 @@ export class FakeEvmWatchWallet implements EvmWatchWalletReadOnly {
             ? "0"
             : hasLidoWithdrawal
               ? "9499"
+              : hasListaWithdrawal
+                ? "5449"
               : config.total,
           currency: "USD",
         },
         holdings,
         ...(unrecognizedEvmTokens.length > 0 ? { unrecognizedEvmTokens } : {}),
-        ...(hasLidoWithdrawal
+        ...(hasLidoWithdrawal || hasListaWithdrawal
           ? {
               coverage: {
                 status: "complete" as const,
                 products: [{
-                  product: "lido-withdrawal-request",
+                  product: hasLidoWithdrawal
+                    ? "lido-withdrawal-request"
+                    : "lista-slisbnb-withdrawal-request",
                   capability: "detailed" as const,
                   freshness: "current" as const,
-                  message: "已读取 2 笔未领取申请 · 1 笔排队中、1 笔可领取",
+                  message: hasLidoWithdrawal
+                    ? "已读取 2 笔未领取申请 · 1 笔排队中、1 笔可领取"
+                    : "已读取 2 笔未领取申请 · 1 笔锁仓中、1 笔可领取",
                 }],
                 unexplainedValue: null,
                 excludedPositiveAccounts: [],

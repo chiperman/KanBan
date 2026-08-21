@@ -35,6 +35,10 @@ const LIDO_GET_LAST_CHECKPOINT_INDEX = "0x526eae3e";
 const LIDO_FIND_CHECKPOINT_HINTS = "0x62abe3fa";
 const LIDO_GET_CLAIMABLE_ETHER = "0xc97912d8";
 const LIDO_REQUEST_LIMIT = 100;
+const LISTA_STAKE_MANAGER = "0x1adb950d8bb3da4be104211d5ab038628e477fe6";
+const LISTA_GET_USER_WITHDRAWAL_REQUESTS = "0x6c930228";
+const LISTA_GET_USER_REQUEST_STATUS = "0x026e3e7b";
+const LISTA_REQUEST_LIMIT = 100;
 
 interface EvmChainConfig {
   chain: EvmChain;
@@ -597,6 +601,14 @@ function encodeAddressCall(selector: string, address: string): string {
   return `${selector}${address.slice(2).padStart(64, "0")}`;
 }
 
+function encodeAddressAndUint256Call(
+  selector: string,
+  address: string,
+  value: bigint,
+): string {
+  return `${encodeAddressCall(selector, address)}${abiWord(value)}`;
+}
+
 function encodeUint256ArrayCall(selector: string, values: bigint[]): string {
   return `${selector}${abiWord(32n)}${abiWord(BigInt(values.length))}${values.map(abiWord).join("")}`;
 }
@@ -782,8 +794,167 @@ const lidoWithdrawalAdapter: EvmProtocolPositionAdapter = {
   },
 };
 
+interface ListaWithdrawalRequest {
+  uuid: bigint;
+  amountInSnBnb: bigint;
+  startTime: bigint;
+}
+
+function decodeListaWithdrawalRequests(value: unknown): ListaWithdrawalRequest[] {
+  const context = "Lista slisBNB 提现申请";
+  const words = abiWords(value, context);
+  const offset = abiOffset(words, context);
+  const length = BigInt(`0x${words[offset] ?? ""}`);
+  if (
+    length > BigInt(LISTA_REQUEST_LIMIT) ||
+    length > BigInt(Number.MAX_SAFE_INTEGER) ||
+    offset + 1 + Number(length) * 3 !== words.length
+  ) {
+    throw new Error(`${context}数组长度无效`);
+  }
+  return Array.from({ length: Number(length) }, (_, index) => {
+    const start = offset + 1 + index * 3;
+    return {
+      uuid: BigInt(`0x${words[start]}`),
+      amountInSnBnb: BigInt(`0x${words[start + 1]}`),
+      startTime: BigInt(`0x${words[start + 2]}`),
+    };
+  });
+}
+
+function decodeListaWithdrawalStatus(value: unknown): {
+  isClaimable: boolean;
+  amount: bigint;
+} {
+  const words = abiWords(value, "Lista slisBNB 提现申请状态");
+  if (words.length !== 2) throw new Error("Lista slisBNB 提现申请状态无效");
+  const isClaimable = BigInt(`0x${words[0]}`);
+  const amount = BigInt(`0x${words[1]}`);
+  if ((isClaimable !== 0n && isClaimable !== 1n) || amount === 0n) {
+    throw new Error("Lista slisBNB 提现申请状态无效");
+  }
+  return { isClaimable: isClaimable === 1n, amount };
+}
+
+function listaEarliestClaimableDate(startTime: bigint): string {
+  const earliestTimestamp = startTime + 7n * 24n * 60n * 60n;
+  const maxTimestamp = BigInt(Math.floor(Number.MAX_SAFE_INTEGER / 1_000));
+  if (earliestTimestamp > maxTimestamp) {
+    throw new Error("Lista slisBNB 提现申请开始时间无效");
+  }
+  const parts = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(Number(earliestTimestamp) * 1_000));
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((item) => item.type === type)?.value;
+  const year = part("year");
+  const month = part("month");
+  const day = part("day");
+  if (!year || !month || !day) throw new Error("Lista slisBNB 提现申请开始时间无效");
+  return `${year}-${month}-${day}`;
+}
+
+function listaWithdrawalReason(error: unknown): string {
+  const message = error instanceof Error ? error.message : "未知错误";
+  return `Lista slisBNB 提现申请读取失败：${message}`;
+}
+
+const listaSlisBnbWithdrawalAdapter: EvmProtocolPositionAdapter = {
+  contracts: [LISTA_STAKE_MANAGER],
+
+  matches({ config }) {
+    return config.chain === "bsc";
+  },
+
+  async read({ config, addresses, client }) {
+    const balances: DiscoveredBalance[] = [];
+    const seenRequestIds = new Set<string>();
+    let pending = 0;
+    let claimable = 0;
+    for (const owner of addresses) {
+      const requests = decodeListaWithdrawalRequests(
+        await client.ethCall(
+          LISTA_STAKE_MANAGER,
+          encodeAddressCall(LISTA_GET_USER_WITHDRAWAL_REQUESTS, owner),
+        ),
+      );
+      for (const [index, request] of requests.entries()) {
+        const providerPositionId = request.uuid.toString();
+        if (request.amountInSnBnb === 0n || request.startTime === 0n) {
+          throw new Error(`Lista slisBNB 提现申请 #${providerPositionId} 数据无效`);
+        }
+        if (seenRequestIds.has(providerPositionId)) {
+          throw new Error(`Lista 返回重复提现申请 #${providerPositionId}`);
+        }
+        seenRequestIds.add(providerPositionId);
+        const status = decodeListaWithdrawalStatus(
+          await client.ethCall(
+            LISTA_STAKE_MANAGER,
+            encodeAddressAndUint256Call(
+              LISTA_GET_USER_REQUEST_STATUS,
+              owner,
+              BigInt(index),
+            ),
+          ),
+        );
+        const providerPositionState = status.isClaimable ? "可领取" : "锁仓中";
+        if (status.isClaimable) claimable += 1;
+        else pending += 1;
+        balances.push({
+          sourceAsset: `evm:${config.chainId}:lista-slisbnb-withdrawal:${providerPositionId}`,
+          contractAddress: LISTA_STAKE_MANAGER,
+          symbol: "BNB",
+          name: status.isClaimable
+            ? `Lista slisBNB 提现申请 #${providerPositionId} · 可领取`
+            : `Lista slisBNB 提现申请 #${providerPositionId} · 锁仓中 · 最早预计可领取 ${listaEarliestClaimableDate(request.startTime)}`,
+          quantity: units(
+            `0x${status.amount.toString(16)}`,
+            18,
+            `Lista slisBNB 提现申请 #${providerPositionId}`,
+          ),
+          priceAsset: `evm:${config.chainId}:native`,
+          sourceAccount: "wallet",
+          sourceProduct: "lista-slisbnb-withdrawal-request",
+          providerPositionId,
+          providerPositionState,
+          economicAssetKey: `lista-slisbnb-withdrawal:${providerPositionId}`,
+          positionState: "redeeming",
+        });
+      }
+    }
+    return {
+      balances,
+      coverage: {
+        product: "lista-slisbnb-withdrawal-request",
+        capability: "detailed",
+        freshness: "current",
+        message: balances.length === 0
+          ? "未发现未领取申请"
+          : `已读取 ${balances.length} 笔未领取申请 · ${pending} 笔锁仓中、${claimable} 笔可领取`,
+      },
+      consumedContracts: [LISTA_STAKE_MANAGER],
+    };
+  },
+
+  failure({ error }) {
+    return {
+      coverage: {
+        product: "lista-slisbnb-withdrawal-request",
+        capability: "unknown",
+        freshness: "current",
+        message: listaWithdrawalReason(error),
+      },
+      candidates: [],
+    };
+  },
+};
+
 const EVM_PROTOCOL_POSITION_ADAPTERS: readonly EvmProtocolPositionAdapter[] = [
   lidoWithdrawalAdapter,
+  listaSlisBnbWithdrawalAdapter,
 ];
 
 class CoinGeckoEvmPrices {
@@ -1118,7 +1289,8 @@ export class ProductionEvmWatchSourceRefresher implements AssetSourceRefresher {
         source.snapshot.holdings.some(
           ({ sourceAsset, sourceProduct }) =>
             sourceAsset === `evm:${config.chainId}:native` ||
-            sourceProduct === "lido-withdrawal-request",
+            sourceProduct === "lido-withdrawal-request" ||
+            sourceProduct === "lista-slisbnb-withdrawal-request",
         ),
       );
       const balances: DiscoveredBalance[] = source.snapshot.holdings.map((holding) => ({
@@ -1129,7 +1301,8 @@ export class ProductionEvmWatchSourceRefresher implements AssetSourceRefresher {
         symbol: holding.symbol,
         name: holding.name,
         quantity: holding.quantity,
-        ...(holding.sourceProduct === "lido-withdrawal-request"
+        ...(holding.sourceProduct === "lido-withdrawal-request" ||
+          holding.sourceProduct === "lista-slisbnb-withdrawal-request"
           ? { priceAsset: `evm:${config.chainId}:native` }
           : {}),
         ...(holding.sourceAccount ? { sourceAccount: holding.sourceAccount } : {}),
