@@ -528,7 +528,7 @@ test("Bitget 全账户残差和排除账户会动态降级，P0 产品失败不�
   expect(futuresAggregate.ok()).toBeTruthy();
   await expect(futuresAggregate.json()).resolves.toMatchObject({
     snapshot: {
-      total: { amount: "11641.98687228", currency: "USDT" },
+      total: { amount: "11691.98687228", currency: "USDT" },
       coverage: {
         status: "complete",
         products: expect.arrayContaining([

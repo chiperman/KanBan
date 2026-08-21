@@ -644,16 +644,16 @@ function classicAccountCoverage(input: {
       decimal(item.usdtBalance, "usdtBalance"),
     );
   }
-  const includedTypes = ["spot", "funding", "earn", "bots"] as const;
+  const totalTypes = ["spot", "funding", "earn", "bots", "futures"] as const;
+  const reconciledTypes = ["spot", "funding", "earn", "bots"] as const;
   const excludedPositiveAccounts = [...balances.entries()]
     .filter(([accountType, amount]) =>
-      accountType !== "futures" &&
-      !includedTypes.includes(accountType as typeof includedTypes[number]) &&
+      !totalTypes.includes(accountType as typeof totalTypes[number]) &&
       positive(amount)
     )
     .map(([accountType]) => accountType);
   const total = decimalAdd(
-    ...includedTypes.map((accountType) => balances.get(accountType) ?? "0"),
+    ...totalTypes.map((accountType) => balances.get(accountType) ?? "0"),
   );
   const partitionByAccount = new Map<string, string>([
     ["spot", "spot"],
@@ -684,7 +684,7 @@ function classicAccountCoverage(input: {
     );
   }
   let netDifference = "0";
-  for (const partition of includedTypes) {
+  for (const partition of reconciledTypes) {
     if (incompletePartitions.has(partition)) continue;
     const difference = decimalSubtract(
       balances.get(partition) ?? "0",
