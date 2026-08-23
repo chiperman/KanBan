@@ -4,7 +4,7 @@
 
 **Blocked by:** None — can start immediately
 
-**Status:** ready-for-human
+**Status:** resolved
 
 - [x] 每次 BSC 持仓刷新读取 `getUserWithdrawalRequests(address)` 与逐项状态，不依赖 slisBNB 余额。
 - [x] 每笔申请保留 uuid、`redeeming` 状态、BNB/USD 定价及“锁仓中”/“可领取”状态。
@@ -14,8 +14,10 @@
 ## 答案
 
 - 已增加 BSC 专用 `lista-slisbnb-withdrawal-request` 适配器；空申请、锁仓中、可领取、残留 slisBNB、多地址多申请、读取失败与完整持仓刷新均由受控 RPC 覆盖。
-- 当前本机运行实例尚未载入本工作树代码，且可用浏览器没有所有者会话；真实已接入来源的单来源刷新需在合入并登录后完成。
+- 已将提交合入实际实例并完成真实 BSC 单来源刷新：读取到 1 笔锁仓中的 Lista 申请；普通 BNB/BEP-20 与残留 slisBNB 仍保留。
+- 已按 2026-08-21、2026-08-22 对应历史区块确认申请当时已存在，并用各观测原有的 BNB 隐含价格修正 BSC 来源基准、趋势及总资产聚合；未使用今日价格倒灌。
 
 ## 评论
 
 - 2026-08-21：委托已确认自动化验收边界为生产 EVM 适配器的受控 RPC 与来源详情；真实已接入来源另做不暴露地址的手动刷新验证。
+- 2026-08-23：真实来源刷新确认 Lista 仓位可读；历史修正限定为 BSC 观察钱包 2026-08-21、2026-08-22 两天，SQLite 完整性检查通过。
