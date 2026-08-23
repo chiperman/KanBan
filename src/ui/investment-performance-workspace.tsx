@@ -13,6 +13,7 @@ import {
 import {
   projectInvestmentPerformanceTrend,
   type InvestmentPerformanceAssetScope,
+  type InvestmentPerformanceCustomRange,
   type InvestmentPerformanceIntervalPreset,
 } from "@/domain/investment-performance-trend";
 import {
@@ -32,6 +33,7 @@ import { AssetTrendChart } from "@/ui/asset-trend-chart";
 import { formatShanghaiDateTime, formatShanghaiDayLabel } from "@/ui/shanghai-date-time";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeMetric, VibeStatusTag } from "@/ui/vibe/vibe-data-instrument";
+import { VibeDateField } from "@/ui/vibe/vibe-date-field";
 import { VibeDialog } from "@/ui/vibe/vibe-dialog";
 import {
   VibeField,
@@ -69,6 +71,7 @@ const INTERVAL_OPTIONS: readonly VibeSelectOption<InvestmentPerformanceIntervalP
   { value: "year-to-date", label: "本年" },
   { value: "1y", label: "近 1 年" },
   { value: "all", label: "全部" },
+  { value: "custom", label: "自定义" },
 ];
 
 const ASSET_SCOPE_OPTIONS: ReadonlyArray<{
@@ -425,17 +428,27 @@ export function InvestmentPerformanceWorkspace({
     showSensitiveInfo,
   } = useWorkbenchDisplayPreferences();
   const [preset, setPreset] = useState<InvestmentPerformanceIntervalPreset>("month-to-date");
+  const [customRange, setCustomRange] =
+    useState<InvestmentPerformanceCustomRange | null>(null);
+  const [customRangeDialogOpen, setCustomRangeDialogOpen] = useState(false);
+  const [customStartDay, setCustomStartDay] = useState(currentDay);
+  const [customEndDay, setCustomEndDay] = useState(currentDay);
   const [assetScope, setAssetScope] = useState<AssetScope>("portfolio");
   const [editing, setEditing] = useState<InvestmentCashflow | null | undefined>(
     undefined,
   );
   const [deleting, setDeleting] = useState<InvestmentCashflow | null>(null);
+  const firstTrendDay = useMemo(
+    () => trendObservations.map((observation) => observation.day).toSorted().at(0),
+    [trendObservations],
+  );
 
   const trend = useMemo(
     () =>
       projectInvestmentPerformanceTrend({
         assetScope,
         currency,
+        customRange,
         currentDay,
         preset,
         trendObservations,
@@ -444,6 +457,7 @@ export function InvestmentPerformanceWorkspace({
       preset,
       assetScope,
       currency,
+      customRange,
       currentDay,
       trendObservations,
     ],
@@ -493,6 +507,33 @@ export function InvestmentPerformanceWorkspace({
         ...existing.filter((item) => item.id !== cashflow.id),
         cashflow,
       ]));
+  }
+
+  function openCustomRangeDialog() {
+    if (firstTrendDay === undefined) return;
+    const suggestedStartDay = trend.days[0] ?? firstTrendDay;
+    const suggestedEndDay = trend.days.at(-1) ?? currentDay;
+    setCustomStartDay(customRange?.startDay ?? suggestedStartDay);
+    setCustomEndDay(customRange?.endDay ?? suggestedEndDay);
+    setCustomRangeDialogOpen(true);
+  }
+
+  function choosePreset(value: InvestmentPerformanceIntervalPreset) {
+    if (value === "custom") {
+      openCustomRangeDialog();
+      return;
+    }
+    setPreset(value);
+  }
+
+  function applyCustomRange() {
+    if (customStartDay > customEndDay) return;
+    setCustomRange({
+      startDay: customStartDay,
+      endDay: customEndDay,
+    });
+    setPreset("custom");
+    setCustomRangeDialogOpen(false);
   }
 
   return (
@@ -578,15 +619,22 @@ export function InvestmentPerformanceWorkspace({
                   key={option.value}
                   aria-pressed={selected}
                   className="investment-performance__range-option"
-                  onClick={() => setPreset(option.value)}
+                  disabled={option.value === "custom" && firstTrendDay === undefined}
+                  onClick={() => choosePreset(option.value)}
                   type="button"
                   variant={selected ? "primary" : "outline"}
                 >
-                  {option.label}
+                {option.label}
                 </VibeButton>
               );
             })}
           </div>
+          {preset === "custom" && customRange !== null ? (
+            <span className="investment-performance__custom-range-label">
+              已选 {formatShanghaiDayLabel(customRange.startDay)} 至{" "}
+              {formatShanghaiDayLabel(customRange.endDay)}
+            </span>
+          ) : null}
         </div>
         <div className="investment-performance__scope" aria-label="资产范围" role="group">
           <span aria-hidden="true" className="vibe-field__label">
@@ -802,6 +850,54 @@ export function InvestmentPerformanceWorkspace({
           onDeleted={(id) =>
             setCashflows((existing) => existing.filter((cashflow) => cashflow.id !== id))}
         />
+      ) : null}
+      {customRangeDialogOpen ? (
+        <VibeDialog
+          actions={
+            <>
+              <VibeButton
+                onClick={() => setCustomRangeDialogOpen(false)}
+                type="button"
+                variant="text"
+              >
+                取消
+              </VibeButton>
+              <VibeButton
+                disabled={customStartDay > customEndDay}
+                onClick={applyCustomRange}
+                type="button"
+                variant="primary"
+              >
+                应用区间
+              </VibeButton>
+            </>
+          }
+          aria-label="自定义分析区间"
+          description="按连续上海自然日取数；区间结论只使用区间内实际完整观测端点。"
+          eyebrow="PERFORMANCE / RANGE"
+          onClose={() => setCustomRangeDialogOpen(false)}
+          title="自定义分析区间"
+          titleId="custom-performance-range-title"
+        >
+          <div className="investment-performance__custom-range-fields">
+            <VibeDateField
+              fieldId="custom-performance-range-start"
+              label="开始日期"
+              max={customEndDay}
+              min={firstTrendDay ?? currentDay}
+              onValueChange={setCustomStartDay}
+              value={customStartDay}
+            />
+            <VibeDateField
+              fieldId="custom-performance-range-end"
+              label="结束日期"
+              max={currentDay}
+              min={customStartDay}
+              onValueChange={setCustomEndDay}
+              value={customEndDay}
+            />
+          </div>
+        </VibeDialog>
       ) : null}
     </section>
   );

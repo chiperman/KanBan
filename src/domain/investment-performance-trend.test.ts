@@ -63,22 +63,25 @@ function project(
   preset: InvestmentPerformanceIntervalPreset,
   trendObservations: DailyAssetTrendObservation[],
   assetScope: "portfolio" | "securities" | "crypto" = "portfolio",
+  customRange?: { startDay: string; endDay: string },
 ) {
   return projectInvestmentPerformanceTrend({
     assetScope,
     currency: "USD",
+    customRange,
     currentDay: "2024-03-31",
     preset,
     trendObservations,
   });
 }
 
-test("收益分析六个区间按连续上海自然日跨月末和闰年计算", () => {
+test("收益分析预设区间按连续上海自然日跨月末和闰年计算", () => {
   const observations = [observation({
     amount: "100",
     day: "2024-02-28",
   })];
-  const expectations: Record<InvestmentPerformanceIntervalPreset, {
+  type Preset = Exclude<InvestmentPerformanceIntervalPreset, "custom">;
+  const expectations: Record<Preset, {
     firstDay: string;
     length: number;
   }> = {
@@ -91,13 +94,34 @@ test("收益分析六个区间按连续上海自然日跨月末和闰年计算",
   };
 
   for (const [preset, expected] of Object.entries(expectations) as Array<
-    [InvestmentPerformanceIntervalPreset, typeof expectations[InvestmentPerformanceIntervalPreset]]
+    [Preset, typeof expectations[Preset]]
   >) {
     const result = project(preset, observations);
     assert.equal(result.days[0], expected.firstDay, preset);
     assert.equal(result.days.at(-1), "2024-03-31", preset);
     assert.equal(result.days.length, expected.length, preset);
   }
+});
+
+test("收益分析自定义区间按所选连续上海自然日投影", () => {
+  const result = project(
+    "custom",
+    [
+      observation({ amount: "100", day: "2024-03-02" }),
+      observation({ amount: "130", day: "2024-03-04" }),
+    ],
+    "portfolio",
+    { startDay: "2024-03-02", endDay: "2024-03-04" },
+  );
+
+  assert.deepEqual(
+    result.days,
+    ["2024-03-02", "2024-03-03", "2024-03-04"],
+  );
+  assert.equal(result.missingCount, 1);
+  assert.equal(result.startDay, "2024-03-02");
+  assert.equal(result.endDay, "2024-03-04");
+  assert.equal(result.intervalAssetChange, "30");
 });
 
 test("趋势投影保留缺失上海自然日为空值，并在区间内选择完整端点", () => {

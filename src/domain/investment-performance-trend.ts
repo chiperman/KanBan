@@ -13,7 +13,13 @@ export type InvestmentPerformanceIntervalPreset =
   | "6m"
   | "year-to-date"
   | "1y"
-  | "all";
+  | "all"
+  | "custom";
+
+export type InvestmentPerformanceCustomRange = {
+  endDay: string;
+  startDay: string;
+};
 
 export type InvestmentPerformanceAssetScope = "portfolio" | AssetTrendClass;
 export type InvestmentPerformanceTrendStatus =
@@ -76,7 +82,16 @@ function rangeDays(
   preset: InvestmentPerformanceIntervalPreset,
   currentDay: string,
   firstTrendDay: string | undefined,
+  customRange?: InvestmentPerformanceCustomRange | null,
 ): string[] {
+  if (preset === "custom") {
+    return customRange !== undefined &&
+        customRange !== null &&
+        customRange.startDay <= customRange.endDay &&
+        customRange.endDay <= currentDay
+      ? daysBetween(customRange.startDay, customRange.endDay)
+      : [];
+  }
   if (preset === "all") {
     return firstTrendDay === undefined ? [] : daysBetween(firstTrendDay, currentDay);
   }
@@ -132,6 +147,7 @@ function scopedObservation(
 export function projectInvestmentPerformanceTrend(input: {
   assetScope: InvestmentPerformanceAssetScope;
   currency: ReportingCurrency;
+  customRange?: InvestmentPerformanceCustomRange | null;
   currentDay: string;
   preset: InvestmentPerformanceIntervalPreset;
   trendObservations: DailyAssetTrendObservation[];
@@ -139,7 +155,12 @@ export function projectInvestmentPerformanceTrend(input: {
   const firstTrendDay = input.trendObservations
     .map((observation) => observation.day)
     .toSorted()[0];
-  const days = rangeDays(input.preset, input.currentDay, firstTrendDay);
+  const days = rangeDays(
+    input.preset,
+    input.currentDay,
+    firstTrendDay,
+    input.customRange,
+  );
   const byDay = new Map(input.trendObservations.map((observation) => [
     observation.day,
     observation,

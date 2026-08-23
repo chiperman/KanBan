@@ -57,7 +57,7 @@ async function chooseOption(page: Page, label: string, option: string) {
   await page.getByRole("option", { name: option, exact: true }).click();
 }
 
-test("收益分析直接提供六个分析区间并默认选择本月", async ({ page }) => {
+test("收益分析提供预设与自定义分析区间，并默认选择本月", async ({ page }) => {
   await seedPerformanceHistory(page);
   await page.goto("/performance");
 
@@ -70,6 +70,7 @@ test("收益分析直接提供六个分析区间并默认选择本月", async ({
     "本年",
     "近 1 年",
     "全部",
+    "自定义",
   ]);
   await expect(
     rangeGroup.getByRole("button", { name: "本月", exact: true }),
@@ -99,6 +100,36 @@ test("收益分析直接提供六个分析区间并默认选择本月", async ({
   await expect(page.locator("body")).toHaveJSProperty(
     "scrollWidth",
     await page.locator("body").evaluate((body) => body.clientWidth),
+  );
+});
+
+test("收益分析支持自定义起止日期，并按所选连续上海自然日解释区间", async ({
+  page,
+}) => {
+  await seedPerformanceHistory(page);
+  await page.goto("/performance");
+
+  const trend = page.getByTestId("performance-trend");
+  const rangeGroup = trend.getByRole("group", { name: "分析区间" });
+  await rangeGroup.getByRole("button", { name: "自定义", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "自定义分析区间" }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "开始日期" }).click();
+  await page.getByRole("button", { name: "2026-03-02" }).click();
+  await page.getByRole("button", { name: "结束日期" }).click();
+  await page.getByRole("button", { name: "2026-03-04，今天" }).click();
+  await page.getByRole("button", { name: "应用区间" }).click();
+
+  await expect(
+    rangeGroup.getByRole("button", { name: "自定义", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(rangeGroup).toContainText("已选 03月02日 至 03月04日");
+  await expect(trend).toContainText("可绘制 2 / 3 天");
+  await expect(trend).toContainText("03月02日 至 03月04日");
+  await expect(page.getByTestId("performance-interval")).toContainText(
+    "03月02日 至 03月04日",
   );
 });
 

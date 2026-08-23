@@ -44,6 +44,7 @@ export function VibeDateField({
   fieldId,
   label,
   max,
+  min,
   onValueChange,
   value,
 }: {
@@ -51,6 +52,7 @@ export function VibeDateField({
   fieldId: string;
   label: string;
   max: string;
+  min?: string;
   onValueChange(value: string): void;
   value: string;
 }) {
@@ -62,6 +64,7 @@ export function VibeDateField({
   const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
   const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
   const maxMonth = monthStart(max);
+  const minMonth = min ? monthStart(min) : undefined;
   const today = max;
   const days = useMemo(() => {
     const firstWeekday = month.getUTCDay();
@@ -143,6 +146,7 @@ export function VibeDateField({
           <button
             aria-label="上个月"
             className="vibe-date-field__month-button is-previous"
+            disabled={minMonth !== undefined && isSameMonth(month, minMonth)}
             onClick={() => setMonth((current) =>
               new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() - 1, 1)),
             )}
@@ -177,7 +181,7 @@ export function VibeDateField({
                 selected ? "is-selected" : "",
                 isToday ? "is-today" : "",
               ].filter(Boolean).join(" ")}
-              disabled={day > max}
+              disabled={day > max || (min !== undefined && day < min)}
               key={day}
               onClick={() => {
                 onValueChange(day);
