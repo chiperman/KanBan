@@ -69,7 +69,7 @@ test("未登录可进入零落盘演示模式，且不请求或泄露真实资�
     window.__demoStorageOperations.length = 0;
   });
   await page
-    .getByTestId("login-gate")
+    .locator(".page-header")
     .getByRole("link", { name: "进入演示模式" })
     .click();
 

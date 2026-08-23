@@ -116,7 +116,7 @@ test("完整锁定到所有者再锁定旅程不泄露敏感数据且不存在�
   await loginAsOwner(page);
   await expect(page.getByRole("link", { name: "本机设置" })).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "配置备用登录" }),
+    page.getByRole("button", { name: "配置 TOTP 登录" }),
   ).toHaveCount(0);
   await expect(
     page.getByRole("button", {

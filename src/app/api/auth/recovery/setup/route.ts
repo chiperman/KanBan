@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     counter = matched;
   } catch (error) {
     return Response.json(
-      { error: error instanceof Error ? error.message : "备用登录配置无效" },
+      { error: error instanceof Error ? error.message : "TOTP 登录配置无效" },
       { status: 400 },
     );
   }

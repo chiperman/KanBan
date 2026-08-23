@@ -7308,7 +7308,7 @@ body {
 .page-locked .login-gate {
   display: grid;
   grid-template-columns: 1fr;
-  grid-template-rows: auto auto;
+  grid-template-rows: auto;
   align-content: center;
   gap: var(--vibe-space-8);
   min-height: clamp(500px, 58vh, 580px);
@@ -7360,20 +7360,11 @@ body {
 }
 
 .page-locked .login-gate--owner {
-  grid-template-areas:
-    "intro visual"
-    "flow visual";
+  grid-template-areas: "auth visual";
   grid-template-columns: minmax(0, 0.92fr) minmax(520px, 1.08fr);
-  grid-template-rows: auto auto;
+  grid-template-rows: auto;
   column-gap: clamp(var(--vibe-space-8), 4vw, var(--vibe-space-16));
-  row-gap: var(--vibe-space-8);
-}
-
-.page-locked .login-gate--owner.login-gate--owner-choice {
-  grid-template-rows:
-    calc(var(--vibe-space-24) + var(--vibe-space-16) + var(--vibe-space-6))
-    calc(var(--vibe-space-16) + var(--vibe-space-6) + var(--vibe-space-3));
-  row-gap: var(--vibe-space-10);
+  row-gap: 0;
 }
 
 .login-eyebrow,
@@ -7388,21 +7379,25 @@ body {
   align-self: center;
 }
 
-.login-eyebrow {
-  margin: 0;
+.page-locked .login-auth-column {
+  display: grid;
+  min-width: 0;
+  row-gap: var(--vibe-space-6);
 }
 
-.page-locked .login-gate--owner .login-intro {
-  grid-area: intro;
+.page-locked .login-gate--owner .login-auth-column {
+  grid-area: auth;
+  width: min(100%, 520px);
+  align-self: center;
+}
+
+.login-eyebrow {
+  margin: 0;
 }
 
 .page-locked .login-gate--owner-choice .login-intro {
   align-self: start;
   padding-top: var(--vibe-space-2);
-}
-
-.page-locked .login-gate--owner .login-flow {
-  grid-area: flow;
 }
 
 .page-locked .login-lock-progress {
@@ -7555,6 +7550,10 @@ body {
   margin-top: 0;
 }
 
+.page-locked .login-flow > .login-error {
+  margin-top: 0;
+}
+
 .page-locked .login-actions--choice {
   display: grid;
   width: min(100%, 520px);
@@ -7570,6 +7569,10 @@ body {
   width: 100%;
   min-height: calc(var(--vibe-space-12) + var(--vibe-space-3));
   font-size: 13px;
+}
+
+.page-locked .login-actions--choice .login-totp-entry {
+  background: var(--raised);
 }
 
 .page-locked .login-hint {
@@ -7802,17 +7805,15 @@ body {
 @media (max-width: 1359px) {
   .page-locked .login-gate--owner {
     grid-template-areas:
-      "intro"
-      "flow"
+      "auth"
       "visual";
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto;
+    grid-template-rows: auto auto;
     row-gap: var(--vibe-space-8);
   }
 
-  .page-locked .login-gate--owner.login-gate--owner-choice {
-    grid-template-rows: auto auto auto;
-    row-gap: var(--vibe-space-8);
+  .page-locked .login-gate--owner .login-auth-column {
+    width: min(100%, 520px);
   }
 
   .login-product-visual {
@@ -7868,10 +7869,8 @@ body {
   }
 
   .page-locked .login-gate--owner {
-    grid-template-areas:
-      "intro"
-      "flow";
-    grid-template-rows: auto auto;
+    grid-template-areas: "auth";
+    grid-template-rows: auto;
   }
 
   .login-product-visual {

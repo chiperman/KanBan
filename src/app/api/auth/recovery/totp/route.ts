@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   const secret = credential ? decryptRecoverySecret(credential) : null;
   if (!secret) {
     return Response.json(
-      { error: "备用登录不可用，请使用 Passkey" },
+      { error: "TOTP 登录不可用，请使用 Passkey" },
       { status: 401 },
     );
   }

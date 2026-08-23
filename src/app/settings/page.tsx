@@ -89,9 +89,9 @@ export default async function SettingsPage({
                 </div>
               </dl>
               <div className="security-settings__recovery">
-                <h3 id="recovery-settings-title">备用登录</h3>
+                <h3 id="recovery-settings-title">TOTP 登录</h3>
                 <p className="settings-description">
-                  配置或更新当前终端所有者的 TOTP 备用登录。TOTP 密钥只在本次配置中显示。
+                  配置或更新当前终端所有者的 TOTP 登录。TOTP 密钥只在本次配置中显示。
                 </p>
                 <RecoverySetup configured={recoveryConfigured} />
               </div>

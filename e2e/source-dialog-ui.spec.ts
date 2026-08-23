@@ -134,7 +134,7 @@ test("移动端来源配置采用全屏 sheet，页头设置操作收进本机�
       .locator(".header-utility-actions")
       .getByRole("button", { name: "打开快捷命令" }),
   ).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "配置备用登录" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "配置 TOTP 登录" })).toHaveCount(0);
 
   await page.getByRole("button", { name: "添加资产来源" }).click();
   const dialog = page.getByRole("dialog", { name: "添加资产来源" });

@@ -429,7 +429,7 @@ test("同级标准操作保持统一的 44px 高度和响应式宽度", async ({
 
     await page.goto("/settings");
     await expectUniformStandardControls([
-      page.getByRole("button", { name: "配置备用登录" }),
+      page.getByRole("button", { name: "配置 TOTP 登录" }),
       page.getByRole("button", { name: "导出业务数据备份" }),
       page.getByRole("button", { name: "预演恢复" }),
       page.getByRole("button", { name: "保存并验证服务" }),

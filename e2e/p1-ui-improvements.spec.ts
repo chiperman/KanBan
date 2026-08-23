@@ -104,7 +104,7 @@ test("看板时间、来源状态和普通卡片遵守 Vibe 视觉层级", async
   const utilityChildren = page.locator(".header-utility-actions").locator(":scope > *")
   await expect(utilityChildren.nth(0)).toHaveClass(/command-menu-trigger/)
   await expect(utilityChildren.nth(1).locator("a")).toHaveAttribute("aria-label", "本机设置")
-  await expect(page.getByRole("button", { name: "配置备用登录" })).toHaveCount(0)
+  await expect(page.getByRole("button", { name: "配置 TOTP 登录" })).toHaveCount(0)
 
   const themeToggle = page.getByRole("button", { name: /^当前主题：/ })
   await expect(themeToggle).toHaveCSS("width", "44px")

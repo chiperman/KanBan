@@ -68,7 +68,7 @@ export default async function AssetDashboardPage({
               href="/"
               variant="outline"
             >
-              退出演示
+              EXIT
             </VibeLink>
             <ThemeSwitcher persist={false} />
           </div>
@@ -115,7 +115,7 @@ export default async function AssetDashboardPage({
               href="/?mode=demo"
               variant="outline"
             >
-              演示
+              DEMO
             </VibeLink>
             <ThemeSwitcher />
           </div>
@@ -180,7 +180,7 @@ export default async function AssetDashboardPage({
                 href="/?mode=demo"
                 variant="outline"
               >
-                演示
+                DEMO
               </VibeLink>
               <LogoutButton />
               <ThemeSwitcher />

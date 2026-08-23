@@ -681,6 +681,7 @@ export function OwnerLogin({
   const recoveryCodeRef = useRef<HTMLInputElement>(null);
 
   function showRecoveryTotp() {
+    setState("idle");
     setRecoveryError("");
     setRecoveryRateLimited(false);
     setMode("recovery-totp");
@@ -765,41 +766,42 @@ export function OwnerLogin({
       data-testid="login-gate"
       data-vibe-surface="auth-panel"
     >
-      <div className="login-intro">
-        <p className="login-eyebrow">
-          {ownerProvisioned
-            ? "OWNER VERIFICATION REQUIRED"
-            : "FIRST RUN · OWNER PROVISION REQUIRED"}
+      <div className="login-auth-column">
+        <div className="login-intro">
+          <p className="login-eyebrow">
+            {ownerProvisioned
+              ? "OWNER VERIFICATION REQUIRED"
+              : "FIRST RUN · OWNER PROVISION REQUIRED"}
+            {ownerProvisioned ? (
+              <span
+                aria-hidden="true"
+                className="login-lock-progress"
+                data-testid="locked-progress"
+              >
+                <span />
+              </span>
+            ) : null}
+          </p>
           {ownerProvisioned ? (
-            <span
-              aria-hidden="true"
-              className="login-lock-progress"
-              data-testid="locked-progress"
-            >
-              <span />
-            </span>
-          ) : null}
-        </p>
-        {ownerProvisioned ? (
-          <LockedPixelDisplay />
-        ) : (
-          <p className="login-display-state" aria-hidden="true">
-            SETUP
-          </p>
-        )}
-        <h1
-          id="login-title"
-          className={ownerProvisioned ? "login-state-heading" : undefined}
-        >
-          {ownerProvisioned ? "个人资产看板已锁定" : "预置唯一所有者"}
-        </h1>
-        {ownerProvisioned ? null : (
-          <p className="login-copy">
-            此终端尚未预置所有者 Passkey，请先完成一次性预置。
-          </p>
-        )}
-      </div>
-      <div className="login-flow" key={ownerProvisioned ? mode : "setup"}>
+            <LockedPixelDisplay />
+          ) : (
+            <p className="login-display-state" aria-hidden="true">
+              SETUP
+            </p>
+          )}
+          <h1
+            id="login-title"
+            className={ownerProvisioned ? "login-state-heading" : undefined}
+          >
+            {ownerProvisioned ? "个人资产看板已锁定" : "预置唯一所有者"}
+          </h1>
+          {ownerProvisioned ? null : (
+            <p className="login-copy">
+              此终端尚未预置所有者 Passkey，请先完成一次性预置。
+            </p>
+          )}
+        </div>
+        <div className="login-flow" key={ownerProvisioned ? mode : "setup"}>
         {state === "failed" ? (
           <VibeNotice className="login-error" code="ERROR" role="alert" tone="error">
             验证失败或已取消，资产看板仍处于锁定状态。
@@ -835,16 +837,17 @@ export function OwnerLogin({
             </VibeButton>
             {recoveryConfigured ? (
               <VibeButton
+                className="login-totp-entry"
                 type="button"
                 disabled={state === "pending"}
                 onClick={showRecoveryTotp}
                 variant="outline"
               >
-                使用备用方式登录
+                使用 TOTP 登录
               </VibeButton>
             ) : (
               <p className="login-hint">
-                备用登录未配置 / 登录后可在本机设置
+                TOTP 登录未配置 / 登录后可在本机设置
               </p>
             )}
           </div>
@@ -884,7 +887,7 @@ export function OwnerLogin({
                 disabled={recoveryPending || recoveryRateLimited}
                 variant="primary"
               >
-                完成备用登录
+                完成 TOTP 登录
               </VibeButton>
               <VibeButton
                 type="button"
@@ -897,17 +900,11 @@ export function OwnerLogin({
             </div>
           </form>
         ) : null}
-        <VibeLink
-          className="login-demo-link"
-          href="/?mode=demo"
-          variant="text"
-        >
-          进入演示模式
-        </VibeLink>
         <div className="login-trust-line" aria-label="安全属性">
           <span>PASSKEY</span>
           <span>LOCAL</span>
           <span>READ ONLY</span>
+        </div>
         </div>
       </div>
       {ownerProvisioned ? <LockedProductFlow /> : null}

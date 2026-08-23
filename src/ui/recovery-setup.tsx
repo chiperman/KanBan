@@ -42,7 +42,7 @@ export function RecoverySetup({ configured }: RecoverySetupProps) {
     setError("");
     const response = await fetch("/api/auth/recovery/setup");
     if (!response.ok) {
-      setError("无法开始备用登录配置");
+      setError("无法开始 TOTP 登录配置");
       setPending(false);
       return;
     }
@@ -82,7 +82,7 @@ export function RecoverySetup({ configured }: RecoverySetupProps) {
       | { error?: string }
       | null;
     if (!response.ok) {
-      setError(result?.error ?? "备用登录配置失败");
+      setError(result?.error ?? "TOTP 登录配置失败");
       setPending(false);
       window.requestAnimationFrame(() => codeRef.current?.focus());
       return;
@@ -101,7 +101,7 @@ export function RecoverySetup({ configured }: RecoverySetupProps) {
         onClick={openDialog}
         variant="outline"
       >
-        {recoveryConfigured ? "更新备用登录" : "配置备用登录"}
+        {recoveryConfigured ? "更新 TOTP 登录" : "配置 TOTP 登录"}
       </VibeButton>
       {saved ? (
         <VibeNotice
@@ -109,7 +109,7 @@ export function RecoverySetup({ configured }: RecoverySetupProps) {
           role="status"
           tone="success"
         >
-          备用登录已配置，请等待验证器显示下一组验证码后再登录
+          TOTP 登录已配置，请等待验证器显示下一组验证码后再登录
         </VibeNotice>
       ) : null}
       {!open && error ? (
@@ -125,7 +125,7 @@ export function RecoverySetup({ configured }: RecoverySetupProps) {
                 取消
               </VibeButton>
               <VibeButton type="submit" disabled={pending} variant="primary">
-                保存备用登录
+                保存 TOTP 登录
               </VibeButton>
             </>
           }
@@ -138,7 +138,7 @@ export function RecoverySetup({ configured }: RecoverySetupProps) {
           eyebrow="LOCAL RECOVERY / TOTP"
           onClose={closeDialog}
           onSubmit={save}
-          title="配置备用登录"
+          title="配置 TOTP 登录"
           titleId="recovery-setup-title"
         >
           <VibeField
@@ -210,13 +210,13 @@ export function RecoverySetup({ configured }: RecoverySetupProps) {
           }
           description={
             <>
-              备用登录会生成一份新的 TOTP 密钥。请确认当前环境没有录屏、投屏或旁观者，
+              TOTP 登录会生成一份新的 TOTP 密钥。请确认当前环境没有录屏、投屏或旁观者，
               并准备好验证器后再继续。
             </>
           }
           eyebrow="LOCAL RECOVERY / TOTP"
           onClose={closeDialog}
-          title="配置备用登录"
+          title="配置 TOTP 登录"
           titleId="recovery-setup-title"
         >
           {error ? (

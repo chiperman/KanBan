@@ -44,7 +44,7 @@ test("设置与安全集中低频入口，计价货币属于总览且隐私开�
   await expect(page.getByRole("heading", { name: "设置与安全" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "登录保护" })).toBeVisible();
   await expect(page.getByText("唯一所有者 Passkey 已启用")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "备用登录" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "TOTP 登录" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "备份与恢复" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "本机数据" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "默认偏好" })).toBeVisible();
@@ -135,12 +135,12 @@ test("设置与安全在锁定态不泄露内容，手机端保持键盘可用�
   await expect(settingsLink).toHaveCSS("outline-style", "solid");
 
   const configureRecovery = page.getByRole("button", {
-    name: "配置备用登录",
+    name: "配置 TOTP 登录",
   });
   await configureRecovery.focus();
   await page.keyboard.press("Enter");
   await expect(
-    page.getByRole("dialog", { name: "配置备用登录" }),
+    page.getByRole("dialog", { name: "配置 TOTP 登录" }),
   ).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(configureRecovery).toBeFocused();
