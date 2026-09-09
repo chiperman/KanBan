@@ -63,7 +63,7 @@ async function replaceWithCredentiallessPasskey(
 async function provisionOwner(page: Page) {
   await page.goto("/setup");
   await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
-  await expect(page.getByRole("status")).toContainText("已完成预置");
+  await expect(page.getByRole("status")).toContainText("预置完成");
 }
 
 async function login(page: Page) {
@@ -137,21 +137,13 @@ test("所有者可从锁定首页完成首次预置并返回登录资产看板",
   expect(await page.content()).not.toContain(SENSITIVE_BODY);
 
   const provisionEntry = page.getByRole("link", { name: "开始首次预置" });
-  const provisionHint = page.getByText(
-    "仅可预置一位所有者 / 完成后仍需使用 Passkey 登录",
-  );
-  const [entryBox, hintBox] = await Promise.all([
-    provisionEntry.boundingBox(),
-    provisionHint.boundingBox(),
-  ]);
+  const entryBox = await provisionEntry.boundingBox();
   expect(entryBox).not.toBeNull();
-  expect(hintBox).not.toBeNull();
-  expect(hintBox!.y).toBeGreaterThanOrEqual(entryBox!.y + entryBox!.height);
 
   await provisionEntry.click();
   await expect(page).toHaveURL(/\/setup$/);
   await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
-  await expect(page.getByRole("status")).toContainText("已完成预置");
+  await expect(page.getByRole("status")).toContainText("预置完成");
   await expect(page.getByTestId("view-mode")).toHaveCount(0);
 
   await page.getByRole("link", { name: "返回所有者登录" }).click();
@@ -172,7 +164,7 @@ test("所有者可从锁定首页完成首次预置并返回登录资产看板",
   await page.goto("/setup");
   await expect(page.getByRole("status")).toHaveCount(0);
   await expect(
-    page.getByRole("heading", { name: "所有者已完成预置" }),
+    page.getByRole("heading", { name: "所有者预置完成" }),
   ).toBeVisible();
   await expect(
     page.getByRole("link", { name: "返回所有者登录" }),
@@ -237,10 +229,10 @@ test("Passkey 登录失败后仍停留在锁定状态", async ({ page }) => {
   await login(page);
 
   await expect(
-    page.getByText("验证失败或已取消，资产看板仍处于锁定状态"),
+    page.getByText("验证失败或已取消。"),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "个人资产看板已锁定" }),
+    page.getByRole("heading", { name: "看板已锁定" }),
   ).toBeVisible();
   expect(await page.content()).not.toContain(SENSITIVE_TITLE);
   const cookies = await page.context().cookies();
@@ -264,6 +256,6 @@ test("所有者退出后立即返回登录入口且旧会话失效", async ({ pa
 
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: "个人资产看板已锁定" }),
+    page.getByRole("heading", { name: "看板已锁定" }),
   ).toBeVisible();
 });

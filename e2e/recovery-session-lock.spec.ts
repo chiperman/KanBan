@@ -50,7 +50,7 @@ async function provisionAndLogin(page: Page): Promise<void> {
   await attachPasskey(page);
   await page.goto("/setup");
   await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
-  await expect(page.getByRole("status")).toContainText("已完成预置");
+  await expect(page.getByRole("status")).toContainText("预置完成");
   await page.goto("/");
   await unlockWithPasskey(page);
 }
@@ -116,7 +116,7 @@ async function configureRecovery(page: Page): Promise<string> {
   await page.getByLabel("当前 TOTP 验证码").fill(code);
   await page.getByRole("button", { name: "保存 TOTP 登录" }).click();
   await expect(page.locator(".recovery-status")).toHaveText(
-    "TOTP 登录已配置，请等待验证器显示下一组验证码后再登录",
+    "TOTP 已配置，请使用下一组验证码登录。",
   );
   return secret;
 }
@@ -173,7 +173,7 @@ test("所有者配置 TOTP 登录时只需要 TOTP", async ({ page }) => {
   await page.getByRole("button", { name: "保存 TOTP 登录" }).click();
 
   await expect(page.locator(".recovery-status")).toHaveText(
-    "TOTP 登录已配置，请等待验证器显示下一组验证码后再登录",
+    "TOTP 已配置，请使用下一组验证码登录。",
   );
 });
 
@@ -242,7 +242,7 @@ test("配置时使用的 TOTP 验证码不能再次 TOTP 登录", async ({ page 
   );
   await expect(failedTotp).toBeFocused();
   await expect(
-    page.getByRole("heading", { name: "个人资产看板已锁定" }),
+    page.getByRole("heading", { name: "看板已锁定" }),
   ).toBeVisible();
 });
 
@@ -261,7 +261,7 @@ test("所有者可仅凭 TOTP 登录", async ({ page, request }) => {
 
   await page.getByRole("button", { name: "立即锁定" }).click();
   await expect(
-    page.getByRole("heading", { name: "个人资产看板已锁定" }),
+    page.getByRole("heading", { name: "看板已锁定" }),
   ).toBeVisible();
   const totpEntry = page.getByRole("button", { name: "使用 TOTP 登录" });
   await expect(totpEntry).toBeVisible();
@@ -342,7 +342,7 @@ test("Passkey 失败后切换 TOTP 登录会清除旧提示且不与锁定字重
   await page.getByRole("button", { name: "使用 Passkey 登录" }).click();
 
   const passkeyError = page.getByRole("alert").filter({
-    hasText: "验证失败或已取消，资产看板仍处于锁定状态",
+    hasText: "验证失败或已取消。",
   });
   await expect(passkeyError).toBeVisible();
   const [pixelBounds, errorBounds, actionBounds] = await Promise.all([
@@ -383,7 +383,7 @@ test("同一个 TOTP 验证码不能重复登录", async ({ page, request }) => 
   for (let login = 0; login < 2; login += 1) {
     await page.getByRole("button", { name: "立即锁定" }).click();
     await expect(
-      page.getByRole("heading", { name: "个人资产看板已锁定" }),
+      page.getByRole("heading", { name: "看板已锁定" }),
     ).toBeVisible();
     await page.getByRole("button", { name: "使用 TOTP 登录" }).click();
     await page.getByLabel("TOTP 验证码").fill(code);
@@ -399,7 +399,7 @@ test("同一个 TOTP 验证码不能重复登录", async ({ page, request }) => 
     }),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "个人资产看板已锁定" }),
+    page.getByRole("heading", { name: "看板已锁定" }),
   ).toBeVisible();
 });
 
@@ -407,7 +407,7 @@ test("未配置 TOTP 登录时锁定页只提供 Passkey 登录", async ({ page 
   await attachPasskey(page);
   await page.goto("/setup");
   await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
-  await expect(page.getByRole("status")).toContainText("已完成预置");
+  await expect(page.getByRole("status")).toContainText("预置完成");
 
   await page.goto("/");
 
@@ -434,7 +434,7 @@ test("TOTP 连续五次失败后限流五分钟", async ({
   ).toContainText("敏感内容已锁定");
   await page.unroute("**/api/auth/logout");
   await expect(
-    page.getByRole("heading", { name: "个人资产看板已锁定" }),
+    page.getByRole("heading", { name: "看板已锁定" }),
   ).toBeVisible();
   expect(await page.content()).not.toContain(SENSITIVE_BODY);
 
@@ -444,7 +444,7 @@ test("TOTP 连续五次失败后限流五分钟", async ({
   ).toHaveCount(0);
   await expect(page.getByLabel("TOTP 验证码")).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "个人资产看板已锁定" }),
+    page.getByRole("heading", { name: "看板已锁定" }),
   ).toBeVisible();
 
   const incompleteAttempt = await page.evaluate(async () =>
@@ -473,7 +473,7 @@ test("TOTP 连续五次失败后限流五分钟", async ({
     ).toBeVisible();
   }
   await expect(
-    page.getByRole("heading", { name: "个人资产看板已锁定" }),
+    page.getByRole("heading", { name: "看板已锁定" }),
   ).toBeVisible();
   const rateLimitedInput = page.getByLabel("TOTP 验证码");
   const rateLimitedSubmit = page.getByRole("button", { name: "完成 TOTP 登录" });
@@ -568,7 +568,7 @@ test("连续三十分钟无操作后自动锁定，随后仍可使用 Passkey �
   await page.clock.fastForward(60 * 1000);
 
   await expect(
-    page.getByRole("heading", { name: "个人资产看板已锁定" }),
+    page.getByRole("heading", { name: "看板已锁定" }),
   ).toBeVisible();
   expect(await page.content()).not.toContain(SENSITIVE_BODY);
   await unlockWithPasskey(page);
@@ -580,7 +580,7 @@ test("并发 TOTP 请求共享五次尝试上限", async ({ page, request }) => 
   const recoverySecret = await configureRecovery(page);
   await page.getByRole("button", { name: "立即锁定" }).click();
   await expect(
-    page.getByRole("heading", { name: "个人资产看板已锁定" }),
+    page.getByRole("heading", { name: "看板已锁定" }),
   ).toBeVisible();
 
   const correctCode = totpCode(recoverySecret, new Date(FIXED_NOW));
@@ -654,7 +654,7 @@ test("关闭浏览器上下文后敏感会话不会在新上下文恢复", async
     reopenedContext.pages()[0] ?? (await reopenedContext.newPage());
   await reopenedPage.goto("/");
   await expect(
-    reopenedPage.getByRole("heading", { name: "个人资产看板已锁定" }),
+    reopenedPage.getByRole("heading", { name: "看板已锁定" }),
   ).toBeVisible();
   await expect(reopenedPage.getByTestId("login-gate")).toBeVisible();
   expect(await reopenedPage.content()).not.toContain(SENSITIVE_BODY);

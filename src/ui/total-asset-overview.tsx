@@ -556,7 +556,7 @@ export function TotalAssetOverview({
         >
           <p>
             {valuation.coverageIssues.map((issue) => issue.sourceLabel).join("、")}
-            ：产品覆盖不完整，当前总资产按已接入及平台汇总范围计算。
+            ：产品覆盖不完整。
           </p>
         </VibeNotice>
       ) : null}
@@ -571,7 +571,7 @@ export function TotalAssetOverview({
             if (issue.kind === "quote-unavailable") {
               return (
                 <p key={issue.sourceId}>
-                  {`${issue.sourceLabel}：${issue.quoteUnavailableCount} 项期权行情未接入，当前持仓明细无法与账户总额精确对账。总资产以账户总额为准。`}
+                  {`${issue.sourceLabel}：${issue.quoteUnavailableCount} 项期权缺少行情；总资产以账户总额为准。`}
                 </p>
               );
             }
@@ -581,8 +581,8 @@ export function TotalAssetOverview({
             return (
               <p key={issue.sourceId}>
                 {issue.sourceLabel}：{showSensitiveInfo && issue.amount !== null
-                  ? `${prefix}持仓明细与账户总额相差 ${amount(issue.amount)} ${valuation.currency}。`
-                  : `${prefix}持仓明细与账户总额暂未对齐。`}
+                  ? `${prefix}持仓与账户总额相差 ${amount(issue.amount)} ${valuation.currency}。`
+                  : `${prefix}持仓与账户总额未对齐。`}
                 总资产以账户总额为准。
               </p>
             );
@@ -690,12 +690,12 @@ export function TotalAssetOverview({
             unavailableCount={0}
           />
         ) : history.length === 0 ? (
-          <p className="trend-empty">首次成功同步后开始记录</p>
+          <p className="trend-empty">等待首次同步</p>
         ) : (
           <>
             <AssetTrendChart
               ariaLabel={trendRange === "all"
-                ? "全部上海自然日总资产趋势"
+                ? "全部总资产趋势"
                 : `最近${totalTrendDays.length}个上海自然日总资产趋势`}
               currency={currency}
               formatAmount={amount}

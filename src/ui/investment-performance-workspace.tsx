@@ -155,9 +155,9 @@ function reasonForCurrent(
   current: PortfolioObservation | null,
   cumulativeNetInvestment: string | null,
 ): string | null {
-  if (current === null) return "当前来源总额不完整、过期或无法折算，不能计算组合投资盈亏。";
+  if (current === null) return "总资产不可用，无法计算投资盈亏。";
   if (cumulativeNetInvestment === null) {
-    return "至少一笔资金缺少该计价货币的长桥参考汇率证据，不能计算组合投资盈亏。";
+    return "资金缺少汇率证据，无法计算投资盈亏。";
   }
   return null;
 }
@@ -168,7 +168,7 @@ function reasonForAssetClassInterval(input: {
   start: PortfolioObservation | null;
   days: string[];
 }): string | null {
-  if (input.days.length === 0) return "请选择有效的起止日期。";
+  if (input.days.length === 0) return "请选择有效日期。";
   if (input.start === null || input.end === null) {
     return `所选区间缺少两个完整的${input.assetClassLabel}资产观测，不能计算区间资产变动。`;
   }
@@ -183,10 +183,10 @@ function reasonForInterval(input: {
 }): string | null {
   if (input.days.length === 0) return "请选择有效的起止日期。";
   if (input.start === null || input.end === null) {
-    return "所选区间缺少两个完整资产观测，不能把资产变化或收益补造出来。";
+    return "区间缺少完整资产观测。";
   }
   if (input.netExternalCashflow === null) {
-    return "区间内至少一笔资金缺少该计价货币的长桥参考汇率证据。";
+    return "区间资金缺少汇率证据。";
   }
   return null;
 }
@@ -297,7 +297,6 @@ function CashflowEditor({
           </VibeButton>
         </>
       }
-      description="只记录资金跨越投资范围的事实；不会创建交易流水、平台间转账或资产观测。"
       eyebrow="INVESTMENT / CASHFLOW"
       onClose={onClose}
       onSubmit={submit}
@@ -557,7 +556,6 @@ export function InvestmentPerformanceWorkspace({
           </VibeButton>
           </>
         }
-        description="将资金进出与资产变化分开阅读。账本只记录本金事实，不会伪造交易、换仓或历史净值。"
         eyebrow="PORTFOLIO / PERFORMANCE"
         title="收益分析"
       />
@@ -577,7 +575,6 @@ export function InvestmentPerformanceWorkspace({
             hidden={showSensitiveInfo === false}
             signed
           />
-          <p>初始投入 + 外部入金 − 外部出金。</p>
         </article>
         <article data-testid="performance-current-profit">
           <p className="card-label">PERFORMANCE / CURRENT</p>
@@ -588,7 +585,6 @@ export function InvestmentPerformanceWorkspace({
             hidden={showSensitiveInfo === false}
             signed
           />
-          <p>当前完整总资产 − 累计净投入。</p>
         </article>
       </section>
       {currentReason ? <VibeNotice tone="info">{currentReason}</VibeNotice> : null}
@@ -604,7 +600,7 @@ export function InvestmentPerformanceWorkspace({
               {formatShanghaiDayLabel(trend.startDay)} 至 {formatShanghaiDayLabel(trend.endDay)}
             </VibeStatusTag>
           ) : (
-            <VibeStatusTag tone="warning">尚无完整端点</VibeStatusTag>
+            <VibeStatusTag tone="warning">尚无资产记录</VibeStatusTag>
           )}
         </header>
         <div className="investment-performance__range" aria-label="分析区间" role="group">
@@ -755,16 +751,12 @@ export function InvestmentPerformanceWorkspace({
           <div>
             <p className="card-label">LEDGER / INVESTMENT BOUNDARY</p>
             <h2>投资资金进出</h2>
-            <p>按发生时间倒序。平台间转账、买卖、换汇和调仓不属于本账本。</p>
           </div>
           <span>{cashflows.length} 笔</span>
         </header>
         {cashflows.length === 0 ? (
           <div className="empty-state">
             <p className="empty-title">尚未记录投入本金</p>
-            <p className="empty-hint">
-              可补录初始投入或后续外部资金进出；没有资产观测的日期不会因此生成收益曲线。
-            </p>
           </div>
         ) : (
           <ol className="investment-performance__cashflow-list">
@@ -873,7 +865,7 @@ export function InvestmentPerformanceWorkspace({
             </>
           }
           aria-label="自定义分析区间"
-          description="按连续上海自然日取数；区间结论只使用区间内实际完整观测端点。"
+          description="仅使用完整总资产观测。"
           eyebrow="PERFORMANCE / RANGE"
           onClose={() => setCustomRangeDialogOpen(false)}
           title="自定义分析区间"

@@ -43,7 +43,7 @@ export function SetupPasskey() {
     return (
       <div className="setup-done">
         <VibeNotice role="status" tone="success">
-          已完成预置。预置不会自动登录，请返回所有者登录页验证身份。
+          预置完成，请登录。
         </VibeNotice>
         <VibeLink
           className="provision-primary setup-home-link"
@@ -68,8 +68,7 @@ export function SetupPasskey() {
           role="alert"
           tone="error"
         >
-          预置失败或已取消。请重试；如系统未弹出 Passkey
-          窗口，请改用支持 Passkey 的浏览器或设备。
+          预置失败或已取消，请重试。
         </VibeNotice>
       ) : null}
       {state === "unsupported" ? (
@@ -80,8 +79,7 @@ export function SetupPasskey() {
             role="alert"
             tone="error"
           >
-            当前浏览器或设备不支持 Passkey。请改用支持 WebAuthn
-            的浏览器或设备，然后返回首页重新开始。
+            此浏览器或设备不支持 Passkey。
           </VibeNotice>
           <div className="setup-feedback-actions">
             <VibeLink className="setup-secondary-action" href="/" variant="text">

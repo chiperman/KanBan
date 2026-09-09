@@ -47,7 +47,7 @@ export function FormalDailySettlementSummary({
           <VibeStatusTag tone="muted">等待首次日结</VibeStatusTag>
         </div>
         <p className="trend-empty">
-          独立于每日趋势观测；后台任务在符合日结窗口时才记录。
+          等待日结。
         </p>
       </section>
     );
@@ -86,12 +86,12 @@ export function FormalDailySettlementSummary({
       <p className="formal-daily-settlement-provenance">
         {anchorLabel(latest.anchor)}
         {latest.capturedAt === null
-          ? " · 未在采集窗口内取得数据"
+          ? " · 未采集"
           : ` · 采集于 ${formatShanghaiDateTime(latest.capturedAt)}`}
       </p>
       <p className="formal-daily-settlement-note">
-        证券按官方日 K 常规盘收盘记录；
-        {hasCrypto ? "加密资产按同一采集窗口市价记录。" : "本批次没有加密资产。"}
+        证券收盘
+        {hasCrypto ? "；加密采集时价。" : null}
       </p>
       {latest.diagnostic ? (
         <p className="formal-daily-settlement-diagnostic">{latest.diagnostic}</p>

@@ -135,7 +135,7 @@ function ManualRecordDialog({
         </>
       }
       aria-label={`记录 ${name} 数据`}
-      description="手工来源只保存每个上海自然日的一条资产总额，不创建持仓或同步记录。"
+      description="每日仅记录一条总额。"
       eyebrow="MANUAL / RECORD"
       onClose={onClose}
       onSubmit={(event) => {
@@ -222,7 +222,7 @@ function ManualRecordDeleteDialog({
         </>
       }
       aria-label={`删除 ${name} ${record.day} 数据`}
-      description="删除后会回退到该来源最新保留的日期记录。"
+      description="将显示上一条保留记录。"
       eyebrow="MANUAL / DELETE"
       onClose={onClose}
       title={`删除 ${name} ${record.day} 数据`}
@@ -287,8 +287,8 @@ function SourceLifecycleActions({
         <h2>显示与生命周期</h2>
         <p>
           {hidden
-            ? "该来源卡片已从总览隐藏；来源身份、数据和快照仍保留。"
-            : "隐藏只影响总览卡片显示，不影响来源身份、同步或历史快照。"}
+            ? "来源卡片已隐藏。"
+            : "仅隐藏总览卡片。"}
         </p>
         <VibeButton
           disabled={pending}
@@ -304,11 +304,11 @@ function SourceLifecycleActions({
         <p className="card-label">DANGEROUS / SOURCE DATA</p>
         <h2>危险操作</h2>
         {manual ? (
-          <p>手工资产记录没有连接或断开能力；永久删除会移除该来源与全部历史记录。</p>
+          <p>永久删除会移除来源及全部历史记录。</p>
         ) : source.lifecycle === "disconnected" ? (
-          <p>该来源已断开，历史数据保留。恢复只会使用仍有效的既有只读授权。</p>
+          <p>已断开；历史数据保留。</p>
         ) : (
-          <p>断开会停止后续同步，但保留来源身份、总览卡片和已经生成的历史快照。</p>
+          <p>断开将停止同步；历史数据保留。</p>
         )}
         {!manual ? (
           source.lifecycle === "disconnected" ? (
@@ -358,7 +358,7 @@ function SourceLifecycleActions({
               </VibeButton>
             </>
           }
-          description="停止后续同步，但不会删除来源身份、总览卡片或已经生成的资产快照。"
+          description="停止同步；历史数据保留。"
           eyebrow="DANGEROUS / DISCONNECT"
           onClose={() => setConfirmDisconnect(false)}
           title={`确认断开 ${name}`}
@@ -378,7 +378,7 @@ function SourceLifecycleActions({
               </VibeButton>
             </>
           }
-          description="这会永久删除该来源的持仓记录、同步记录和全部资产快照，无法恢复。"
+          description="将永久删除来源及全部历史数据，无法恢复。"
           eyebrow="DANGEROUS / DELETE"
           onClose={() => setDeleteStep(null)}
           title="永久删除来源数据"
@@ -398,7 +398,7 @@ function SourceLifecycleActions({
               </VibeButton>
             </>
           }
-          description={`即将永久删除 ${name} 的来源数据及全部历史快照。`}
+          description={`将永久删除 ${name} 及全部历史数据。`}
           eyebrow="DANGEROUS / FINAL CONFIRMATION"
           onClose={() => setDeleteStep(null)}
           title="第二次确认永久删除"
@@ -443,7 +443,6 @@ export function AssetSourceDetail({
           <div>
             <p className="card-label">SOURCE / DETAIL</p>
             <h1>来源详情</h1>
-            <p>{manual ? "手工资产记录只维护日期总额，不含凭证、持仓或同步操作。" : "查看单一来源的持仓、趋势、同步与只读授权摘要。"}</p>
           </div>
           <div className="asset-source-detail__actions">
             <VibeSelect

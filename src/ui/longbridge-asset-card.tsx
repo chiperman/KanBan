@@ -813,9 +813,9 @@ export function AssetSourceCard({
   );
   const sourceTrendNotice = [
     isManual
-      ? "手工数据按最近记录延用，不影响同步完整性"
+      ? "手工记录"
       : missingSourceTrendDayCount > 0
-      ? `缺少 ${missingSourceTrendDayCount} 天观测，趋势线已跨过缺口连接`
+      ? `缺少 ${missingSourceTrendDayCount} 天观测`
       : null,
     abnormalSourceTrendPoints.length > 0 || unavailableSourceTrendPoints.length > 0
       ? `数据受限：${
@@ -1002,7 +1002,7 @@ export function AssetSourceCard({
             />
           ) : sourceHistory.length === 0 ? (
             <p className="trend-empty">
-              {isManual ? "添加首条数据后开始记录" : "首次成功同步后开始记录"}
+              {isManual ? "等待首条记录" : "等待首次同步"}
             </p>
           ) : (
             <>
@@ -1071,8 +1071,8 @@ export function AssetSourceCard({
           <>
             <VibeStatusTag className="asset-sync-status" tone="muted">
               {hasManualRecord
-                ? "仅记录资产总额 · 每日一条，可在下方管理历史数据"
-                : "尚未添加数据 · 添加后才会计入总资产"}
+                ? "每日一条总额"
+                : "等待首条数据"}
             </VibeStatusTag>
             {hasManualRecord ? (
               <p className="asset-updated">
@@ -1309,9 +1309,6 @@ export function AssetSourceCard({
                 <h3 id={`evm-unreadable-assets-title-${source.id}`}>
                   读取受限资产
                 </h3>
-                <p>
-                  这些合约已被发现，但无法可靠读取数量；不计入普通持仓数量或估值。
-                </p>
               </div>
               {assetScopeHref ? (
                 <VibeLink href={assetScopeHref} variant="outline">

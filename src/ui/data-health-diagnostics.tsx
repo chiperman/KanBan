@@ -372,15 +372,6 @@ export function DataHealthDiagnostics({
 
   return (
     <div className="data-health-diagnostics" data-testid="data-health-diagnostics">
-      <section className="data-health-intro">
-        <p className="data-health-intro__eyebrow">READ ONLY / DIAGNOSTICS</p>
-        <p className="data-health-intro__summary">
-          先确认哪些来源影响当前资产视图，再进入来源详情排查。
-        </p>
-        <p className="data-health-intro__boundary">
-          刷新、重新授权与来源生命周期操作保留在对应来源详情。
-        </p>
-      </section>
 
       <section aria-label="来源诊断" className="data-health-source-section">
         <div className="data-health-section-heading">
@@ -435,7 +426,6 @@ export function DataHealthDiagnostics({
         {sources.length === 0 ? (
           <div className="empty-state">
             <p className="empty-title">暂无可诊断来源</p>
-            <p className="empty-hint">接入或创建来源后，此处会显示同步与历史覆盖状态。</p>
           </div>
         ) : (
           <>
@@ -450,12 +440,12 @@ export function DataHealthDiagnostics({
                   );
                   return (
                     <li key={reason}>
-                      <p>共同诊断 · 影响 {matchedSources.length} 个来源</p>
+                      <p>影响 {matchedSources.length} 个来源</p>
                       <strong>{reason}</strong>
                       <span>
                         {hasUnvaluedSource
                           ? "相关未估值资产未计入总览："
-                          : "请在对应来源详情排查："}
+                          : "查看来源："}
                         {matchedSources.map(({ name, source }) => (
                           <VibeLink
                             aria-label={`查看 ${name} 来源详情`}
@@ -621,7 +611,6 @@ export function DataHealthDiagnostics({
         {filteredEntries.length === 0 ? (
           <div className="empty-state">
             <p className="empty-title">所选条件没有匹配观测</p>
-            <p className="empty-hint">改变完整性筛选可查看完整、未估值、过期或缺失的历史状态。</p>
           </div>
         ) : (
           <ol className="data-health-history__list">

@@ -27,7 +27,7 @@ async function loginAsOwner(page: Page): Promise<void> {
   await attachPasskey(page);
   await page.goto("/setup");
   await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
-  await expect(page.getByRole("status")).toContainText("已完成预置");
+  await expect(page.getByRole("status")).toContainText("预置完成");
   await page.goto("/");
   await unlockAsOwner(page);
 }
@@ -222,7 +222,7 @@ test("没有每日趋势观测时提示首次成功同步", async ({ page, reque
 
   await loginAsOwner(page);
   await expect(page.getByTestId("total-asset-trend")).toContainText(
-    "首次成功同步后开始记录",
+    "等待首次同步",
   );
 });
 

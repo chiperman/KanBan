@@ -57,7 +57,7 @@ const EVM_WATCH_WALLET = {
     },
   ] satisfies AssetSourceFieldDescription[],
   startLabel: "验证公开地址",
-  fieldHelp: "仅读取公开地址余额；不接收私钥、助记词、MPC 恢复材料或签名能力。",
+  fieldHelp: "只读公开地址；不接收私钥、助记词或签名。",
 };
 
 const MANUAL_ASSET_SOURCE = {
@@ -454,11 +454,6 @@ export function AssetSourceFlow({
           {isReauthorizing ? "SOURCE / REAUTHORIZE" : "SOURCE / ONBOARDING"}
         </p>
         <h1>{flowTitle}</h1>
-        <p>
-          {isReauthorizing
-            ? "请重新提供最小只读授权材料；已保存的凭证不会显示或回填。"
-            : "选择来源、填写最小只读授权、校验范围后再确认保存。"}
-        </p>
       </header>
 
       <ol aria-label="来源接入步骤" className="asset-source-flow__steps">
@@ -484,7 +479,6 @@ export function AssetSourceFlow({
       {step === "choose" ? (
         <section aria-labelledby="source-flow-choose-title" className="asset-source-flow__panel">
           <h2 id="source-flow-choose-title">选择来源类型</h2>
-          <p>自动账户、观察钱包与手工资产记录都从同一工作区进入。</p>
           <fieldset className="source-provider-list">
             <legend className="sr-only">来源类型</legend>
             {PROVIDER_OPTIONS.map((description) => (
@@ -515,10 +509,12 @@ export function AssetSourceFlow({
           <h2 id="source-flow-configure-title">{configurationTitle}</h2>
           <p>
             {providerId === "manual"
-              ? "手工资产来源无凭证；创建后再在详情中维护按上海自然日保存的总额。"
+              ? "无凭证；确认后创建。"
               : isReauthorizing && isEvm
-                ? "只能提供与当前来源身份相同的公开地址；不会接收任何私钥或签名材料。"
-                : "交易、划转、提现、未知或不完整权限都会被拒绝，失败时不会保存来源或凭证。"}
+                ? "仅接受公开地址。"
+                : isEvm
+                  ? "仅接受公开地址。"
+                  : "仅接受只读权限。"}
           </p>
           {providerId === "manual" ? (
             <VibeField
@@ -634,11 +630,10 @@ export function AssetSourceFlow({
       {step === "preview" ? (
         <section aria-labelledby="source-flow-preview-title" className="asset-source-flow__panel">
           <h2 id="source-flow-preview-title">
-            {providerId === "manual" ? "确认创建手工资产来源" : "校验与范围预览"}
+            {providerId === "manual" ? "确认手工来源" : "校验与范围预览"}
           </h2>
           {providerId === "manual" ? (
             <>
-              <p>“{manualLabel}”会创建为独立的无凭证来源。</p>
               <dl className="source-preview-list vibe-preview-list">
                 <div className="vibe-data-row">
                   <dt>来源能力</dt>
@@ -646,13 +641,13 @@ export function AssetSourceFlow({
                 </div>
                 <div className="vibe-data-row">
                   <dt>数据边界</dt>
-                  <dd>不创建持仓或同步能力</dd>
+                  <dd>仅记录总额</dd>
                 </div>
               </dl>
             </>
           ) : (
             <>
-              <p>已完成只读校验；确认前不会把授权材料写入持久化存储。</p>
+              <p>已验证；确认后保存。</p>
               <dl className="source-preview-list vibe-preview-list">
                 {previews.map((current) => {
                   const description = assetSourceProvider(current.provider);

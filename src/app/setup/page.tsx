@@ -25,10 +25,9 @@ export default async function SetupPage({
           data-vibe-surface="auth-panel"
         >
           <p className="card-label">OWNER PROVISION / CLOSED</p>
-          <h1 className="setup-title">所有者已完成预置</h1>
+          <h1 className="setup-title">已预置</h1>
           <p className="setup-copy">
-            此终端的唯一所有者已经建立，预置入口已永久关闭。
-            请返回所有者登录页继续使用资产看板。
+            预置入口已关闭。
           </p>
           <VibeLink className="provision-primary" href="/" variant="primary">
             返回所有者登录
@@ -48,8 +47,7 @@ export default async function SetupPage({
         <p className="card-label">OWNER PROVISION / 00</p>
         <h1 className="setup-title">预置唯一所有者的 Passkey</h1>
         <p className="setup-copy">
-          此操作仅可完成一次。完成后注册入口永久关闭，
-          只有持有该 Passkey 的所有者可以查看敏感内容。
+          仅可预置一次。
         </p>
         <SetupPasskey />
       </main>

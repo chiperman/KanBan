@@ -438,7 +438,7 @@ function LockedProductFlow() {
         <title id="locked-product-flow-title">个人资产看板只读数据流</title>
         <desc id="locked-product-flow-description">
           Longbridge、Binance、OKX、Bitget 和 Web3
-          只读资产来源经过同步与估值后，汇总到个人资产看板。
+          只读资产汇总。
         </desc>
 
         <defs>
@@ -768,20 +768,6 @@ export function OwnerLogin({
     >
       <div className="login-auth-column">
         <div className="login-intro">
-          <p className="login-eyebrow">
-            {ownerProvisioned
-              ? "OWNER VERIFICATION REQUIRED"
-              : "FIRST RUN · OWNER PROVISION REQUIRED"}
-            {ownerProvisioned ? (
-              <span
-                aria-hidden="true"
-                className="login-lock-progress"
-                data-testid="locked-progress"
-              >
-                <span />
-              </span>
-            ) : null}
-          </p>
           {ownerProvisioned ? (
             <LockedPixelDisplay />
           ) : (
@@ -793,23 +779,18 @@ export function OwnerLogin({
             id="login-title"
             className={ownerProvisioned ? "login-state-heading" : undefined}
           >
-            {ownerProvisioned ? "个人资产看板已锁定" : "预置唯一所有者"}
+            {ownerProvisioned ? "看板已锁定" : "预置唯一所有者"}
           </h1>
-          {ownerProvisioned ? null : (
-            <p className="login-copy">
-              此终端尚未预置所有者 Passkey，请先完成一次性预置。
-            </p>
-          )}
         </div>
         <div className="login-flow" key={ownerProvisioned ? mode : "setup"}>
         {state === "failed" ? (
           <VibeNotice className="login-error" code="ERROR" role="alert" tone="error">
-            验证失败或已取消，资产看板仍处于锁定状态。
+            验证失败或已取消。
           </VibeNotice>
         ) : null}
         {state === "unavailable" ? (
           <VibeNotice className="login-error" code="ERROR" role="alert" tone="error">
-            所有者尚未预置登录凭证，请先完成首次预置。
+            请先预置登录凭证。
           </VibeNotice>
         ) : null}
         {!ownerProvisioned ? (
@@ -820,9 +801,6 @@ export function OwnerLogin({
                 →
               </span>
             </VibeLink>
-            <p className="login-hint">
-              仅可预置一位所有者 / 完成后仍需使用 Passkey 登录
-            </p>
           </div>
         ) : null}
         {ownerProvisioned && mode === "choice" ? (
@@ -845,11 +823,7 @@ export function OwnerLogin({
               >
                 使用 TOTP 登录
               </VibeButton>
-            ) : (
-              <p className="login-hint">
-                TOTP 登录未配置 / 登录后可在本机设置
-              </p>
-            )}
+            ) : null}
           </div>
         ) : null}
         {mode === "recovery-totp" ? (
@@ -858,7 +832,6 @@ export function OwnerLogin({
             data-vibe-surface="auth-flow"
             onSubmit={verifyRecoveryTotp}
           >
-            <p className="login-copy">输入验证器当前显示的 6 位动态验证码。</p>
             <VibeVerificationCode
               aria-describedby={recoveryError ? "recovery-totp-error" : undefined}
               aria-invalid={recoveryError ? true : undefined}
@@ -900,11 +873,6 @@ export function OwnerLogin({
             </div>
           </form>
         ) : null}
-        <div className="login-trust-line" aria-label="安全属性">
-          <span>PASSKEY</span>
-          <span>LOCAL</span>
-          <span>READ ONLY</span>
-        </div>
         </div>
       </div>
       {ownerProvisioned ? <LockedProductFlow /> : null}

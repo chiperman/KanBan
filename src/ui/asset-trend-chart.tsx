@@ -37,7 +37,6 @@ function HiddenTrendState({
       <div className="asset-trend-private-copy">
         <p>趋势已隐藏</p>
         <strong aria-hidden="true">••••••</strong>
-        <span>开启“显示关键信息”以查看趋势与明细</span>
       </div>
     </div>
   );
@@ -157,7 +156,7 @@ export function AssetTrendChart({
     return (
       <div className={`asset-trend-comparison asset-trend-comparison--${variant}`}>
         {comparisonHeader}
-        <p className="trend-empty">当前计价货币没有可用趋势金额</p>
+        <p className="trend-empty">无可用趋势</p>
       </div>
     );
   }

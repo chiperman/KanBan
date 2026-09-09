@@ -332,9 +332,6 @@ export function AssetsHoldingsWorkspace({
         {sources.length === 0 ? (
           <div className="empty-state">
             <p className="empty-title">尚未接入资产来源</p>
-            <p className="empty-hint">
-              先添加只读来源或手工资产组；连接后可在这里分别阅读总额与持仓观察。
-            </p>
             <VibeLink href="/asset-sources/new" variant="outline">
               新增来源
             </VibeLink>
@@ -431,9 +428,6 @@ export function AssetsHoldingsWorkspace({
           <div>
             <p className="card-label">HOLDINGS / OBSERVATION</p>
             <h2 id="holding-observations-title">持仓价格与市值观察</h2>
-            <p>
-              平台未提供成本、累计盈亏或完整价格端点时，明确显示数据不足，不推测或补零。
-            </p>
           </div>
           <VibeLink href="/asset-sources" variant="text">
             管理资产来源
@@ -473,9 +467,6 @@ export function AssetsHoldingsWorkspace({
         {filteredObservations.length === 0 ? (
           <div className="empty-state" data-testid="assets-holdings-empty">
             <p className="empty-title">当前筛选没有持仓观察</p>
-            <p className="empty-hint">
-              手工资产组与仅汇总产品仍会保留在上方来源总额中，不会伪造成单项持仓。
-            </p>
           </div>
         ) : (
           <div className="assets-holdings__table-wrap">
@@ -590,7 +581,7 @@ export function AssetsHoldingsWorkspace({
         )}
 
         <VibeNotice tone="info">
-          来源总额与持仓明细的时间、汇率、产品覆盖和接口能力可不同。只有来源明确提供的平台盈亏才显示为平台盈亏；组合收益请前往收益分析。
+          平台盈亏仅在来源提供时显示。
         </VibeNotice>
       </section>
     </section>

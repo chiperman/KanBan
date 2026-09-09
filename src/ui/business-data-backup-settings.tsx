@@ -134,7 +134,7 @@ export function BusinessDataBackupSettings() {
     >
       <h2 id="business-data-backup-title">备份与恢复</h2>
       <p className="settings-description">
-        备份包含来源与历史观察、资金账本及对应的长桥参考汇率观察；恢复会替换这些业务数据。外部来源凭证、令牌和密钥不会导出、回显或恢复。
+        备份业务数据与资金账本。恢复会替换当前数据；不含凭证、令牌和密钥。
       </p>
       <div className="business-data-backup-settings__actions">
         <VibeButton
@@ -154,7 +154,7 @@ export function BusinessDataBackupSettings() {
       <div className="business-data-restore">
         <VibeField
           fieldId="business-data-backup-file-name"
-          label="要恢复的本机备份文件名"
+          label="备份文件名"
           name="fileName"
           onChange={(event) => {
             setFileName(event.currentTarget.value);
@@ -190,7 +190,7 @@ export function BusinessDataBackupSettings() {
       ) : null}
       {restored ? (
         <VibeNotice role="status" tone="success">
-          已恢复业务数据与资金账本。自动来源保持断开，需重新提供只读授权材料。
+          已恢复。自动来源需重新授权。
         </VibeNotice>
       ) : null}
       {error ? (
@@ -221,8 +221,7 @@ export function BusinessDataBackupSettings() {
           }
           description={
             <>
-              此操作会替换当前业务数据。{preview.warning}
-              资金账本及其长桥参考汇率观察会一并恢复；自动来源保持断开，必须重新提供只读授权材料。
+              将替换当前业务数据。{preview.warning} 自动来源需重新授权。
             </>
           }
           eyebrow="LOCAL BACKUP / RESTORE"

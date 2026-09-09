@@ -25,7 +25,6 @@ const WORKBENCH_DESTINATIONS = [
 interface Command {
   id: string;
   label: string;
-  detail: string;
   keywords: string;
   action(): void;
 }
@@ -93,7 +92,6 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
       ...WORKBENCH_DESTINATIONS.map(({ href, label }) => ({
         id: `workbench:${href}`,
         label: `前往${label}`,
-        detail: "工作台导航",
         keywords: `${label} 前往 跳转 导航 工作台`,
         action() {
           close(false);
@@ -103,7 +101,6 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
       ...targets.map((target) => ({
         id: `navigate:${target.id}`,
         label: `跳转到 ${target.label}`,
-        detail: "卡片导航",
         keywords: `${target.label} 跳转 导航 卡片`,
         action() {
           close(false);
@@ -129,7 +126,6 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
       actions.push({
         id: "refresh",
         label: "立即刷新资产",
-        detail: "资产动作",
         keywords: "立即 刷新 同步 资产 refresh",
         action() {
           close(false);
@@ -140,7 +136,6 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
     actions.push({
       id: "lock",
       label: "立即锁定敏感内容",
-      detail: "会话动作",
       keywords: "立即 锁定 退出 敏感内容 lock",
       action() {
         close(false);
@@ -225,7 +220,7 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
           <div className="command-menu-panel" data-vibe-surface="command-panel">
             <header className="command-menu-head">
               <div>
-                <p className="command-menu-eyebrow">COMMAND PALETTE · 快捷命令</p>
+                <p className="command-menu-eyebrow">快捷命令</p>
                 <p className="command-menu-hint">⌘K · Ctrl K · Esc 关闭</p>
               </div>
               <VibeButton
@@ -248,7 +243,6 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
                 autoComplete="off"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="搜索卡片、刷新或锁定"
               />
             </div>
             <div className="command-menu-results" aria-live="polite">
@@ -267,7 +261,6 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
                     variant="text"
                   >
                     <span>{command.label}</span>
-                    <small>{command.detail}</small>
                   </VibeButton>
                 ))
               )}

@@ -109,7 +109,7 @@ export function RecoverySetup({ configured }: RecoverySetupProps) {
           role="status"
           tone="success"
         >
-          TOTP 登录已配置，请等待验证器显示下一组验证码后再登录
+          TOTP 已配置，请使用下一组验证码登录。
         </VibeNotice>
       ) : null}
       {!open && error ? (
@@ -131,8 +131,7 @@ export function RecoverySetup({ configured }: RecoverySetupProps) {
           }
           description={
             <>
-              请把下方 TOTP 密钥添加到验证器，再输入当前验证码确认；
-              密钥只在本次配置中显示。
+              添加密钥后输入验证码确认；密钥仅本次显示。
             </>
           }
           eyebrow="LOCAL RECOVERY / TOTP"
@@ -210,8 +209,7 @@ export function RecoverySetup({ configured }: RecoverySetupProps) {
           }
           description={
             <>
-              TOTP 登录会生成一份新的 TOTP 密钥。请确认当前环境没有录屏、投屏或旁观者，
-              并准备好验证器后再继续。
+              将生成新密钥。请确认无录屏、投屏或旁观者。
             </>
           }
           eyebrow="LOCAL RECOVERY / TOTP"

@@ -342,10 +342,10 @@ export function DailyOverviewWorkspace({
   );
   const currentReason = current === null
     ? currency === "USD"
-      ? "当前来源总额不完整、包含过期数据或尚未接入来源，不能形成可信组合结论。"
+      ? "总额数据不完整。"
       : `没有可用的长桥参考汇率，无法将 USD 总额折算为 ${currency}。`
     : !current.complete
-      ? "当前总额保留最后成功数据，但包含过期、不完整或已断开的来源；金额可阅读，不将其标为完整。"
+      ? "总额为最近成功值。"
       : null;
   const refreshEnabled = recordedSources.some(
     (source) =>
@@ -375,7 +375,6 @@ export function DailyOverviewWorkspace({
     >
       <WorkbenchPageHeader
         actionsLabel="总览快捷操作"
-        description="先判断组合总额是否可信，再查看本金、实际盈亏与今日变化。"
         eyebrow="PORTFOLIO / TODAY"
         title="总览"
         actions={
@@ -423,17 +422,14 @@ export function DailyOverviewWorkspace({
         </article>
         <article data-testid="overview-confidence">
           <p className="card-label">CONFIDENCE / DATA</p>
-          <h2>{current?.complete ? "总额完整" : "需要留意数据状态"}</h2>
-          <VibeStatusTag tone={current?.complete ? "success" : "warning"}>
-            {current?.complete ? "来源账户总额 · 当前" : "总额保留最后成功数据"}
-          </VibeStatusTag>
+          <h2>{current?.complete ? "总额完整" : "数据不完整"}</h2>
           <p>
             {currentReason ??
-              `已覆盖 ${recordedSources.length} 个资产来源。`}
+              `已覆盖 ${recordedSources.length} 个来源`}
           </p>
           {!current?.complete ? (
             <p>
-              未估值 {usdValuation.unvaluedCount} 项，过期来源 {usdValuation.expiredCount} 个。
+              未估值 {usdValuation.unvaluedCount} 项 · 过期来源 {usdValuation.expiredCount} 个
             </p>
           ) : null}
         </article>
@@ -465,10 +461,10 @@ export function DailyOverviewWorkspace({
               className="daily-overview__change-issues"
               data-testid="overview-today-change-issues"
             >
-              <p>影响本次计算的来源</p>
+              <p>未计入今日变化</p>
               {!showSensitiveInfo ? (
                 <span>
-                  已隐藏 {todayChangeIssueSources.length} 个问题来源；不参与今日资产变化。
+                  已隐藏 {todayChangeIssueSources.length} 个来源。
                 </span>
               ) : (
                 <>
@@ -487,7 +483,6 @@ export function DailyOverviewWorkspace({
                       </li>
                     ))}
                   </ul>
-                  <span>以上数据不参与今日资产变化。</span>
                 </>
               )}
             </div>
@@ -503,7 +498,6 @@ export function DailyOverviewWorkspace({
             hidden={!showSensitiveInfo}
             value={analysis.current.cumulativeNetInvestment}
           />
-          <span>初始投入与外部资金进出</span>
         </article>
         <article data-testid="overview-investment-profit">
           <p>组合投资盈亏</p>
@@ -513,7 +507,6 @@ export function DailyOverviewWorkspace({
             signed
             value={analysis.current.investmentProfit}
           />
-          <span>当前完整总额减累计净投入</span>
         </article>
         {demoMode ? (
           <p className="daily-overview__demo-static">
@@ -566,9 +559,6 @@ export function DailyOverviewWorkspace({
           points={trend.points}
           unavailableCount={trend.unavailableCount}
         />
-        <p className="daily-overview__hint">
-          缺失日期不补造数据；曲线会跨过空缺连接已有估值观测。深度历史、区间收益和资金记录在收益分析中维护。
-        </p>
       </section>
 
       <section className="daily-overview__sources" data-testid="overview-source-summary">
@@ -588,13 +578,10 @@ export function DailyOverviewWorkspace({
           )}
         </header>
         {!showSensitiveInfo ? (
-          <p className="daily-overview__hidden-sources">
-            已隐藏 {recordedSources.length} 个来源的身份、金额与同步状态。
-          </p>
+          <p className="daily-overview__hidden-sources">已隐藏 {recordedSources.length} 个来源。</p>
         ) : sourceSummaries.length === 0 ? (
           <div className="empty-state">
             <p className="empty-title">尚未接入资产来源</p>
-            <p className="empty-hint">先连接只读账户、观察钱包或手工资产，再形成组合总额。</p>
             <VibeLink href="/asset-sources/new" variant="primary">
               新增资产来源
             </VibeLink>
@@ -643,7 +630,7 @@ export function DailyOverviewWorkspace({
             在资产来源中查看单来源状态与恢复操作
           </VibeLink>
           <span>
-            全局刷新只更新已连接来源；单来源恢复、重新授权与生命周期操作留在资产来源。
+            单来源操作请前往资产来源。
           </span>
         </div>
       ) : null}
