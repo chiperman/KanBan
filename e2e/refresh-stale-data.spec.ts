@@ -25,7 +25,7 @@ async function loginAsOwner(page: Page): Promise<void> {
   await attachPasskey(page);
   await page.goto("/setup");
   await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
-  await expect(page.getByRole("status")).toContainText("已完成预置");
+  await expect(page.getByRole("status")).toContainText("预置完成");
   await page.goto("/");
 
   const [verification] = await Promise.all([
@@ -35,7 +35,7 @@ async function loginAsOwner(page: Page): Promise<void> {
     page.getByRole("button", { name: "使用 Passkey 登录" }).click(),
   ]);
   expect(verification.ok()).toBeTruthy();
-  await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
+  await expect(page.getByTestId("workbench-shell")).toBeVisible();
 }
 
 async function metrics(request: APIRequestContext) {
@@ -44,6 +44,7 @@ async function metrics(request: APIRequestContext) {
     scopes: string[];
     sourceIds: Array<string | null>;
     active: number;
+    adapterCalls: number;
   };
 }
 
@@ -61,6 +62,26 @@ async function setVisibility(page: Page, state: "visible" | "hidden") {
   }, state);
 }
 
+async function setFocus(page: Page, focused: boolean) {
+  await page.evaluate((nextFocused) => {
+    const scope = window as typeof window & { __testFocused?: boolean };
+    scope.__testFocused = nextFocused;
+    if (!Object.hasOwn(document, "hasFocus")) {
+      Object.defineProperty(document, "hasFocus", {
+        configurable: true,
+        value: () => scope.__testFocused === true,
+      });
+    }
+    window.dispatchEvent(new Event(nextFocused ? "focus" : "blur"));
+  }, focused);
+}
+
+async function keepOwnerSessionAlive(page: Page, now: string) {
+  await page.request.post("/test-doubles/clock", { data: { now } });
+  const response = await page.request.post("/api/auth/session/activity");
+  expect(response.ok()).toBeTruthy();
+}
+
 async function configureRefresh(
   request: APIRequestContext,
   scenario: "schedule" | "partial-failure",
@@ -71,82 +92,95 @@ async function configureRefresh(
   });
 }
 
-async function tokenColor(page: Page, token: "--success" | "--error") {
-  return page.evaluate((name) => {
-    const probe = document.createElement("span");
-    probe.style.color = `var(${name})`;
-    document.body.append(probe);
-    const color = getComputedStyle(probe).color;
-    probe.remove();
-    return color;
-  }, token);
-}
-
 test.beforeEach(async ({ request }) => {
   await request.post("/test-doubles/reset");
 });
 
-test("非 EVM 来源维持 30 秒行情刷新，回到前台执行完整刷新", async ({
+test("统一周期只在可见且聚焦时到期刷新，恢复前台事件合并为一轮", async ({
   page,
   request,
 }) => {
   await configureRefresh(request, "schedule");
-  await page.clock.install();
+  await page.clock.install({ time: new Date("2026-04-02T08:00:00.000Z") });
   await loginAsOwner(page);
-  const refreshStatus = page.getByTestId("asset-refresh-status");
-  await expect.poll(async () => (await metrics(request)).modes).toEqual([
-    "all",
-  ]);
-  await expect(refreshStatus).toContainText("同步完成");
-  await expect(page.getByTestId("total-asset-amount")).toHaveText("302.00 USD");
+  await expect.poll(async () => (await metrics(request)).adapterCalls).toBe(2);
+  expect((await metrics(request)).modes).toEqual(["all"]);
+  expect((await metrics(request)).scopes).toEqual(["all"]);
+  await expect(page.getByRole("region", { name: "总资产" })).toContainText(
+    "302.00 USD",
+  );
+  await expect(page.getByTestId("asset-refresh-status")).toHaveCount(0);
 
   await page.clock.fastForward("00:00:30");
-  await expect.poll(async () => (await metrics(request)).modes).toEqual([
-    "all",
-    "prices",
-  ]);
-  expect((await metrics(request)).scopes).toEqual(["non-evm", "non-evm"]);
+  expect((await metrics(request)).adapterCalls).toBe(2);
 
+  await setFocus(page, false);
   await setVisibility(page, "hidden");
-  await page.clock.fastForward("00:05:00");
-  expect((await metrics(request)).modes).toEqual(["all", "prices"]);
+  await keepOwnerSessionAlive(page, "2026-04-02T08:20:00.000Z");
+  await keepOwnerSessionAlive(page, "2026-04-02T08:40:00.000Z");
+  await request.post("/test-doubles/clock", {
+    data: { now: "2026-04-02T09:00:01.000Z" },
+  });
+  await page.clock.setFixedTime(new Date("2026-04-02T09:00:01.000Z"));
+  expect((await metrics(request)).adapterCalls).toBe(2);
 
   await setVisibility(page, "visible");
-  await expect.poll(async () => (await metrics(request)).modes).toEqual([
-    "all",
-    "prices",
-    "all",
+  expect((await metrics(request)).adapterCalls).toBe(2);
+
+  await Promise.all([
+    setFocus(page, true),
+    setVisibility(page, "visible"),
   ]);
-  expect((await metrics(request)).scopes).toEqual([
-    "non-evm",
-    "non-evm",
-    "all",
-  ]);
+  await expect.poll(async () => (await metrics(request)).adapterCalls).toBe(4);
+  expect((await metrics(request)).modes).toEqual(["all", "all"]);
+  expect((await metrics(request)).scopes).toEqual(["all", "all"]);
+  await expect(page.getByTestId("asset-refresh-status")).toHaveCount(0);
 });
 
-test("EVM 每日首次只刷新行情，回到前台执行完整刷新", async ({
+test("页面重载与多标签共享统一周期且到期只执行一轮 Adapter", async ({
+  context,
   page,
   request,
 }) => {
-  await configureRefresh(request, "schedule", "evm-watch-ethereum");
+  await configureRefresh(request, "schedule");
+  await page.clock.install({ time: new Date("2026-04-02T08:00:00.000Z") });
   await loginAsOwner(page);
+  await expect.poll(async () => (await metrics(request)).adapterCalls).toBe(2);
 
-  await expect.poll(async () => (await metrics(request)).modes).toEqual([
-    "prices",
+  await request.post("/test-doubles/clock", {
+    data: { now: "2026-04-02T08:01:00.000Z" },
+  });
+  await page.clock.fastForward("00:01:00");
+  await page.reload();
+  await expect(page.getByTestId("workbench-shell")).toBeVisible();
+  expect((await metrics(request)).adapterCalls).toBe(2);
+
+  const secondPage = await context.newPage();
+  await secondPage.clock.install({
+    time: new Date("2026-04-02T08:01:00.000Z"),
+  });
+  await secondPage.goto("/");
+  await expect(secondPage.getByTestId("workbench-shell")).toBeVisible();
+  expect((await metrics(request)).adapterCalls).toBe(2);
+
+  await Promise.all([
+    setVisibility(page, "visible"),
+    setVisibility(secondPage, "visible"),
+    setFocus(page, true),
+    setFocus(secondPage, true),
   ]);
-  expect((await metrics(request)).scopes).toEqual(["evm"]);
-
-  await page.clock.install();
-  await page.clock.fastForward("00:05:00");
-  expect((await metrics(request)).modes).toEqual(["prices"]);
-
-  await setVisibility(page, "hidden");
-  await setVisibility(page, "visible");
-  await expect.poll(async () => (await metrics(request)).modes).toEqual([
-    "prices",
-    "all",
+  await keepOwnerSessionAlive(page, "2026-04-02T08:20:00.000Z");
+  await keepOwnerSessionAlive(page, "2026-04-02T08:40:00.000Z");
+  await request.post("/test-doubles/clock", {
+    data: { now: "2026-04-02T09:00:01.000Z" },
+  });
+  await Promise.all([
+    page.clock.fastForward("00:59:01"),
+    secondPage.clock.fastForward("00:59:01"),
   ]);
-  expect((await metrics(request)).scopes).toEqual(["evm", "all"]);
+  await expect.poll(async () => (await metrics(request)).adapterCalls).toBe(4);
+  await page.waitForTimeout(50);
+  expect((await metrics(request)).adapterCalls).toBe(4);
 });
 
 test("部分失败保留最后成功数据并标记过期，手动刷新可见进行中与恢复状态", async ({
@@ -157,121 +191,38 @@ test("部分失败保留最后成功数据并标记过期，手动刷新可见�
     data: { action: "configure", scenario: "partial-failure" },
   });
   await loginAsOwner(page);
+  await expect.poll(async () => (await metrics(request)).adapterCalls).toBe(2);
 
-  const overview = page.getByTestId("total-asset-overview");
-  await expect(overview.getByTestId("total-asset-amount")).toHaveText(
-    "310.00 USD",
-  );
-  await expect(overview).toContainText("包含 1 个过期来源");
-  const alpha = page.getByTestId("asset-source-card-source-alpha");
-  const beta = page.getByTestId("asset-source-card-source-beta");
-  await expect(alpha).toContainText("110.00 USD");
-  await expect(alpha).toContainText("数据当前");
-  await expect(beta.getByTestId("asset-source-total")).toHaveText("200.00 USD");
-  await expect(beta).toContainText("过期数据");
-  await expect(beta).toContainText("最后更新：2026-04-01 16:00");
-  await expect(beta).not.toContainText("最后成功：");
-  await expect(beta).not.toContainText("UTC");
-  await expect(beta).toContainText("Beta Crypto 同步失败：来源暂时不可用");
-  const expiredStatus = beta.locator(".asset-sync-status");
-  await expect(expiredStatus.locator(":scope > i")).toHaveCount(1);
-  expect(
-    await expiredStatus.evaluate((element) => ({
-      pseudoContent: getComputedStyle(element, "::before").content,
-      renderedDotWidth: element
-        .querySelector(":scope > i")
-        ?.getBoundingClientRect().width,
-    })),
-  ).toEqual({
-    pseudoContent: "none",
-    renderedDotWidth: 6,
-  });
-  const syncError = beta.locator(".asset-sync-error");
-  await expect(syncError.locator(".vibe-dot-icon")).toHaveCount(1);
-  expect(
-    await syncError.evaluate((element) => {
-      const style = getComputedStyle(element);
-      return {
-        borderLeftWidth: style.borderLeftWidth,
-        pseudoContent: getComputedStyle(element, "::before").content,
-      };
-    }),
-  ).toEqual({
-    borderLeftWidth: "3px",
-    pseudoContent: "none",
-  });
-
-  const alphaState = alpha.locator(".source-live-state");
-  await expect(alphaState).toContainText("CURRENT");
-  await expect(alphaState).toHaveAttribute("data-vibe-tone", "success");
-  const betaState = beta.locator(".source-live-state");
-  await expect(betaState).toContainText("ERROR");
-  await expect(betaState).toHaveAttribute("data-vibe-tone", "error");
-  await expect(alphaState.locator("i")).toHaveCSS(
-    "background-color",
-    await tokenColor(page, "--success"),
-  );
-  await expect(betaState.locator("i")).toHaveCSS(
-    "background-color",
-    await tokenColor(page, "--error"),
-  );
+  const overview = page.getByRole("region", { name: "总资产" });
+  await expect(overview).toContainText("310.00 USD");
+  await expect(overview).toContainText("过期来源 1 个");
+  const sourceSummary = page.getByTestId("overview-source-summary");
+  await expect(sourceSummary).toContainText("Alpha Securities");
+  await expect(sourceSummary).toContainText("110.00 USD");
+  await expect(sourceSummary).toContainText("Beta Crypto");
+  await expect(sourceSummary).toContainText("200.00 USD");
+  await expect(sourceSummary).toContainText("同步失败 · 数据过期");
 
   await request.post("/test-doubles/refresh", {
     data: { action: "prepare-recovery", hold: true },
   });
   const refresh = page.getByRole("button", { name: "立即刷新资产" });
   const refreshStatus = page.getByTestId("asset-refresh-status");
-  const alphaRefresh = alpha.getByRole("button", {
-    name: "刷新 Alpha Securities",
-  });
-  const betaRefresh = beta.getByRole("button", {
-    name: "刷新 Beta Crypto",
-  });
   await refresh.click();
   await expect(refresh).toBeDisabled();
-  await expect(alphaRefresh).toBeDisabled();
-  await expect(betaRefresh).toBeDisabled();
-  await expect(refresh).toContainText("正在刷新资产");
-  await expect(refreshStatus).toContainText(
-    "正在刷新余额与持仓",
-  );
-  await expect(refreshStatus).toHaveCSS("clip-path", "none");
+  await expect(refresh).toContainText("刷新中…");
+  await expect(refreshStatus).toHaveCount(0);
   await expect.poll(async () => (await metrics(request)).active).toBe(1);
   await request.post("/test-doubles/refresh", { data: { action: "release" } });
 
-  await expect(refreshStatus).toContainText("同步完成");
-  await expect(refreshStatus).toHaveCSS("clip-path", "none");
+  await expect(refreshStatus).toHaveText("刷新完成");
   await expect(refreshStatus).toHaveAttribute("data-vibe-tone", "success");
   await expect(refresh).toContainText("立即刷新资产");
-  await expect(alphaRefresh).toBeEnabled();
-  await expect(betaRefresh).toBeEnabled();
-  const refreshLayout = await page.locator(".asset-refresh-controls").evaluate(
-    (element) => {
-      const button = element.querySelector("button");
-      const status = element.querySelector('[data-testid="asset-refresh-status"]');
-      if (!button || !status) return null;
-      const buttonRect = button.getBoundingClientRect();
-      const statusRect = status.getBoundingClientRect();
-      const styles = getComputedStyle(element);
-      return {
-        borderTopWidth: styles.borderTopWidth,
-        buttonBottom: buttonRect.bottom,
-        statusTop: statusRect.top,
-      };
-    },
-  );
-  expect(refreshLayout).not.toBeNull();
-  expect(refreshLayout!.borderTopWidth).toBe("0px");
-  expect(refreshLayout!.statusTop).toBeGreaterThanOrEqual(
-    refreshLayout!.buttonBottom,
-  );
-  await expect(overview.getByTestId("total-asset-amount")).toHaveText(
-    "330.00 USD",
-  );
-  await expect(overview).not.toContainText("过期来源");
-  await expect(beta.getByTestId("asset-source-total")).toHaveText("210.00 USD");
-  await expect(beta).toContainText("数据当前");
-  await expect(beta).not.toContainText("来源暂时不可用");
+  await expect(refresh).toBeEnabled();
+  await expect(overview).toContainText("330.00 USD");
+  await expect(overview).not.toContainText("过期来源 1 个");
+  await expect(sourceSummary).toContainText("210.00 USD");
+  await expect(sourceSummary).not.toContainText("同步失败 · 数据过期");
 });
 
 test("资产卡片只刷新对应来源，并在卡片内显示状态", async ({
@@ -284,22 +235,17 @@ test("资产卡片只刷新对应来源，并在卡片内显示状态", async ({
     null,
   ]);
 
-  const alpha = page.getByTestId("asset-source-card-source-alpha");
-  const beta = page.getByTestId("asset-source-card-source-beta");
-  const alphaRefresh = alpha.getByRole("button", {
-    name: "刷新 Alpha Securities",
-  });
-  const betaRefresh = beta.getByRole("button", {
-    name: "刷新 Beta Crypto",
-  });
-  await expect(alphaRefresh).toBeEnabled();
+  await page.goto("/asset-sources/source-beta");
+  const betaRefresh = page.getByRole("button", { name: "刷新 Beta Crypto" });
   await expect(betaRefresh).toBeEnabled();
-  await expect(alpha.getByTestId("asset-source-total")).toHaveText("101.00 USD");
-  await expect(beta.getByTestId("asset-source-total")).toHaveText("201.00 USD");
+  await expect(page.getByTestId("asset-source-total")).toContainText(
+    "201.00 USD",
+  );
 
   await request.post("/test-doubles/refresh", {
     data: { action: "prepare-recovery", hold: true },
   });
+  const beforeManual = await metrics(request);
   await betaRefresh.click();
   await expect(betaRefresh).toBeDisabled();
   await expect(betaRefresh).toContainText("刷新中");
@@ -326,23 +272,31 @@ test("资产卡片只刷新对应来源，并在卡片内显示状态", async ({
   expect(spinGeometry.originOffsetX).toBeLessThan(0.01);
   expect(spinGeometry.originOffsetY).toBeLessThan(0.01);
   await expect(
-    beta.getByTestId("asset-source-refresh-status-source-beta"),
+    page.getByTestId("asset-source-refresh-status-source-beta"),
   ).toContainText("正在刷新");
-  await expect(alphaRefresh).toBeEnabled();
   await expect.poll(async () => (await metrics(request)).active).toBe(1);
   await request.post("/test-doubles/refresh", { data: { action: "release" } });
 
   await expect(
-    beta.getByTestId("asset-source-refresh-status-source-beta"),
+    page.getByTestId("asset-source-refresh-status-source-beta"),
   ).toContainText("刷新完成");
-  await expect.poll(async () => (await metrics(request)).sourceIds).toEqual([
-    null,
-    "source-beta",
+  await expect.poll(async () => (await metrics(request)).sourceIds.slice(
+    beforeManual.sourceIds.length,
+  )).toEqual(["source-beta"]);
+  expect((await metrics(request)).scopes.slice(beforeManual.scopes.length)).toEqual([
+    "all",
   ]);
-  expect((await metrics(request)).scopes).toEqual(["non-evm", "all"]);
-  await expect(alpha.getByTestId("asset-source-total")).toHaveText("101.00 USD");
-  await expect(beta.getByTestId("asset-source-total")).toHaveText("202.00 USD");
-  await expect(page.getByTestId("total-asset-amount")).toHaveText("303.00 USD");
+  await expect(page.getByTestId("asset-source-total")).toContainText(
+    "202.00 USD",
+  );
+  await page.goto("/asset-sources/source-alpha");
+  await expect(page.getByTestId("asset-source-total")).toContainText(
+    "101.00 USD",
+  );
+  await page.goto("/");
+  await expect(page.getByRole("region", { name: "总资产" })).toContainText(
+    "303.00 USD",
+  );
 });
 
 test("挂起来源超时不阻塞成功提交，刷新期间新增来源也不会被旧列表覆盖", async ({
@@ -353,7 +307,8 @@ test("挂起来源超时不阻塞成功提交，刷新期间新增来源也不�
     data: { action: "configure", scenario: "schedule" },
   });
   await loginAsOwner(page);
-  await expect(page.getByTestId("asset-refresh-status")).toContainText("同步完成");
+  await expect.poll(async () => (await metrics(request)).adapterCalls).toBe(2);
+  await expect(page.getByTestId("asset-refresh-status")).toHaveCount(0);
   await request.post("/test-doubles/refresh", {
     data: { action: "prepare-timeout" },
   });
@@ -365,23 +320,13 @@ test("挂起来源超时不阻塞成功提交，刷新期间新增来源也不�
   });
 
   const failedStatus = page.getByTestId("asset-refresh-status");
-  await expect(failedStatus).toContainText(
-    "同步完成 · 1 个来源失败",
-  );
-  await expect(failedStatus).toHaveClass(/is-visible/);
-  await expect(failedStatus).toHaveCSS("clip-path", "none");
-  await expect(page.getByTestId("total-asset-amount")).toHaveText(
-    "361.00 USD",
-  );
-  await expect(page.getByTestId("asset-source-card-source-alpha")).toContainText(
-    "110.00 USD",
-  );
-  await expect(page.getByTestId("asset-source-card-source-beta")).toContainText(
-    "过期数据",
-  );
-  await expect(page.getByTestId("asset-source-card-source-gamma")).toContainText(
-    "50.00 USD",
-  );
+  await expect(failedStatus).toHaveText("部分来源刷新失败");
+  const overview = page.getByRole("region", { name: "总资产" });
+  await expect(overview).toContainText("361.00 USD");
+  const sourceSummary = page.getByTestId("overview-source-summary");
+  await expect(sourceSummary).toContainText("110.00 USD");
+  await expect(sourceSummary).toContainText("同步失败 · 数据过期");
+  await expect(sourceSummary).toContainText("50.00 USD");
 });
 
 test("未认证状态不能触发同步，也不会收到来源刷新状态", async ({ page, request }) => {
@@ -418,6 +363,64 @@ test("单来源刷新拒绝无效目标和范围组合", async ({ page, request 
   expect(conflicting.status()).toBe(400);
   await expect(conflicting.json()).resolves.toEqual({
     error: "单来源刷新不能同时指定来源范围",
+  });
+});
+
+test("统一刷新批量目标拒绝歧义组合并保留意图目标", async ({ page, request }) => {
+  await configureRefresh(request, "schedule");
+  await loginAsOwner(page);
+  await expect.poll(async () => (await metrics(request)).adapterCalls).toBe(2);
+  await expect.poll(async () => (await metrics(request)).active).toBe(0);
+  await request.post("/test-doubles/refresh", {
+    data: { action: "reset-schedule" },
+  });
+
+  const invalidRequests = [
+    { mode: "all", sourceIds: ["source-alpha"] },
+    {
+      mode: "all",
+      intent: { reason: "manual-source", sourceId: "source-alpha" },
+      sourceId: "source-alpha",
+      sourceIds: ["source-alpha"],
+    },
+    {
+      mode: "all",
+      scope: "all",
+      intent: { reason: "manual-source", sourceId: "source-alpha" },
+      sourceIds: ["source-alpha"],
+    },
+    {
+      mode: "all",
+      intent: { reason: "manual-source", sourceId: "source-alpha" },
+      sourceIds: ["source-beta"],
+    },
+  ];
+  for (const data of invalidRequests) {
+    const response = await page.request.post("/api/asset-sources/refresh", { data });
+    expect(response.status()).toBe(400);
+  }
+  expect(await metrics(request)).toMatchObject({
+    modes: [],
+    scopes: [],
+    sourceIds: [],
+  });
+
+  const merged = await page.request.post("/api/asset-sources/refresh", {
+    data: {
+      mode: "all",
+      intent: { reason: "manual-source", sourceId: "source-alpha" },
+      sourceIds: ["source-alpha", "source-beta"],
+    },
+  });
+  expect(merged.ok()).toBeTruthy();
+  await expect(merged.json()).resolves.toMatchObject({
+    successCount: 2,
+    failureCount: 0,
+  });
+  expect(await metrics(request)).toMatchObject({
+    modes: ["all"],
+    scopes: ["all"],
+    sourceIds: ["source-alpha"],
   });
 });
 

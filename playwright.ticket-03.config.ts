@@ -7,6 +7,9 @@ import {
 
 export default defineConfig({
   ...sharedPlaywrightConfig,
-  testMatch: "source-list-detail-lifecycle.spec.ts",
-  webServer: { ...testWebServer },
+  testMatch: [
+    "asset-refresh-workbench.spec.ts",
+    "source-list-detail-lifecycle.spec.ts",
+  ],
+  webServer: testWebServer,
 });
