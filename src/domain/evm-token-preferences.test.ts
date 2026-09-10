@@ -6,6 +6,7 @@ import {
   portfolioSourceTotal,
   updateEvmTokenPreferences,
 } from "@/domain/evm-token-preferences";
+import { buildTotalValuation } from "@/domain/valuation";
 import type { AssetSourceSummary } from "@/server/ports";
 
 function source(): AssetSourceSummary {
@@ -96,4 +97,37 @@ test("忽略列表不接受协议仓位标识", () => {
     "evm:1:native",
     "evm:1:lido-withdrawal:18",
   ]), ["evm:1:native"]);
+});
+
+test("未确认的未估值 EVM 代币不阻断组合估值，明确纳入后才阻断", () => {
+  const unconfirmed = source();
+  const token = "evm:1:0x6051c1354ccc51b4d561e43b02735deae64768b8";
+  const holding = unconfirmed.snapshot.holdings[1]!;
+  holding.currentPrice = null;
+  holding.marketValue = null;
+  holding.sourceMarketValue = null;
+  holding.valuation = { status: "unvalued", reason: "来源没有可靠价格" };
+  unconfirmed.snapshot.total = { amount: "5000", currency: "USD" };
+  unconfirmed.snapshot.coverage = {
+    status: "partial",
+    products: [],
+    unexplainedValue: null,
+    excludedPositiveAccounts: [],
+  };
+
+  const unconfirmedValuation = buildTotalValuation(
+    [unconfirmed],
+    "USD",
+    "source",
+  );
+  assert.equal(unconfirmedValuation.incomplete, false);
+  assert.equal(unconfirmedValuation.unvaluedCount, 0);
+
+  const includedValuation = buildTotalValuation(
+    [{ ...unconfirmed, includedAssetKeys: [token] }],
+    "USD",
+    "source",
+  );
+  assert.equal(includedValuation.incomplete, true);
+  assert.equal(includedValuation.unvaluedCount, 1);
 });

@@ -10,6 +10,7 @@ import {
 import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
 import {
   activeSourceHoldings,
+  includedAssetKeySet,
   portfolioSourceTotal,
   unrecognizedEvmTokenCandidates,
 } from "@/domain/evm-token-preferences";
@@ -31,6 +32,7 @@ export type ValuationSource = Pick<
   | "snapshot"
   | "sync"
   | "ignoredAssetKeys"
+  | "includedAssetKeys"
   | "hasManualRecord"
   | "manualAssetClass"
 >;
@@ -406,10 +408,10 @@ export function buildTotalValuation(
           sourceAsset === undefined ? [] : [sourceAsset],
         ),
       );
-      const ignoredAssetKeys = new Set(source.ignoredAssetKeys ?? []);
+      const includedAssetKeys = includedAssetKeySet(source);
       unvaluedCount += unrecognizedEvmTokenCandidates(source).filter(
         ({ sourceAsset }) =>
-          !ignoredAssetKeys.has(sourceAsset) &&
+          includedAssetKeys.has(sourceAsset) &&
           !activeAssetKeys.has(sourceAsset),
       ).length;
     }

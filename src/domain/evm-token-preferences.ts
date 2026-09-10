@@ -128,8 +128,9 @@ export function activeSourceHoldings(
   const ignored = ignoredAssetKeySet(source);
   return source.snapshot.holdings.filter(
     (holding) =>
-      holding.sourceAsset === undefined ||
-      !ignored.has(holding.sourceAsset),
+      (holding.sourceAsset === undefined ||
+        !ignored.has(holding.sourceAsset)) &&
+      !isUnrecognizedEvmTokenHolding(source, holding),
   );
 }
 
