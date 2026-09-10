@@ -97,6 +97,23 @@ export interface DailyAssetSourceSnapshot {
   assetClassTotals?: Record<AssetTrendClass, DailyAssetClassTotal>;
 }
 
+/**
+ * 从外部系统补录的单一来源历史金额。它只用于该来源自己的历史展示，
+ * 不代表完整组合或分类观察，因此不会写入每日趋势观测。
+ */
+export interface ImportedAssetSourceHistoryObservation {
+  day: string;
+  sourceId: string;
+  label: string;
+  kind: string;
+  capturedAt: string;
+  complete: boolean;
+  status?: "complete" | "incomplete" | "expired";
+  total: Record<"USD" | "CNY", string | null> & {
+    HKD?: string | null;
+  };
+}
+
 export type AssetTrendClass = "securities" | "crypto";
 
 export interface DailyAssetClassTotal {
@@ -136,11 +153,15 @@ export interface DailyAssetSnapshots {
   list(): Promise<DailyAssetBaseline[]>;
   /** 每日趋势观测，仅用于历史趋势。 */
   listTrendObservations(): Promise<DailyAssetTrendObservation[]>;
-  createIfAbsent(snapshot: DailyAssetSnapshot): Promise<boolean>;
   /**
-   * 所有来源刷新成功后建立日初基准（如尚不存在），并可修复同日遗留的过期基准；
-   * 已有非过期基准不可改写。失败刷新只更新已存在趋势观测的完整性/过期状态。
+   * 外部补录的单一来源历史，仅用于来源详情和收益分析的「来源历史」。
+   * 它不能作为组合或分类趋势的完整观测。
    */
+  listImportedSourceHistoryObservations(): Promise<
+    ImportedAssetSourceHistoryObservation[]
+  >;
+  createIfAbsent(snapshot: DailyAssetSnapshot): Promise<boolean>;
+  /** 仅完整全量批次调用：建立缺失的日初基准并更新当日完整趋势观测。 */
   record(
     snapshot: DailyAssetTrendObservation,
     createBaseline: boolean,

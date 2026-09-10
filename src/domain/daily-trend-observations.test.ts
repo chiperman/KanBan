@@ -101,6 +101,26 @@ test("来源趋势保留过期状态，兼容旧观测的完整性标记", () =>
   );
 });
 
+test("网络失败只让完整来源变旧，不把估值完整性改成不完整", () => {
+  const source = valuedSource({
+    id: "过期但完整",
+    kind: "longbridge",
+    assetClass: "securities",
+    amount: "100",
+  });
+  source.sync = {
+    ...source.sync,
+    status: "expired",
+    error: "来源暂时不可用",
+  };
+
+  const snapshot = buildDailyAssetSnapshot([source], CAPTURED_AT);
+  assert.equal(snapshot.complete, true);
+  assert.equal(snapshot.status, "expired");
+  assert.equal(snapshot.sources[0]?.complete, true);
+  assert.equal(snapshot.sources[0]?.status, "expired");
+});
+
 test("总资产趋势只由自动来源决定过期与不完整状态", () => {
   assert.equal(
     totalTrendObservationStatus([

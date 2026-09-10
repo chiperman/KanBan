@@ -54,6 +54,7 @@ import type {
   DailyAssetSnapshot,
   DailyAssetTrendObservation,
   DailyAssetSnapshots,
+  ImportedAssetSourceHistoryObservation,
   FormalDailySettlement,
   FormalDailySettlements,
   InvestmentCashflow,
@@ -138,10 +139,11 @@ interface DashboardState {
   manualAssetRecords: ManualAssetRecord[];
   dailyAssetSnapshots: DailyAssetSnapshot[];
   dailyAssetTrendObservations: DailyAssetTrendObservation[];
+  importedAssetSourceHistoryObservations: ImportedAssetSourceHistoryObservation[];
 }
 
 const DASHBOARD_SCHEMA_VERSION = 9 as const;
-const SQLITE_SCHEMA_VERSION = 16;
+const SQLITE_SCHEMA_VERSION = 17;
 
 type SourceConnectionKind =
   | "longbridge"
@@ -252,6 +254,9 @@ interface DashboardDatabase {
   updateSource(source: AssetSourceSummary): Promise<void>;
   listDailyAssetSnapshots(): Promise<DailyAssetSnapshot[]>;
   listDailyAssetTrendObservations(): Promise<DailyAssetTrendObservation[]>;
+  listImportedSourceHistoryObservations(): Promise<
+    ImportedAssetSourceHistoryObservation[]
+  >;
   createDailyAssetSnapshotIfAbsent(
     snapshot: DailyAssetSnapshot,
   ): Promise<boolean>;
@@ -626,11 +631,25 @@ function migrateDailyObservation<T extends DailyAssetSnapshot>(
   };
   const sources = observation.sources.map((source) => {
     const manual = source.kind === "manual";
-    const complete = manual || (
-      source.complete && (source.total.HKD ?? null) !== null
-    );
+    const complete = manual || source.complete;
+    const status = manual
+      ? "complete"
+      : source.status === "expired"
+        ? "expired"
+        : complete
+          ? "complete"
+          : "incomplete";
+    const normalizedTotal = {
+      ...source.total,
+      HKD: source.total.HKD ?? null,
+    };
     const assetClassTotals = source.assetClassTotals === undefined
-      ? undefined
+      ? source.kind === "longbridge"
+        ? sourceTrendClassTotals(
+            { kind: source.kind },
+            { complete, status, total: normalizedTotal },
+          )
+        : undefined
       : {
           securities: {
             ...source.assetClassTotals.securities,
@@ -650,17 +669,8 @@ function migrateDailyObservation<T extends DailyAssetSnapshot>(
     return {
       ...source,
       complete,
-      status: manual
-        ? "complete"
-        : source.status === "expired"
-          ? "expired"
-          : complete
-            ? "complete"
-            : "incomplete",
-      total: {
-        ...source.total,
-        HKD: source.total.HKD ?? null,
-      },
+      status,
+      total: normalizedTotal,
       ...(assetClassTotals === undefined ? {} : { assetClassTotals }),
     };
   });
@@ -770,6 +780,7 @@ export class FileDashboardDatabase {
         manualAssetRecords: [],
         dailyAssetSnapshots: [],
         dailyAssetTrendObservations: [],
+        importedAssetSourceHistoryObservations: [],
       };
     }
     const value = JSON.parse(raw) as Partial<DashboardState> & {
@@ -803,6 +814,10 @@ export class FileDashboardDatabase {
         ? value.dailyAssetTrendObservations.map(migrateDailyObservation)
         : Array.isArray(value.dailyAssetSnapshots)
           ? value.dailyAssetSnapshots.map(migrateDailyObservation)
+          : [],
+      importedAssetSourceHistoryObservations:
+        Array.isArray(value.importedAssetSourceHistoryObservations)
+          ? value.importedAssetSourceHistoryObservations as ImportedAssetSourceHistoryObservation[]
           : [],
     };
   }
@@ -851,6 +866,10 @@ export class FileDashboardDatabase {
       state.manualAssetRecords = state.manualAssetRecords.filter((record) =>
         sourceIds.has(record.sourceId),
       );
+      state.importedAssetSourceHistoryObservations =
+        state.importedAssetSourceHistoryObservations.filter((observation) =>
+          sourceIds.has(observation.sourceId),
+        );
     });
   }
 
@@ -869,6 +888,13 @@ export class FileDashboardDatabase {
   async listDailyAssetTrendObservations(): Promise<DailyAssetTrendObservation[]> {
     await this.queue;
     return (await this.load()).dailyAssetTrendObservations;
+  }
+
+  async listImportedSourceHistoryObservations(): Promise<
+    ImportedAssetSourceHistoryObservation[]
+  > {
+    await this.queue;
+    return (await this.load()).importedAssetSourceHistoryObservations;
   }
 
   async listManualAssetRecords(): Promise<ManualAssetRecord[]> {
@@ -1191,6 +1217,10 @@ export class FileDashboardDatabase {
           return updated ? [updated] : [];
         },
       );
+      state.importedAssetSourceHistoryObservations =
+        state.importedAssetSourceHistoryObservations.filter(
+          (observation) => observation.sourceId !== sourceId,
+        );
       return source.credentialReference;
     });
   }
@@ -1348,6 +1378,7 @@ function parseLegacyDashboardStateSync(
         manualAssetRecords: [],
         dailyAssetSnapshots: [],
         dailyAssetTrendObservations: [],
+        importedAssetSourceHistoryObservations: [],
       };
     }
     const assetCards = parseAssetCards(
@@ -1361,6 +1392,7 @@ function parseLegacyDashboardStateSync(
       manualAssetRecords: [],
       dailyAssetSnapshots: [],
       dailyAssetTrendObservations: [],
+      importedAssetSourceHistoryObservations: [],
     };
   }
 
@@ -1391,6 +1423,10 @@ function parseLegacyDashboardStateSync(
       ? value.dailyAssetTrendObservations.map(migrateDailyObservation)
       : Array.isArray(value.dailyAssetSnapshots)
         ? value.dailyAssetSnapshots.map(migrateDailyObservation)
+        : [],
+    importedAssetSourceHistoryObservations:
+      Array.isArray(value.importedAssetSourceHistoryObservations)
+        ? value.importedAssetSourceHistoryObservations as ImportedAssetSourceHistoryObservation[]
         : [],
   };
 }
@@ -1552,6 +1588,19 @@ export class SqliteDashboardDatabase
           ),
         PRIMARY KEY (day, source_id)
       ) STRICT;
+      CREATE TABLE IF NOT EXISTS imported_asset_source_history_observations (
+        source_id TEXT NOT NULL REFERENCES asset_sources(id) ON DELETE CASCADE,
+        day TEXT NOT NULL,
+        label TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        captured_at TEXT NOT NULL,
+        complete INTEGER NOT NULL CHECK (complete IN (0, 1)),
+        status TEXT NOT NULL CHECK (status IN ('complete', 'incomplete', 'expired')),
+        total_usd TEXT,
+        total_cny TEXT,
+        total_hkd TEXT,
+        PRIMARY KEY (source_id, day)
+      ) STRICT;
       CREATE TABLE IF NOT EXISTS formal_daily_settlements (
         anchor_key TEXT PRIMARY KEY,
         anchor_kind TEXT NOT NULL CHECK (anchor_kind IN ('securities-close', 'crypto-cutoff')),
@@ -1671,6 +1720,10 @@ export class SqliteDashboardDatabase
     if (schemaVersion === "15") {
       this.migrateSchemaVersionFifteen();
       schemaVersion = "16";
+    }
+    if (schemaVersion === "16") {
+      this.migrateSchemaVersionSixteen();
+      schemaVersion = "17";
     }
     if (schemaVersion !== String(SQLITE_SCHEMA_VERSION)) {
       throw new Error(`不支持的 SQLite schema 版本: ${schemaVersion}`);
@@ -2053,6 +2106,29 @@ export class SqliteDashboardDatabase
     });
   }
 
+  private migrateSchemaVersionSixteen(): void {
+    this.transaction(() => {
+      this.database.exec(`
+        CREATE TABLE IF NOT EXISTS imported_asset_source_history_observations (
+          source_id TEXT NOT NULL REFERENCES asset_sources(id) ON DELETE CASCADE,
+          day TEXT NOT NULL,
+          label TEXT NOT NULL,
+          kind TEXT NOT NULL,
+          captured_at TEXT NOT NULL,
+          complete INTEGER NOT NULL CHECK (complete IN (0, 1)),
+          status TEXT NOT NULL CHECK (status IN ('complete', 'incomplete', 'expired')),
+          total_usd TEXT,
+          total_cny TEXT,
+          total_hkd TEXT,
+          PRIMARY KEY (source_id, day)
+        ) STRICT;
+      `);
+      this.database
+        .prepare("UPDATE schema_metadata SET value = ? WHERE key = ?")
+        .run("17", "schema_version");
+    });
+  }
+
   private initializeLegacyData(): void {
     if (this.metadata("json_import_complete") === "1") return;
     const state = parseLegacyDashboardStateSync(
@@ -2138,6 +2214,7 @@ export class SqliteDashboardDatabase
   private replaceState(state: DashboardState | BusinessDataState): void {
     this.database.exec(`
       DELETE FROM investment_cashflows;
+      DELETE FROM imported_asset_source_history_observations;
       DELETE FROM daily_asset_source_trend_observations;
       DELETE FROM daily_asset_trend_observations;
       DELETE FROM daily_asset_source_snapshots;
@@ -2157,6 +2234,12 @@ export class SqliteDashboardDatabase
     );
     state.dailyAssetTrendObservations.forEach((observation) =>
       this.upsertDailyTrendObservation(migrateDailyObservation(observation)),
+    );
+    const importedHistory = "importedAssetSourceHistoryObservations" in state
+      ? state.importedAssetSourceHistoryObservations
+      : [];
+    importedHistory.forEach((observation) =>
+      this.insertImportedSourceHistoryObservation(observation),
     );
     const cashflows = "investmentCashflows" in state
       ? (state as { investmentCashflows: InvestmentCashflow[] })
@@ -2460,6 +2543,30 @@ export class SqliteDashboardDatabase
       );
   }
 
+  private insertImportedSourceHistoryObservation(
+    observation: ImportedAssetSourceHistoryObservation,
+  ): void {
+    this.database
+      .prepare(`
+        INSERT INTO imported_asset_source_history_observations (
+          source_id, day, label, kind, captured_at, complete, status,
+          total_usd, total_cny, total_hkd
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      .run(
+        observation.sourceId,
+        observation.day,
+        observation.label,
+        observation.kind,
+        observation.capturedAt,
+        Number(observation.complete),
+        observation.status ?? (observation.complete ? "complete" : "incomplete"),
+        observation.total.USD,
+        observation.total.CNY,
+        observation.total.HKD ?? null,
+      );
+  }
+
   /**
    * 手工记录是按上海自然日覆盖写入：同一来源当天只有一条，编辑会替换该来源的日值，
    * 而不会覆盖同日外部来源的观测。
@@ -2739,6 +2846,30 @@ export class SqliteDashboardDatabase
     );
   }
 
+  private listImportedSourceHistoryObservationsSync():
+    ImportedAssetSourceHistoryObservation[] {
+    const rows = this.database
+      .prepare(`
+        SELECT * FROM imported_asset_source_history_observations
+        ORDER BY day, source_id
+      `)
+      .all() as SqliteRow[];
+    return rows.map((row) => ({
+      day: row.day as string,
+      sourceId: row.source_id as string,
+      label: row.label as string,
+      kind: row.kind as string,
+      capturedAt: row.captured_at as string,
+      complete: row.complete === 1,
+      status: row.status as ImportedAssetSourceHistoryObservation["status"],
+      total: {
+        USD: row.total_usd as string | null,
+        CNY: row.total_cny as string | null,
+        HKD: row.total_hkd as string | null,
+      },
+    }));
+  }
+
   private listDailyObservationsSync(
     snapshotTable: "daily_asset_snapshots" | "daily_asset_trend_observations",
     sourceTable:
@@ -2863,6 +2994,12 @@ export class SqliteDashboardDatabase
 
   async listDailyAssetTrendObservations(): Promise<DailyAssetTrendObservation[]> {
     return this.listDailyAssetTrendObservationsSync();
+  }
+
+  async listImportedSourceHistoryObservations(): Promise<
+    ImportedAssetSourceHistoryObservation[]
+  > {
+    return this.listImportedSourceHistoryObservationsSync();
   }
 
   async listManualAssetRecords(): Promise<ManualAssetRecord[]> {
@@ -3414,6 +3551,9 @@ export class SqliteDashboardDatabase
       this.database
         .prepare("DELETE FROM daily_asset_source_trend_observations WHERE source_id = ?")
         .run(sourceId);
+      this.database
+        .prepare("DELETE FROM imported_asset_source_history_observations WHERE source_id = ?")
+        .run(sourceId);
       this.database.prepare("DELETE FROM asset_sources WHERE id = ?").run(sourceId);
       this.compactPositions("asset_sources");
       this.compactPositions("asset_cards");
@@ -3761,6 +3901,9 @@ class DatabaseDailyAssetSnapshots implements DailyAssetSnapshots {
   list() { return this.database.listDailyAssetSnapshots(); }
   listTrendObservations() {
     return this.database.listDailyAssetTrendObservations();
+  }
+  listImportedSourceHistoryObservations() {
+    return this.database.listImportedSourceHistoryObservations();
   }
   createIfAbsent(snapshot: DailyAssetSnapshot) {
     return this.database.createDailyAssetSnapshotIfAbsent(snapshot);

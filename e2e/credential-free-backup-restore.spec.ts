@@ -47,6 +47,11 @@ test("导出后可以恢复业务数据且来源默认断开", async ({ request 
           totalUsd: "130",
         },
       },
+      importedHistory: [{
+        day: "2026-07-20",
+        sourceId: "backup-source",
+        totalUsd: "100.00",
+      }],
       lifecycle: "disconnected",
       credentialReference: null,
       cashflows: [{

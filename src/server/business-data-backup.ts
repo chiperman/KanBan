@@ -7,6 +7,7 @@ import type {
   Clock,
   DailyAssetSnapshot,
   DailyAssetTrendObservation,
+  ImportedAssetSourceHistoryObservation,
   InvestmentCashflow,
   InvestmentCashflowCurrency,
 } from "@/server/ports";
@@ -23,8 +24,8 @@ import {
 } from "@/server/local-data-permissions";
 
 const BACKUP_FORMAT = "personal-asset-dashboard-business-data";
-const BACKUP_FORMAT_VERSION = 3;
-const SUPPORTED_BACKUP_VERSIONS = new Set([1, 2, BACKUP_FORMAT_VERSION]);
+const BACKUP_FORMAT_VERSION = 4;
+const SUPPORTED_BACKUP_VERSIONS = new Set([1, 2, 3, BACKUP_FORMAT_VERSION]);
 
 export const SENSITIVE_ASSET_DATA_WARNING =
   "备份仍包含敏感资产数据，请仅存放在受保护的位置。";
@@ -56,6 +57,7 @@ export interface BusinessDataState {
   assetSources: AssetSourceSummary[];
   dailyAssetSnapshots: DailyAssetSnapshot[];
   dailyAssetTrendObservations: DailyAssetTrendObservation[];
+  importedAssetSourceHistoryObservations: ImportedAssetSourceHistoryObservation[];
   investmentCashflows: InvestmentCashflow[];
 }
 
@@ -86,6 +88,9 @@ export interface BusinessDataBackupStore {
   listSources(): Promise<AssetSourceSummary[]>;
   listDailyAssetSnapshots(): Promise<DailyAssetSnapshot[]>;
   listDailyAssetTrendObservations(): Promise<DailyAssetTrendObservation[]>;
+  listImportedSourceHistoryObservations(): Promise<
+    ImportedAssetSourceHistoryObservation[]
+  >;
   listInvestmentCashflows(): Promise<InvestmentCashflow[]>;
   validateBusinessData(state: BusinessDataState): Promise<void>;
   replaceBusinessData(state: BusinessDataState): Promise<void>;
@@ -96,6 +101,7 @@ type BackupPayload = {
   assetSources: Array<Omit<AssetSourceSummary, "credentialReference">>;
   dailyAssetSnapshots: DailyAssetSnapshot[];
   dailyAssetTrendObservations: DailyAssetTrendObservation[];
+  importedAssetSourceHistoryObservations: ImportedAssetSourceHistoryObservation[];
   investmentCashflows: InvestmentCashflow[];
 };
 
@@ -207,6 +213,35 @@ function assertIsoTime(value: unknown, label: string): asserts value is string {
   }
 }
 
+function assertCalendarDay(value: unknown, label: string): asserts value is string {
+  assertString(value, label);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new Error(`备份字段无效: ${label}`);
+  }
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.valueOf()) || parsed.toISOString().slice(0, 10) !== value) {
+    throw new Error(`备份字段无效: ${label}`);
+  }
+}
+
+function assertStrictIsoTime(value: unknown, label: string): asserts value is string {
+  assertString(value, label);
+  const match = /^(\d{4}-\d{2}-\d{2})T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.exec(value);
+  if (match === null || Number.isNaN(new Date(value).valueOf())) {
+    throw new Error(`备份字段无效: ${label}`);
+  }
+  assertCalendarDay(match[1], label);
+}
+
+function nullableNonNegativeAmount(value: unknown, label: string): string | null {
+  if (value === null) return null;
+  assertString(value, label);
+  if (!/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value)) {
+    throw new Error(`备份字段无效: ${label}`);
+  }
+  return value;
+}
+
 function nullableAmount(
   value: unknown,
   label: string,
@@ -229,6 +264,48 @@ function isLongbridgeReferencePair(
     (quoteCurrency === "USD" &&
       (baseCurrency === "CNY" || baseCurrency === "HKD"))
   );
+}
+
+function restoredImportedSourceHistory(
+  value: unknown,
+): ImportedAssetSourceHistoryObservation[] {
+  assertArray(value, "payload.importedAssetSourceHistoryObservations");
+  return value.map((raw, index) => {
+    const label = "importedAssetSourceHistoryObservations[" + index + "]";
+    if (!isRecord(raw)) throw new Error("备份字段无效: " + label);
+    assertCalendarDay(raw.day, label + ".day");
+    assertString(raw.sourceId, label + ".sourceId");
+    assertString(raw.label, label + ".label");
+    assertString(raw.kind, label + ".kind");
+    assertStrictIsoTime(raw.capturedAt, label + ".capturedAt");
+    if (typeof raw.complete !== "boolean" || !isRecord(raw.total)) {
+      throw new Error("备份字段无效: " + label);
+    }
+    const status = raw.status;
+    if (status !== undefined && status !== "complete" &&
+        status !== "incomplete" && status !== "expired") {
+      throw new Error("备份字段无效: " + label + ".status");
+    }
+    if (status !== undefined && (status === "complete") !== raw.complete) {
+      throw new Error("备份字段无效: " + label + ".complete/status");
+    }
+    return {
+      day: raw.day,
+      sourceId: raw.sourceId,
+      label: raw.label,
+      kind: raw.kind,
+      capturedAt: raw.capturedAt,
+      complete: raw.complete,
+      ...(status === undefined ? {} : { status }),
+      total: {
+        USD: nullableNonNegativeAmount(raw.total.USD, label + ".total.USD"),
+        CNY: nullableNonNegativeAmount(raw.total.CNY, label + ".total.CNY"),
+        ...(raw.total.HKD === undefined ? {} : {
+          HKD: nullableNonNegativeAmount(raw.total.HKD, label + ".total.HKD"),
+        }),
+      },
+    };
+  });
 }
 
 function restoredCashflows(value: unknown): InvestmentCashflow[] {
@@ -387,6 +464,19 @@ function validateReferences(state: BusinessDataState): void {
     }
   }
   assertUnique(
+    state.importedAssetSourceHistoryObservations.map(
+      ({ sourceId, day }) => sourceId + ":" + day,
+    ),
+    "导入来源历史记录重复",
+  );
+  for (const observation of state.importedAssetSourceHistoryObservations) {
+    if (!sourceIds.has(observation.sourceId)) {
+      throw new Error(
+        "备份引用完整性失败: 导入历史 " + observation.day + " 引用了不存在的来源 " + observation.sourceId,
+      );
+    }
+  }
+  assertUnique(
     state.investmentCashflows.map(({ id }) => id),
     "资金记录 ID 重复",
   );
@@ -434,6 +524,7 @@ function parseDocument(contents: string): BackupDocument {
         assetSources: legacy.data.sources,
         dailyAssetSnapshots: legacy.data.snapshots,
         dailyAssetTrendObservations: legacy.data.snapshots,
+        importedAssetSourceHistoryObservations: [],
         investmentCashflows: [],
       },
     };
@@ -451,6 +542,12 @@ function parseDocument(contents: string): BackupDocument {
   if (!Array.isArray(document.payload.investmentCashflows)) {
     document.payload.investmentCashflows = [];
   }
+  if (document.formatVersion < 4 &&
+      document.payload.importedAssetSourceHistoryObservations === undefined) {
+    document.payload.importedAssetSourceHistoryObservations = [];
+  }
+  assertArray(document.payload.importedAssetSourceHistoryObservations,
+    "payload.importedAssetSourceHistoryObservations");
   return document;
 }
 
@@ -482,6 +579,9 @@ function restoredState(document: BackupDocument): BusinessDataState {
     assetSources: sources,
     dailyAssetSnapshots: document.payload.dailyAssetSnapshots,
     dailyAssetTrendObservations: document.payload.dailyAssetTrendObservations,
+    importedAssetSourceHistoryObservations: restoredImportedSourceHistory(
+      document.payload.importedAssetSourceHistoryObservations,
+    ),
     investmentCashflows: restoredCashflows(document.payload.investmentCashflows),
   };
   validateReferences(state);
@@ -543,12 +643,14 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
       sources,
       dailyAssetSnapshots,
       dailyAssetTrendObservations,
+      importedAssetSourceHistoryObservations,
       investmentCashflows,
     ] = await Promise.all([
       this.store.listAssetCards(),
       this.store.listSources(),
       this.store.listDailyAssetSnapshots(),
       this.store.listDailyAssetTrendObservations(),
+      this.store.listImportedSourceHistoryObservations(),
       this.store.listInvestmentCashflows(),
     ]);
     const assetSources = sources.map(
@@ -563,6 +665,7 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
         assetSources,
         dailyAssetSnapshots,
         dailyAssetTrendObservations,
+        importedAssetSourceHistoryObservations,
         investmentCashflows,
       },
     } satisfies Pick<BackupDocument, "format" | "formatVersion" | "createdAt" | "payload">;

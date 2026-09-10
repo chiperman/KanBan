@@ -29,6 +29,7 @@ import type {
   DailyAssetSnapshot,
   DailyAssetSourceSnapshot,
   DailyAssetSnapshots,
+  ImportedAssetSourceHistoryObservation,
   FormalDailySettlement,
   FormalDailySettlementRunner,
   FormalDailySettlements,
@@ -169,6 +170,8 @@ export class FakeAssetSources implements AssetSources {
 export class InMemoryDailyAssetSnapshots implements DailyAssetSnapshots {
   private snapshots: DailyAssetSnapshot[] = [];
   private trendObservations: DailyAssetSnapshot[] = [];
+  private importedSourceHistoryObservations:
+    ImportedAssetSourceHistoryObservation[] = [];
 
   async list(): Promise<DailyAssetSnapshot[]> {
     return this.snapshots;
@@ -176,6 +179,12 @@ export class InMemoryDailyAssetSnapshots implements DailyAssetSnapshots {
 
   async listTrendObservations(): Promise<DailyAssetSnapshot[]> {
     return this.trendObservations;
+  }
+
+  async listImportedSourceHistoryObservations(): Promise<
+    ImportedAssetSourceHistoryObservation[]
+  > {
+    return structuredClone(this.importedSourceHistoryObservations);
   }
 
   async createIfAbsent(snapshot: DailyAssetSnapshot): Promise<boolean> {

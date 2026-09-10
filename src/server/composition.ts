@@ -92,6 +92,8 @@ function hasCurrentServices(
   return (
     services !== null &&
     services.externalServices !== undefined &&
+    typeof services.dailyAssetSnapshots
+      .listImportedSourceHistoryObservations === "function" &&
     services.longbridgeBenchmarkCandlesticks !== undefined &&
     services.longbridgeHoldingCandlesticks !== undefined &&
     typeof services.longbridgeHoldingCandlesticks.readFiveDayTrend === "function" &&

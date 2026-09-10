@@ -5,6 +5,7 @@ import type { ReportingCurrency } from "@/domain/valuation";
 import type {
   AssetTrendClass,
   DailyAssetTrendObservation,
+  ImportedAssetSourceHistoryObservation,
 } from "@/server/ports";
 
 export type InvestmentPerformanceIntervalPreset =
@@ -38,6 +39,7 @@ export interface InvestmentPerformanceTrendProjection {
     amount: string | null;
     day: string;
     observed: boolean;
+    observedAt: string | null;
     status: InvestmentPerformanceTrendStatus;
   }>;
   start: PortfolioObservation | null;
@@ -140,6 +142,13 @@ function scopedObservation(
       };
 }
 
+function sourceObservation(
+  observation: DailyAssetTrendObservation,
+  sourceId: string,
+): TrendValueObservation | null {
+  return observation.sources.find((source) => source.sourceId === sourceId) ?? null;
+}
+
 /**
  * 把每日趋势观测投影成收益分析页面所需的连续上海自然日序列。
  * 资金账本和投资盈亏不属于此投影；分类范围只提供资产端点与资产变动。
@@ -172,6 +181,7 @@ export function projectInvestmentPerformanceTrend(input: {
         amount: null,
         day,
         observed: false,
+        observedAt: null,
         status: "incomplete" as const,
       };
     }
@@ -181,6 +191,7 @@ export function projectInvestmentPerformanceTrend(input: {
         amount: null,
         day,
         observed: false,
+        observedAt: null,
         status: "incomplete" as const,
       };
     }
@@ -188,6 +199,7 @@ export function projectInvestmentPerformanceTrend(input: {
       amount: scoped.total[input.currency] ?? null,
       day,
       observed: true,
+      observedAt: scoped.capturedAt,
       status: observationStatus(scoped),
     };
   });
@@ -197,6 +209,101 @@ export function projectInvestmentPerformanceTrend(input: {
     const scoped = scopedObservation(observation, input.assetScope);
     if (scoped === null) return [];
     const value = completeObservation(scoped, input.currency);
+    return value === null ? [] : [{ day, value }];
+  });
+  const start = complete[0]?.value ?? null;
+  const end = complete.at(-1)?.value ?? null;
+
+  return {
+    days,
+    end,
+    endDay: complete.at(-1)?.day ?? null,
+    incompleteCount: points.filter(
+      (point) => point.observed && point.status !== "complete",
+    ).length,
+    intervalAssetChange: start !== null && end !== null
+      ? decimalSubtract(end.amount, start.amount)
+      : null,
+    missingCount: points.filter((point) => !point.observed).length,
+    points,
+    start,
+    startDay: complete[0]?.day ?? null,
+    unavailableCount: points.filter(
+      (point) => point.observed && point.amount === null,
+    ).length,
+  };
+}
+
+/**
+ * 把单一资产来源的每日实际观测投影成连续上海自然日序列。
+ * 缺少来源观测、不完整、过期或未估值的日期不会补成可比较的端点。
+ */
+export function projectAssetSourceTrend(input: {
+  currency: ReportingCurrency;
+  customRange?: InvestmentPerformanceCustomRange | null;
+  currentDay: string;
+  preset: InvestmentPerformanceIntervalPreset;
+  sourceId: string;
+  trendObservations: DailyAssetTrendObservation[];
+}): InvestmentPerformanceTrendProjection {
+  return projectAssetSourceHistoryTrend({
+    ...input,
+    importedSourceHistoryObservations: [],
+  });
+}
+
+/**
+ * 投影单一来源的实际历史。系统趋势观测覆盖同日外部补录值；
+ * 补录数据始终局限在该来源历史，绝不进入组合或分类投影。
+ */
+export function projectAssetSourceHistoryTrend(input: {
+  currency: ReportingCurrency;
+  customRange?: InvestmentPerformanceCustomRange | null;
+  currentDay: string;
+  importedSourceHistoryObservations: ImportedAssetSourceHistoryObservation[];
+  preset: InvestmentPerformanceIntervalPreset;
+  sourceId: string;
+  trendObservations: DailyAssetTrendObservation[];
+}): InvestmentPerformanceTrendProjection {
+  const byDay = new Map<string, TrendValueObservation>(
+    input.importedSourceHistoryObservations
+      .filter((observation) => observation.sourceId === input.sourceId)
+      .map((observation) => [observation.day, observation]),
+  );
+  for (const observation of input.trendObservations) {
+    const source = sourceObservation(observation, input.sourceId);
+    if (source !== null) byDay.set(observation.day, source);
+  }
+  const firstTrendDay = [...byDay.keys()].toSorted()[0];
+  const days = rangeDays(
+    input.preset,
+    input.currentDay,
+    firstTrendDay,
+    input.customRange,
+  );
+  const points = days.map((day) => {
+    const observation = byDay.get(day);
+    if (observation === undefined) {
+      return {
+        amount: null,
+        day,
+        observed: false,
+        observedAt: null,
+        status: "incomplete" as const,
+      };
+    }
+    return {
+      amount: observation.total[input.currency] ?? null,
+      day,
+      observed: true,
+      observedAt: observation.capturedAt,
+      status: observationStatus(observation),
+    };
+  });
+  const complete = days.flatMap((day) => {
+    const observation = byDay.get(day);
+    if (observation === undefined) return [];
+    const value = completeObservation(observation, input.currency);
     return value === null ? [] : [{ day, value }];
   });
   const start = complete[0]?.value ?? null;

@@ -94,6 +94,16 @@ function backupState(): BusinessDataState {
       trendObservation("2026-07-27"),
       trendObservation("2026-07-28"),
     ],
+    importedAssetSourceHistoryObservations: [{
+      day: "2026-07-20",
+      sourceId: "backup-source",
+      label: "Backup Binance",
+      kind: "binance",
+      capturedAt: "2026-07-20T02:00:00.000Z",
+      complete: true,
+      status: "complete",
+      total: { USD: "100.00", CNY: "720.00", HKD: "780.00" },
+    }],
     investmentCashflows: [],
   };
 }
@@ -325,6 +335,7 @@ export async function POST(request: Request) {
         assetSources: [],
         dailyAssetSnapshots: [],
         dailyAssetTrendObservations: [],
+        importedAssetSourceHistoryObservations: [],
         investmentCashflows: [],
       });
       await backups.restore(exported.fileName);
@@ -350,6 +361,7 @@ export async function POST(request: Request) {
         assetSources: [],
         dailyAssetSnapshots: [],
         dailyAssetTrendObservations: [],
+        importedAssetSourceHistoryObservations: [],
         investmentCashflows: [],
       });
       await backups.restore(exported.fileName);
@@ -408,6 +420,7 @@ export async function POST(request: Request) {
       assetSources: [],
       dailyAssetSnapshots: [],
       dailyAssetTrendObservations: [],
+      importedAssetSourceHistoryObservations: [],
       investmentCashflows: [],
     });
     const preview = await backups.previewRestore(exported.fileName);
@@ -418,6 +431,7 @@ export async function POST(request: Request) {
       throw new Error("备份恢复后缺少资产卡片");
     }
     const trendObservations = await database.listDailyAssetTrendObservations();
+    const importedHistory = await database.listImportedSourceHistoryObservations();
     return Response.json({
       preview,
       restored: {
@@ -437,6 +451,11 @@ export async function POST(request: Request) {
             totalUsd: trendObservations.at(-1)?.total.USD,
           },
         },
+        importedHistory: importedHistory.map((observation) => ({
+          day: observation.day,
+          sourceId: observation.sourceId,
+          totalUsd: observation.total.USD,
+        })),
         lifecycle: restoredSource.lifecycle,
         credentialReference: restoredSource.credentialReference,
         cashflows: (await database.listInvestmentCashflows()).map((item) => ({

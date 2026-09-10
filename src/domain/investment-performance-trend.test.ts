@@ -2,12 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  projectAssetSourceHistoryTrend,
+  projectAssetSourceTrend,
   projectInvestmentPerformanceTrend,
   type InvestmentPerformanceIntervalPreset,
 } from "@/domain/investment-performance-trend";
 import type {
   DailyAssetClassTotal,
   DailyAssetTrendObservation,
+  ImportedAssetSourceHistoryObservation,
 } from "@/server/ports";
 
 const COMPLETE = "complete" as const;
@@ -59,6 +62,23 @@ function observation(input: {
   };
 }
 
+function importedObservation(input: {
+  amount: string | null;
+  day: string;
+  sourceId?: string;
+}): ImportedAssetSourceHistoryObservation {
+  return {
+    capturedAt: `${input.day}T12:00:00.000Z`,
+    complete: true,
+    day: input.day,
+    kind: "longbridge",
+    label: "外部证券账户",
+    sourceId: input.sourceId ?? "source-a",
+    status: COMPLETE,
+    total: { USD: input.amount, CNY: null, HKD: null },
+  };
+}
+
 function project(
   preset: InvestmentPerformanceIntervalPreset,
   trendObservations: DailyAssetTrendObservation[],
@@ -74,6 +94,137 @@ function project(
     trendObservations,
   });
 }
+
+test("来源趋势投影只使用该来源的实际完整观测作为比较端点", () => {
+  const result = projectAssetSourceTrend({
+    currency: "USD",
+    currentDay: "2024-03-04",
+    customRange: { startDay: "2024-03-01", endDay: "2024-03-04" },
+    preset: "custom",
+    sourceId: "source-a",
+    trendObservations: [
+      observation({ amount: "100", day: "2024-03-01" }),
+      {
+        ...observation({ amount: "999", day: "2024-03-02" }),
+        sources: [{
+          ...observation({ amount: "999", day: "2024-03-02" }).sources[0]!,
+          sourceId: "source-b",
+        }],
+      },
+      observation({ amount: "120", day: "2024-03-03", status: "expired" }),
+      observation({ amount: "140", day: "2024-03-04" }),
+    ].map((item) => ({
+      ...item,
+      sources: item.sources.map((source) =>
+        source.sourceId === "securities" ? { ...source, sourceId: "source-a" } : source
+      ),
+    })),
+  });
+
+  assert.deepEqual(result.points, [
+    {
+      amount: "100",
+      day: "2024-03-01",
+      observed: true,
+      observedAt: "2024-03-01T04:00:00.000Z",
+      status: COMPLETE,
+    },
+    {
+      amount: null,
+      day: "2024-03-02",
+      observed: false,
+      observedAt: null,
+      status: "incomplete",
+    },
+    {
+      amount: "120",
+      day: "2024-03-03",
+      observed: true,
+      observedAt: "2024-03-03T04:00:00.000Z",
+      status: "expired",
+    },
+    {
+      amount: "140",
+      day: "2024-03-04",
+      observed: true,
+      observedAt: "2024-03-04T04:00:00.000Z",
+      status: COMPLETE,
+    },
+  ]);
+  assert.equal(result.missingCount, 1);
+  assert.equal(result.incompleteCount, 1);
+  assert.equal(result.startDay, "2024-03-01");
+  assert.equal(result.endDay, "2024-03-04");
+  assert.equal(result.intervalAssetChange, "40");
+});
+
+test("外部补录来源历史保留按日缺口，且不需要组合趋势观测", () => {
+  const result = projectAssetSourceHistoryTrend({
+    currency: "USD",
+    currentDay: "2024-03-04",
+    importedSourceHistoryObservations: [
+      importedObservation({ amount: "100", day: "2024-03-01" }),
+      importedObservation({ amount: "130", day: "2024-03-04" }),
+    ],
+    preset: "all",
+    sourceId: "source-a",
+    trendObservations: [],
+  });
+
+  assert.deepEqual(result.points, [
+    {
+      amount: "100",
+      day: "2024-03-01",
+      observed: true,
+      observedAt: "2024-03-01T12:00:00.000Z",
+      status: COMPLETE,
+    },
+    {
+      amount: null,
+      day: "2024-03-02",
+      observed: false,
+      observedAt: null,
+      status: "incomplete",
+    },
+    {
+      amount: null,
+      day: "2024-03-03",
+      observed: false,
+      observedAt: null,
+      status: "incomplete",
+    },
+    {
+      amount: "130",
+      day: "2024-03-04",
+      observed: true,
+      observedAt: "2024-03-04T12:00:00.000Z",
+      status: COMPLETE,
+    },
+  ]);
+  assert.equal(result.missingCount, 2);
+  assert.equal(result.intervalAssetChange, "30");
+});
+
+test("同日系统来源趋势优先于外部补录值", () => {
+  const trend = observation({ amount: "140", day: "2024-03-04" });
+  const result = projectAssetSourceHistoryTrend({
+    currency: "USD",
+    currentDay: "2024-03-04",
+    importedSourceHistoryObservations: [
+      importedObservation({ amount: "100", day: "2024-03-01" }),
+      importedObservation({ amount: "999", day: "2024-03-04" }),
+    ],
+    preset: "all",
+    sourceId: "source-a",
+    trendObservations: [{
+      ...trend,
+      sources: trend.sources.map((source) => ({ ...source, sourceId: "source-a" })),
+    }],
+  });
+
+  assert.equal(result.points.at(-1)?.amount, "140");
+  assert.equal(result.points.at(-1)?.observedAt, "2024-03-04T04:00:00.000Z");
+});
 
 test("收益分析预设区间按连续上海自然日跨月末和闰年计算", () => {
   const observations = [observation({
@@ -131,17 +282,18 @@ test("趋势投影保留缺失上海自然日为空值，并在区间内选择�
   ]);
 
   assert.deepEqual(
-    result.points.slice(0, 4).map(({ amount, day, observed, status }) => ({
+    result.points.slice(0, 4).map(({ amount, day, observed, observedAt, status }) => ({
       amount,
       day,
       observed,
+      observedAt,
       status,
     })),
     [
-      { amount: "100", day: "2024-03-01", observed: true, status: COMPLETE },
-      { amount: null, day: "2024-03-02", observed: false, status: "incomplete" },
-      { amount: null, day: "2024-03-03", observed: false, status: "incomplete" },
-      { amount: "130", day: "2024-03-04", observed: true, status: COMPLETE },
+      { amount: "100", day: "2024-03-01", observed: true, observedAt: "2024-03-01T04:00:00.000Z", status: COMPLETE },
+      { amount: null, day: "2024-03-02", observed: false, observedAt: null, status: "incomplete" },
+      { amount: null, day: "2024-03-03", observed: false, observedAt: null, status: "incomplete" },
+      { amount: "130", day: "2024-03-04", observed: true, observedAt: "2024-03-04T04:00:00.000Z", status: COMPLETE },
     ],
   );
   assert.equal(result.missingCount, 29);
@@ -165,6 +317,7 @@ test("旧分类趋势没有分类总额时保留为缺失，不伪造分类端�
     amount: null,
     day: "2024-03-01",
     observed: false,
+    observedAt: null,
     status: "incomplete",
   });
   assert.equal(result.missingCount, 31);

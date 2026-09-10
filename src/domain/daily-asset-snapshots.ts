@@ -143,7 +143,6 @@ function sourceSnapshot(
     rateSources,
   );
   const complete =
-    source.sync.status === "current" &&
     !valuation.incomplete &&
     total.USD !== null &&
     total.HKD !== null;

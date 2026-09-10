@@ -163,6 +163,41 @@ export async function POST(request: Request) {
       await rm(root, { recursive: true, force: true });
     }
   }
+  if (new URL(request.url).searchParams.get("legacy") === "history") {
+    try {
+      const dashboardPath = path.join(root, "dashboard.json");
+      await writeFile(dashboardPath, JSON.stringify({
+        cards: [],
+        assetSources: [],
+        dailyAssetSnapshots: [{
+          day: "2026-03-01",
+          capturedAt: "2026-03-01T04:00:00.000Z",
+          complete: true,
+          total: { USD: "100", CNY: "720" },
+          exchangeRates: [],
+          sources: [{
+            sourceId: "legacy-longbridge",
+            label: "旧长桥记录",
+            kind: "longbridge",
+            capturedAt: "2026-03-01T04:00:00.000Z",
+            complete: true,
+            total: { USD: "100", CNY: "720" },
+          }],
+        }],
+      }));
+      const database = new FileDashboardDatabase(
+        dashboardPath,
+        path.join(root, "legacy-cards.json"),
+      );
+      const [observation] = await database.listDailyAssetTrendObservations();
+      return Response.json({
+        observation,
+        source: observation?.sources[0] ?? null,
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
   const previousKey = process.env.PAD_SECRET_ENCRYPTION_KEY;
   process.env.PAD_SECRET_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64");
   try {
@@ -249,6 +284,8 @@ export async function POST(request: Request) {
         list: () => rotationDashboard.listDailyAssetSnapshots(),
         listTrendObservations: () =>
           rotationDashboard.listDailyAssetTrendObservations(),
+        listImportedSourceHistoryObservations: () =>
+          rotationDashboard.listImportedSourceHistoryObservations(),
         createIfAbsent: (snapshot) =>
           rotationDashboard.createDailyAssetSnapshotIfAbsent(snapshot),
         record: (snapshot, createBaseline) =>
