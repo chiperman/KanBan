@@ -28,11 +28,11 @@ async function loginAsOwner(page: Page): Promise<void> {
   await attachPasskey(page);
   await page.goto("/setup");
   await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
-  await expect(page.getByRole("status")).toContainText("已完成预置");
+  await expect(page.getByRole("status")).toContainText("预置完成");
   await page.goto("/");
 
   await page.getByRole("button", { name: "使用 Passkey 登录" }).click();
-  await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
+  await expect(page.getByTestId("workbench-shell")).toBeVisible();
 }
 
 async function addEvmSource(
@@ -453,7 +453,7 @@ test("Ethereum 余额失败只使该来源过期，BSC 继续当前且未认证�
   await expect(page.getByTestId("bsc-watch-card")).toContainText("数据当前");
   await page.goto("/");
   await page.getByRole("button", { name: "立即锁定（退出登录）" }).click();
-  await expect(page.getByRole("heading", { name: "个人资产看板已锁定" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "看板已锁定" })).toBeVisible();
   const publicSurface = await page.content();
   for (const sensitive of [ADDRESS.toLowerCase(), "SAME", "5,519", "2,019"]) {
     expect(publicSurface.toLowerCase()).not.toContain(sensitive.toLowerCase());
@@ -561,6 +561,7 @@ test("已忽略的异常合约在完整刷新时不再读取元数据", async ({
   expect(body.metadataContracts).not.toContain(
     "0xcccccccccccccccccccccccccccccccccccccccc",
   );
+  expect(body.snapshot.coverage).toMatchObject({ status: "complete" });
 });
 
 test("Ethereum 行情刷新不读取链上余额，完整刷新恢复读取持仓", async ({ request }) => {
