@@ -7,6 +7,7 @@ import { decimalAdd } from "@/domain/decimal";
 
 const EVM_TOKEN_ASSET_KEY_PATTERN =
   /^evm:(1|56):0x[0-9a-f]{40}$/;
+const EVM_NATIVE_ASSET_KEY_PATTERN = /^evm:(1|56):native$/;
 
 type SourceWithEvmTokenPreferences = Pick<
   AssetSourceSummary,
@@ -19,6 +20,18 @@ export function isEvmTokenAssetKey(value: string): boolean {
   return EVM_TOKEN_ASSET_KEY_PATTERN.test(value);
 }
 
+/** EVM 观察钱包中可由所有者控制显示范围的普通资产。
+ *
+ * 协议头寸使用各自的 providerPositionId，不能与原生币或 ERC-20
+ * 混用这个开关，避免隐藏一部分协议仓位后失去产品语义。
+ */
+export function isEvmManagedAssetKey(value: string): boolean {
+  return (
+    EVM_NATIVE_ASSET_KEY_PATTERN.test(value) ||
+    isEvmTokenAssetKey(value)
+  );
+}
+
 export function isEvmTokenHolding(
   sourceKind: string,
   holding: AssetHolding,
@@ -27,6 +40,17 @@ export function isEvmTokenHolding(
     sourceKind.startsWith("evm-watch-") &&
     typeof holding.sourceAsset === "string" &&
     isEvmTokenAssetKey(holding.sourceAsset)
+  );
+}
+
+export function isEvmManagedHolding(
+  sourceKind: string,
+  holding: AssetHolding,
+): boolean {
+  return (
+    sourceKind.startsWith("evm-watch-") &&
+    typeof holding.sourceAsset === "string" &&
+    isEvmManagedAssetKey(holding.sourceAsset)
   );
 }
 
@@ -159,7 +183,7 @@ export function normalizeIgnoredAssetKeys(value: unknown): string[] {
     ...new Set(
       value.filter(
         (item): item is string =>
-          typeof item === "string" && isEvmTokenAssetKey(item),
+          typeof item === "string" && isEvmManagedAssetKey(item),
       ),
     ),
   ].sort();
@@ -181,8 +205,7 @@ export function updateEvmTokenPreferences(
   }
   const available = new Set([
     ...source.snapshot.holdings.flatMap((holding) =>
-      isEvmTokenHolding(source.kind, holding) &&
-      holding.valuation.status === "unvalued" &&
+      isEvmManagedHolding(source.kind, holding) &&
       holding.sourceAsset
         ? [holding.sourceAsset]
         : [],
@@ -196,11 +219,11 @@ export function updateEvmTokenPreferences(
   if (
     assetKeys.some(
       (assetKey) =>
-        !isEvmTokenAssetKey(assetKey) ||
+        !isEvmManagedAssetKey(assetKey) ||
         !available.has(assetKey),
     )
   ) {
-    throw new InvalidEvmTokenPreferenceError("代币合约不属于该观察钱包");
+    throw new InvalidEvmTokenPreferenceError("资产不属于该观察钱包");
   }
   const ignored = ignoredAssetKeySet(source);
   const included = includedAssetKeySet(source);
