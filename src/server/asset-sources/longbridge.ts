@@ -13,6 +13,14 @@ import type {
   AssetQuoteEvidence,
   FormalSettlementCandleReader,
   FormalSettlementDailyCandle,
+  LongbridgeHoldingCandlestick,
+  LongbridgeHoldingCandlestickReader,
+  LongbridgeHoldingCandlestickPeriod,
+  LongbridgeHoldingCandlePeriod,
+  LongbridgeHoldingTrendPoint,
+  LongbridgeBenchmarkCandlestick,
+  LongbridgeBenchmarkCandlestickReader,
+  LongbridgeBenchmarkSymbol,
   LongbridgeAuthorizationResult,
   LongbridgeOAuth,
 } from "@/server/ports";
@@ -26,6 +34,12 @@ import {
   decimalDivide,
   decimalMultiply,
 } from "@/domain/decimal";
+import {
+  isLongbridgeUsOptionSymbol,
+  supportsLongbridgeCandlesticks,
+} from "@/domain/longbridge-symbols";
+
+export { isLongbridgeUsOptionSymbol } from "@/domain/longbridge-symbols";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -45,22 +59,6 @@ function text(value: unknown, field: string): string {
 
 function optionalText(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
-}
-
-export function isLongbridgeUsOptionSymbol(symbol: string): boolean {
-  const match = /^(?:[A-Z0-9.^_-]+)(\d{6})[CP]\d+\.US$/i.exec(symbol);
-  if (match === null) return false;
-  const expiration = match[1];
-  if (expiration === undefined) return false;
-  const year = 2000 + Number(expiration.slice(0, 2));
-  const month = Number(expiration.slice(2, 4));
-  const day = Number(expiration.slice(4, 6));
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return (
-    date.getUTCFullYear() === year &&
-    date.getUTCMonth() === month - 1 &&
-    date.getUTCDate() === day
-  );
 }
 
 function optionalUnixSecondsIso(value: unknown, field: string): string | null {
@@ -547,6 +545,11 @@ const LONGBRIDGE_TOKEN_ENDPOINT =
 const LONGBRIDGE_API_ORIGIN = "https://openapi.longbridge.com";
 const READ_ONLY_SCOPE = "6";
 const ACCOUNT_READ_SCOPE = "account.read";
+const COMBINED_READ_ONLY_SCOPES = [
+  "watchlist",
+  ACCOUNT_READ_SCOPE,
+  "trade.read",
+] as const;
 const ASSET_PATHS = [
   "/v1/asset/account",
   "/v1/asset/stock",
@@ -587,11 +590,14 @@ function validateReadOnlyScopes(scopes: string[]): string[] {
   if (scopes.includes("11")) {
     throw new Error("检测到长桥交易写权限，已拒绝连接");
   }
-  if (
-    scopes.length !== 1 ||
-    ![READ_ONLY_SCOPE, ACCOUNT_READ_SCOPE].includes(scopes[0] ?? "")
-  ) {
-    throw new Error(`长桥授权范围不是仅账户读取（实际：${scopes.join(" ")}）`);
+  const isSingleReadOnly =
+    scopes.length === 1 &&
+    [READ_ONLY_SCOPE, ACCOUNT_READ_SCOPE].includes(scopes[0] ?? "");
+  const isCombinedReadOnly =
+    scopes.length === COMBINED_READ_ONLY_SCOPES.length &&
+    COMBINED_READ_ONLY_SCOPES.every((scope) => scopes.includes(scope));
+  if (!isSingleReadOnly && !isCombinedReadOnly) {
+    throw new Error(`长桥授权范围不是允许的只读范围（实际：${scopes.join(" ")}）`);
   }
   return scopes;
 }
@@ -602,9 +608,7 @@ function parseTokenResponse(value: unknown): TokenResponse {
   if (typeof scope !== "string" || scope.trim().length === 0) {
     throw new Error("长桥未返回授权范围，无法证明凭证为只读");
   }
-  const scopes = validateReadOnlyScopes([
-    ...new Set(scope.trim().split(/\s+/)),
-  ]);
+  const scopes = validateReadOnlyScopes(scope.trim().split(/\s+/));
   if (token.token_type !== "Bearer") {
     throw new Error("长桥 token 类型不是 Bearer，已拒绝连接");
   }
@@ -638,7 +642,7 @@ function parseStoredCredentials(credentials: string): StoredLongbridgeCredential
         ? value.expiresIn
         : null,
     obtainedAt: optionalText(value.obtainedAt),
-    validatedScopes: validateReadOnlyScopes([...new Set(rawScopes)]),
+    validatedScopes: validateReadOnlyScopes(rawScopes),
   };
 }
 
@@ -655,9 +659,7 @@ function parseRefreshTokenResponse(
   if (!Object.hasOwn(token, "scope")) {
     scopes = validateReadOnlyScopes(previous.validatedScopes);
   } else if (typeof token.scope === "string" && token.scope.trim().length > 0) {
-    scopes = validateReadOnlyScopes([
-      ...new Set(token.scope.trim().split(/\s+/)),
-    ]);
+    scopes = validateReadOnlyScopes(token.scope.trim().split(/\s+/));
   } else {
     throw new Error("长桥刷新响应 scope 格式无效，已拒绝使用");
   }
@@ -841,7 +843,7 @@ function needsCredentialRefresh(
   return attempted >= obtainedAt + credentials.expiresIn * 1000 - 5 * 60_000;
 }
 
-/** 已保存来源的只读刷新器；30 秒价格周期不访问长桥。 */
+/** 已保存来源的只读刷新器；由统一完整批次或手动单来源意图调用。 */
 export class ProductionLongbridgeSourceRefresher
   implements AssetSourceRefresher
 {
@@ -935,6 +937,8 @@ type LongbridgeKeychainReadSdk = Pick<
   | "readAssets"
   | "readQuotes"
   | "readDailyCandles"
+  | "readCandlesticks"
+  | "readFiveDayTrend"
 >;
 
 const LONGBRIDGE_KEYCHAIN_REPAIR_COMMAND =
@@ -1258,6 +1262,167 @@ export class KeychainLongbridgeFormalSettlementCandleReader
           throw new Error("长桥日 K 缺少时间");
         })(),
       tradeSession: candle.tradeSession,
+    }));
+  }
+}
+
+const LONG_BRIDGE_FIVE_DAY_TREND_COUNT = 1_000;
+
+const LONG_BRIDGE_CANDLE_COUNTS: Record<LongbridgeHoldingCandlestickPeriod, number> = {
+  day: 120,
+  week: 104,
+  month: 120,
+  year: 30,
+  "min-1": 240,
+};
+
+function candleValue(value: unknown, field: string): string {
+  if (typeof value !== "string" || !/^\d+(?:\.\d+)?$/.test(value)) {
+    throw new Error(`长桥 K 线 ${field} 格式无效`);
+  }
+  return value;
+}
+
+function marketTimeZone(symbol: string): string {
+  const market = symbol.split(".").at(-1)?.toUpperCase();
+  switch (market) {
+    case "US": return "America/New_York";
+    case "HK": return "Asia/Hong_Kong";
+    case "SG": return "Asia/Singapore";
+    case "SH":
+    case "SZ": return "Asia/Shanghai";
+    default: return "Asia/Shanghai";
+  }
+}
+
+function marketTradeDate(time: string, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(time));
+  const field = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value;
+  const year = field("year");
+  const month = field("month");
+  const day = field("day");
+  if (!year || !month || !day) throw new Error("长桥近五日走势日期格式无效");
+  return `${year}-${month}-${day}`;
+}
+
+function latestFiveTradingDayTrend(
+  points: LongbridgeHoldingTrendPoint[],
+  symbol: string,
+): LongbridgeHoldingTrendPoint[] {
+  const sorted = [...points].sort((left, right) =>
+    Date.parse(left.time) - Date.parse(right.time),
+  );
+  const timeZone = marketTimeZone(symbol);
+  const dates = new Set<string>();
+  for (const point of [...sorted].reverse()) {
+    dates.add(marketTradeDate(point.time, timeZone));
+    if (dates.size === 5) break;
+  }
+  return sorted.filter((point) => dates.has(marketTradeDate(point.time, timeZone)));
+}
+
+/**
+ * 单标的行情读取与日结读取分离：前者仅按需读取当前持仓，始终使用常规盘与未复权。
+ */
+export class KeychainLongbridgeHoldingCandlestickReader
+  implements LongbridgeHoldingCandlestickReader
+{
+  constructor(private readonly sdk: LongbridgeKeychainReadSdk = new LongbridgeKeychainSdk()) {}
+
+  async readCandlesticks(input: {
+    source: import("@/server/ports").AssetSourceSummary;
+    symbol: string;
+    period: LongbridgeHoldingCandlestickPeriod;
+  }): Promise<LongbridgeHoldingCandlestick[]> {
+    if (input.source.kind !== "longbridge") {
+      throw new Error(`K 线不支持证券来源类型：${input.source.kind}`);
+    }
+    if (input.source.credentialReference !== this.sdk.credentialReference()) {
+      throw new Error("长桥来源不是 macOS Keychain 凭证，请重新连接");
+    }
+    if (!supportsLongbridgeCandlesticks(input.symbol)) {
+      throw new Error("该持仓暂不支持查看 K 线");
+    }
+    const candles = await withKeychainAuthenticationRetry(() =>
+      this.sdk.readCandlesticks(
+        input.symbol,
+        input.period,
+        LONG_BRIDGE_CANDLE_COUNTS[input.period],
+      ),
+    );
+    return candles.map((candle) => ({
+      time: optionalUnixSecondsIso(candle.timestamp, "candlestick.timestamp")
+        ?? (() => { throw new Error("长桥 K 线缺少时间"); })(),
+      open: candleValue(candle.open, "open"),
+      high: candleValue(candle.high, "high"),
+      low: candleValue(candle.low, "low"),
+      close: candleValue(candle.close, "close"),
+      volume: candleValue(candle.volume, "volume"),
+      turnover: candleValue(candle.turnover, "turnover"),
+    }));
+  }
+
+  async readFiveDayTrend(input: {
+    source: import("@/server/ports").AssetSourceSummary;
+    symbol: string;
+  }): Promise<LongbridgeHoldingTrendPoint[]> {
+    if (input.source.kind !== "longbridge") {
+      throw new Error(`K线不支持证券来源类型：${input.source.kind}`);
+    }
+    if (input.source.credentialReference !== this.sdk.credentialReference()) {
+      throw new Error("长桥来源不是 macOS Keychain 凭证，请重新连接");
+    }
+    if (!supportsLongbridgeCandlesticks(input.symbol)) {
+      throw new Error("该持仓暂不支持查看 K 线");
+    }
+    const points = await withKeychainAuthenticationRetry(() =>
+      this.sdk.readFiveDayTrend(input.symbol, LONG_BRIDGE_FIVE_DAY_TREND_COUNT),
+    );
+    return latestFiveTradingDayTrend(points.map((point) => ({
+      time: optionalUnixSecondsIso(point.timestamp, "fiveDayTrend.timestamp")
+        ?? (() => { throw new Error("长桥近五日走势缺少时间"); })(),
+      price: candleValue(point.close, "fiveDayTrend.close"),
+    })), input.symbol);
+  }
+}
+
+const LONGBRIDGE_BENCHMARK_SYMBOLS = new Set<LongbridgeBenchmarkSymbol>([
+  ".SPX.US",
+  ".NDX.US",
+]);
+
+/**
+ * 收益分析指数与账户持仓 K 线隔离：只读固定指数的日 K，
+ * 使用现有 Keychain 凭证、常规盘和未复权价格，绝不读取账户资产。
+ */
+export class KeychainLongbridgeBenchmarkCandlestickReader
+  implements LongbridgeBenchmarkCandlestickReader
+{
+  constructor(private readonly sdk: LongbridgeKeychainReadSdk = new LongbridgeKeychainSdk()) {}
+
+  async readDailyCandlesticks(input: {
+    count: number;
+    symbol: LongbridgeBenchmarkSymbol;
+  }): Promise<LongbridgeBenchmarkCandlestick[]> {
+    if (!LONGBRIDGE_BENCHMARK_SYMBOLS.has(input.symbol)) {
+      throw new Error("收益分析不支持该指数。");
+    }
+    if (!Number.isInteger(input.count) || input.count < 1 || input.count > 1000) {
+      throw new Error("长桥指数日 K 数量必须介于 1 到 1000。");
+    }
+    const candles = await withKeychainAuthenticationRetry(() =>
+      this.sdk.readCandlesticks(input.symbol, "day", input.count),
+    );
+    return candles.map((candle) => ({
+      close: candleValue(candle.close, "close"),
+      time: optionalUnixSecondsIso(candle.timestamp, "benchmark.timestamp")
+        ?? (() => { throw new Error("长桥指数日 K 缺少时间。"); })(),
     }));
   }
 }

@@ -25,6 +25,19 @@ type NativeLongbridgeSdk = {
     callbackPort: number,
     symbols: string[],
   ): Promise<unknown>;
+  readCandlesticks(
+    clientId: string,
+    callbackPort: number,
+    symbol: string,
+    period: string,
+    count: number,
+  ): Promise<unknown>;
+  readFiveDayTrend(
+    clientId: string,
+    callbackPort: number,
+    symbol: string,
+    count: number,
+  ): Promise<unknown>;
   forgetAuthorization(clientId: string): void;
 };
 
@@ -70,6 +83,28 @@ export interface LongbridgeSdkDailyCandle {
   close: string;
   timestamp: number;
   tradeSession: "intraday";
+}
+
+/** 原生 addon 已归一化的 OHLCV DTO。 */
+export interface LongbridgeSdkCandlestick {
+  timestamp: number;
+  open: string;
+  high: string;
+  low: string;
+  close: string;
+  volume: string;
+  turnover: string;
+}
+
+/** 原生 addon 已归一化的近五日收盘价点。 */
+export interface LongbridgeSdkTrendPoint {
+  timestamp: number;
+  close: string;
+}
+
+/** Keychain 中 OAuth 凭证的唯一持久化引用；不是可写入 SecretStore 的密钥。 */
+export function isMacOSKeychainCredentialReference(reference: string): boolean {
+  return reference.startsWith("macos-keychain:") && reference.length > "macos-keychain:".length;
 }
 
 function requiredClientId(): string {
@@ -194,6 +229,33 @@ export class LongbridgeKeychainSdk {
     return parse(
       await nativeSdk().readDailyCandles(this.clientId, this.port, symbols),
       "长桥日 K 响应格式无效",
+    );
+  }
+
+  async readCandlesticks(
+    symbol: string,
+    period: "day" | "week" | "month" | "year" | "min-1",
+    count: number,
+  ): Promise<LongbridgeSdkCandlestick[]> {
+    return parse(
+      await nativeSdk().readCandlesticks(
+        this.clientId,
+        this.port,
+        symbol,
+        period,
+        count,
+      ),
+      "长桥 K 线响应格式无效",
+    );
+  }
+
+  async readFiveDayTrend(
+    symbol: string,
+    count: number,
+  ): Promise<LongbridgeSdkTrendPoint[]> {
+    return parse(
+      await nativeSdk().readFiveDayTrend(this.clientId, this.port, symbol, count),
+      "长桥近五日走势响应格式无效",
     );
   }
 

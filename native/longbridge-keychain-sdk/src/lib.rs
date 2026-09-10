@@ -585,6 +585,113 @@ pub async fn read_daily_candles(
     serialize(values)
 }
 
+/// 读取单个普通证券的 K 线。
+#[napi]
+pub async fn read_candlesticks(
+    client_id: String,
+    callback_port: u32,
+    symbol: String,
+    period: String,
+    count: u32,
+) -> NapiResult<String> {
+    let callback_port = u16::try_from(callback_port)
+        .map_err(|_| napi_error("长桥 OAuth 回调端口无效"))?;
+    let symbol = symbol.trim().to_string();
+    if symbol.is_empty() {
+        return Err(napi_error("长桥 K 线标的不能为空"));
+    }
+    let count = usize::try_from(count)
+        .ok()
+        .filter(|count| (1..=1_000).contains(count))
+        .ok_or_else(|| napi_error("长桥 K 线数量必须介于 1 到 1000"))?;
+    let period = match period.as_str() {
+        "day" => Period::Day,
+        "week" => Period::Week,
+        "month" => Period::Month,
+        "year" => Period::Year,
+        "min-1" => Period::OneMinute,
+        _ => return Err(napi_error("长桥 K 线周期无效")),
+    };
+    let oauth = load_oauth(client_id, callback_port)
+        .await
+        .map_err(napi_error)?;
+    let config = std::sync::Arc::new(Config::from_oauth(oauth));
+    let (quote, _) = QuoteContext::new(config);
+    let candles = quote
+        .candlesticks(
+            symbol,
+            period,
+            count,
+            AdjustType::NoAdjust,
+            TradeSessions::Intraday,
+        )
+        .await
+        .map_err(|error| napi_error(format!("长桥 K 线读取失败：{error}")))?;
+    serialize(
+        candles
+            .into_iter()
+            .map(|candle| {
+                serde_json::json!({
+                    "timestamp": candle.timestamp.unix_timestamp(),
+                    "open": candle.open.to_string(),
+                    "high": candle.high.to_string(),
+                    "low": candle.low.to_string(),
+                    "close": candle.close.to_string(),
+                    "volume": candle.volume.to_string(),
+                    "turnover": candle.turnover.to_string(),
+                })
+            })
+            .collect::<Vec<_>>(),
+    )
+}
+
+/// 读取最近足够覆盖五个交易日的 5 分钟常规盘收盘价。
+/// 交易日过滤留给上层，以标的所在市场时区为准。
+#[napi]
+pub async fn read_five_day_trend(
+    client_id: String,
+    callback_port: u32,
+    symbol: String,
+    count: u32,
+) -> NapiResult<String> {
+    let callback_port = u16::try_from(callback_port)
+        .map_err(|_| napi_error("长桥 OAuth 回调端口无效"))?;
+    let symbol = symbol.trim().to_string();
+    if symbol.is_empty() {
+        return Err(napi_error("长桥近五日走势标的不能为空"));
+    }
+    let count = usize::try_from(count)
+        .ok()
+        .filter(|count| (1..=1_000).contains(count))
+        .ok_or_else(|| napi_error("长桥近五日走势数量必须介于 1 到 1000"))?;
+    let oauth = load_oauth(client_id, callback_port)
+        .await
+        .map_err(napi_error)?;
+    let config = std::sync::Arc::new(Config::from_oauth(oauth));
+    let (quote, _) = QuoteContext::new(config);
+    let points = quote
+        .candlesticks(
+            symbol,
+            Period::FiveMinute,
+            count,
+            AdjustType::NoAdjust,
+            TradeSessions::Intraday,
+        )
+        .await
+        .map_err(|error| napi_error(format!("长桥近五日走势读取失败：{error}")))?;
+    serialize(
+        points
+            .into_iter()
+            .map(|point| {
+                serde_json::json!({
+                    "timestamp": point.timestamp.unix_timestamp(),
+                    "close": point.close.to_string(),
+                })
+            })
+            .collect::<Vec<_>>(),
+    )
+}
+
 /// 删除当前 OAuth client 的长桥 Keychain 凭证，用于用户主动断开连接。
 #[napi]
 pub fn forget_authorization(client_id: String) -> NapiResult<()> {

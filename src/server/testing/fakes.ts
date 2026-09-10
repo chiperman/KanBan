@@ -33,7 +33,15 @@ import type {
   FormalDailySettlementRunner,
   FormalDailySettlements,
   InvestmentCashflow,
+  LongbridgeBenchmarkCandlestickReader,
+  LongbridgeBenchmarkCandlestick,
+  LongbridgeBenchmarkSymbol,
   LongbridgeAuthorizationResult,
+  LongbridgeHoldingCandlestickReader,
+  LongbridgeHoldingCandlestick,
+  LongbridgeHoldingCandlestickPeriod,
+  LongbridgeHoldingCandlePeriod,
+  LongbridgeHoldingTrendPoint,
   Card,
   AssetCardStore,
   Clock,
@@ -547,6 +555,90 @@ export class FakeLongbridgeOAuth implements LongbridgeOAuth {
 
   async revalidate() {
     return this.finish();
+  }
+}
+
+export class FakeLongbridgeHoldingCandlestickReader
+  implements LongbridgeHoldingCandlestickReader
+{
+  readonly reads: Array<{
+    sourceId: string;
+    symbol: string;
+    period: LongbridgeHoldingCandlestickPeriod;
+  }> = [];
+  readonly trendReads: Array<{ sourceId: string; symbol: string }> = [];
+
+  async readCandlesticks(input: {
+    source: AssetSourceSummary;
+    symbol: string;
+    period: LongbridgeHoldingCandlestickPeriod;
+  }): Promise<LongbridgeHoldingCandlestick[]> {
+    this.reads.push({
+      sourceId: input.source.id,
+      symbol: input.symbol,
+      period: input.period,
+    });
+    const count = 12;
+    const minuteStep = input.period === "min-1" ? 60_000 : 86_400_000;
+    const start = Date.parse("2026-08-10T13:30:00.000Z");
+    return Array.from({ length: count }, (_, index) => {
+      const open = 200 + index * 1.25;
+      const close = open + (index % 2 === 0 ? 0.75 : -0.5);
+      return {
+        time: new Date(start + index * minuteStep).toISOString(),
+        open: open.toFixed(2),
+        high: (Math.max(open, close) + 0.8).toFixed(2),
+        low: (Math.min(open, close) - 0.7).toFixed(2),
+        close: close.toFixed(2),
+        volume: String(1_000_000 + index * 45_000),
+        turnover: String(200_000_000 + index * 9_000_000),
+      };
+    });
+  }
+
+  async readFiveDayTrend(input: {
+    source: AssetSourceSummary;
+    symbol: string;
+  }): Promise<LongbridgeHoldingTrendPoint[]> {
+    this.trendReads.push({ sourceId: input.source.id, symbol: input.symbol });
+    const dates = [
+      "2026-08-21",
+      "2026-08-24",
+      "2026-08-25",
+      "2026-08-26",
+      "2026-08-27",
+    ];
+    return dates.flatMap((date, dayIndex) =>
+      Array.from({ length: 78 }, (_, minuteIndex) => {
+        const price = 200 + dayIndex * 1.5 + minuteIndex * 0.08;
+        return {
+          time: new Date(
+            Date.parse(`${date}T13:30:00.000Z`) + minuteIndex * 300_000,
+          ).toISOString(),
+          price: price.toFixed(2),
+        };
+      }),
+    );
+  }
+}
+
+export class FakeLongbridgeBenchmarkCandlestickReader
+  implements LongbridgeBenchmarkCandlestickReader
+{
+  readonly reads: Array<{ count: number; symbol: LongbridgeBenchmarkSymbol }> = [];
+
+  async readDailyCandlesticks(input: {
+    count: number;
+    symbol: LongbridgeBenchmarkSymbol;
+  }): Promise<LongbridgeBenchmarkCandlestick[]> {
+    this.reads.push(input);
+    const start = Date.parse("2026-03-01T20:00:00.000Z");
+    const base = input.symbol === ".SPX.US" ? 5_800 : 20_000;
+    const step = input.symbol === ".SPX.US" ? 2.75 : 11.5;
+    return Array.from({ length: 180 }, (_, index) => ({
+      close: (base + index * step).toFixed(2),
+      time: new Date(start + index * 86_400_000).toISOString(),
+    })).slice(-input.count);
   }
 }
 
@@ -1892,6 +1984,8 @@ export interface TestServices extends AppServices {
   ownerRecoveryCredentials: InMemoryOwnerRecoveryCredentialStore;
   secrets: InMemorySecretStore;
   longbridge: FakeLongbridgeOAuth;
+  longbridgeBenchmarkCandlesticks: FakeLongbridgeBenchmarkCandlestickReader;
+  longbridgeHoldingCandlesticks: FakeLongbridgeHoldingCandlestickReader;
   longbridgeOAuthState: LongbridgeOAuthState;
   binance: FakeBinanceReadOnly;
   okx: FakeOkxReadOnly;
@@ -1939,6 +2033,8 @@ export function createTestServices(): TestServices {
     dailyAssetSnapshots,
   );
   const longbridge = new FakeLongbridgeOAuth();
+  const longbridgeBenchmarkCandlesticks = new FakeLongbridgeBenchmarkCandlestickReader();
+  const longbridgeHoldingCandlesticks = new FakeLongbridgeHoldingCandlestickReader();
   const binance = new FakeBinanceReadOnly(prices);
   const okx = new FakeOkxReadOnly();
   const bitget = new FakeBitgetReadOnly();
@@ -2009,6 +2105,8 @@ export function createTestServices(): TestServices {
     ownerRecoveryCredentials: new InMemoryOwnerRecoveryCredentialStore(),
     secrets,
     longbridge,
+    longbridgeBenchmarkCandlesticks,
+    longbridgeHoldingCandlesticks,
     longbridgeOAuthState: new LongbridgeOAuthState(),
     binance,
     okx,

@@ -78,6 +78,8 @@ import {
   isLongbridgeUsOptionSymbol,
   LongbridgeOAuthState,
   KeychainLongbridgeOAuth,
+  KeychainLongbridgeBenchmarkCandlestickReader,
+  KeychainLongbridgeHoldingCandlestickReader,
   KeychainLongbridgeFormalSettlementCandleReader,
   KeychainLongbridgeSourceRefresher,
 } from "@/server/asset-sources/longbridge";
@@ -4268,6 +4270,8 @@ export function createProductionServices(
     ),
     secrets: readySecrets,
     longbridge,
+    longbridgeBenchmarkCandlesticks: new KeychainLongbridgeBenchmarkCandlestickReader(),
+    longbridgeHoldingCandlesticks: new KeychainLongbridgeHoldingCandlestickReader(),
     longbridgeOAuthState: new LongbridgeOAuthState(),
     binance,
     okx,

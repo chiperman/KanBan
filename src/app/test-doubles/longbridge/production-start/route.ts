@@ -31,7 +31,14 @@ export async function POST(request: Request) {
       | "keychain-refresh-retry"
       | "keychain-refresh-retry-exhausted"
       | "rest-source-audit";
-    scenario?: "readonly" | "trade" | "missing" | "unknown" | "extra";
+    scenario?:
+      | "readonly"
+      | "readonly-combined"
+      | "trade"
+      | "missing"
+      | "unknown"
+      | "extra"
+      | "duplicate";
   };
   const previousClientId = process.env.LONGBRIDGE_OAUTH_CLIENT_ID;
   process.env.LONGBRIDGE_OAUTH_CLIENT_ID = "browser-test-client";
@@ -40,10 +47,12 @@ export async function POST(request: Request) {
   let credentialsRotated = false;
   const scope = {
     readonly: "account.read",
+    "readonly-combined": "trade.read watchlist account.read",
     trade: "account.read 11",
     missing: undefined,
     unknown: "account.read 99",
     extra: "account.read 10",
+    duplicate: "watchlist account.read account.read",
   }[body.scenario ?? "readonly"];
   const accessToken = [
     Buffer.from(JSON.stringify({ alg: "none" })).toString("base64url"),
@@ -169,6 +178,8 @@ export async function POST(request: Request) {
         },
         readQuotes: async () => [],
         readDailyCandles: async () => [],
+        readCandlesticks: async () => [],
+        readFiveDayTrend: async () => [],
       });
       const source: AssetSourceSummary = {
         id: "keychain-retry-source",
@@ -293,6 +304,8 @@ export async function POST(request: Request) {
           timestamp: 1785150000,
         }],
         readDailyCandles: async () => [],
+        readCandlesticks: async () => [],
+        readFiveDayTrend: async () => [],
       });
       const { credentials: _credentials, ...safe } = await oauth.finish({
         code: "browser-test-code",
@@ -449,6 +462,8 @@ export async function POST(request: Request) {
           },
         }],
         readDailyCandles: async () => [],
+        readCandlesticks: async () => [],
+        readFiveDayTrend: async () => [],
       });
       const { credentials: _credentials, ...safe } = await oauth.finish({
         code: "browser-test-code",
@@ -497,6 +512,8 @@ export async function POST(request: Request) {
         }),
         readQuotes: async () => [],
         readDailyCandles: async () => [],
+        readCandlesticks: async () => [],
+        readFiveDayTrend: async () => [],
       });
       const source: AssetSourceSummary = {
         id: "keychain-retained-quote-source",

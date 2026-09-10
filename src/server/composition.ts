@@ -16,6 +16,8 @@ import type {
   FormalDailySettlementRunner,
   FormalDailySettlements,
   InvestmentCashflows,
+  LongbridgeBenchmarkCandlestickReader,
+  LongbridgeHoldingCandlestickReader,
   LongbridgeOAuth,
   OwnerAuth,
   OwnerCredentialStore,
@@ -52,6 +54,8 @@ export interface AppServices {
   ownerRecoveryCredentials: OwnerRecoveryCredentialStore;
   secrets: SecretStore;
   longbridge: LongbridgeOAuth;
+  longbridgeBenchmarkCandlesticks: LongbridgeBenchmarkCandlestickReader;
+  longbridgeHoldingCandlesticks: LongbridgeHoldingCandlestickReader;
   longbridgeOAuthState: LongbridgeOAuthState;
   binance: BinanceReadOnly;
   okx: OkxReadOnly;
@@ -88,6 +92,9 @@ function hasCurrentServices(
   return (
     services !== null &&
     services.externalServices !== undefined &&
+    services.longbridgeBenchmarkCandlesticks !== undefined &&
+    services.longbridgeHoldingCandlesticks !== undefined &&
+    typeof services.longbridgeHoldingCandlesticks.readFiveDayTrend === "function" &&
     typeof services.assetSourceLifecycle.setEvmTokenPreference === "function" &&
     typeof services.manualAssetRecords.record === "function" &&
     typeof services.investmentCashflows?.create === "function" &&
