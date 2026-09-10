@@ -297,6 +297,7 @@ function CashflowEditor({
           </VibeButton>
         </>
       }
+      description="仅记录外部资金进出。"
       eyebrow="INVESTMENT / CASHFLOW"
       onClose={onClose}
       onSubmit={submit}
