@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 
 const KEYCHAIN_SERVICE: &str = "com.xiaox.kanban.longbridge";
 const AUTHORIZATION_URL_WAIT: Duration = Duration::from_secs(3);
+const ACCOUNT_READ_SCOPE: &str = "6";
 
 #[derive(Deserialize, Serialize)]
 struct KeychainToken {
@@ -214,13 +215,25 @@ fn validate_account_read_scope<T>(token: &T) -> NapiResult<()>
 where
     T: TokenResponse<oauth2::basic::BasicTokenType>,
 {
-    let scopes = token
+    let actual = token
         .scopes()
-        .ok_or_else(|| napi_error("长桥未返回 OAuth scope，无法证明授权为只读"))?;
-    let actual: Vec<&str> = scopes.iter().map(|scope| scope.as_ref()).collect();
-    if actual.len() != 1 || !matches!(actual.first().copied(), Some("6" | "account.read")) {
+        .map(|scopes| scopes.iter().map(|scope| scope.as_ref()).collect());
+    validate_account_read_scope_values(actual)
+}
+
+fn validate_account_read_scope_values(actual: Option<Vec<&str>>) -> NapiResult<()> {
+    // 本流程仅请求固定的账户读取 scope。OAuth 响应省略 scope 时，
+    // 以该请求范围验证；明确返回的范围仍必须通过下面的严格白名单。
+    let actual = actual.unwrap_or_else(|| vec![ACCOUNT_READ_SCOPE]);
+    let is_single_read_only = actual.len() == 1
+        && matches!(actual.first().copied(), Some("6" | "account.read"));
+    let is_combined_read_only = actual.len() == 3
+        && actual.contains(&"watchlist")
+        && actual.contains(&"account.read")
+        && actual.contains(&"trade.read");
+    if !is_single_read_only && !is_combined_read_only {
         return Err(napi_error(format!(
-            "长桥授权范围不是仅账户读取（实际：{}）",
+            "长桥授权范围不是允许的只读范围（实际：{}）",
             actual.join(" ")
         )));
     }
@@ -346,7 +359,7 @@ pub fn begin_browser_authorization(client_id: String, redirect_uri: String) -> N
     let (challenge, verifier) = PkceCodeChallenge::new_random_sha256();
     let (authorization_url, csrf_token) = client
         .authorize_url(CsrfToken::new_random)
-        .add_scope(Scope::new("6".to_string()))
+        .add_scope(Scope::new(ACCOUNT_READ_SCOPE.to_string()))
         .set_pkce_challenge(challenge)
         .url();
     let state = csrf_token.secret().to_string();
@@ -587,7 +600,7 @@ pub fn keychain_service_name() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::KeychainTokenStorage;
+    use super::{validate_account_read_scope_values, KeychainTokenStorage};
 
     #[test]
     fn stores_each_oauth_client_under_the_kanban_keychain_service() {
@@ -595,5 +608,35 @@ mod tests {
 
         assert_eq!(storage.service_name(), "com.xiaox.kanban.longbridge");
         assert_eq!(storage.account_name(), "client-123");
+    }
+
+    #[test]
+    fn accepts_a_missing_scope_when_this_flow_requested_account_read_only() {
+        assert!(validate_account_read_scope_values(None).is_ok());
+    }
+
+    #[test]
+    fn accepts_the_known_read_only_scope_forms() {
+        assert!(validate_account_read_scope_values(Some(vec!["6"])).is_ok());
+        assert!(validate_account_read_scope_values(Some(vec!["account.read"])).is_ok());
+        assert!(validate_account_read_scope_values(Some(vec![
+            "watchlist",
+            "account.read",
+            "trade.read",
+        ]))
+        .is_ok());
+    }
+
+    #[test]
+    fn rejects_explicitly_broader_or_unknown_scopes() {
+        assert!(validate_account_read_scope_values(Some(vec!["11"])).is_err());
+        assert!(validate_account_read_scope_values(Some(vec!["unknown"])).is_err());
+        assert!(validate_account_read_scope_values(Some(vec!["6", "11"])).is_err());
+        assert!(validate_account_read_scope_values(Some(vec![
+            "watchlist",
+            "account.read",
+            "account.read",
+        ]))
+        .is_err());
     }
 }
