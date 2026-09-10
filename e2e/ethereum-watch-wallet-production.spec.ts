@@ -561,7 +561,8 @@ test("已忽略的异常合约在完整刷新时不再读取元数据", async ({
   expect(body.metadataContracts).not.toContain(
     "0xcccccccccccccccccccccccccccccccccccccccc",
   );
-  expect(body.snapshot.coverage).toMatchObject({ status: "complete" });
+  // 普通钱包没有协议覆盖字段；忽略异常合约后仍保留已估值资产总额。
+  expect(body.snapshot.total).toEqual({ amount: "5519", currency: "USD" });
 });
 
 test("Ethereum 行情刷新不读取链上余额，完整刷新恢复读取持仓", async ({ request }) => {
