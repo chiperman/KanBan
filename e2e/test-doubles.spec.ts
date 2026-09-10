@@ -36,6 +36,21 @@ test("热更新后会替换缺少新增生命周期方法的缓存服务", async
   expect(response.ok()).toBeTruthy();
   await expect(response.json()).resolves.toEqual({
     supportsEvmTokenPreferences: true,
+    supportsFiveDayTrend: true,
+  });
+});
+
+test("热更新后会替换缺少五日走势读取方法的缓存服务", async ({
+  request,
+}) => {
+  const response = await request.post("/test-doubles/context", {
+    data: { staleContract: "longbridge-holding-candlesticks" },
+  });
+
+  expect(response.ok()).toBeTruthy();
+  await expect(response.json()).resolves.toEqual({
+    supportsEvmTokenPreferences: true,
+    supportsFiveDayTrend: true,
   });
 });
 
