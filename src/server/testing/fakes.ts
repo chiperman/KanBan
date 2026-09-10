@@ -1180,7 +1180,7 @@ export class FakeEvmWatchWallet implements EvmWatchWalletReadOnly {
       holdings.push(
         {
           symbol: "ETH",
-          name: "Lido 提现申请 #18 · 排队中",
+          name: "Lido 提现申请 #18",
           sourceAsset: "evm:1:lido-withdrawal:18",
           sourceAccount: "wallet",
           sourceProduct: "lido-withdrawal-request",
@@ -1201,7 +1201,7 @@ export class FakeEvmWatchWallet implements EvmWatchWalletReadOnly {
         },
         {
           symbol: "ETH",
-          name: "Lido 提现申请 #27 · 可领取",
+          name: "Lido 提现申请 #27",
           sourceAsset: "evm:1:lido-withdrawal:27",
           sourceAccount: "wallet",
           sourceProduct: "lido-withdrawal-request",
@@ -1244,12 +1244,13 @@ export class FakeEvmWatchWallet implements EvmWatchWalletReadOnly {
       holdings.push(
         {
           symbol: "BNB",
-          name: "Lista slisBNB 提现申请 #101 · 锁仓中 · 最早预计可领取 2026-02-08",
+          name: "Lista slisBNB 提现申请 #101",
           sourceAsset: "evm:56:lista-slisbnb-withdrawal:101",
           sourceAccount: "wallet",
           sourceProduct: "lista-slisbnb-withdrawal-request",
           providerPositionId: "101",
           providerPositionState: "锁仓中",
+          providerPositionAvailableOn: "2026-08-27",
           economicAssetKey: "lista-slisbnb-withdrawal:101",
           positionState: "redeeming",
           quantity: "1.2",
@@ -1265,7 +1266,7 @@ export class FakeEvmWatchWallet implements EvmWatchWalletReadOnly {
         },
         {
           symbol: "BNB",
-          name: "Lista slisBNB 提现申请 #102 · 可领取",
+          name: "Lista slisBNB 提现申请 #102",
           sourceAsset: "evm:56:lista-slisbnb-withdrawal:102",
           sourceAccount: "wallet",
           sourceProduct: "lista-slisbnb-withdrawal-request",

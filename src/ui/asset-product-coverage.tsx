@@ -82,17 +82,49 @@ export function assetHoldingKey(holding: AssetHolding): string {
 
 export { assetHoldingDisplayName };
 
+export function AssetHoldingPositionStatus({
+  holding,
+}: {
+  holding: AssetHolding;
+}) {
+  if (!holding.providerPositionState) return null;
+  const tone = holding.providerPositionState === "可领取"
+    ? "success"
+    : holding.providerPositionState === "排队中" ||
+        holding.providerPositionState === "锁仓中"
+      ? "warning"
+      : "muted";
+  return (
+    <span className="asset-provider-position">
+      <VibeStatusTag tone={tone}>{holding.providerPositionState}</VibeStatusTag>
+      {holding.providerPositionAvailableOn ? (
+        <small>最早预计可领取 {holding.providerPositionAvailableOn}</small>
+      ) : null}
+    </span>
+  );
+}
+
 export function AssetProductCoverage({
   coverage,
   sourceKind,
   variant = "default",
+  isOpen: controlledOpen,
+  onOpenChange,
+  panelId: controlledPanelId,
+  renderInlinePanel = true,
 }: {
   coverage: AssetSnapshotCoverage | undefined;
   sourceKind: string;
   variant?: "default" | "source-row";
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  panelId?: string;
+  renderInlinePanel?: boolean;
 }) {
-  const [isSourceRowOpen, setIsSourceRowOpen] = useState(false);
-  const panelId = useId();
+  const [internalOpen, setInternalOpen] = useState(false);
+  const internalPanelId = useId();
+  const isSourceRowOpen = controlledOpen ?? internalOpen;
+  const panelId = controlledPanelId ?? internalPanelId;
   const aggregateOnlyCount = coverage?.products.filter(
     ({ capability, freshness }) =>
       capability === "aggregate-only" && freshness === "current",
@@ -110,14 +142,6 @@ export function AssetProductCoverage({
     ({ freshness }) => freshness === "current",
   ).length ?? 0;
   const expiredProductCount = (coverage?.products.length ?? 0) - currentProductCount;
-  const capabilityGroups = coverage
-    ? CAPABILITY_ORDER.flatMap((capability) => {
-        const products = coverage.products.filter(
-          (product) => product.capability === capability,
-        );
-        return products.length > 0 ? [{ capability, products }] : [];
-      })
-    : [];
   const summary = (
     <>
       <span className="vibe-coverage-summary-label">产品覆盖</span>
@@ -136,8 +160,91 @@ export function AssetProductCoverage({
       <span aria-hidden="true" className="vibe-coverage-summary-toggle" />
     </>
   );
-  const panel = (
+  const setSourceRowOpen = (open: boolean) => {
+    if (controlledOpen === undefined) setInternalOpen(open);
+    onOpenChange?.(open);
+  };
+  return (
     <>
+      {label ? (
+        <VibeStatusTag
+          className={`asset-sync-status${
+            coverage?.status === "complete" || coverage?.totalIsAuthoritative
+              ? ""
+              : " is-incomplete"
+          }`}
+          data-testid={`${sourceKind}-coverage-status`}
+          tone="warning"
+        >
+          {label}
+          {coverage?.unexplainedValue
+            ? ` · ${coverage.totalIsAuthoritative ? "明细差额" : "未解释"} ${money(coverage.unexplainedValue.amount)} ${coverage.unexplainedValue.currency}`
+            : ""}
+          {coverage && coverage.excludedPositiveAccounts.length > 0
+            ? ` · 未纳入 ${coverage.excludedPositiveAccounts.join("、")}`
+            : ""}
+        </VibeStatusTag>
+      ) : null}
+      {coverage && coverage.products.length > 0 ? (
+        variant === "source-row" ? (
+          <div
+            className="vibe-coverage-inline"
+            data-testid={`${sourceKind}-product-coverage`}
+          >
+            <button
+              aria-controls={panelId}
+              aria-expanded={isSourceRowOpen}
+              className={`vibe-coverage-summary-trigger${
+                isSourceRowOpen ? " is-open" : ""
+              }`}
+              onClick={() => setSourceRowOpen(!isSourceRowOpen)}
+              type="button"
+            >
+              {summary}
+            </button>
+            {renderInlinePanel && isSourceRowOpen ? (
+              <AssetProductCoveragePanel
+                className="vibe-coverage-panel--inline"
+                coverage={coverage}
+                id={panelId}
+              />
+            ) : null}
+          </div>
+        ) : (
+          <details
+            className="vibe-coverage"
+            data-testid={`${sourceKind}-product-coverage`}
+          >
+            <summary>{summary}</summary>
+            <AssetProductCoveragePanel coverage={coverage} />
+          </details>
+        )
+      ) : null}
+    </>
+  );
+}
+
+export function AssetProductCoveragePanel({
+  className,
+  coverage,
+  id,
+}: {
+  className?: string;
+  coverage: AssetSnapshotCoverage;
+  id?: string;
+}) {
+  const capabilityGroups = CAPABILITY_ORDER.flatMap((capability) => {
+    const products = coverage.products.filter(
+      (product) => product.capability === capability,
+    );
+    return products.length > 0 ? [{ capability, products }] : [];
+  });
+
+  return (
+    <div
+      className={["vibe-coverage-panel", className].filter(Boolean).join(" ")}
+      id={id}
+    >
       {capabilityGroups.map(({ capability, products }, groupIndex) => (
         <section
           className="vibe-coverage-group"
@@ -175,65 +282,6 @@ export function AssetProductCoverage({
           </ul>
         </section>
       ))}
-    </>
-  );
-  return (
-    <>
-      {label ? (
-        <VibeStatusTag
-          className={`asset-sync-status${
-            coverage?.status === "complete" || coverage?.totalIsAuthoritative
-              ? ""
-              : " is-incomplete"
-          }`}
-          data-testid={`${sourceKind}-coverage-status`}
-          tone="warning"
-        >
-          {label}
-          {coverage?.unexplainedValue
-            ? ` · ${coverage.totalIsAuthoritative ? "明细差额" : "未解释"} ${money(coverage.unexplainedValue.amount)} ${coverage.unexplainedValue.currency}`
-            : ""}
-          {coverage && coverage.excludedPositiveAccounts.length > 0
-            ? ` · 未纳入 ${coverage.excludedPositiveAccounts.join("、")}`
-            : ""}
-        </VibeStatusTag>
-      ) : null}
-      {coverage && coverage.products.length > 0 ? (
-        variant === "source-row" ? (
-          <div
-            className="vibe-coverage-inline"
-            data-testid={`${sourceKind}-product-coverage`}
-          >
-            <button
-              aria-controls={panelId}
-              aria-expanded={isSourceRowOpen}
-              className={`vibe-coverage-summary-trigger${
-                isSourceRowOpen ? " is-open" : ""
-              }`}
-              onClick={() => setIsSourceRowOpen((open) => !open)}
-              type="button"
-            >
-              {summary}
-            </button>
-            {isSourceRowOpen ? (
-              <div
-                className="vibe-coverage-panel vibe-coverage-panel--inline"
-                id={panelId}
-              >
-                {panel}
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          <details
-            className="vibe-coverage"
-            data-testid={`${sourceKind}-product-coverage`}
-          >
-            <summary>{summary}</summary>
-            <div className="vibe-coverage-panel">{panel}</div>
-          </details>
-        )
-      ) : null}
-    </>
+    </div>
   );
 }

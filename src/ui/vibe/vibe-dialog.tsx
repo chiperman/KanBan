@@ -26,7 +26,7 @@ interface VibeDialogProps
   actions: ReactNode;
   children?: ReactNode;
   description: ReactNode;
-  eyebrow: string;
+  eyebrow?: string;
   headerActions?: ReactNode;
   onClose: () => void;
   onSubmit?: FormEventHandler<HTMLFormElement>;
@@ -111,7 +111,7 @@ export function VibeDialog({
     <>
       <header className="vibe-dialog__header">
         <div className="vibe-dialog__heading">
-          <p className="vibe-dialog__eyebrow">{eyebrow}</p>
+          {eyebrow ? <p className="vibe-dialog__eyebrow">{eyebrow}</p> : null}
           <h2 id={titleId}>{title}</h2>
         </div>
         {headerActions ? (

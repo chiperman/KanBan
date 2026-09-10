@@ -33,3 +33,32 @@ test("DCP 订单持仓展示订单号与标的，而非重复的币种标签", (
     "DCP #7125082312731329000 · BTC-USDT · 进行中 · 2024-08-09 到期",
   );
 });
+
+test("协议提现仓位名称不重复承载状态与可领取日期", () => {
+  const holding: AssetHolding = {
+    symbol: "BNB",
+    name: "Lista slisBNB 提现申请 #101 · 锁仓中 · 最早预计可领取 2026-08-27",
+    sourceAsset: "evm:56:lista-slisbnb-withdrawal:101",
+    sourceAccount: "wallet",
+    sourceProduct: "lista-slisbnb-withdrawal-request",
+    providerPositionId: "101",
+    providerPositionState: "锁仓中",
+    providerPositionAvailableOn: "2026-08-27",
+    quantity: "1.2",
+    currency: "USD",
+    assetClass: "crypto",
+    currentPrice: { amount: "600", currency: "USD" },
+    marketValue: "720",
+    sourceMarketValue: { amount: "720", currency: "USD" },
+    valuation: {
+      status: "valued",
+      priceSource: "CoinGecko BNB Smart Chain/USD 参考价格",
+      pricedAt: "2026-02-01T00:00:00.000Z",
+    },
+    costPrice: null,
+    platformProfit: null,
+    changePercent: null,
+  };
+
+  assert.equal(assetHoldingDisplayName(holding), "Lista slisBNB 提现申请 #101");
+});

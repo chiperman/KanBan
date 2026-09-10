@@ -40,7 +40,7 @@ export interface AssetSourceSummary {
   credentialReference: string | null;
   snapshot: AssetSnapshot;
   sync: AssetSourceSyncState;
-  /** 所有者按 EVM chain ID + contract address 明确忽略的来源资产标识。 */
+  /** 所有者按 EVM chain ID + 原生币或合约资产标识明确忽略的来源资产。 */
   ignoredAssetKeys?: string[];
   /** 所有者确认属于投资资产、即使暂时缺价也应正常展示的 EVM 资产标识。 */
   includedAssetKeys?: string[];
@@ -504,6 +504,8 @@ export interface AssetHolding {
   sourceProduct?: string;
   providerPositionId?: string;
   providerPositionState?: string;
+  /** 来源明确给出的最早可领取日期，格式为 YYYY-MM-DD。 */
+  providerPositionAvailableOn?: string;
   economicAssetKey?: string;
   positionState?: AssetPositionState;
   quantity: string;

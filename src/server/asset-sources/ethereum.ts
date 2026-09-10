@@ -142,6 +142,7 @@ interface DiscoveredBalance {
   sourceProduct?: string;
   providerPositionId?: string;
   providerPositionState?: string;
+  providerPositionAvailableOn?: string;
   economicAssetKey?: string;
   positionState?: AssetHolding["positionState"];
 }
@@ -211,6 +212,9 @@ function buildSnapshot(
       ...(balance.sourceProduct ? { sourceProduct: balance.sourceProduct } : {}),
       ...(balance.providerPositionId ? { providerPositionId: balance.providerPositionId } : {}),
       ...(balance.providerPositionState ? { providerPositionState: balance.providerPositionState } : {}),
+      ...(balance.providerPositionAvailableOn
+        ? { providerPositionAvailableOn: balance.providerPositionAvailableOn }
+        : {}),
       ...(balance.economicAssetKey ? { economicAssetKey: balance.economicAssetKey } : {}),
       ...(balance.positionState ? { positionState: balance.positionState } : {}),
       quantity: balance.quantity,
@@ -747,7 +751,7 @@ const lidoWithdrawalAdapter: EvmProtocolPositionAdapter = {
           sourceAsset: `evm:${config.chainId}:lido-withdrawal:${providerPositionId}`,
           contractAddress: LIDO_WITHDRAWAL_QUEUE,
           symbol: "ETH",
-          name: `Lido 提现申请 #${providerPositionId} · ${providerPositionState}`,
+          name: `Lido 提现申请 #${providerPositionId}`,
           quantity: units(
             `0x${quantityInWei.toString(16)}`,
             18,
@@ -903,13 +907,14 @@ const listaSlisBnbWithdrawalAdapter: EvmProtocolPositionAdapter = {
         const providerPositionState = status.isClaimable ? "可领取" : "锁仓中";
         if (status.isClaimable) claimable += 1;
         else pending += 1;
+        const providerPositionAvailableOn = status.isClaimable
+          ? undefined
+          : listaEarliestClaimableDate(request.startTime);
         balances.push({
           sourceAsset: `evm:${config.chainId}:lista-slisbnb-withdrawal:${providerPositionId}`,
           contractAddress: LISTA_STAKE_MANAGER,
           symbol: "BNB",
-          name: status.isClaimable
-            ? `Lista slisBNB 提现申请 #${providerPositionId} · 可领取`
-            : `Lista slisBNB 提现申请 #${providerPositionId} · 锁仓中 · 最早预计可领取 ${listaEarliestClaimableDate(request.startTime)}`,
+          name: `Lista slisBNB 提现申请 #${providerPositionId}`,
           quantity: units(
             `0x${status.amount.toString(16)}`,
             18,
@@ -920,6 +925,7 @@ const listaSlisBnbWithdrawalAdapter: EvmProtocolPositionAdapter = {
           sourceProduct: "lista-slisbnb-withdrawal-request",
           providerPositionId,
           providerPositionState,
+          ...(providerPositionAvailableOn ? { providerPositionAvailableOn } : {}),
           economicAssetKey: `lista-slisbnb-withdrawal:${providerPositionId}`,
           positionState: "redeeming",
         });
@@ -1209,7 +1215,9 @@ async function readFullSnapshot(input: {
   if (matchedProtocolAdapters.length === 0) return snapshot;
   const hasUnvalued = snapshot.holdings.some(
     ({ valuation }) => valuation.status === "unvalued",
-  ) || (snapshot.unrecognizedEvmTokens?.length ?? 0) > 0;
+  ) || (snapshot.unrecognizedEvmTokens ?? []).some(
+    ({ sourceAsset }) => !ignoredAssetKeys.has(sourceAsset),
+  );
   return {
     ...snapshot,
     coverage: {
@@ -1309,6 +1317,9 @@ export class ProductionEvmWatchSourceRefresher implements AssetSourceRefresher {
         ...(holding.sourceProduct ? { sourceProduct: holding.sourceProduct } : {}),
         ...(holding.providerPositionId ? { providerPositionId: holding.providerPositionId } : {}),
         ...(holding.providerPositionState ? { providerPositionState: holding.providerPositionState } : {}),
+        ...(holding.providerPositionAvailableOn
+          ? { providerPositionAvailableOn: holding.providerPositionAvailableOn }
+          : {}),
         ...(holding.economicAssetKey ? { economicAssetKey: holding.economicAssetKey } : {}),
         ...(holding.positionState ? { positionState: holding.positionState } : {}),
       }));

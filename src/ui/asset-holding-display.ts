@@ -28,10 +28,7 @@ const HOLDING_PRODUCT_LABELS: Record<string, string> = {
 
 export function assetHoldingDisplayName(holding: AssetHolding): string {
   if (
-    (holding.sourceProduct === "dcp" ||
-      holding.sourceProduct === "lido-withdrawal-request" ||
-      holding.sourceProduct === "lista-slisbnb-withdrawal-request"
-    ) &&
+    holding.sourceProduct === "dcp" &&
     holding.providerPositionId !== undefined &&
     holding.providerPositionId !== "aggregate"
   ) {
@@ -40,5 +37,14 @@ export function assetHoldingDisplayName(holding: AssetHolding): string {
   const productLabel = holding.sourceProduct
     ? HOLDING_PRODUCT_LABELS[holding.sourceProduct]
     : undefined;
+  if (
+    productLabel &&
+    (holding.sourceProduct === "lido-withdrawal-request" ||
+      holding.sourceProduct === "lista-slisbnb-withdrawal-request") &&
+    holding.providerPositionId !== undefined &&
+    holding.providerPositionId !== "aggregate"
+  ) {
+    return `${productLabel} #${holding.providerPositionId}`;
+  }
   return productLabel ? `${holding.symbol} · ${productLabel}` : holding.name;
 }
