@@ -3,6 +3,7 @@ import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import path from "node:path";
 import process from "node:process";
+import { resolveNodeNetworkEnvironment } from "./local-network-environment.mjs";
 
 import {
   checkLongbridgeKeychain,
@@ -91,12 +92,19 @@ await new Promise((resolve, reject) => {
 
 const nextPackage = require.resolve("next/package.json");
 const nextCli = path.join(path.dirname(nextPackage), "dist", "bin", "next");
+const { env: nextEnvironment, unavailableLocalProxies } =
+  await resolveNodeNetworkEnvironment(process.env);
+if (unavailableLocalProxies.length > 0) {
+  console.warn(
+    `本机环境代理不可达，已回退到系统网络：${unavailableLocalProxies.join(", ")}`,
+  );
+}
 const nextProcess = spawn(
   process.execPath,
   [nextCli, mode, ...nextArgs, "--hostname", "localhost"],
   {
     cwd: process.cwd(),
-    env: process.env,
+    env: nextEnvironment,
     stdio: "inherit",
   },
 );
