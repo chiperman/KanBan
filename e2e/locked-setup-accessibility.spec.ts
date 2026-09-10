@@ -40,10 +40,20 @@ async function expectReadableText(locator: Locator): Promise<void> {
   await expect(locator).toBeVisible();
   const styles = await locator.evaluate((element) => {
     const computed = getComputedStyle(element);
+    let background = "rgb(255, 255, 255)";
+    let current: Element | null = element;
+    while (current !== null) {
+      const candidate = getComputedStyle(current).backgroundColor;
+      if (candidate !== "transparent" && candidate !== "rgba(0, 0, 0, 0)") {
+        background = candidate;
+        break;
+      }
+      current = current.parentElement;
+    }
     return {
       color: computed.color,
       fontSize: Number.parseFloat(computed.fontSize),
-      background: getComputedStyle(document.body).backgroundColor,
+      background,
     };
   });
 
@@ -76,7 +86,7 @@ async function provisionOwner(page: Page): Promise<void> {
   });
   await page.goto("/setup");
   await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
-  await expect(page.getByRole("status")).toContainText("已完成预置");
+  await expect(page.getByRole("status")).toContainText("预置完成");
 }
 
 test("锁定页以可访问状态传达安全边界并保留清晰键盘焦点", async ({
@@ -88,9 +98,11 @@ test("锁定页以可访问状态传达安全边界并保留清晰键盘焦点",
   await page.goto("/");
 
   const lockedHeading = page.getByRole("heading", {
-    name: "个人资产看板已锁定",
+    name: "看板已锁定",
   });
   await expect(lockedHeading).toBeVisible();
+  await expect(page.getByTestId("locked-product-flow")).toBeVisible();
+  await expect(page.getByTestId("locked-product-flow").locator("animateMotion")).toHaveCount(7);
   const hiddenHeadingStyles = await lockedHeading.evaluate((element) => {
     const bounds = element.getBoundingClientRect();
     return {
@@ -159,9 +171,7 @@ test("锁定页以可访问状态传达安全边界并保留清晰键盘焦点",
   for (const locator of [
     page.locator(".page-locked .header-wordmark"),
     page.locator(".header-time > strong"),
-    page.locator(".login-eyebrow"),
-    page.locator(".login-hint"),
-    page.locator(".login-trust-line"),
+    page.getByRole("button", { name: "使用 Passkey 登录", exact: true }),
   ]) {
     await expectReadableText(locator);
   }
@@ -180,6 +190,8 @@ test("锁定页以可访问状态传达安全边界并保留清晰键盘焦点",
 
   await page.keyboard.press("Tab");
   await expect(page.getByRole("link", { name: "跳到主要内容" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("link", { name: "进入演示模式" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: /当前主题/ })).toBeFocused();
   await page.keyboard.press("Tab");
@@ -313,7 +325,7 @@ for (const theme of THEMES) {
       await page.goto("/");
       await expectNoHorizontalOverflow(page);
       await expect(
-        page.getByRole("heading", { name: "个人资产看板已锁定" }),
+        page.getByRole("heading", { name: "看板已锁定" }),
       ).toBeVisible();
 
       const lockedAction = page.getByRole("button", {

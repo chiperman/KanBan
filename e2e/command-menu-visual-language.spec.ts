@@ -37,11 +37,11 @@ async function loginAsOwner(page: Page): Promise<void> {
   await attachPasskey(page);
   await page.goto("/setup");
   await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
-  await expect(page.getByRole("status")).toContainText("已完成预置");
+  await expect(page.getByRole("status")).toContainText("预置完成");
   await page.goto("/");
 
   await page.getByRole("button", { name: "使用 Passkey 登录" }).click();
-  await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
+  await expect(page.getByTestId("workbench-shell")).toBeVisible();
 }
 
 async function connectEthereum(page: Page): Promise<void> {
@@ -187,7 +187,7 @@ test("鼠标可打开菜单、刷新资产并锁定", async ({ page }) => {
   await page.getByRole("searchbox", { name: "搜索命令" }).fill("锁定");
   await page.getByRole("button", { name: "立即锁定敏感内容" }).click();
   await expect(
-    page.getByRole("heading", { name: "个人资产看板已锁定" }),
+    page.getByRole("heading", { name: "看板已锁定" }),
   ).toBeVisible();
   await expect(page.getByRole("dialog", { name: "快捷命令" })).toHaveCount(0);
 });

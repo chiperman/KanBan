@@ -144,7 +144,7 @@ test("所有者可从锁定首页完成首次预置并返回登录资产看板",
   await expect(page).toHaveURL(/\/setup$/);
   await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
   await expect(page.getByRole("status")).toContainText("预置完成");
-  await expect(page.getByTestId("view-mode")).toHaveCount(0);
+  await expect(page.getByTestId("workbench-shell")).toHaveCount(0);
 
   await page.getByRole("link", { name: "返回所有者登录" }).click();
   await expect(page).toHaveURL(/\/$/);
@@ -155,16 +155,16 @@ test("所有者可从锁定首页完成首次预置并返回登录资产看板",
     page.getByRole("link", { name: "开始首次预置" }),
   ).toHaveCount(0);
 
-  await login(page);
-  await expect(page.getByTestId("view-mode")).toContainText("资产看板");
   await expect(page.getByTestId("local-time")).toBeVisible();
   await expect(page.getByTestId("local-time")).not.toContainText("LOCAL");
+  await login(page);
+  await expect(page.getByTestId("workbench-shell")).toBeVisible();
   await expectAuthenticatedWorkbench(page);
 
   await page.goto("/setup");
   await expect(page.getByRole("status")).toHaveCount(0);
   await expect(
-    page.getByRole("heading", { name: "所有者预置完成" }),
+    page.getByRole("heading", { name: "已预置" }),
   ).toBeVisible();
   await expect(
     page.getByRole("link", { name: "返回所有者登录" }),

@@ -19,7 +19,7 @@ async function loginAsOwner(page: Page): Promise<void> {
   await attachPasskey(page);
   await page.goto("/setup");
   await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
-  await expect(page.getByRole("status")).toContainText("已完成预置");
+  await expect(page.getByRole("status")).toContainText("预置完成");
   await page.goto("/");
   await page.getByRole("button", { name: "使用 Passkey 登录" }).click();
   await expect(page.getByTestId("portfolio-overview-workspace")).toBeVisible();
@@ -63,7 +63,7 @@ test("来源总额、严格长桥汇率与未估值明细在新工作区分层�
     "font-family",
     /Geist Mono/,
   );
-  await expect(confidence).toContainText("需要留意数据状态");
+  await expect(confidence).toContainText("数据不完整");
   await expect(confidence).toContainText("未估值 1 项");
   await expect(sources).toContainText("Alpha Securities");
   await expect(sources).toContainText("264.01 USD");
@@ -72,9 +72,7 @@ test("来源总额、严格长桥汇率与未估值明细在新工作区分层�
 
   await chooseOption(page, "计价货币", "CNY");
   await expect(total).toContainText("数据不足");
-  await expect(total).toContainText(
-    "默认以 USD 计价；CNY、HKD 按长桥参考汇率折算。",
-  );
+  await expect(total).not.toContainText("默认以 USD 计价；CNY、HKD 按长桥参考汇率折算。");
   await page.reload();
   await expect(overview(page).getByTestId("overview-current-total")).toContainText(
     "数据不足",
@@ -175,7 +173,7 @@ test("非长桥反向汇率不会回退用于报告货币，缺失时不显示�
   await expect(overview(page).getByTestId("overview-current-total")).toContainText(
     "数据不足",
   );
-  await expect(overview(page).getByTestId("overview-current-total")).toContainText(
+  await expect(overview(page).getByTestId("overview-current-total")).not.toContainText(
     "默认以 USD 计价；CNY、HKD 按长桥参考汇率折算。",
   );
 
@@ -223,6 +221,30 @@ test("来源详情保留长桥现金与持仓的独立观察，不把现金伪�
   await expect(card.getByTestId("asset-holdings-detail")).not.toContainText(
     "账户现金",
   );
+});
+
+test("总资产只显示当前计价货币对应的长桥汇率", async ({
+  page,
+  request,
+}) => {
+  const configured = await request.post(
+    "/test-doubles/valuation?scenario=longbridge-cash",
+  );
+  expect(configured.ok()).toBeTruthy();
+  await loginAsOwner(page);
+
+  const total = overview(page).getByTestId("overview-current-total");
+  const rate = total.getByTestId("overview-reporting-rate");
+  await expect(rate).toHaveCount(0);
+  await expect(total).not.toContainText("默认以 USD 计价；CNY、HKD 按长桥参考汇率折算。");
+
+  await chooseOption(page, "计价货币", "CNY");
+  await expect(rate).toContainText("USD/CNY 7.1234");
+  await expect(rate).not.toContainText("USD/HKD");
+
+  await chooseOption(page, "计价货币", "HKD");
+  await expect(rate).toContainText("USD/HKD 7.8125");
+  await expect(rate).not.toContainText("USD/CNY");
 });
 
 test("期权行情缺失与明细仅汇总不会否定来源账户总额", async ({
@@ -310,7 +332,7 @@ test("来源覆盖不完整时保留最后成功总额并明确标注覆盖限�
     "数据不足",
   );
   await expect(workspace.getByTestId("overview-confidence")).toContainText(
-    "需要留意数据状态",
+    "数据不完整",
   );
   await expect(workspace.getByTestId("overview-source-summary")).toContainText(
     "来源总额可读 · 明细覆盖不完整",

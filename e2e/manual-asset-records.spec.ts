@@ -6,7 +6,7 @@ async function loginAsOwner(page: Page): Promise<void> {
   const response = await page.request.post("/test-doubles/owner-session");
   expect(response.ok()).toBeTruthy();
   await page.goto("/");
-  await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
+  await expect(page.getByTestId("workbench-shell")).toBeVisible();
 }
 
 async function manualState(page: Page) {

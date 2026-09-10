@@ -28,7 +28,7 @@ async function loginAsOwner(page: Page): Promise<void> {
   await attachPasskey(page);
   await page.goto("/setup");
   await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
-  await expect(page.getByRole("status")).toContainText("已完成预置");
+  await expect(page.getByRole("status")).toContainText("预置完成");
   await page.goto("/");
 
   const [response] = await Promise.all([
@@ -38,7 +38,7 @@ async function loginAsOwner(page: Page): Promise<void> {
     page.getByRole("button", { name: "使用 Passkey 登录" }).click(),
   ]);
   expect(response.ok()).toBeTruthy();
-  await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
+  await expect(page.getByTestId("workbench-shell")).toBeVisible();
 }
 
 async function configure(page: Page, scenario = "valid") {
@@ -685,7 +685,7 @@ test("未认证状态与生产测试替身都不能读取 Binance 私密来源�
     .click();
   await expect(page.getByTestId("binance-card")).toBeVisible();
   await page.getByRole("button", { name: "退出登录" }).click();
-  await expect(page.getByRole("heading", { name: "个人资产看板已锁定" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "看板已锁定" })).toBeVisible();
   const publicSurface = `${await page.content()}\n${await (await page.request.get("/")).text()}`;
   for (const value of ["900001", "BTC", "12,849", API_KEY, API_SECRET]) {
     expect(publicSurface).not.toContain(value);

@@ -41,7 +41,7 @@ async function unlockAsOwner(page: Page): Promise<void> {
     page.getByRole("button", { name: "使用 Passkey 登录" }).click(),
   ]);
   expect(verification.ok()).toBeTruthy();
-  await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
+  await expect(page.getByTestId("workbench-shell")).toBeVisible();
 }
 
 async function configure(
@@ -109,8 +109,8 @@ async function manualRefresh(page: Page, expectedFailureCount = 0) {
   await completed;
   await expect(page.getByTestId("asset-refresh-status")).toContainText(
     expectedFailureCount === 0
-      ? "同步完成"
-      : `同步完成 · ${expectedFailureCount} 个来源失败`,
+      ? "刷新完成"
+      : "部分来源刷新失败",
   );
 }
 
@@ -144,14 +144,33 @@ test("今日资产变化使用昨日最后一条完整趋势快照，不依赖�
   await setServerTime(request, "2026-08-06T12:00:00.000Z");
 
   await loginAsOwner(page);
-  await manualRefresh(page);
   await expect(page.getByTestId("overview-current-total")).toContainText(
     "302.00 USD",
   );
 
   const change = page.getByRole("heading", { name: "今日资产变化" }).locator("..");
   await expect(change).toContainText("+2.00 USD");
-  await expect(change).toContainText("相对昨日最后完整记录（08月05日）");
+  await expect(change).toContainText("较 08月05日");
+
+  const sourceSummary = page.getByTestId("overview-source-summary");
+  const alpha = sourceSummary.getByRole("listitem").filter({
+    hasText: "Alpha Securities",
+  });
+  const beta = sourceSummary.getByRole("listitem").filter({
+    hasText: "Beta Crypto",
+  });
+  await expect(alpha).toContainText("101.00 USD");
+  await expect(alpha).toContainText("今日变化");
+  await expect(alpha).toContainText("+1.00 USD");
+  await expect(alpha).toContainText("昨日 100.00 USD");
+  await expect(beta).toContainText("201.00 USD");
+  await expect(beta).toContainText("+1.00 USD");
+  await expect(beta).toContainText("昨日 200.00 USD");
+
+  await page.getByRole("button", { name: "隐藏关键信息" }).click();
+  await expect(sourceSummary).not.toContainText("Alpha Securities");
+  await expect(sourceSummary).not.toContainText("101.00 USD");
+  await expect(sourceSummary).not.toContainText("今日变化");
 });
 
 test("今日资产变化直接列出不参与计算的问题来源", async ({
@@ -175,15 +194,19 @@ test("今日资产变化直接列出不参与计算的问题来源", async ({
   const change = page.getByRole("heading", { name: "今日资产变化" }).locator("..");
   const issues = change.getByTestId("overview-today-change-issues");
   await expect(change).toContainText("数据不足");
-  await expect(issues).toContainText("影响本次计算的来源");
+  await expect(issues).toContainText("未计入今日变化");
   await expect(issues).toContainText("Beta Crypto");
   await expect(issues).toContainText("同步失败 · 数据过期");
   await expect(issues).toContainText("200.00 USD");
-  await expect(issues).toContainText("以上数据不参与今日资产变化。");
+  const betaSummary = page.getByTestId("overview-source-summary")
+    .getByRole("listitem")
+    .filter({ hasText: "Beta Crypto" });
+  await expect(betaSummary).toContainText("暂无法比较");
+  await expect(betaSummary).not.toContainText("今日变化");
 
   await page.getByRole("button", { name: "隐藏关键信息" }).click();
   await expect(issues).toContainText(
-    "已隐藏 1 个问题来源；不参与今日资产变化。",
+    "已隐藏 1 个来源。",
   );
   await expect(issues).not.toContainText("Beta Crypto");
   await expect(issues).not.toContainText("200.00 USD");
@@ -221,8 +244,8 @@ test("没有每日趋势观测时提示首次成功同步", async ({ page, reque
   expect(disabled.ok()).toBeTruthy();
 
   await loginAsOwner(page);
-  await expect(page.getByTestId("total-asset-trend")).toContainText(
-    "等待首次同步",
+  await expect(page.getByTestId("overview-trend")).toContainText(
+    "暂无可用观察",
   );
 });
 
@@ -302,7 +325,7 @@ test("同次观测可共享可靠汇率，不把来源单独缺少展示币种�
       status: "complete",
       total: { USD: "200", CNY: "1440", HKD: "1560" },
     });
-  await expect(page.getByTestId("total-asset-trend")).not.toContainText(
+  await expect(page.getByTestId("overview-trend")).not.toContainText(
     "不完整或过期",
   );
 });
@@ -317,7 +340,7 @@ test("北京时间日界线建立唯一基准，同日幂等且跨日不回填",
     "同步完成",
   );
 
-  await expect(page.getByTestId("total-asset-trend")).toContainText(
+  await expect(page.getByTestId("overview-trend")).toContainText(
     "04月01日",
   );
   expect((await history(request)).days.map(({ day }) => day)).toEqual([
@@ -327,7 +350,7 @@ test("北京时间日界线建立唯一基准，同日幂等且跨日不回填",
   expect((await history(request)).trendObservations[0].total.HKD).toBe("2355.6");
   await chooseOverviewOption(page, "计价货币", "CNY");
   await chooseOverviewOption(page, "计价货币", "HKD");
-  await expect(page.getByTestId("total-asset-trend")).toContainText(
+  await expect(page.getByTestId("overview-trend")).toContainText(
     "2,355.60 HKD",
   );
   await chooseOverviewOption(page, "计价货币", "USD");
@@ -350,7 +373,7 @@ test("北京时间日界线建立唯一基准，同日幂等且跨日不回填",
 
   await setServerTime(request, "2026-04-01T16:00:00.000Z");
   await manualRefresh(page);
-  await expect(page.getByTestId("total-asset-trend")).toContainText(
+  await expect(page.getByTestId("overview-trend")).toContainText(
     "04月02日",
   );
   expect((await history(request)).days.map(({ day }) => day)).toEqual([
@@ -461,7 +484,7 @@ test("同日后续成功刷新只更新每日趋势观测，失败保留最后�
       },
     ],
   }]);
-  const trend = page.getByTestId("total-asset-trend");
+  const trend = page.getByTestId("overview-trend");
   await expect(trend).toContainText("1 天不完整或过期");
   await expect(trend).toContainText("04月01日");
   await expect(trend).toContainText("312.00 USD");
@@ -578,8 +601,8 @@ test("未估值趋势不伪造零值，平台盈亏只出现在来源提供的�
     complete: false,
     total: { USD: null, CNY: null },
   });
-  await expect(page.getByTestId("total-asset-trend")).toContainText("04月01日");
-  await expect(page.getByTestId("total-asset-trend")).toContainText("不完整");
+  await expect(page.getByTestId("overview-trend")).toContainText("04月01日");
+  await expect(page.getByTestId("overview-trend")).toContainText("不完整");
 });
 
 test("缺少可靠 HKD 汇率时趋势金额不可用且观测不完整", async ({
@@ -599,10 +622,10 @@ test("缺少可靠 HKD 汇率时趋势金额不可用且观测不完整", async 
     "无法折算 HKD",
   );
   await expect(overview).toContainText("当前估值：不完整");
-  await expect(page.getByTestId("total-asset-trend")).toContainText(
+  await expect(page.getByTestId("overview-trend")).toContainText(
     "可绘制 0 / 30 天",
   );
-  await expect(page.getByTestId("total-asset-trend")).toContainText(
+  await expect(page.getByTestId("overview-trend")).toContainText(
     "04月01日未估值",
   );
   expect((await history(request)).trendObservations[0]).toMatchObject({
@@ -630,10 +653,10 @@ test("历史 HKD 金额固定使用各自观测时汇率", async ({ page, reques
   await chooseOverviewOption(page, "计价货币", "HKD");
   const overview = page.getByTestId("total-asset-overview");
   await expect(overview).toContainText("USD/HKD 8.0000");
-  await expect(page.getByTestId("total-asset-trend")).toContainText(
+  await expect(page.getByTestId("overview-trend")).toContainText(
     "2,355.60 HKD",
   );
-  await expect(page.getByTestId("total-asset-trend")).toContainText(
+  await expect(page.getByTestId("overview-trend")).toContainText(
     "2,432.00 HKD",
   );
   expect((await history(request)).trendObservations.map(({ total }) => total.HKD))
@@ -740,7 +763,7 @@ test("总资产趋势默认展示 30 日连续直线、缺失提示与区间资�
   expect(seeded.ok()).toBeTruthy();
 
   await loginAsOwner(page);
-  const trend = page.getByTestId("total-asset-trend");
+  const trend = page.getByTestId("overview-trend");
   await expect(
     page.getByRole("button", { name: "趋势区间" }),
   ).toBeVisible();
@@ -782,7 +805,7 @@ test("趋势区间会记忆，且每日明细分页独立于图表区间", async
   expect(seeded.ok()).toBeTruthy();
 
   await loginAsOwner(page);
-  const trend = page.getByTestId("total-asset-trend");
+  const trend = page.getByTestId("overview-trend");
   await expect(
     trend.getByRole("img", { name: /最近30个上海自然日总资产趋势/ }),
   ).toBeVisible();
@@ -867,6 +890,69 @@ test("来源详情趋势跨过缺失日期连接已有观测", async ({ page, re
   ).toHaveCount(1);
 });
 
+test("来源详情支持分析区间与市场价格指数对比", async ({
+  page,
+  request,
+}) => {
+  await configure(request, "configure-longbridge");
+  const seeded = await request.post("/test-doubles/daily-snapshots", {
+    data: { action: "seed-source-trend-gap", keepSourcesConnected: true },
+  });
+  expect(seeded.ok()).toBeTruthy();
+
+  await loginAsOwner(page);
+  await page.goto("/asset-sources/source-alpha");
+
+  const analysis = page.getByRole("region", { name: "来源分析" });
+  const range = analysis.getByRole("group", { name: "分析区间" });
+  await expect(range.getByRole("button", { name: "本月" }))
+    .toHaveAttribute("aria-pressed", "true");
+
+  await range.getByRole("button", { name: "全部" }).click();
+  await expect(range.getByRole("button", { name: "全部" }))
+    .toHaveAttribute("aria-pressed", "true");
+
+  await range.getByRole("button", { name: "自定义" }).click();
+  const dialog = page.getByRole("dialog", { name: "选择来源分析区间" });
+  await expect(dialog.getByLabel("开始日期")).toHaveText("2026 / 03 / 01");
+  await expect(dialog.getByLabel("结束日期")).toHaveText("2026 / 03 / 04");
+
+  await dialog.getByLabel("开始日期").click();
+  await page.getByRole("dialog", { name: "选择记录日期" })
+    .getByRole("button", { name: "2026-03-02" })
+    .click();
+  await dialog.getByLabel("结束日期").click();
+  await page.getByRole("dialog", { name: "选择记录日期" })
+    .getByRole("button", { name: "2026-03-04" })
+    .click();
+  await dialog.getByRole("button", { name: "应用区间" }).click();
+  await expect(analysis).toContainText("已选 03月02日 至 03月04日");
+
+  const benchmark = analysis.getByTestId("performance-benchmark");
+  const chart = analysis.getByRole("img", {
+    name: "来源资产与市场价格指数趋势",
+  });
+  await expect(benchmark).toContainText("基准起点 03月02日");
+  await expect(chart).toBeVisible();
+  await expect(chart.locator(".recharts-line-curve")).toHaveCount(3);
+
+  const controls = benchmark.getByRole("group", { name: "市场指数" });
+  await controls.getByRole("button", { name: "标普 500" }).click();
+  await expect(controls.getByRole("button", { name: "标普 500" }))
+    .toHaveAttribute("aria-pressed", "false");
+  await expect(chart.locator(".recharts-line-curve")).toHaveCount(2);
+
+  await page.getByRole("button", { name: "隐藏关键信息" }).click();
+  await expect(benchmark).toHaveCount(0);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const viewport = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(viewport.scrollWidth).toBeLessThanOrEqual(viewport.clientWidth);
+});
+
 test("移动端可查看总资产每日观测明细且不产生横向溢出", async ({
   page,
   request,
@@ -880,12 +966,49 @@ test("移动端可查看总资产每日观测明细且不产生横向溢出", as
   await page.setViewportSize({ width: 390, height: 844 });
   await loginAsOwner(page);
 
-  const totalTrend = page.getByTestId("total-asset-trend");
+  const totalTrend = page.getByTestId("overview-trend");
   const totalDailyDetails = totalTrend.locator(".daily-trend-details");
   await totalDailyDetails.getByText(/观测明细（/).click();
   await expect(
     totalTrend.getByTestId("daily-trend-detail").first(),
   ).toBeVisible();
+
+  const viewport = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(viewport.scrollWidth).toBeLessThanOrEqual(viewport.clientWidth);
+});
+
+test("移动端来源摘要将变化置于当前金额下方且不横向溢出", async ({
+  page,
+  request,
+}) => {
+  await configure(request);
+  await setServerTime(request, "2026-08-05T12:00:00.000Z");
+  const yesterdayObservation = await request.post("/test-doubles/daily-snapshots", {
+    data: { action: "record-complete-observation" },
+  });
+  expect(yesterdayObservation.ok()).toBeTruthy();
+  await setServerTime(request, "2026-08-06T12:00:00.000Z");
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  await loginAsOwner(page);
+  await manualRefresh(page);
+
+  const alpha = page.getByTestId("overview-source-summary")
+    .getByRole("listitem")
+    .filter({ hasText: "Alpha Securities" });
+  const total = alpha.locator(".daily-overview__source-total");
+  const sourceChange = alpha.locator(".daily-overview__source-change");
+  const detail = alpha.getByRole("link", { name: /查看 Alpha Securities 的资产明细/ });
+  const [totalBox, changeBox, detailBox] = await Promise.all([
+    total.boundingBox(),
+    sourceChange.boundingBox(),
+    detail.boundingBox(),
+  ]);
+  expect(changeBox?.y).toBeGreaterThan(totalBox?.y ?? 0);
+  expect(detailBox?.y).toBeGreaterThan(changeBox?.y ?? 0);
 
   const viewport = await page.evaluate(() => ({
     clientWidth: document.documentElement.clientWidth,
@@ -907,7 +1030,7 @@ test("移动端总资产趋势入口、键盘操作与窄屏图保持可访问",
   await page.setViewportSize({ width: 390, height: 844 });
   await loginAsOwner(page);
   const overviewCard = page.getByTestId("total-overview-card");
-  const trend = page.getByTestId("total-asset-trend");
+  const trend = page.getByTestId("overview-trend");
   await expect(trend).toBeVisible();
   await expect(
     overviewCard.getByRole("button", { name: /总资产详情/ }),

@@ -31,7 +31,7 @@ async function loginAsOwner(page: Page): Promise<void> {
   });
   await page.goto("/setup");
   await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
-  await expect(page.getByRole("status")).toContainText("已完成预置");
+  await expect(page.getByRole("status")).toContainText("预置完成");
   await page.goto("/");
   await page.getByRole("button", { name: "使用 Passkey 登录" }).click();
   await expect(page.getByTestId("workbench-shell")).toBeVisible();
@@ -150,6 +150,28 @@ test("已认证所有者在桌面可通过左侧主导航和键盘到达五个�
   );
   await expect(commandKeycap).toBeVisible();
 
+  const portfolioGroup = desktopNavigation.locator(
+    '[aria-controls="workbench-navigation-group-portfolio"]',
+  );
+  const managementGroup = desktopNavigation.locator(
+    '[aria-controls="workbench-navigation-group-management"]',
+  );
+  await expect(portfolioGroup).toHaveAccessibleName("收起资产组合导航");
+  await expect(managementGroup).toHaveAccessibleName("收起管理导航");
+  await expect(portfolioGroup).toHaveAttribute("aria-expanded", "true");
+  await expect(managementGroup).toHaveAttribute("aria-expanded", "true");
+  await portfolioGroup.focus();
+  await portfolioGroup.press("Space");
+  await expect(portfolioGroup).toHaveAttribute("aria-expanded", "false");
+  await expect(desktopNavigation.locator('a[href="/assets"]')).toBeHidden();
+  await expect(desktopNavigation.locator('a[href="/performance"]')).toBeHidden();
+  await expect(portfolioGroup).toHaveAccessibleName("展开资产组合导航");
+  await portfolioGroup.press("Space");
+  await expect(desktopNavigation.locator('a[href="/assets"]')).toBeVisible();
+  await expect(
+    desktopNavigation.locator('a[href="/performance"]'),
+  ).toBeVisible();
+
   for (const destination of PRIMARY_DESTINATIONS) {
     const link = desktopNavigation.getByRole("link", {
       name: destination.label,
@@ -164,10 +186,16 @@ test("已认证所有者在桌面可通过左侧主导航和键盘到达五个�
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(new RegExp(`${destination.path.replace("/", "\\/")}$`));
     await expect(link).toHaveAttribute("aria-current", "page");
+    if (["/assets", "/performance"].includes(destination.path)) {
+      await expect(portfolioGroup).toHaveAttribute("aria-expanded", "true");
+    }
+    if (["/asset-sources", "/settings"].includes(destination.path)) {
+      await expect(managementGroup).toHaveAttribute("aria-expanded", "true");
+    }
   }
 });
 
-test("全局工具按三档宽度放入侧栏、标题区和顶部操作区", async ({
+test("桌面和窄窗口的快捷命令与全局工具均位于页面抬头", async ({
   page,
 }, testInfo) => {
   await page.emulateMedia({ colorScheme: "dark" });
@@ -175,25 +203,35 @@ test("全局工具按三档宽度放入侧栏、标题区和顶部操作区", as
 
   const utilities = page.getByTestId("workbench-utilities");
   const desktopNavigation = page.getByTestId("workbench-desktop-navigation");
+  const commandContainer = page.locator(".workbench-command");
 
   await page.setViewportSize({ width: 1440, height: 900 });
-  const [desktopUtilities, desktopNavigationBox] = await Promise.all([
+  await expectUtilitiesInHeader(page, testInfo, "utilities-wide.png");
+  const [desktopUtilities, desktopNavigationBox, desktopCommand] = await Promise.all([
     utilities.boundingBox(),
     desktopNavigation.boundingBox(),
+    commandContainer.boundingBox(),
   ]);
   expect(desktopUtilities).not.toBeNull();
   expect(desktopNavigationBox).not.toBeNull();
-  expect(
-    desktopUtilities!.x + desktopUtilities!.width,
-  ).toBeLessThanOrEqual(
+  expect(desktopCommand).not.toBeNull();
+  expect(desktopUtilities!.x).toBeGreaterThanOrEqual(
     desktopNavigationBox!.x + desktopNavigationBox!.width,
   );
-  expect(desktopUtilities!.y + desktopUtilities!.height).toBeGreaterThan(
-    desktopNavigationBox!.y + desktopNavigationBox!.height - 180,
+  const desktopHeader = await page.getByTestId("workbench-page-header").boundingBox();
+  expect(desktopHeader).not.toBeNull();
+  expect(desktopCommand!.x).toBeGreaterThanOrEqual(desktopHeader!.x);
+  expect(desktopCommand!.x + desktopCommand!.width).toBeLessThanOrEqual(
+    desktopHeader!.x + desktopHeader!.width,
   );
-  await page.screenshot({
-    path: testInfo.outputPath("utilities-wide.png"),
-  });
+  expect(desktopCommand!.y).toBeGreaterThanOrEqual(desktopHeader!.y);
+  expect(desktopCommand!.y + desktopCommand!.height).toBeLessThanOrEqual(
+    desktopHeader!.y + desktopHeader!.height,
+  );
+  await expect(
+    page.locator(".workbench-shell > .workbench-utilities"),
+  ).toHaveCount(0);
+  await expectNoHorizontalOverflow(page);
 
   await page.setViewportSize({ width: 975, height: 900 });
   await expect(page.getByTestId("workbench-mobile-navigation")).toBeVisible();
@@ -317,6 +355,10 @@ test("五个工作台页面共享统一的页面抬头", async ({ page }) => {
     await expect(
       header.getByRole("heading", { name: destination.title }),
     ).toBeVisible();
+    await expect(header.getByTestId("workbench-utilities")).toHaveCount(1);
+    await expect(
+      page.locator(".workbench-shell > .workbench-utilities"),
+    ).toHaveCount(0);
   }
 });
 

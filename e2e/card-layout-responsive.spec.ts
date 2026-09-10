@@ -67,11 +67,11 @@ async function loginAsOwner(page: Page): Promise<void> {
   await attachPasskey(page);
   await page.goto("/setup");
   await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
-  await expect(page.getByRole("status")).toContainText("已完成预置");
+  await expect(page.getByRole("status")).toContainText("预置完成");
   await page.goto("/");
 
   await page.getByRole("button", { name: "使用 Passkey 登录" }).click();
-  await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
+  await expect(page.getByTestId("workbench-shell")).toBeVisible();
 }
 
 async function enterLayoutMode(page: Page): Promise<void> {
@@ -459,7 +459,7 @@ test("向左拖动首次进入左侧插入位置时兄弟卡片平滑向右让�
   await page.setViewportSize({ width: 1280, height: 900 });
   await loginAsOwner(page);
   await page.reload();
-  await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
+  await expect(page.getByTestId("workbench-shell")).toBeVisible();
   await enterLayoutMode(page);
 
   const first = page.locator('[data-layout-card-id="first"]');

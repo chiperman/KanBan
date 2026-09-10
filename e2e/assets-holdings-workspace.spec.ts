@@ -19,7 +19,7 @@ async function loginAsOwner(page: Page): Promise<void> {
   await attachPasskey(page);
   await page.goto("/setup");
   await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
-  await expect(page.getByRole("status")).toContainText("已完成预置");
+  await expect(page.getByRole("status")).toContainText("预置完成");
   await page.goto("/");
   await page.getByRole("button", { name: "使用 Passkey 登录" }).click();
   await expect(page.getByTestId("workbench-shell")).toBeVisible();
@@ -105,7 +105,7 @@ test("来源、类别与估值筛选只收缩观察列表，不混淆上方来�
   ).toBeVisible();
 });
 
-test("产品覆盖展开保持主状态对齐，并将覆盖信息限制在右侧分组", async ({
+test("产品覆盖展开保持主行对齐，并将覆盖信息铺满来源整行", async ({
   page,
   request,
 }) => {
@@ -151,57 +151,54 @@ test("产品覆盖展开保持主状态对齐，并将覆盖信息限制在右�
   });
 
   await trigger.click();
-  await expect(coverage).toContainText("Trading Bots");
-  await expect(coverage).toContainText("On-chain Earn");
-  const layout = await coverage.evaluate((element) => {
+  const panel = source.locator(".assets-holdings__source-coverage-panel");
+  await expect(panel).toContainText("Trading Bots");
+  await expect(panel).toContainText("On-chain Earn");
+  const layout = await source.evaluate((element) => {
     const trigger = element.querySelector<HTMLButtonElement>(
       ".vibe-coverage-summary-trigger",
     );
     const panel = element.querySelector<HTMLElement>(
-      ".vibe-coverage-panel--inline",
+      ".assets-holdings__source-coverage-panel",
     );
-    const coverageStatus = element.previousElementSibling;
-    const state = element.closest<HTMLElement>(".assets-holdings__source-state");
-    const coverageGroup = element.closest<HTMLElement>(
-      ".assets-holdings__source-coverage",
+    const article = element.querySelector<HTMLElement>(":scope > article");
+    const state = element.querySelector<HTMLElement>(
+      ".assets-holdings__source-state",
+    );
+    const value = element.querySelector<HTMLElement>(
+      ".assets-holdings__source-value",
     );
     if (
       trigger === null
       || panel === null
-      || coverageStatus === null
+      || article === null
       || state === null
-      || coverageGroup === null
+      || value === null
     ) {
       return null;
     }
 
     const triggerBox = trigger.getBoundingClientRect();
     const panelBox = panel.getBoundingClientRect();
-    const coverageStatusBox = coverageStatus.getBoundingClientRect();
+    const articleBox = article.getBoundingClientRect();
     const stateBox = state.getBoundingClientRect();
-    const coverageGroupBox = coverageGroup.getBoundingClientRect();
-    const primaryStatus = state.querySelector<HTMLElement>(
-      ":scope > .vibe-status-tag",
-    );
-    if (primaryStatus === null) return null;
-    const primaryStatusBox = primaryStatus.getBoundingClientRect();
+    const valueBox = value.getBoundingClientRect();
     return {
-      panelStartsBelowTrigger: panelBox.top >= triggerBox.bottom,
-      panelStaysInCoverageGroup: Math.abs(panelBox.left - coverageGroupBox.left) < 1
-        && Math.abs(panelBox.width - coverageGroupBox.width) < 1,
-      primaryStatusIsSeparate: primaryStatusBox.right <= coverageGroupBox.left
-        && coverageGroupBox.left > stateBox.left,
-      triggerSharesCoverageStatusRow:
-        triggerBox.top < coverageStatusBox.bottom
-        && coverageStatusBox.top < triggerBox.bottom,
+      panelStartsBelowMainRow: panelBox.top >= Math.max(
+        triggerBox.bottom,
+        valueBox.bottom,
+      ),
+      panelSpansArticle: Math.abs(panelBox.left - articleBox.left) < 1
+        && Math.abs(panelBox.right - articleBox.right) < 1,
+      valueStaysInMainRow: valueBox.top < stateBox.bottom
+        && stateBox.top < valueBox.bottom,
     };
   });
 
   expect(layout).toEqual({
-    panelStartsBelowTrigger: true,
-    panelStaysInCoverageGroup: true,
-    primaryStatusIsSeparate: true,
-    triggerSharesCoverageStatusRow: true,
+    panelStartsBelowMainRow: true,
+    panelSpansArticle: true,
+    valueStaysInMainRow: true,
   });
 });
 

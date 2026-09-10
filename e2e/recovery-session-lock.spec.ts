@@ -57,7 +57,7 @@ async function provisionAndLogin(page: Page): Promise<void> {
 
 async function unlockWithPasskey(page: Page): Promise<void> {
   await page.getByRole("button", { name: "使用 Passkey 登录" }).click();
-  await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
+  await expect(page.getByTestId("workbench-shell")).toBeVisible();
 }
 
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -320,7 +320,7 @@ test("所有者可仅凭 TOTP 登录", async ({ page, request }) => {
   await expect(totpSlots).toHaveText([...loginCode]);
   await submitButton.click();
 
-  await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
+  await expect(page.getByTestId("workbench-shell")).toBeVisible();
   await expectAuthenticatedWorkbench(page);
 });
 
@@ -389,7 +389,7 @@ test("同一个 TOTP 验证码不能重复登录", async ({ page, request }) => 
     await page.getByLabel("TOTP 验证码").fill(code);
     await page.getByRole("button", { name: "完成 TOTP 登录" }).click();
     if (login === 0) {
-      await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
+      await expect(page.getByTestId("workbench-shell")).toBeVisible();
     }
   }
 
@@ -496,7 +496,7 @@ test("TOTP 连续五次失败后限流五分钟", async ({
     .fill(totpCode(recoverySecret, new Date("2026-01-01T00:05:00.000Z")));
   await page.getByRole("button", { name: "完成 TOTP 登录" }).click();
 
-  await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
+  await expect(page.getByTestId("workbench-shell")).toBeVisible();
   await expectAuthenticatedWorkbench(page);
 });
 
@@ -545,7 +545,7 @@ test("TOTP 从第五次失败起锁定五分钟", async ({ page, request }) => {
   );
   expect(recovered).toBe(200);
   await page.reload();
-  await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
+  await expect(page.getByTestId("workbench-shell")).toBeVisible();
 });
 
 test("连续三十分钟无操作后自动锁定，随后仍可使用 Passkey 快速解锁", async ({
@@ -625,7 +625,7 @@ test("并发 TOTP 请求共享五次尝试上限", async ({ page, request }) => 
   );
   expect(recoveredAttempt).toBe(200);
   await page.reload();
-  await expect(page.getByTestId("view-mode")).toContainText("所有者视图");
+  await expect(page.getByTestId("workbench-shell")).toBeVisible();
 });
 
 test("关闭浏览器上下文后敏感会话不会在新上下文恢复", async ({

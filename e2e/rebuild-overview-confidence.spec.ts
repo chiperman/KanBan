@@ -82,7 +82,7 @@ test("总览以来源总额为真相，解释今日判断并收口至收益与�
     "300.00 USD",
   );
   await expect(overview.getByTestId("overview-confidence")).toContainText(
-    "来源账户总额",
+    "已覆盖 2 个来源",
   );
   await expect(overview.getByTestId("overview-net-investment")).toContainText(
     "115.00 USD",
@@ -158,7 +158,7 @@ test("健康状态只显示来源规模，不罗列零值异常", async ({ page 
 
   const confidence = page.getByTestId("overview-confidence");
   await expect(confidence).toContainText("总额完整");
-  await expect(confidence).toContainText(/已覆盖 \d+ 个资产来源。/);
+  await expect(confidence).toContainText(/已覆盖 \d+ 个来源/);
   await expect(confidence).not.toContainText("未估值 0 项");
   await expect(confidence).not.toContainText("过期来源 0 个");
 });
@@ -354,6 +354,6 @@ test("总览保留过期来源总额，标明未估值与明细仅汇总而不�
     "部分仅汇总",
   );
   await expect(overview.getByTestId("overview-confidence")).toContainText(
-    "来源账户总额",
+    "已覆盖 1 个来源",
   );
 });
