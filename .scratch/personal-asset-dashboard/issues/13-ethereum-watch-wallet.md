@@ -6,6 +6,8 @@
 
 **Status:** resolved
 
+**Adjusted by:** `.scratch/asset-refresh-redesign/spec.md`
+
 - [x] 所有者可以通过同一个统一来源流程选择 Ethereum 或 BNB Smart Chain，并添加、预览一个或多个公开地址。
 - [x] 系统只接受公开地址，不提供粘贴助记词、私钥、MPC 材料或连接钱包的入口。
 - [x] 一个共享 EVM 适配器通过链配置支持两条链，不为 Ethereum 与 BNB Smart Chain 复制两套业务流程；配置固定 Ethereum mainnet chain ID `1` 与 BNB Smart Chain mainnet chain ID `56`。
@@ -21,3 +23,4 @@
 ## 评论
 
 - 2026-08-06：所有者确认已用真实 Ethereum 与 BNB Smart Chain 公开地址完成预览确认、来源连接、资产卡片与持仓查看及单来源刷新；未发现问题，未要求钱包连接、签名、私钥或助记词。未记录地址或资产数据。
+- 2026-08-26：历史 30 秒参考价格与 5 分钟余额周期已由统一每小时完整刷新取代；观察钱包仍保留手动单来源刷新，既有真实公开地址验收记录不变。

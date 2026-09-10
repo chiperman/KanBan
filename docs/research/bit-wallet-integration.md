@@ -1,6 +1,6 @@
 # BIT / Matrixport 钱包资产来源接入调研
 
-调研日期：2026-08-04。范围为 BIT 官方文档及其同一文档站内的 DCP、Fixed Income、Balance+、Trade 页面；没有登录真实账户，也没有使用真实 API Key。
+调研日期：2026-08-04。范围为 BIT 官方文档及其同一文档站内的 DCP、Fixed Income、Balance+、Trade 页面；没有登录真实账户，也没有使用真实 API Key。本文保留接入时的历史调研结论；当前刷新生命周期以 [资产数据刷新生命周期](asset-refresh-lifecycle.md) 为准。
 
 ## 结论
 
@@ -40,7 +40,7 @@
 - 官方 Wallet 页声明生产 REST 基址为 `https://mapi.matrixport.com`，API Key 在 Matrixport 的 Key 管理门户申请。
 - 私有 Wallet 请求采用 `X-MatrixPort-Access-Key`、`X-Signature`、毫秒 `X-Timestamp`、`X-Auth-Version: v2`；签名为 `hex(hmac_sha256(timestamp + method + api_path + "&" + body, secret_key))`。
 - 2026-08-04 的安全探测表明，`/fixed-income/api/v3/user-asset/statistics_usd` 在 `mapi.matrixport.com` 返回 `404`；转向 `api.matrixport.com` 虽会返回 `401`，但真实 API Key 请求同样返回“Chat has expired”，说明它要求网页登录会话，不能用作只读 API 的替代。UID 3827903 已确认没有 Fixed Income 资产，因此该产品不在此来源的读取和完整性范围内。
-- Wallet 私有 API 文档限额为每用户每秒 1 请求，超限为 HTTP 429。看板的 `prices` 刷新模式不得请求 BIT；仅完整余额刷新调用一次 Wallet balance，避免 30 秒行情轮询意外消耗额度。
+- Wallet 私有 API 文档限额为每用户每秒 1 请求，超限为 HTTP 429。当前统一每小时完整刷新及手动单来源刷新，每个 BIT 来源批次只调用一次 Wallet balance；已移除的历史 `prices`/30 秒行情轮询不得恢复用于请求 BIT。
 
 ## 与本仓库模型的对应
 

@@ -1,29 +1,42 @@
-# 资产数据刷新生命周期调研
+# 资产数据刷新生命周期
 
-调研范围：当前源码与运行配置；未运行服务或浏览器。本结论只描述代码定义的行为。
+Last verified: 2026-08-26
 
-## 结论
+本文件描述当前实际运行行为。目标方案与开发验收见 [资产刷新机制重设计](../../.scratch/asset-refresh-redesign/spec.md)。
 
-| 页面状态 | 是否会发起新的自动刷新 | 说明 |
-| --- | --- | --- |
-| 可见 | 会 | 首次挂载自动同步；非 EVM 随后每 30 秒检查一次：余额/持仓距上次成功满 5 分钟则完整刷新，否则行情距上次成功满 30 秒则只刷新行情。 |
-| 后台/隐藏 | 不会 | 定时器仍存在，但每次 tick 发现 `document.visibilityState === "hidden"` 即返回，不调用 API；恢复可见时立即发起一次全量、全范围刷新。 |
-| 页面关闭/组件卸载 | 不会 | effect cleanup 清除定时器并移除可见性、手动刷新监听，因此不会再产生客户端触发。已在途的 `fetch` 未使用 `AbortController` 取消；关闭浏览器后该请求能否在运行环境中继续完成，源码没有保证。 |
+## 当前结论
 
-## 客户端触发链
+| 页面或触发方式 | 当前行为 |
+| --- | --- |
+| 总览、`/assets`、`/performance` | 共享同一个 `AssetRefreshProvider` 与 Coordinator；页面进入、定时器和恢复前台只在页面可见且窗口聚焦时判断统一周期 |
+| 三个核心页面的刷新按钮 | 提交 `manual-global`，立即请求一次 `all/all`，不受一小时周期限制 |
+| 命令菜单 | 直接向共享 Coordinator 提交 `manual-global`，不再广播浏览器自定义事件 |
+| 来源详情页 | 提交 `manual-source`，只刷新目标 `sourceId`；不改变统一全量周期，也不写组合历史 |
+| 自动刷新 | 所有已连接且可刷新的来源共享最多每小时一次完整 `all/all` 尝试；没有 30 秒行情或 5 分钟持仓轮询 |
+| 页面关闭后 | 统一资产刷新没有服务端 cron、后台 worker 或独立调度器，不会自行刷新；重新打开时仅判断统一周期是否到期。正式日结是独立流程，不在本表范围内 |
 
-- `AssetRefreshControls` 是客户端组件（`"use client"`），刷新由浏览器 `fetch` POST 到 `/api/asset-sources/refresh`；成功后调用 `router.refresh()` 更新页面数据。[src/ui/asset-refresh-controls.tsx:1](../../src/ui/asset-refresh-controls.tsx#L1) [src/ui/asset-refresh-controls.tsx:40-85](../../src/ui/asset-refresh-controls.tsx#L40-L85)
-- 首次挂载时：有非 EVM 来源发起 `all/non-evm`；EVM 当个上海自然日尚未尝试行情刷新时发起 `prices/evm`。此 effect 不检查页面可见性。[src/ui/asset-refresh-controls.tsx:103-115](../../src/ui/asset-refresh-controls.tsx#L103-L115)
-- 非 EVM 周期检查由 `window.setInterval(..., 30_000)` 驱动；隐藏状态或已有在途请求时直接返回。组件卸载时清理 interval。[src/ui/asset-refresh-controls.tsx:117-130](../../src/ui/asset-refresh-controls.tsx#L117-L130)
-- 监听 `visibilitychange`，仅在状态变为 `visible` 时执行 `all/all`，并在卸载时移除监听。[src/ui/asset-refresh-controls.tsx:132-141](../../src/ui/asset-refresh-controls.tsx#L132-L141)
-- 看板只在存在未断开来源时挂载该控件；来源分类与 EVM 当日判断在所有者看板完成。[src/ui/owner-dashboard.tsx:209-224](../../src/ui/owner-dashboard.tsx#L209-L224) [src/ui/owner-dashboard.tsx:816-821](../../src/ui/owner-dashboard.tsx#L816-L821)
+## 周期与并发
 
-浏览器回归测试也覆盖上述行为：隐藏后快进 5 分钟，调用序列不增加；恢复可见后增加一次 `all/all`。测试同时验证 EVM 的首次自动操作仅为 `prices/evm`，恢复可见仍为 `all/all`。[e2e/refresh-stale-data.spec.ts:88-149](../../e2e/refresh-stale-data.spec.ts#L88-L149)
+- 最近一次完整批次开始时间持久化在 SQLite `schema_metadata.asset_full_refresh_attempted_at`；进行中诊断使用 `asset_full_refresh_in_progress_at`。
+- Coordinator 只减少无效请求；服务端通过 SQLite 原子 claim 决定是否执行，因此页面重载、多标签和多个服务实例竞争时，来源 Adapter 仍只执行一轮。
+- 自动、手动全量和手动单来源意图进入共享队列；可吸收的请求合并，不同来源意图保持各自的进行中与终态反馈。
+- 自动完整批次失败、部分失败、超时或客户端请求异常都不会快速重试，下一次自动尝试至少等待一小时；手动刷新仍可立即发起。
+- 旧数据库没有统一锚点时视为到期；首次满足可见且聚焦条件后尝试完整批次，即使失败也会建立下一小时周期。
+- 没有可刷新来源时不建立虚假的周期锚点；第一个自动来源成功连接时原子建立初始周期。
 
-## API 与服务端边界
+## 服务端执行与历史
 
-- API route 只响应收到的 `POST`：校验所有者 session、`mode` 与 `scope`，随后调用 `services.assetSynchronization.refresh()`；它不是定时任务入口。[src/app/api/asset-sources/refresh/route.ts:4-27](../../src/app/api/asset-sources/refresh/route.ts#L4-L27)
-- 同步服务只把调用串行化，并对本次请求中的每个来源执行刷新；其 `setTimeout` 是单来源超时，不是调度器。生产装配的超时为 60 秒。[src/server/asset-synchronization.ts:18-39](../../src/server/asset-synchronization.ts#L18-L39) [src/server/asset-synchronization.ts:55-80](../../src/server/asset-synchronization.ts#L55-L80) [src/server/production.ts:2349-2363](../../src/server/production.ts#L2349-L2363)
-- 当前 `package.json` 仅定义开发、构建、启动、类型检查和测试脚本，依赖中也没有 cron/队列调度组件；`next.config.ts` 仅配置主页的 `Cache-Control`。仓库中没有独立 scheduler、cron、后台 worker 或部署级 cron 配置。[package.json:5-33](../../package.json#L5-L33) [next.config.ts:3-14](../../next.config.ts#L3-L14)
+- 刷新接口只响应已认证的 `POST /api/asset-sources/refresh` 请求，并校验统一 intent、批量 `sourceIds`、旧 `sourceId` 与 `scope` 的互斥关系。
+- 不同刷新批次由同步服务串行执行；同一批次内的来源通过受控 Adapter 并行读取，每来源生产超时为 60 秒。
+- 某来源失败只更新该来源的尝试时间、错误和过期状态，保留最后成功金额、持仓和同步时间；一个来源失败不阻塞其他来源提交。
+- 只有同一完整批次的全部参与来源成功，才写入组合当日基准与趋势；部分失败、全部失败和单来源刷新均不写组合历史。
+- 已断开的来源不参与断开后的新组合历史；恢复后单来源刷新仍不写历史，下一次完整成功批次才重新纳入。
+- 完整批次开始即建立统一锚点；正常结束清除进行中标记，异常中断保留诊断并由后续原子 claim 按合同恢复。
 
-因此，资产刷新当前是**打开且已认证页面驱动的按需同步**，不是脱离页面持续运行的服务端任务。若需要页面关闭后仍刷新，须新增受认证/防重入保护的服务端调度机制；现有 API route 本身不会自行唤醒。
+## 已移除的旧路径
+
+- `AssetRefreshControls` 及其休眠的首次、30 秒行情、5 分钟持仓调度；
+- `pad:asset-manual-refresh` 自定义事件及页面级重复监听器；
+- 无路由调用方的 `OwnerDashboard` 组件链。
+
+`ProductionLongbridgeSourceRefresher` 仍被受控生产启动测试替身调用，因此保留；它不是独立后台调度器。

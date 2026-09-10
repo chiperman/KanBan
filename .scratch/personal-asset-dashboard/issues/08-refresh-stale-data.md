@@ -6,7 +6,7 @@
 
 **Status:** resolved
 
-**Adjusted by:** `.scratch/personal-asset-dashboard-rebuild/issues/06-source-health-and-recovery-experience.md`
+**Adjusted by:** `.scratch/personal-asset-dashboard-rebuild/issues/06-source-health-and-recovery-experience.md`; `.scratch/asset-refresh-redesign/spec.md`
 
 - [x] 打开所有者页面时立即触发一次资产同步。
 - [x] 页面可见时行情每 30 秒刷新，余额和持仓每 5 分钟刷新。
@@ -17,3 +17,7 @@
 - [x] 一个来源失败不会阻止其他来源成功提交新数据。
 - [x] 手动或自动同步失败都不能覆盖最后一次成功快照或持仓。
 - [x] 自动化测试使用可控时间和确定性来源替身验证调度、页面可见性和部分失败。
+
+## 评论
+
+- 2026-08-26：本 Ticket 记录的是当时完成的登录后刷新与 30 秒/5 分钟调度事实，历史勾选保持不变。现行生命周期已由资产刷新机制重设计调整为：可见且聚焦时，所有自动来源共享最多每小时一次完整刷新；自动失败仍等待下一周期，手动刷新可立即发起。

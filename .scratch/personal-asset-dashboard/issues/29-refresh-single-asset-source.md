@@ -6,7 +6,7 @@
 
 **Status:** resolved
 
-**Adjusted by:** `.scratch/personal-asset-dashboard-rebuild/issues/06-source-health-and-recovery-experience.md`
+**Adjusted by:** `.scratch/personal-asset-dashboard-rebuild/issues/06-source-health-and-recovery-experience.md`; `.scratch/asset-refresh-redesign/spec.md`
 
 ## 验收标准
 
@@ -24,6 +24,7 @@
 - 2026-07-31：已核对仓库固定的 Vibe-Nothing-UI revision `46661e55ae04537215a229be49f2ac1bd37a4255`；卡片刷新复用现有 `VibeButton`、单色线性图标、hairline、运行时 Token 和内联状态反馈。
 - 2026-07-31：隔离 webpack 生产构建、`pnpm typecheck`、`git diff --check` 通过；单来源隔离与非法目标定向回归 `2/2 passed`。刷新整文件另有两条既有断言仍期待旧格式 `110 USD`，当前页面实际为 `110.00 USD`，与本 Ticket 无关，未顺手改写。
 - 2026-07-31：已在已登录实页核对桌面与 390×844 手机布局；四张来源卡片均显示刷新入口，窄屏展开后无卡片头部溢出、无页面横向滚动、无 Next.js 错误遮罩。未手动触发真实来源刷新，避免在未明确要求时读取真实私有账户。
+- 2026-08-26：单来源能力继续保留，但现由共享 Coordinator 提交 `manual-source` 意图；它不改变统一一小时全量周期，也不写组合基准或趋势。全量与不同来源意图按重设计的队列/吸收合同执行，历史验收事实不变。
 
 ## 答案
 

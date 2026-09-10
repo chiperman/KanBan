@@ -6,6 +6,8 @@
 
 **Status:** resolved
 
+**Adjusted by:** `.scratch/asset-refresh-redesign/spec.md`
+
 - [x] 所有者可以从统一“添加资产来源”流程选择长桥并开始 OAuth 授权。
 - [x] 私有官方 SDK 补丁固定请求并只接受 `account.read`；缺失、未知、附加 scope 或任何交易权限均在读取和保存前拒绝。
 - [x] 授权成功后先预览账户身份和可读取范围，只有确认后才保存资产来源。
@@ -23,3 +25,4 @@
 
 - 2026-07-27：按所有者确认改为统一 SDK OAuth + macOS Keychain。网页仍使用已注册的 `localhost:3000/api/asset-sources/longbridge/oauth/callback` 回调；PKCE verifier 与 Token 均留在原生模块/Keychain。实现已验证私有 OAuth 补丁、Keychain 存储命名空间、Node 原生加载、类型检查与既有浏览器回归；尚未以真实长桥账户完成授权与报价验收，故状态保持 `ready-for-human`。
 - 2026-08-06：所有者确认已用真实长桥账户完成 OAuth 授权、只读范围核对、预览确认、来源连接、持仓查看/排序及单来源刷新；未发现问题，全程未请求或执行写操作。未记录账户数据或凭证。
+- 2026-08-26：历史 30 秒报价与 5 分钟持仓周期已由统一每小时完整刷新取代；长桥仍参与完整刷新并保留手动单来源刷新，既有真实只读验收记录不变。
