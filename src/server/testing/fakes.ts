@@ -188,6 +188,12 @@ export class InMemoryDailyAssetSnapshots implements DailyAssetSnapshots {
     return structuredClone(this.importedSourceHistoryObservations);
   }
 
+  seedImportedSourceHistory(
+    observations: ImportedAssetSourceHistoryObservation[],
+  ): void {
+    this.importedSourceHistoryObservations = structuredClone(observations);
+  }
+
   async createIfAbsent(snapshot: DailyAssetSnapshot): Promise<boolean> {
     const existing = this.snapshots.find(({ day }) => day === snapshot.day);
     if (existing) return false;

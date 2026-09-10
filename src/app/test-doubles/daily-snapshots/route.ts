@@ -419,6 +419,22 @@ export async function POST(request: Request) {
     services.clock.set(body.iso);
     return Response.json({ ok: true });
   }
+  if (body?.action === "seed-imported-source-history") {
+    services.dailyAssetSnapshots.seedImportedSourceHistory([
+      { day: "2026-01-01", amount: "100" },
+      { day: "2026-01-02", amount: "110" },
+    ].map(({ day, amount }) => ({
+      capturedAt: day + "T04:00:00.000Z",
+      complete: true,
+      day,
+      kind: "longbridge",
+      label: "长桥",
+      sourceId: "legacy-source",
+      status: "complete" as const,
+      total: { USD: amount, CNY: null, HKD: null },
+    })));
+    return Response.json({ ok: true });
+  }
   if (body?.action === "seed-classified-performance-history") {
     const sourceList = await services.assetSources.list();
     const observations = [

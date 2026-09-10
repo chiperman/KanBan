@@ -69,11 +69,156 @@ test("SQLite schema v2 自动迁移并持久化 Binance 覆盖证据", async ({ 
 
   expect(response.ok()).toBeTruthy();
   await expect(response.json()).resolves.toEqual({
-    schemaVersion: "16",
+    schemaVersion: "17",
     coverageColumn: true,
     displayNameColumn: true,
     coverageStatus: "partial",
     unexplainedValue: { amount: "3", currency: "USD" },
+  });
+});
+
+test("旧版 SQLite 原地升级保留业务数据且首次失败建立统一周期", async ({
+  request,
+}) => {
+  const response = await request.post(
+    "/test-doubles/sqlite-business-data-persistence?action=legacy-refresh-upgrade",
+  );
+
+  expect(response.ok()).toBeTruthy();
+  await expect(response.json()).resolves.toEqual({
+    schemaVersion: "17",
+    attemptedAtBeforeRefresh: null,
+    sourceAttemptedAtBeforeRefresh: [
+      "2026-08-18T01:00:00.000Z",
+      "2026-08-19T02:00:00.000Z",
+    ],
+    upgradePreserved: true,
+    before: {
+      sourceCount: 2,
+      currentSnapshotCount: 2,
+      syncStateCount: 2,
+      dailyBaselineCount: 2,
+      dailyTrendCount: 2,
+      dailyBaselineSourceCount: 4,
+      dailyTrendSourceCount: 4,
+      sourceIdentities: [
+        "binance:legacy-binance-account",
+        "longbridge:legacy-longbridge-account",
+      ],
+      currentAmounts: ["123.45", "678.90"],
+      baselineAmounts: ["790.00", "802.35"],
+      trendAmounts: ["795", "802.35"],
+    },
+    firstFailure: {
+      successCount: 0,
+      failureCount: 2,
+      attemptedAtMatchesState: true,
+      inProgressCleared: true,
+    },
+    afterRestart: {
+      attemptedAtPreserved: true,
+      inProgressAt: null,
+      skipped: "not-due",
+      reportUsesPersistedAttemptedAt: true,
+    },
+  });
+});
+
+test("SQLite 在重启后保留全量刷新周期与中断诊断", async ({ request }) => {
+  const response = await request.post(
+    "/test-doubles/sqlite-business-data-persistence?action=full-refresh-state",
+  );
+
+  expect(response.ok()).toBeTruthy();
+  await expect(response.json()).resolves.toEqual({
+    before: { attemptedAt: null, inProgressAt: null },
+    during: {
+      attemptedAt: "2026-08-20T04:00:00.000Z",
+      inProgressAt: "2026-08-20T04:00:00.000Z",
+    },
+    afterRestart: {
+      attemptedAt: "2026-08-20T04:00:00.000Z",
+      inProgressAt: "2026-08-20T04:00:00.000Z",
+    },
+    after: {
+      attemptedAt: "2026-08-20T04:00:00.000Z",
+      inProgressAt: null,
+    },
+  });
+});
+
+test("两个 SQLite 实例对同一文件只允许一次全量刷新预占", async ({ request }) => {
+  const response = await request.post(
+    "/test-doubles/sqlite-business-data-persistence?action=full-refresh-claim-race",
+  );
+
+  expect(response.ok()).toBeTruthy();
+  await expect(response.json()).resolves.toEqual({
+    claims: ["claimed", "in-progress"],
+    firstState: {
+      attemptedAt: "2026-08-20T04:00:00.000Z",
+      inProgressAt: "2026-08-20T04:00:00.000Z",
+    },
+    secondState: {
+      attemptedAt: "2026-08-20T04:00:00.000Z",
+      inProgressAt: "2026-08-20T04:00:00.000Z",
+    },
+  });
+});
+
+test("首个自动来源连接以连接时间初始化全量刷新周期", async ({ request }) => {
+  const response = await request.post(
+    "/test-doubles/sqlite-business-data-persistence?action=first-connection-refresh-state",
+  );
+
+  expect(response.ok()).toBeTruthy();
+  await expect(response.json()).resolves.toEqual({
+    attemptedAt: "2026-08-20T04:00:00.000Z",
+    inProgressAt: null,
+  });
+});
+
+test("并发首连只由首个成功来源建立周期与初始历史", async ({ request }) => {
+  const response = await request.post(
+    "/test-doubles/sqlite-business-data-persistence?action=first-connection-race",
+  );
+
+  expect(response.ok()).toBeTruthy();
+  await expect(response.json()).resolves.toEqual({
+    bothSucceeded: {
+      rejected: 0,
+      state: {
+        attemptedAt: "2026-08-20T04:00:00.000Z",
+        inProgressAt: null,
+      },
+      sourceAccounts: ["race-first", "race-second"],
+      baselineSourceAccounts: ["race-first"],
+      trendSourceAccounts: ["race-first"],
+    },
+    firstCommitFailed: {
+      rejected: 1,
+      state: {
+        attemptedAt: "2026-08-20T05:00:00.000Z",
+        inProgressAt: null,
+      },
+      sourceAccounts: ["race-second"],
+      baselineSourceAccounts: ["race-second"],
+      trendSourceAccounts: ["race-second"],
+    },
+  });
+});
+
+test("最后一个自动来源断开或删除会清理周期，重新连接重新建立", async ({ request }) => {
+  const response = await request.post(
+    "/test-doubles/sqlite-business-data-persistence?action=last-source-refresh-clear",
+  );
+
+  expect(response.ok()).toBeTruthy();
+  await expect(response.json()).resolves.toEqual({
+    afterFirstConnection: true,
+    afterDisconnect: { attemptedAt: null, inProgressAt: null },
+    afterReconnect: true,
+    afterDelete: { attemptedAt: null, inProgressAt: null },
   });
 });
 
@@ -86,7 +231,7 @@ test("SQLite schema v4 升级后分离日初基准与每日趋势观测并跨重
 
   expect(response.ok()).toBeTruthy();
   await expect(response.json()).resolves.toEqual({
-    schemaVersion: "16",
+    schemaVersion: "17",
     migratedTrend: {
       capturedAt: "2026-07-28T00:30:00.000Z",
       complete: false,
@@ -144,7 +289,7 @@ test("SQLite schema v6 升级后持久化 HKD 金额与观测时汇率", async (
 
   expect(response.ok()).toBeTruthy();
   await expect(response.json()).resolves.toEqual({
-    schemaVersion: "16",
+    schemaVersion: "17",
     hkdColumns: true,
     baseline: {
       total: { USD: "10", CNY: "72", HKD: "78" },
@@ -210,7 +355,7 @@ test("SQLite schema v8 升级后可创建并记录手工资产来源", async ({
 
   expect(response.ok()).toBeTruthy();
   await expect(response.json()).resolves.toEqual({
-    schemaVersion: "16",
+    schemaVersion: "17",
     hasManualRecordColumn: true,
     manualAssetClassColumn: true,
     existing: {
@@ -238,7 +383,7 @@ test("SQLite schema v12 增量迁移保存资金账本且不改写资产观测",
 
   expect(response.ok()).toBeTruthy();
   await expect(response.json()).resolves.toEqual({
-    schemaVersion: "16",
+    schemaVersion: "17",
     cashflowTable: true,
     cashflow: {
       kind: "initial-investment",
@@ -261,7 +406,7 @@ test("SQLite schema v14 升级后保留旧分类未知，并跨重启持久化�
 
   expect(response.ok()).toBeTruthy();
   await expect(response.json()).resolves.toEqual({
-    schemaVersion: "16",
+    schemaVersion: "17",
     assetClassColumns: true,
     oldTrendHasAssetClassTotals: true,
     persistedTrend: {
@@ -312,7 +457,7 @@ test("SQLite schema v15 按来源类别回填历史证券与加密趋势", async
     },
   };
   await expect(response.json()).resolves.toEqual({
-    schemaVersion: "16",
+    schemaVersion: "17",
     baseline: {
       longbridge: expected,
       binance: expectedCrypto,
@@ -453,9 +598,9 @@ test("并发连接不会丢失来源且 SQLite 不含凭证正文", async ({ req
   await expect(response.json()).resolves.toEqual({
     accountIds: ["concurrent-one", "concurrent-two"],
     cardCount: 2,
-    dailySnapshotCount: 1,
-    dailySourceCount: 1,
-    trendSourceCount: 2,
+    dailySnapshotCount: 0,
+    dailySourceCount: 0,
+    trendSourceCount: 0,
     lockContentionHandled: true,
     rawSecretLeaked: false,
   });

@@ -77,7 +77,7 @@ test("收益分析提供预设与自定义分析区间，并默认选择本月",
   ).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("region", { name: "收益分析范围" })).toHaveCount(0);
   await expect(trend).toContainText(
-    "可绘制 3 / 4 天",
+    "完整 3 / 4 天",
   );
 
   for (const [label, totalDays] of [
@@ -92,7 +92,7 @@ test("收益分析提供预设与自定义分析区间，并默认选择本月",
     await option.click();
     await expect(option).toHaveAttribute("aria-pressed", "true");
     await expect(trend).toContainText(
-      `可绘制 3 / ${totalDays} 天`,
+      `完整 3 / ${totalDays} 天`,
     );
   }
 
@@ -126,7 +126,7 @@ test("收益分析支持自定义起止日期，并按所选连续上海自然�
     rangeGroup.getByRole("button", { name: "自定义", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
   await expect(rangeGroup).toContainText("已选 03月02日 至 03月04日");
-  await expect(trend).toContainText("可绘制 2 / 3 天");
+  await expect(trend).toContainText("完整 2 / 3 天");
   await expect(trend).toContainText("03月02日 至 03月04日");
   await expect(page.getByTestId("performance-interval")).toContainText(
     "03月02日 至 03月04日",
@@ -142,15 +142,15 @@ test("收益分析趋势跨过缺失日期连接已有观测", async ({ page }) 
     .click();
 
   const trend = page.getByTestId("performance-trend");
-  await expect(trend).toContainText("缺少 60 天资产观测");
-  await expect(trend).toContainText("趋势线已跨过缺口连接");
+  await expect(trend).toContainText("完整 3 / 63 天");
+  await expect(trend).toContainText("结论仅基于完整总资产。");
   const trendPath = trend.locator(".recharts-line-curve");
   await expect(trendPath).toHaveCount(1);
   const trendPathData = await trendPath.getAttribute("d");
   expect(trendPathData?.match(/M/g)).toHaveLength(1);
 });
 
-test("收益分析按证券或加密资产查看分类走势和资产变动，不伪造分类收益", async ({
+test("收益分析只展示我的完整资产走势，不再切换来源或分类口径", async ({
   page,
 }) => {
   await page.request.post("/test-doubles/reset");
@@ -164,28 +164,14 @@ test("收益分析按证券或加密资产查看分类走势和资产变动，�
 
   await page.goto("/performance");
   const trend = page.getByTestId("performance-trend");
-  const assetScope = trend.getByRole("group", { name: "资产范围" });
   const interval = page.getByTestId("performance-interval");
 
-  await assetScope.getByRole("button", { name: "证券", exact: true }).click();
-  await expect(
-    assetScope.getByRole("button", { name: "证券", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
-  await expect(trend.getByRole("heading", { name: "证券走势" })).toBeVisible();
-  await expect(trend).toContainText("分类趋势按资产来源归类");
-  await expect(trend).toContainText("缺少 1 天证券观测");
-  await expect(interval.getByRole("heading", { name: "证券区间资产变动" })).toBeVisible();
-  await expect(interval).toContainText("+20.00 USD");
-  await expect(interval).not.toContainText("区间净外部投入");
-  await expect(interval).toContainText("不计算分类收益或收益率");
-
-  await assetScope.getByRole("button", { name: "加密资产", exact: true }).click();
-  await expect(
-    assetScope.getByRole("button", { name: "加密资产", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
-  await expect(trend.getByRole("heading", { name: "加密资产走势" })).toBeVisible();
-  await expect(interval.getByRole("heading", { name: "加密资产区间资产变动" })).toBeVisible();
-  await expect(interval).toContainText("-20.00 USD");
+  await expect(trend.getByRole("heading", { name: "我的资产走势" })).toBeVisible();
+  await expect(trend.getByRole("group", { name: "数据口径" })).toHaveCount(0);
+  await expect(trend.getByRole("group", { name: "资产分类" })).toHaveCount(0);
+  await expect(interval.getByRole("heading", { name: "区间结论" })).toBeVisible();
+  await expect(interval).toContainText("区间净外部投入");
+  await expect(interval).toContainText("区间投资盈亏");
 });
 
 test("收益分析按真实资产观测和资金账本解释收益，并支持安全维护历史记录", async ({
@@ -202,13 +188,13 @@ test("收益分析按真实资产观测和资金账本解释收益，并支持�
   const workspace = page.getByTestId("investment-performance-workspace");
   await expect(page.getByRole("heading", { name: "收益分析" })).toBeVisible();
   await expect(workspace.getByTestId("performance-current-total")).toContainText(
-    "300.00 USD",
+    "302.00 USD",
   );
   await expect(workspace.getByTestId("performance-net-investment")).toContainText(
     "115.00 USD",
   );
   await expect(workspace.getByTestId("performance-current-profit")).toContainText(
-    "+185.00 USD",
+    "+187.00 USD",
   );
   await expect(workspace.getByTestId("performance-interval")).toContainText(
     "03月01日 至 03月04日",
@@ -217,10 +203,7 @@ test("收益分析按真实资产观测和资金账本解释收益，并支持�
     "-15.00 USD",
   );
   await expect(workspace.getByTestId("performance-trend")).toContainText(
-    "可绘制 3 / 63 天",
-  );
-  await expect(workspace.getByTestId("performance-trend")).toContainText(
-    "缺少 60 天资产观测",
+    "完整 3 / 63 天",
   );
 
   await page.getByRole("button", { name: "新增资金记录" }).click();
@@ -234,7 +217,7 @@ test("收益分析按真实资产观测和资金账本解释收益，并支持�
     "135.00 USD",
   );
   await expect(workspace.getByTestId("performance-current-profit")).toContainText(
-    "+165.00 USD",
+    "+167.00 USD",
   );
   await expect(workspace.getByText("历史补录", { exact: true })).toBeVisible();
 
@@ -248,7 +231,7 @@ test("收益分析按真实资产观测和资金账本解释收益，并支持�
   await page.getByRole("button", { name: /删除资金记录.*历史补录/ }).click();
   await expect(
     page.getByRole("dialog", { name: "永久删除资金记录" }),
-  ).toContainText("不会改写任何资产观测");
+  ).toContainText("将永久删除 外部入金记录");
   await page.getByRole("button", { name: "永久删除这条记录" }).click();
   await expect(workspace.getByText("历史补录", { exact: true })).toHaveCount(0);
   await expect(workspace.getByTestId("performance-net-investment")).toContainText(
@@ -291,4 +274,149 @@ test("收益分析按真实资产观测和资金账本解释收益，并支持�
     "scrollWidth",
     await page.locator("body").evaluate((body) => body.clientWidth),
   );
+});
+
+test("市场价格指数接口保留所有者与长桥来源边界", async ({ request }) => {
+  await request.post("/test-doubles/reset");
+
+  expect(
+    (await request.get("/api/market-benchmarks/candles")).status(),
+  ).toBe(401);
+
+  await request.post("/test-doubles/owner-session");
+  expect(
+    (await request.get("/api/market-benchmarks/candles")).status(),
+  ).toBe(409);
+
+  const loaded = await request.post(
+    "/test-doubles/longbridge/persistence?legacy=1",
+  );
+  expect(loaded.ok()).toBeTruthy();
+
+  const response = await request.get("/api/market-benchmarks/candles");
+  expect(response.ok()).toBeTruthy();
+  const body = await response.json();
+  expect(body.candles[".SPX.US"]).toHaveLength(180);
+  expect(body.candles[".NDX.US"]).toHaveLength(180);
+});
+
+test("旧长桥历史保留来源实际观测，不伪造组合完整性", async ({ request }) => {
+  const response = await request.post(
+    "/test-doubles/longbridge/persistence?legacy=history",
+  );
+  expect(response.ok()).toBeTruthy();
+
+  const body = await response.json();
+  expect(body.observation).toMatchObject({
+    complete: false,
+    status: "incomplete",
+    total: { USD: "100", CNY: "720", HKD: null },
+  });
+  expect(body.source).toMatchObject({
+    complete: true,
+    status: "complete",
+    total: { USD: "100", CNY: "720", HKD: null },
+    assetClassTotals: {
+      securities: {
+        complete: true,
+        total: { USD: "100", CNY: "720", HKD: null },
+      },
+    },
+  });
+});
+
+test("收益分析将早期长桥金额作为统一资产走势的补充历史", async ({
+  page,
+}) => {
+  await page.request.post("/test-doubles/reset");
+  await page.request.post("/test-doubles/daily-snapshots", {
+    data: { action: "configure-classified" },
+  });
+  await page.request.post("/test-doubles/daily-snapshots", {
+    data: { action: "seed-classified-performance-history" },
+  });
+  await page.request.post("/test-doubles/owner-session");
+  const loaded = await page.request.post(
+    "/test-doubles/longbridge/persistence?legacy=1",
+  );
+  expect(loaded.ok()).toBeTruthy();
+
+  const history = await page.request.post("/test-doubles/daily-snapshots", {
+    data: { action: "seed-imported-source-history" },
+  });
+  expect(history.ok()).toBeTruthy();
+
+  await page.goto("/performance");
+
+  const trend = page.getByTestId("performance-trend");
+  await trend.getByRole("button", { name: "全部", exact: true }).click();
+  const chart = trend.getByRole("img", { name: /我的资产走势.*早期实际记录/ });
+  await expect(chart).toBeVisible();
+  await expect(trend.getByRole("img")).toHaveCount(1);
+  await expect(chart.locator(".recharts-line-curve")).toHaveCount(2);
+  await expect(trend).toContainText("早期记录");
+  await expect(trend).toContainText("完整总资产");
+  await expect(trend.getByTestId("performance-benchmark")).toHaveCount(0);
+  await expect(trend.getByRole("group", { name: "数据口径" })).toHaveCount(0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator("body")).toHaveJSProperty(
+    "scrollWidth",
+    await page.locator("body").evaluate((body) => body.clientWidth),
+  );
+
+  await page.getByRole("button", { name: "隐藏关键信息" }).click();
+  await expect(trend.getByTestId("performance-benchmark")).toHaveCount(0);
+});
+
+test("近期范围未包含早期记录时，资产走势仍可显示市场对比", async ({
+  page,
+}) => {
+  await seedPerformanceHistory(page);
+  const loaded = await page.request.post(
+    "/test-doubles/longbridge/persistence?legacy=1",
+  );
+  expect(loaded.ok()).toBeTruthy();
+
+  const history = await page.request.post("/test-doubles/daily-snapshots", {
+    data: { action: "seed-imported-source-history" },
+  });
+  expect(history.ok()).toBeTruthy();
+
+  await page.goto("/performance");
+  const trend = page.getByTestId("performance-trend");
+  const rangeGroup = trend.getByRole("group", { name: "分析区间" });
+
+  await rangeGroup.getByRole("button", { name: "近 1 月", exact: true }).click();
+  const chart = trend.getByRole("img", {
+    name: "组合资产与市场价格指数趋势",
+  });
+
+  await expect(rangeGroup.getByRole("button", { name: "近 1 月", exact: true }))
+    .toHaveAttribute("aria-pressed", "true");
+  await expect(trend).toContainText("完整 3 / 29 天");
+  await expect(chart).toContainText("02月04日");
+  expect(
+    (await chart.locator(".recharts-line-curve").first().getAttribute("d"))?.match(/M/g),
+  ).toHaveLength(1);
+});
+
+test("长桥价格指数读取失败时不伪造对比数值", async ({ page }) => {
+  await seedPerformanceHistory(page);
+  const loaded = await page.request.post(
+    "/test-doubles/longbridge/persistence?legacy=1",
+  );
+  expect(loaded.ok()).toBeTruthy();
+  await page.route("**/api/market-benchmarks/candles", (route) =>
+    route.fulfill({
+      body: JSON.stringify({ error: "读取失败" }),
+      contentType: "application/json",
+      status: 500,
+    }),
+  );
+
+  await page.goto("/performance");
+  const benchmark = page.getByTestId("performance-benchmark");
+  await expect(benchmark).toContainText("指数读取失败");
+  await expect(page.getByTestId("performance-trend").locator(".recharts-line-curve")).toHaveCount(1);
+  await expect(page.getByTestId("performance-trend").getByRole("img")).toHaveCount(1);
 });
