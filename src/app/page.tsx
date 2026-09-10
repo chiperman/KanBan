@@ -8,6 +8,7 @@ import {
 } from "@/server/auth/canonical-origin"
 import { getServices } from "@/server/composition"
 import { DailyOverviewWorkspace } from "@/ui/daily-overview-workspace"
+import { AssetRefreshReset } from "@/ui/asset-refresh-provider"
 import { LocalClock } from "@/ui/local-clock"
 import { LogoutButton } from "@/ui/logout-button"
 import { OwnerLogin } from "@/ui/owner-login"
@@ -40,6 +41,7 @@ export default async function AssetDashboardPage({
 
     return (
       <div className="page page-dashboard page-demo" data-testid="demo-mode-dashboard">
+        <AssetRefreshReset />
         <a className="skip-link" href="#main-content">
           跳到主要内容
         </a>
@@ -98,6 +100,7 @@ export default async function AssetDashboardPage({
   if (session === null) {
     return (
       <div className="page page-locked">
+        <AssetRefreshReset />
         <a className="skip-link" href="#main-content">
           跳到主要内容
         </a>
@@ -132,10 +135,12 @@ export default async function AssetDashboardPage({
     storedSources,
     cashflows,
     dailyAssetTrendObservations,
+    fullRefreshState,
   ] = await Promise.all([
     services.assetSources.list(),
     services.investmentCashflows.list(),
     services.dailyAssetSnapshots.listTrendObservations(),
+    services.assetFullRefreshState.read(),
   ])
   const assetSources = storedSources.map(
     ({ credentialReference: _credentialReference, permissions: _permissions, ...source }) => source,
@@ -149,43 +154,21 @@ export default async function AssetDashboardPage({
   return (
     <SessionGuard>
       <WorkbenchShell
-        refreshEnabled={assetSources.some(
-          (source) =>
-            source.lifecycle !== "disconnected" && source.kind !== "manual",
-        )}
+        refreshEnabled
+        refreshRegistration={{
+          attemptedAt: fullRefreshState.attemptedAt,
+          sources: storedSources.map((source) => ({
+            id: source.id,
+            kind: source.kind,
+            lifecycle: source.lifecycle,
+            credentialAvailable: source.credentialReference !== null,
+          })),
+        }}
       >
         <div className="page page-dashboard">
-        <a className="skip-link" href="#main-content">
-          跳到主要内容
-        </a>
-          <header className="page-header">
-            <div className="header-title">
-              <p className="header-label">
-                <span className="header-index" aria-hidden="true">
-                  01
-                </span>
-                <span className="header-wordmark" lang="en">
-                  PERSONAL ASSET DASHBOARD
-                </span>
-              </p>
-              <span data-testid="view-mode" hidden>
-                所有者视图 · 资产看板 · 已验证身份
-              </span>
-            </div>
-            <div className="header-side">
-              <LocalClock initialTime={now.toISOString()} compact />
-              <VibeLink
-                aria-label="进入演示模式"
-                className="header-demo-link"
-                href="/?mode=demo"
-                variant="outline"
-              >
-                DEMO
-              </VibeLink>
-              <LogoutButton />
-              <ThemeSwitcher />
-            </div>
-          </header>
+          <a className="skip-link" href="#main-content">
+            跳到主要内容
+          </a>
           <main id="main-content">
             <DailyOverviewWorkspace
               cashflows={cashflows}

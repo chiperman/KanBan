@@ -19,9 +19,10 @@ export default async function AssetsPage({
   await redirectLoopbackIpToLocalhost("/assets", searchParams);
   const services = getServices();
   if ((await services.auth.currentSession()) === null) redirect("/");
-  const [storedSources, manualRecords] = await Promise.all([
+  const [storedSources, manualRecords, fullRefreshState] = await Promise.all([
     services.assetSources.list(),
     services.manualAssetRecords.list(),
+    services.assetFullRefreshState.read(),
   ]);
   const manualRecordsBySource = new Map<string, typeof manualRecords>();
   for (const record of manualRecords) {
@@ -42,10 +43,16 @@ export default async function AssetsPage({
   return (
     <SessionGuard>
       <WorkbenchShell
-        refreshEnabled={sources.some(
-          (source) =>
-            source.lifecycle !== "disconnected" && source.kind !== "manual",
-        )}
+        refreshEnabled
+        refreshRegistration={{
+          attemptedAt: fullRefreshState.attemptedAt,
+          sources: storedSources.map((source) => ({
+            id: source.id,
+            kind: source.kind,
+            lifecycle: source.lifecycle,
+            credentialAvailable: source.credentialReference !== null,
+          })),
+        }}
       >
         <div className="page page-workbench-destination">
           <a className="skip-link" href="#main-content">

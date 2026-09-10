@@ -1,8 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
+import type {
+  MarketBenchmarkComparison,
+  MarketBenchmarkSymbol,
+} from "@/domain/market-benchmark";
 import {
   decimalCompare,
   decimalDivide,
@@ -40,8 +44,11 @@ import type {
 import {
   assetHoldingKey,
   assetHoldingDisplayName,
+  AssetHoldingPositionStatus,
   AssetProductCoverage,
 } from "@/ui/asset-product-coverage";
+import { supportsLongbridgeCandlesticks } from "@/domain/longbridge-symbols";
+import { HoldingCandlestickChart } from "@/ui/holding-candlestick-chart";
 import { formatAssetUnitPrice } from "@/ui/asset-price-display";
 import type { ProfitColorScheme } from "@/ui/profit-color-scheme";
 import {
@@ -466,6 +473,7 @@ function HoldingCurrentCostPriceCell({
 
 function HoldingDetailRow({
   holding,
+  onShowCandlesticks,
   profitColorScheme,
   showPlatformProfit,
   compactProfitColumns,
@@ -474,6 +482,7 @@ function HoldingDetailRow({
   formatDisplayPrice,
 }: {
   holding: AssetHolding;
+  onShowCandlesticks?: (holding: AssetHolding) => void;
   profitColorScheme: ProfitColorScheme;
   showPlatformProfit: boolean;
   compactProfitColumns: boolean;
@@ -496,7 +505,20 @@ function HoldingDetailRow({
       data-holding-key={assetHoldingKey(holding)}
     >
       <td>
-        <strong>{assetHoldingDisplayName(holding)}</strong>
+        <strong className="holding-name">
+          {assetHoldingDisplayName(holding)}
+          {onShowCandlesticks ? (
+            <VibeButton
+              className="holding-candlestick-trigger"
+              onClick={() => onShowCandlesticks(holding)}
+              type="button"
+              variant="text"
+            >
+              K线
+            </VibeButton>
+          ) : null}
+        </strong>
+        <AssetHoldingPositionStatus holding={holding} />
         <span className="holding-symbol">{holding.symbol}</span>
         <span className="holding-price-source">{valuationDetail}</span>
       </td>
@@ -615,6 +637,8 @@ export function AssetSourceCard({
   history,
   reportingExchangeRates,
   reportingCurrency,
+  trendBenchmark,
+  trendDays,
   trendRange,
   currentDay,
   holdingsSearchQuery,
@@ -631,6 +655,11 @@ export function AssetSourceCard({
   history: DailyAssetTrendObservation[];
   reportingExchangeRates: AssetExchangeRate[];
   reportingCurrency: ReportingCurrency;
+  trendBenchmark?: {
+    comparison: MarketBenchmarkComparison;
+    enabledSymbols: MarketBenchmarkSymbol[];
+  } | null;
+  trendDays?: readonly string[];
   trendRange: TrendRange;
   currentDay: string;
   holdingsSearchQuery: string;
@@ -643,6 +672,10 @@ export function AssetSourceCard({
 }) {
   const [hideSmallCryptoHoldings, setHideSmallCryptoHoldings] = useState(true);
   const [holdingsDetailExpanded, setHoldingsDetailExpanded] = useState(true);
+  const [candlestickHolding, setCandlestickHolding] = useState<AssetHolding | null>(null);
+  useEffect(() => {
+    if (!showSensitiveInfo) setCandlestickHolding(null);
+  }, [showSensitiveInfo]);
   const isManual = source.kind === "manual";
   const hasManualRecord = !isManual || source.hasManualRecord !== false;
   const manualRecords = source.manualRecords ?? [];
@@ -746,7 +779,7 @@ export function AssetSourceCard({
           : earliest,
       undefined,
     );
-  const sourceTrendDays = daysForTrendRange(
+  const sourceTrendDays = trendDays ?? daysForTrendRange(
     trendRange,
     currentDay,
     firstSourceTrendDay,
@@ -1008,6 +1041,11 @@ export function AssetSourceCard({
             <>
               <AssetTrendChart
                 ariaLabel={`${heading.title}来源总额趋势`}
+                benchmark={trendBenchmark === null || trendBenchmark === undefined ? null : {
+                  assetScopeLabel: "来源",
+                  comparison: trendBenchmark.comparison,
+                  enabledSymbols: trendBenchmark.enabledSymbols,
+                }}
                 currency={reportingCurrency}
                 formatAmount={moneyAmount}
                 formatDay={formatShanghaiDayLabel}
@@ -1194,7 +1232,10 @@ export function AssetSourceCard({
               data-holding-key={assetHoldingKey(holding)}
               key={assetHoldingKey(holding)}
             >
-              <span>{assetHoldingDisplayName(holding)}</span>
+              <div className="holding-top-list__identity">
+                <span>{assetHoldingDisplayName(holding)}</span>
+                <AssetHoldingPositionStatus holding={holding} />
+              </div>
               <strong>
                 {holding.marketValue === null
                   ? holding.valuation.status === "quote-unavailable"
@@ -1283,6 +1324,14 @@ export function AssetSourceCard({
                       <HoldingDetailRow
                         key={assetHoldingKey(holding)}
                         holding={holding}
+                        onShowCandlesticks={
+                          source.kind === "longbridge" &&
+                          showSensitiveInfo &&
+                          holding.assetClass === "securities" &&
+                          supportsLongbridgeCandlesticks(holding.symbol)
+                            ? setCandlestickHolding
+                            : undefined
+                        }
                         profitColorScheme={profitColorScheme}
                         showPlatformProfit={showPlatformProfit}
                         compactProfitColumns={compactProfitColumns}
@@ -1372,6 +1421,14 @@ export function AssetSourceCard({
           </>
         )}
       </div>
+      {candlestickHolding !== null && showSensitiveInfo ? (
+        <HoldingCandlestickChart
+          name={assetHoldingDisplayName(candlestickHolding)}
+          onClose={() => setCandlestickHolding(null)}
+          sourceId={source.id}
+          symbol={candlestickHolding.symbol}
+        />
+      ) : null}
     </>
   );
 }

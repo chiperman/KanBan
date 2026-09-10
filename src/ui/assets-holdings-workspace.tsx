@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 
 import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
 import { longbridgeReferenceRates } from "@/domain/investment-performance";
@@ -22,7 +22,9 @@ import type {
 import {
   assetHoldingDisplayName,
   assetHoldingKey,
+  AssetHoldingPositionStatus,
   AssetProductCoverage,
+  AssetProductCoveragePanel,
 } from "@/ui/asset-product-coverage";
 import { formatAssetUnitPrice } from "@/ui/asset-price-display";
 import { sourceSyncStatus } from "@/ui/asset-source-status";
@@ -38,6 +40,7 @@ import {
   useWorkbenchDisplayPreferences,
 } from "@/ui/workbench-display-preferences";
 import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
+import { AssetGlobalRefreshControl } from "@/ui/asset-refresh-controls";
 
 type WorkspaceSource = Omit<
   AssetSourceSummary,
@@ -211,6 +214,91 @@ function sourceTotal(
   return convertCurrencyAmount(total.amount, total.currency, currency, rates);
 }
 
+function AssetSourceTotalRow({
+  currency,
+  reportingRates,
+  showSensitiveInfo,
+  source,
+}: {
+  currency: ReportingCurrency;
+  reportingRates: WorkspaceSource["snapshot"]["exchangeRates"];
+  showSensitiveInfo: boolean;
+  source: WorkspaceSource;
+}) {
+  const [isCoverageOpen, setIsCoverageOpen] = useState(false);
+  const coveragePanelId = useId();
+  const sourceRates = sourceReportingConversionRates(source, reportingRates);
+  const total = sourceTotal(source, currency, sourceRates);
+  const status = sourceStatus(source);
+  const coverage = source.snapshot.coverage;
+  const hasCoveragePanel = Boolean(coverage && coverage.products.length > 0);
+
+  return (
+    <li
+      data-testid={`assets-source-total-${source.id}`}
+    >
+      <article>
+        <div>
+          <strong>{assetSourceDisplayName(source)}</strong>
+          <span>
+            {source.kind === "manual"
+              ? source.hasManualRecord === false
+                ? "手工资产组 · 暂无记录"
+                : "手工资产组 · 仅总额"
+              : `${sourceHoldingCount(source)} 项持仓观察`}
+          </span>
+        </div>
+        <div className="assets-holdings__source-state">
+          <VibeStatusTag tone={status.tone}>{status.label}</VibeStatusTag>
+          <div className="assets-holdings__source-coverage">
+            {coverage ? (
+              <AssetProductCoverage
+                coverage={coverage}
+                isOpen={isCoverageOpen}
+                onOpenChange={setIsCoverageOpen}
+                panelId={coveragePanelId}
+                renderInlinePanel={false}
+                sourceKind={`assets-${source.id}`}
+                variant="source-row"
+              />
+            ) : null}
+          </div>
+        </div>
+        <div className="assets-holdings__source-value">
+          {showSensitiveInfo && total !== null ? (
+            <VibeMetric unit={currency} value={money(total)} />
+          ) : (
+            <strong
+              className={
+                showSensitiveInfo
+                  ? undefined
+                  : "assets-holdings__source-value-hidden"
+              }
+            >
+              {showSensitiveInfo ? "无法折算" : "金额已隐藏"}
+            </strong>
+          )}
+          <VibeLink
+            aria-label={`查看 ${assetSourceDisplayName(source)} 来源详情`}
+            className="assets-holdings__source-detail"
+            href={`/asset-sources/${encodeURIComponent(source.id)}`}
+            variant="text"
+          >
+            查看
+          </VibeLink>
+        </div>
+        {isCoverageOpen && hasCoveragePanel && coverage ? (
+          <AssetProductCoveragePanel
+            className="assets-holdings__source-coverage-panel"
+            coverage={coverage}
+            id={coveragePanelId}
+          />
+        ) : null}
+      </article>
+    </li>
+  );
+}
+
 export function AssetsHoldingsWorkspace({
   sources,
 }: {
@@ -312,6 +400,7 @@ export function AssetsHoldingsWorkspace({
             value={currency}
             variant="compact"
           />
+          <AssetGlobalRefreshControl />
           </>
         }
         eyebrow="PORTFOLIO / HOLDINGS"
@@ -350,71 +439,15 @@ export function AssetsHoldingsWorkspace({
               <span>来源总额</span>
             </div>
             <ol>
-              {sources.map((source) => {
-                const sourceRates = sourceReportingConversionRates(
-                  source,
-                  reportingRates,
-                );
-                const total = sourceTotal(source, currency, sourceRates);
-                const status = sourceStatus(source);
-                const coverage = source.snapshot.coverage;
-                return (
-                  <li
-                    key={source.id}
-                    data-testid={`assets-source-total-${source.id}`}
-                  >
-                    <article>
-                      <div>
-                        <strong>{assetSourceDisplayName(source)}</strong>
-                        <span>
-                          {source.kind === "manual"
-                            ? source.hasManualRecord === false
-                              ? "手工资产组 · 暂无记录"
-                              : "手工资产组 · 仅总额"
-                            : `${sourceHoldingCount(source)} 项持仓观察`}
-                        </span>
-                      </div>
-                      <div className="assets-holdings__source-state">
-                        <VibeStatusTag tone={status.tone}>
-                          {status.label}
-                        </VibeStatusTag>
-                        <div className="assets-holdings__source-coverage">
-                          {coverage ? (
-                            <AssetProductCoverage
-                              coverage={coverage}
-                              sourceKind={`assets-${source.id}`}
-                              variant="source-row"
-                            />
-                          ) : null}
-                        </div>
-                      </div>
-                      <div className="assets-holdings__source-value">
-                        {showSensitiveInfo && total !== null ? (
-                          <VibeMetric unit={currency} value={money(total)} />
-                        ) : (
-                          <strong
-                            className={
-                              showSensitiveInfo
-                                ? undefined
-                                : "assets-holdings__source-value-hidden"
-                            }
-                          >
-                            {showSensitiveInfo ? "无法折算" : "金额已隐藏"}
-                          </strong>
-                        )}
-                        <VibeLink
-                          aria-label={`查看 ${assetSourceDisplayName(source)} 来源详情`}
-                          className="assets-holdings__source-detail"
-                          href={`/asset-sources/${encodeURIComponent(source.id)}`}
-                          variant="text"
-                        >
-                          查看
-                        </VibeLink>
-                      </div>
-                    </article>
-                  </li>
-                );
-              })}
+              {sources.map((source) => (
+                <AssetSourceTotalRow
+                  currency={currency}
+                  key={source.id}
+                  reportingRates={reportingRates}
+                  showSensitiveInfo={showSensitiveInfo}
+                  source={source}
+                />
+              ))}
             </ol>
           </div>
         )}
@@ -511,6 +544,7 @@ export function AssetsHoldingsWorkspace({
                     >
                       <td data-label="资产与来源">
                         <strong>{assetHoldingDisplayName(holding)}</strong>
+                        <AssetHoldingPositionStatus holding={holding} />
                         <span>{assetSourceDisplayName(source)}</span>
                         <small>{holding.sourceProduct ?? holding.assetClass}</small>
                       </td>

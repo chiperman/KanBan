@@ -5,7 +5,8 @@ import type {
   HTMLAttributes,
   ReactNode,
 } from "react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 const FOCUSABLE_SELECTOR = [
   "button:not([disabled])",
@@ -49,6 +50,11 @@ export function VibeDialog({
 }: VibeDialogProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -128,7 +134,7 @@ export function VibeDialog({
   const panelClassName = ["vibe-dialog", className].filter(Boolean).join(" ");
   const hasExplicitLabel = typeof overlayProps["aria-label"] === "string";
 
-  return (
+  const dialog = (
     <div
       ref={overlayRef}
       aria-labelledby={hasExplicitLabel ? undefined : titleId}
@@ -147,4 +153,6 @@ export function VibeDialog({
       )}
     </div>
   );
+
+  return mounted ? createPortal(dialog, document.body) : dialog;
 }

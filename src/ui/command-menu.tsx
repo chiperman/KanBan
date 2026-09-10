@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 
-import { ASSET_MANUAL_REFRESH_EVENT } from "@/shared/command-events";
 import { OWNER_LOCK_EVENT } from "@/shared/session-policy";
+import { useAssetRefresh } from "@/ui/asset-refresh-provider";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeField } from "@/ui/vibe/vibe-field";
 
@@ -40,6 +40,7 @@ function navigationTargets(): NavigationTarget[] {
 
 export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
   const router = useRouter();
+  const refresh = useAssetRefresh();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [targets, setTargets] = useState<NavigationTarget[]>([]);
@@ -122,14 +123,14 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
       })),
     ];
     const actions: Command[] = [];
-    if (refreshEnabled) {
+    if (refreshEnabled && refresh.canRefresh) {
       actions.push({
         id: "refresh",
         label: "立即刷新资产",
         keywords: "立即 刷新 同步 资产 refresh",
         action() {
           close(false);
-          window.dispatchEvent(new Event(ASSET_MANUAL_REFRESH_EVENT));
+          void refresh.request({ reason: "manual-global" });
         },
       });
     }
@@ -143,7 +144,7 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
       },
     });
     return [...navigation, ...actions];
-  }, [refreshEnabled, router, targets]);
+  }, [refresh, refreshEnabled, router, targets]);
 
   const normalized = query.trim().toLocaleLowerCase("zh-CN");
   const filtered = commands.filter((command) =>

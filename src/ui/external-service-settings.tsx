@@ -74,9 +74,6 @@ export function ExternalServiceSettings({
       <div className="external-service-settings__head">
         <div>
           <h2 id="external-service-settings-title">外部服务连接</h2>
-          <p className="settings-description">
-            全局用于 EVM 钱包与行情估值。密钥和 RPC URL 加密保存在本机，保存后不会回显。
-          </p>
         </div>
         <span className="external-service-settings__scope">GLOBAL / EVM</span>
       </div>
@@ -124,14 +121,14 @@ export function ExternalServiceSettings({
         />
         <div className="external-service-form__actions">
           <VibeButton disabled={pending} type="submit" variant="primary">
-            {pending ? "正在保存并验证…" : "保存并验证服务"}
+            {pending ? "正在保存…" : "保存并验证"}
           </VibeButton>
-          <span>首次配置需要三项齐全；更新时留空的项目保持原值。</span>
+          <span>留空保持原值。</span>
         </div>
       </form>
       {saved ? (
         <VibeNotice role="status" tone="success">
-          外部服务已保存并验证，可返回资产看板刷新 EVM 钱包。
+          已保存并验证。
         </VibeNotice>
       ) : null}
       {error ? (

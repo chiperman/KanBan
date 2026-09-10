@@ -46,7 +46,6 @@ export default async function AssetSourcesPage({
                   </VibeLink>
                 </>
               }
-              description="自动账户、观察钱包与手工资产记录统一在此查看；详情才提供单来源数据与生命周期操作。"
               eyebrow="PORTFOLIO / SOURCES"
               title="资产来源"
             />

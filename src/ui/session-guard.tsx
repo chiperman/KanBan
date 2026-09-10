@@ -113,7 +113,7 @@ export function SessionGuard({ children }: { children: ReactNode }) {
           <VibeDotIcon name="lock" size={72} />
         </span>
         <p className="empty-title">敏感内容已锁定</p>
-        <p className="empty-hint">正在确认服务端锁定，完成后可重新验证身份。</p>
+        <p className="empty-hint">正在锁定…</p>
       </span>
       <span className="session-locked-curtain" aria-hidden="true" />
     </section>

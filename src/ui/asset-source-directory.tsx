@@ -34,7 +34,6 @@ export function AssetSourceDirectory({
       {sources.length === 0 ? (
         <div className="empty-state">
           <p className="empty-title">暂无资产来源</p>
-          <p className="empty-hint">尚未接入自动账户、观察钱包或手工资产记录。</p>
         </div>
       ) : (
         <ol className="asset-source-directory__list">

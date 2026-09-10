@@ -1,4 +1,8 @@
+"use client";
+
 import type { ReactNode } from "react";
+
+import { WorkbenchHeaderUtilitiesSlot } from "@/ui/workbench-shell";
 
 export function WorkbenchPageHeader({
   actions,
@@ -30,10 +34,7 @@ export function WorkbenchPageHeader({
           {actions}
         </div>
       ) : null}
-      <div
-        className="workbench-page-header__utilities"
-        data-workbench-utilities-slot
-      />
+      <WorkbenchHeaderUtilitiesSlot />
     </header>
   );
 }

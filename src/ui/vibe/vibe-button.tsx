@@ -4,6 +4,7 @@ import type {
   Ref,
   ReactNode,
 } from "react";
+import Link from "next/link";
 
 type VibeButtonVariant = "primary" | "outline" | "text";
 
@@ -50,9 +51,23 @@ export function VibeLink({
   variant = "outline",
   ...props
 }: VibeLinkProps) {
+  const classNames = actionClasses(variant, className);
+  if (typeof props.href === "string" && props.href.startsWith("/")) {
+    return (
+      <Link
+        className={classNames}
+        data-vibe-component="link"
+        data-vibe-variant={variant}
+        {...props}
+        href={props.href}
+      >
+        {children}
+      </Link>
+    );
+  }
   return (
     <a
-      className={actionClasses(variant, className)}
+      className={classNames}
       data-vibe-component="link"
       data-vibe-variant={variant}
       {...props}

@@ -6,8 +6,6 @@ import {
   type PageSearchParams,
 } from "@/server/auth/canonical-origin";
 import { getServices } from "@/server/composition";
-import { LocalClock } from "@/ui/local-clock";
-import { LogoutButton } from "@/ui/logout-button";
 import {
   isProfitColorScheme,
   PROFIT_COLOR_SCHEME_COOKIE_KEY,
@@ -17,7 +15,6 @@ import { ProfitColorSettings } from "@/ui/profit-color-settings";
 import { RecoverySetup } from "@/ui/recovery-setup";
 import { ExternalServiceSettings } from "@/ui/external-service-settings";
 import { SessionGuard } from "@/ui/session-guard";
-import { ThemeSwitcher } from "@/ui/theme-switcher";
 import { WorkbenchShell } from "@/ui/workbench-shell";
 import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
 
@@ -40,36 +37,17 @@ export default async function SettingsPage({
   const initialProfitColorScheme = isProfitColorScheme(savedProfitColorScheme)
     ? savedProfitColorScheme
     : null;
-  const now = services.clock.now();
   const externalServiceStatus = await services.externalServices.status();
 
   return (
     <SessionGuard>
       <WorkbenchShell refreshEnabled={false}>
         <div className="page page-settings">
-        <a className="skip-link" href="#main-content">
-          跳到主要内容
-        </a>
-          <header className="page-header">
-            <div className="header-title">
-              <p className="header-label">
-                <span className="header-index" aria-hidden="true">
-                  02
-                </span>
-                <span className="header-wordmark" lang="en">
-                  SETTINGS / SECURITY
-                </span>
-              </p>
-            </div>
-            <div className="header-side">
-              <LocalClock initialTime={now.toISOString()} compact />
-              <LogoutButton />
-              <ThemeSwitcher />
-            </div>
-          </header>
+          <a className="skip-link" href="#main-content">
+            跳到主要内容
+          </a>
           <main className="settings-main" id="main-content">
             <WorkbenchPageHeader
-              description="集中管理所有者登录保护、备份恢复、本机数据和默认偏好。"
               eyebrow="LOCAL / SETTINGS"
               title="设置与安全"
             />
@@ -90,30 +68,15 @@ export default async function SettingsPage({
               </dl>
               <div className="security-settings__recovery">
                 <h3 id="recovery-settings-title">TOTP 登录</h3>
-                <p className="settings-description">
-                  配置或更新当前终端所有者的 TOTP 登录。TOTP 密钥只在本次配置中显示。
-                </p>
                 <RecoverySetup configured={recoveryConfigured} />
               </div>
             </section>
             <BusinessDataBackupSettings />
             <section
               className="settings-section"
-              aria-labelledby="local-data-settings-title"
-            >
-              <h2 id="local-data-settings-title">本机数据</h2>
-              <p className="settings-description">
-                本机数据目录采用私有权限；目录仅限当前所有者访问，数据、备份和临时文件均以私有文件权限保存。不会在此页面显示数据路径、外部来源凭证或密钥。
-              </p>
-            </section>
-            <section
-              className="settings-section"
               aria-labelledby="default-preferences-title"
             >
               <h2 id="default-preferences-title">默认偏好</h2>
-              <p className="settings-description">
-                此处保存跨会话的显示偏好。计价货币和金额隐藏仍是总览的即时查看控制。
-              </p>
               <ProfitColorSettings initialScheme={initialProfitColorScheme} />
             </section>
             <ExternalServiceSettings initialStatus={externalServiceStatus} />

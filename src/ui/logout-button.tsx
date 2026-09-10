@@ -12,7 +12,7 @@ export function LogoutButton() {
   }
 
   return (
-    <VibeTooltip label="立即锁定敏感内容">
+    <VibeTooltip align="end" label="立即锁定敏感内容">
       <VibeButton
         type="button"
         className="header-action-button header-lock-button"

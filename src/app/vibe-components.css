@@ -1131,6 +1131,22 @@ body::before {
   color: var(--bg);
 }
 
+.workbench-page-header__actions
+  .asset-refresh-controls
+  .vibe-button.vibe-button--outline {
+  border-color: var(--line-2);
+  background: transparent;
+  color: var(--secondary);
+}
+
+.workbench-page-header__actions
+  .asset-refresh-controls
+  .vibe-button.vibe-button--outline:not(:disabled):hover {
+  border-color: var(--primary);
+  background: var(--raised);
+  color: var(--primary);
+}
+
 .asset-refresh-controls .asset-refresh-status {
   min-height: 0;
   padding: 0;

@@ -1,14 +1,25 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { type ReactNode, useLayoutEffect, useState } from "react";
-import { createPortal } from "react-dom";
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 
 import { CommandMenu } from "@/ui/command-menu";
+import { LogoutButton } from "@/ui/logout-button";
+import { ThemeSwitcher } from "@/ui/theme-switcher";
 import {
   useWorkbenchDisplayPreferences,
 } from "@/ui/workbench-display-preferences";
 import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
+import {
+  type AssetRefreshRegistration,
+  useAssetRefresh,
+} from "@/ui/asset-refresh-provider";
 
 const PRIMARY_DESTINATIONS = [
   { href: "/", label: "总览", icon: "overview" },
@@ -18,7 +29,26 @@ const PRIMARY_DESTINATIONS = [
   { href: "/settings", label: "设置与安全", icon: "security" },
 ] as const;
 
+type WorkbenchDestination = (typeof PRIMARY_DESTINATIONS)[number];
 type WorkbenchNavigationIconName = (typeof PRIMARY_DESTINATIONS)[number]["icon"];
+
+const DESKTOP_NAVIGATION_GROUPS = [
+  {
+    id: "portfolio",
+    label: "资产组合",
+    destinations: [PRIMARY_DESTINATIONS[1], PRIMARY_DESTINATIONS[2]],
+  },
+  {
+    id: "management",
+    label: "管理",
+    destinations: [PRIMARY_DESTINATIONS[3], PRIMARY_DESTINATIONS[4]],
+  },
+] as const;
+
+type WorkbenchNavigationGroupId =
+  (typeof DESKTOP_NAVIGATION_GROUPS)[number]["id"];
+
+const WorkbenchHeaderUtilitiesContext = createContext<ReactNode>(null);
 
 function isCurrentDestination(pathname: string, href: string) {
   return href === "/"
@@ -81,9 +111,11 @@ function WorkbenchNavigationIcon({
 }
 
 function WorkbenchDestinationLinks({
+  destinations = PRIMARY_DESTINATIONS,
   iconOnly = false,
   showIcon = iconOnly,
 }: {
+  destinations?: readonly WorkbenchDestination[];
   iconOnly?: boolean;
   showIcon?: boolean;
 }) {
@@ -91,7 +123,7 @@ function WorkbenchDestinationLinks({
 
   return (
     <>
-      {PRIMARY_DESTINATIONS.map(({ href, icon, label }) => (
+      {destinations.map(({ href, icon, label }) => (
         <VibeLink
           aria-label={iconOnly ? label : undefined}
           aria-current={
@@ -107,6 +139,84 @@ function WorkbenchDestinationLinks({
         </VibeLink>
       ))}
     </>
+  );
+}
+
+function WorkbenchNavigationGroupChevron() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="workbench-navigation-group-chevron"
+      fill="none"
+      focusable="false"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.5"
+      viewBox="0 0 24 24"
+    >
+      <path d="m5 9 7 7 7-7" />
+    </svg>
+  );
+}
+
+function WorkbenchDesktopNavigationGroups() {
+  const pathname = usePathname();
+  const [expandedGroups, setExpandedGroups] = useState<
+    Record<WorkbenchNavigationGroupId, boolean>
+  >({
+    portfolio: true,
+    management: true,
+  });
+
+  return (
+    <div className="workbench-navigation-groups">
+      {DESKTOP_NAVIGATION_GROUPS.map(({ id, label, destinations }) => {
+        const includesCurrentDestination = destinations.some(({ href }) =>
+          isCurrentDestination(pathname, href),
+        );
+        const isExpanded =
+          includesCurrentDestination || expandedGroups[id];
+        const destinationListId = `workbench-navigation-group-${id}`;
+        const actionLabel = isExpanded ? "收起" : "展开";
+
+        return (
+          <section className="workbench-navigation-group" key={id}>
+            <VibeButton
+              aria-controls={destinationListId}
+              aria-disabled={includesCurrentDestination || undefined}
+              aria-expanded={isExpanded}
+              aria-label={
+                includesCurrentDestination
+                  ? `${label}导航已展开（当前页面）`
+                  : `${actionLabel}${label}导航`
+              }
+              className="workbench-navigation-group-trigger"
+              onClick={() => {
+                if (!includesCurrentDestination) {
+                  setExpandedGroups((groups) => ({
+                    ...groups,
+                    [id]: !groups[id],
+                  }));
+                }
+              }}
+              type="button"
+              variant="text"
+            >
+              <span>{label}</span>
+              <WorkbenchNavigationGroupChevron />
+            </VibeButton>
+            <div
+              className="workbench-navigation-group-destinations"
+              hidden={!isExpanded}
+              id={destinationListId}
+            >
+              <WorkbenchDestinationLinks destinations={destinations} showIcon />
+            </div>
+          </section>
+        );
+      })}
+    </div>
   );
 }
 
@@ -138,6 +248,10 @@ function WorkbenchUtilities({
   return (
     <div className="workbench-utilities" data-testid="workbench-utilities">
       <WorkbenchPrivacyToggle />
+      <div className="workbench-utility-actions">
+        <ThemeSwitcher />
+        <LogoutButton />
+      </div>
       {commandMenu ? (
         <div className="workbench-command">
           <CommandMenu refreshEnabled={refreshEnabled} />
@@ -147,94 +261,81 @@ function WorkbenchUtilities({
   );
 }
 
-function WorkbenchUtilitiesMount({
-  commandMenu,
-  refreshEnabled,
-}: {
-  commandMenu: boolean;
-  refreshEnabled: boolean;
-}) {
-  const pathname = usePathname();
-  const [utilitySlot, setUtilitySlot] = useState<HTMLElement | null>(null);
-  const [useHeaderUtilities, setUseHeaderUtilities] = useState(false);
+export function WorkbenchHeaderUtilitiesSlot() {
+  const utilities = useContext(WorkbenchHeaderUtilitiesContext);
 
-  useLayoutEffect(() => {
-    const mediaQuery = window.matchMedia("(max-width: 1199px)");
-    const updatePlacement = () => setUseHeaderUtilities(mediaQuery.matches);
-    updatePlacement();
-    mediaQuery.addEventListener("change", updatePlacement);
-    return () => mediaQuery.removeEventListener("change", updatePlacement);
-  }, []);
-
-  useLayoutEffect(() => {
-    if (!useHeaderUtilities) {
-      setUtilitySlot(null);
-      return;
-    }
-
-    setUtilitySlot(
-      document.querySelector<HTMLElement>("[data-workbench-utilities-slot]"),
-    );
-  }, [pathname, useHeaderUtilities]);
-
-  const utilities = (
-    <WorkbenchUtilities
-      commandMenu={commandMenu}
-      refreshEnabled={refreshEnabled}
-    />
+  return (
+    <div
+      className="workbench-page-header__utilities"
+      data-workbench-utilities-slot
+    >
+      {utilities}
+    </div>
   );
-
-  return useHeaderUtilities && utilitySlot !== null
-    ? createPortal(utilities, utilitySlot)
-    : utilities;
 }
 
 export function WorkbenchShell({
   children,
   commandMenu = true,
+  refreshRegistration,
   refreshEnabled,
 }: {
   children: ReactNode;
   commandMenu?: boolean;
+  refreshRegistration?: AssetRefreshRegistration;
   refreshEnabled: boolean;
 }) {
+  const { register } = useAssetRefresh();
+  useEffect(() => {
+    if (refreshRegistration !== undefined) register(refreshRegistration);
+  }, [refreshRegistration, register]);
+
   return (
-    <div className="workbench-shell" data-testid="workbench-shell">
-      <nav
-        aria-label="工作台主导航"
-        className="workbench-navigation workbench-desktop-navigation"
-        data-testid="workbench-desktop-navigation"
-      >
-        <VibeLink
-          aria-label="返回资产总览"
-          className="workbench-navigation-brand"
-          href="/"
-          variant="text"
+    <WorkbenchHeaderUtilitiesContext.Provider
+      value={
+        <WorkbenchUtilities
+          commandMenu={commandMenu}
+          refreshEnabled={refreshEnabled}
+        />
+      }
+    >
+      <div className="workbench-shell" data-testid="workbench-shell">
+        <nav
+          aria-label="工作台主导航"
+          className="workbench-navigation workbench-desktop-navigation"
+          data-testid="workbench-desktop-navigation"
         >
-          <span aria-hidden="true" className="workbench-navigation-brand-index">
-            01
-          </span>
-          <span className="workbench-navigation-brand-copy">
-            <strong lang="en">PERSONAL ASSET</strong>
-            <span lang="en">DASHBOARD</span>
-          </span>
-        </VibeLink>
-        <div className="workbench-navigation-links">
-          <WorkbenchDestinationLinks showIcon />
-        </div>
-      </nav>
-      <div className="workbench-shell-content">{children}</div>
-      <WorkbenchUtilitiesMount
-        commandMenu={commandMenu}
-        refreshEnabled={refreshEnabled}
-      />
-      <nav
-        aria-label="工作台主导航"
-        className="workbench-navigation workbench-mobile-navigation"
-        data-testid="workbench-mobile-navigation"
-      >
-        <WorkbenchDestinationLinks iconOnly />
-      </nav>
-    </div>
+          <VibeLink
+            aria-label="返回资产总览"
+            className="workbench-navigation-brand"
+            href="/"
+            variant="text"
+          >
+            <span aria-hidden="true" className="workbench-navigation-brand-index">
+              01
+            </span>
+            <span className="workbench-navigation-brand-copy">
+              <strong lang="en">PERSONAL ASSET</strong>
+              <span lang="en">DASHBOARD</span>
+            </span>
+          </VibeLink>
+          <div className="workbench-navigation-links">
+            <WorkbenchDestinationLinks
+              destinations={[PRIMARY_DESTINATIONS[0]]}
+              showIcon
+            />
+            <WorkbenchDesktopNavigationGroups />
+          </div>
+        </nav>
+        <div className="workbench-shell-content">{children}</div>
+        <nav
+          aria-label="工作台主导航"
+          className="workbench-navigation workbench-mobile-navigation"
+          data-testid="workbench-mobile-navigation"
+        >
+          <WorkbenchDestinationLinks iconOnly />
+        </nav>
+      </div>
+    </WorkbenchHeaderUtilitiesContext.Provider>
   );
 }

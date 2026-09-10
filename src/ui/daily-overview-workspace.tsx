@@ -24,10 +24,11 @@ import { portfolioSourceTotal } from "@/domain/evm-token-preferences";
 import { hasManualAssetRecord } from "@/domain/manual-asset-records";
 import type {
   AssetSourceSummary,
+  DailyAssetSourceSnapshot,
   DailyAssetTrendObservation,
   InvestmentCashflow,
 } from "@/server/ports";
-import { AssetRefreshControls } from "@/ui/asset-refresh-controls";
+import { AssetGlobalRefreshControl } from "@/ui/asset-refresh-controls";
 import { sourceSyncStatus } from "@/ui/asset-source-status";
 import { AssetTrendChart } from "@/ui/asset-trend-chart";
 import type { ProfitColorScheme } from "@/ui/profit-color-scheme";
@@ -54,6 +55,11 @@ type OverviewSource = Omit<
   AssetSourceSummary,
   "credentialReference" | "permissions"
 >;
+
+type SourceComparison =
+  | { state: "changed"; change: string; previousAmount: string }
+  | { state: "scope-change" }
+  | { state: "unavailable" };
 
 const CURRENCY_OPTIONS: readonly VibeSelectOption<ReportingCurrency>[] = [
   { value: "USD", label: "USD" },
@@ -136,6 +142,18 @@ function MetricValue({
   );
 }
 
+function SourceDetailArrowIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      focusable="false"
+      viewBox="0 0 16 16"
+    >
+      <path d="M3 8h10M9 4l4 4-4 4" />
+    </svg>
+  );
+}
+
 function sourceTotalInCurrency(
   source: OverviewSource,
   currency: ReportingCurrency,
@@ -167,6 +185,33 @@ function latestCompletedPriorObservation(
         right.capturedAt.localeCompare(left.capturedAt),
     )
     .at(0) ?? null;
+}
+
+function sourceComparison(
+  currentAmount: string | null,
+  currentComparable: boolean,
+  priorObservation: DailyAssetTrendObservation | null,
+  priorSource: DailyAssetSourceSnapshot | undefined,
+  currency: ReportingCurrency,
+): SourceComparison {
+  if (!currentComparable || currentAmount === null || priorObservation === null) {
+    return { state: "unavailable" };
+  }
+  if (priorSource === undefined) {
+    return { state: "scope-change" };
+  }
+  const previousAmount = priorSource.total[currency] ?? null;
+  const previousComplete =
+    priorSource.complete &&
+    (priorSource.status === undefined || priorSource.status === "complete");
+  if (!previousComplete || previousAmount === null) {
+    return { state: "unavailable" };
+  }
+  return {
+    state: "changed",
+    change: decimalSubtract(currentAmount, previousAmount),
+    previousAmount,
+  };
 }
 
 function daysBetweenShanghaiDays(startDay: string, endDay: string): number {
@@ -201,6 +246,10 @@ export function DailyOverviewWorkspace({
   const recordedSources = useMemo(
     () => sources.filter(hasManualAssetRecord),
     [sources],
+  );
+  const refreshEnabled = recordedSources.some(
+    (source) =>
+      source.kind !== "manual" && source.lifecycle !== "disconnected",
   );
   const usdValuation = useMemo(
     () => buildTotalValuation(recordedSources, "USD", "source"),
@@ -299,19 +348,44 @@ export function DailyOverviewWorkspace({
     };
   }, [currency, currentDay, trendObservations]);
   const sourceSummaries = useMemo(
-    () =>
-      recordedSources
-        .map((source) => ({
-          source,
-          amount: sourceTotalInCurrency(source, currency, longbridgeRates),
-          health: sourceHealth(source),
-        }))
+    () => {
+      const priorSourcesById = new Map(
+        priorObservation?.sources.map((source) => [source.sourceId, source]),
+      );
+      return recordedSources
+        .map((source) => {
+          const health = sourceHealth(source);
+          const valuation = buildTotalValuation(
+            [source],
+            currency,
+            "source",
+            recordedSources,
+          );
+          const sourceAmount = sourceTotalInCurrency(
+            source,
+            currency,
+            longbridgeRates,
+          );
+          return {
+            source,
+            amount: sourceAmount,
+            health,
+            comparison: sourceComparison(
+              sourceAmount,
+              health.tone === "success" && !valuation.incomplete,
+              priorObservation,
+              priorSourcesById.get(source.id),
+              currency,
+            ),
+          };
+        })
         .toSorted((left, right) => {
           if (left.amount === null) return right.amount === null ? 0 : 1;
           if (right.amount === null) return -1;
           return decimalCompare(right.amount, left.amount);
-        }),
-    [currency, longbridgeRates, recordedSources],
+        });
+    },
+    [currency, longbridgeRates, priorObservation, recordedSources],
   );
   const todayChangeIssueSources = useMemo(
     () =>
@@ -343,31 +417,15 @@ export function DailyOverviewWorkspace({
   const currentReason = current === null
     ? currency === "USD"
       ? "总额数据不完整。"
-      : `没有可用的长桥参考汇率，无法将 USD 总额折算为 ${currency}。`
+      : `无法折算为 ${currency}。`
     : !current.complete
       ? "总额为最近成功值。"
       : null;
-  const refreshEnabled = recordedSources.some(
-    (source) =>
-      source.lifecycle !== "disconnected" && source.kind !== "manual",
-  );
-  const hasEvmSources = recordedSources.some(
-    (source) =>
-      source.lifecycle !== "disconnected" && source.kind.startsWith("evm-watch-"),
-  );
-  const hasNonEvmSources = recordedSources.some(
-    (source) =>
-      source.lifecycle !== "disconnected" &&
-      source.kind !== "manual" &&
-      !source.kind.startsWith("evm-watch-"),
-  );
-  const needsDailyEvmPriceRefresh = recordedSources.some(
-    (source) =>
-      source.lifecycle !== "disconnected" &&
-      source.kind.startsWith("evm-watch-") &&
-      source.sync.lastAttemptAt.slice(0, 10) !== currentDay,
-  );
-
+  const reportingRate = currency === "USD"
+    ? null
+    : usdValuation.exchangeRateObservations.find(
+      (rate) => rate.quoteCurrency === currency,
+    ) ?? null;
   return (
     <div
       className="daily-overview"
@@ -387,14 +445,7 @@ export function DailyOverviewWorkspace({
               value={currency}
               variant="compact"
             />
-            <AssetRefreshControls
-              automaticRefresh={false}
-              disabled={demoMode}
-              enabled={refreshEnabled}
-              hasEvmSources={hasEvmSources}
-              hasNonEvmSources={hasNonEvmSources}
-              needsDailyEvmPriceRefresh={needsDailyEvmPriceRefresh}
-            />
+            {demoMode ? null : <AssetGlobalRefreshControl />}
           </>
         }
       />
@@ -408,17 +459,14 @@ export function DailyOverviewWorkspace({
             hidden={!showSensitiveInfo}
             value={current?.amount ?? null}
           />
-          <p>
-            默认以 USD 计价；CNY、HKD 按长桥参考汇率折算。
-            {usdValuation.exchangeRateObservations.map((rate) => (
-              <span key={`${rate.baseCurrency}/${rate.quoteCurrency}`}>
-                <br />
-                {rate.baseCurrency}/{rate.quoteCurrency} {decimalToFixed(rate.rate, 4)}
-                {" · "}
-                {formatShanghaiShortDateTime(rate.observedAt)}
-              </span>
-            ))}
-          </p>
+          {reportingRate === null ? null : (
+            <p data-testid="overview-reporting-rate">
+              {reportingRate.baseCurrency}/{reportingRate.quoteCurrency}{" "}
+              {decimalToFixed(reportingRate.rate, 4)}
+              {" · "}
+              {formatShanghaiShortDateTime(reportingRate.observedAt)}
+            </p>
+          )}
         </article>
         <article data-testid="overview-confidence">
           <p className="card-label">CONFIDENCE / DATA</p>
@@ -447,13 +495,13 @@ export function DailyOverviewWorkspace({
             signed
             value={todayChange}
           />
-          <p>
-            {priorObservation === null
-              ? "等待一条此前完整资产记录后开始计算；可能包含入金、出金或账户划转，不是投资盈亏。"
-              : intervalFallback
-                ? `相对上次完整记录（${formatShanghaiDayLabel(priorObservation.day)}，间隔 ${daysSincePriorObservation} 天）以来；可能包含入金、出金或账户划转，不是投资盈亏。`
-                : `相对昨日最后完整记录（${formatShanghaiDayLabel(priorObservation.day)}）；可能包含入金、出金或账户划转，不是投资盈亏。`}
-          </p>
+          {priorObservation === null ? null : (
+            <p>
+              {intervalFallback
+                ? `较 ${formatShanghaiDayLabel(priorObservation.day)}（${daysSincePriorObservation} 日）`
+                : `较 ${formatShanghaiDayLabel(priorObservation.day)}`}
+            </p>
+          )}
           {todayChange === null &&
           priorObservation !== null &&
           todayChangeIssueSources.length > 0 ? (
@@ -508,11 +556,7 @@ export function DailyOverviewWorkspace({
             value={analysis.current.investmentProfit}
           />
         </article>
-        {demoMode ? (
-          <p className="daily-overview__demo-static">
-            演示数据不可记录资金或查看真实收益分析。
-          </p>
-        ) : (
+        {demoMode ? null : (
           <div className="daily-overview__summary-actions">
             <VibeLink href="/performance" variant="primary">
               记录资金
@@ -533,11 +577,7 @@ export function DailyOverviewWorkspace({
                 ? `${formatShanghaiDayLabel(trend.firstDay)} 至 ${formatShanghaiDayLabel(currentDay)}`
                 : "暂无可用观察"}
             </span>
-            {demoMode ? (
-              <span className="daily-overview__demo-static">
-                演示仅展示近 7 日样例走势
-              </span>
-            ) : (
+            {demoMode ? null : (
               <VibeLink
                 className="daily-overview__trend-link"
                 href="/performance"
@@ -567,11 +607,7 @@ export function DailyOverviewWorkspace({
             <p className="card-label">SOURCES / SUMMARY</p>
             <h2>来源摘要</h2>
           </div>
-          {demoMode ? (
-            <span className="daily-overview__demo-static">
-              演示不提供真实资产与持仓详情
-            </span>
-          ) : (
+          {demoMode ? null : (
             <VibeLink aria-label="查看全部资产与持仓" href="/assets" variant="outline">
               查看全部资产与持仓
             </VibeLink>
@@ -588,31 +624,72 @@ export function DailyOverviewWorkspace({
           </div>
         ) : (
           <ul className="daily-overview__source-list">
-            {sourceSummaries.map(({ amount: sourceAmount, health, source }) => (
+            {sourceSummaries.map(({
+              amount: sourceAmount,
+              comparison,
+              health,
+              source,
+            }) => (
               <li key={source.id}>
                 <article>
-                  <div>
+                  <div className="daily-overview__source-identity">
                     <p>{assetSourceDisplayName(source)}</p>
                     <VibeStatusTag tone={health.tone}>{health.label}</VibeStatusTag>
                   </div>
-                  <strong>
-                    {sourceAmount === null
-                      ? "无法折算"
-                      : `${amount(sourceAmount)} ${currency}`}
-                  </strong>
-                  {demoMode ? (
-                    <span className="daily-overview__demo-static">
-                      演示来源
-                    </span>
-                  ) : (
-                    <VibeLink
-                      aria-label={`查看 ${assetSourceDisplayName(source)} 来源详情`}
-                      href={`/asset-sources/${encodeURIComponent(source.id)}`}
-                      variant="text"
+                  <div className="daily-overview__source-value">
+                    <strong className="daily-overview__source-total">
+                      {sourceAmount === null
+                        ? "无法折算"
+                        : `${amount(sourceAmount)} ${currency}`}
+                    </strong>
+                    <div
+                      className="daily-overview__source-change"
+                      data-comparison-state={comparison.state}
                     >
-                      详情
-                    </VibeLink>
-                  )}
+                      {comparison.state === "changed" ? (
+                        <>
+                          <div className="daily-overview__source-change-today">
+                            <span>今日变化</span>
+                            <VibeMetric
+                              animate={false}
+                              className="profit-color-value"
+                              data-profit-color-scheme={profitColorScheme}
+                              data-profit-direction={profitDirection(comparison.change)}
+                              unit={currency}
+                              value={signedAmount(comparison.change)}
+                            />
+                          </div>
+                          <small>
+                            昨日{" "}
+                            <span className="daily-overview__source-yesterday-amount">
+                              {amount(comparison.previousAmount)}
+                            </span>{" "}
+                            <span className="daily-overview__source-yesterday-unit">
+                              {currency}
+                            </span>
+                          </small>
+                        </>
+                      ) : comparison.state === "scope-change" ? (
+                        <>
+                          <span>资产范围变化</span>
+                          <small>昨日未纳入</small>
+                        </>
+                      ) : (
+                        <span>暂无法比较</span>
+                      )}
+                    </div>
+                    {demoMode ? null : (
+                      <VibeLink
+                        aria-label={`查看 ${assetSourceDisplayName(source)} 的资产明细`}
+                        className="daily-overview__source-detail-link"
+                        href={`/asset-sources/${encodeURIComponent(source.id)}`}
+                        variant="text"
+                      >
+                        查看资产明细
+                        <SourceDetailArrowIcon />
+                      </VibeLink>
+                    )}
+                  </div>
                 </article>
               </li>
             ))}
@@ -620,15 +697,9 @@ export function DailyOverviewWorkspace({
         )}
       </section>
 
-      {demoMode ? (
+      {!demoMode && refreshEnabled ? (
         <div className="daily-overview__refresh">
-          <span>演示数据为固定样例；刷新、来源维护与真实账户访问均不可用。</span>
-        </div>
-      ) : refreshEnabled ? (
-        <div className="daily-overview__refresh">
-          <VibeLink href="/asset-sources" variant="text">
-            在资产来源中查看单来源状态与恢复操作
-          </VibeLink>
+          <VibeLink href="/asset-sources" variant="text">资产来源</VibeLink>
           <span>
             单来源操作请前往资产来源。
           </span>

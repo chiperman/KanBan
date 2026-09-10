@@ -7,6 +7,7 @@ import "./command-menu.css";
 import "./product-layout.css";
 import "./vibe-components.css";
 import { ThemeInitializer } from "@/ui/theme-switcher";
+import { AssetRefreshProvider } from "@/ui/asset-refresh-provider";
 import {
   WorkbenchDisplayPreferencesProvider,
 } from "@/ui/workbench-display-preferences";
@@ -24,8 +25,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body>
         <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
         <WorkbenchDisplayPreferencesProvider>
-          <ThemeInitializer />
-          {children}
+          <AssetRefreshProvider>
+            <ThemeInitializer />
+            {children}
+          </AssetRefreshProvider>
         </WorkbenchDisplayPreferencesProvider>
       </body>
     </html>

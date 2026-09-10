@@ -1,9 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { WorkbenchHeaderUtilitiesSlot } from "@/ui/workbench-shell";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
+import {
+  DEFAULT_MARKET_BENCHMARK_SYMBOLS,
+  type MarketBenchmarkSymbol,
+} from "@/domain/market-benchmark";
+import {
+  projectAssetSourceTrend,
+  type InvestmentPerformanceCustomRange,
+  type InvestmentPerformanceIntervalPreset,
+} from "@/domain/investment-performance-trend";
 import type {
   AssetExchangeRate,
   AssetPermission,
@@ -14,6 +24,10 @@ import {
   AssetSourceCard,
   type AssetSourceView,
 } from "@/ui/longbridge-asset-card";
+import { MarketBenchmarkControls } from "@/ui/market-benchmark-controls";
+import { useMarketBenchmarkComparison } from "@/ui/market-benchmark";
+import type { ProfitColorScheme } from "@/ui/profit-color-scheme";
+import { formatShanghaiDayLabel } from "@/ui/shanghai-date-time";
 import { useWorkbenchDisplayPreferences } from "@/ui/workbench-display-preferences";
 import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
 import { VibeDateField } from "@/ui/vibe/vibe-date-field";
@@ -34,6 +48,16 @@ const REPORTING_CURRENCY_OPTIONS: readonly VibeSelectOption<"USD" | "CNY" | "HKD
   { value: "USD", label: "USD" },
   { value: "CNY", label: "CNY" },
   { value: "HKD", label: "HKD" },
+];
+
+const INTERVAL_OPTIONS: readonly VibeSelectOption<InvestmentPerformanceIntervalPreset>[] = [
+  { value: "month-to-date", label: "本月" },
+  { value: "1m", label: "近 1 月" },
+  { value: "6m", label: "近 6 月" },
+  { value: "year-to-date", label: "本年" },
+  { value: "1y", label: "近 1 年" },
+  { value: "all", label: "全部" },
+  { value: "custom", label: "自定义" },
 ];
 
 async function sourceRequest(
@@ -413,12 +437,14 @@ export function AssetSourceDetail({
   cardHidden,
   currentDay,
   history,
+  profitColorScheme,
   reportingExchangeRates,
   source,
 }: {
   cardHidden: boolean;
   currentDay: string;
   history: DailyAssetTrendObservation[];
+  profitColorScheme: ProfitColorScheme;
   reportingExchangeRates: AssetExchangeRate[];
   source: DetailSource;
 }) {
@@ -433,8 +459,66 @@ export function AssetSourceDetail({
   const [deletingRecord, setDeletingRecord] = useState<ManualAssetRecord | null>(
     null,
   );
+  const [preset, setPreset] = useState<InvestmentPerformanceIntervalPreset>(
+    "month-to-date",
+  );
+  const [customRange, setCustomRange] =
+    useState<InvestmentPerformanceCustomRange | null>(null);
+  const [customRangeDialogOpen, setCustomRangeDialogOpen] = useState(false);
+  const [customStartDay, setCustomStartDay] = useState(currentDay);
+  const [customEndDay, setCustomEndDay] = useState(currentDay);
+  const [enabledBenchmarkSymbols, setEnabledBenchmarkSymbols] = useState<
+    MarketBenchmarkSymbol[]
+  >(() => [...DEFAULT_MARKET_BENCHMARK_SYMBOLS]);
   const name = assetSourceDisplayName(source);
   const manual = source.kind === "manual";
+  const firstSourceTrendDay = useMemo(
+    () => history.flatMap((observation) =>
+      observation.sources.some((item) => item.sourceId === source.id)
+        ? [observation.day]
+        : []
+    ).toSorted().at(0),
+    [history, source.id],
+  );
+  const sourceTrend = useMemo(
+    () => projectAssetSourceTrend({
+      currency,
+      customRange,
+      currentDay,
+      preset,
+      sourceId: source.id,
+      trendObservations: history,
+    }),
+    [currency, customRange, currentDay, history, preset, source.id],
+  );
+
+  const benchmarkDataState = useMarketBenchmarkComparison({
+    enabledSymbols: enabledBenchmarkSymbols,
+    points: sourceTrend.points,
+    visible: showSensitiveInfo,
+  });
+
+  function openCustomRangeDialog() {
+    if (firstSourceTrendDay === undefined) return;
+    setCustomStartDay(customRange?.startDay ?? sourceTrend.days[0] ?? firstSourceTrendDay);
+    setCustomEndDay(customRange?.endDay ?? sourceTrend.days.at(-1) ?? currentDay);
+    setCustomRangeDialogOpen(true);
+  }
+
+  function choosePreset(value: InvestmentPerformanceIntervalPreset) {
+    if (value === "custom") {
+      openCustomRangeDialog();
+      return;
+    }
+    setPreset(value);
+  }
+
+  function applyCustomRange() {
+    if (customStartDay > customEndDay) return;
+    setCustomRange({ startDay: customStartDay, endDay: customEndDay });
+    setPreset("custom");
+    setCustomRangeDialogOpen(false);
+  }
 
   return (
     <>
@@ -458,6 +542,7 @@ export function AssetSourceDetail({
             </VibeLink>
           </div>
         </div>
+        <WorkbenchHeaderUtilitiesSlot />
       </section>
 
       <section aria-label="来源身份" className="asset-source-detail__metadata">
@@ -514,26 +599,76 @@ export function AssetSourceDetail({
         </section>
       ) : null}
 
-      <AssetSourceCard
-        assetScopeHref={source.kind.startsWith("evm-watch-")
-          ? `/asset-sources/${encodeURIComponent(source.id)}/settings`
-          : undefined}
-        currentDay={currentDay}
-        history={history}
-        holdingsSearchQuery=""
-        onManualAssetRecord={(current, record) => {
-          if (current.id === source.id) setEditingRecord(record ?? undefined);
-        }}
-        onManualAssetRecordDelete={(current, record) => {
-          if (current.id === source.id) setDeletingRecord(record);
-        }}
-        profitColorScheme="red-up"
-        reportingCurrency={currency}
-        reportingExchangeRates={reportingExchangeRates}
-        showSensitiveInfo={showSensitiveInfo}
-        source={source}
-        trendRange="30d"
-      />
+      <section aria-label="来源分析" className="asset-source-detail__analysis">
+        <div
+          aria-label="分析区间"
+          className="investment-performance__range"
+          role="group"
+        >
+          <span aria-hidden="true" className="vibe-field__label">
+            分析区间
+          </span>
+          <div className="investment-performance__range-options">
+            {INTERVAL_OPTIONS.map((option) => {
+              const selected = option.value === preset;
+              return (
+                <VibeButton
+                  key={option.value}
+                  aria-pressed={selected}
+                  className="investment-performance__range-option"
+                  disabled={option.value === "custom" && firstSourceTrendDay === undefined}
+                  onClick={() => choosePreset(option.value)}
+                  type="button"
+                  variant={selected ? "primary" : "outline"}
+                >
+                  {option.label}
+                </VibeButton>
+              );
+            })}
+          </div>
+          {preset === "custom" && customRange !== null ? (
+            <span className="investment-performance__custom-range-label">
+              已选 {formatShanghaiDayLabel(customRange.startDay)} 至{" "}
+              {formatShanghaiDayLabel(customRange.endDay)}
+            </span>
+          ) : null}
+        </div>
+        {showSensitiveInfo ? (
+          <MarketBenchmarkControls
+            assetScopeLabel="来源"
+            dataState={benchmarkDataState}
+            enabledSymbols={enabledBenchmarkSymbols}
+            formatDay={formatShanghaiDayLabel}
+            onEnabledSymbolsChange={setEnabledBenchmarkSymbols}
+          />
+        ) : null}
+
+        <AssetSourceCard
+          assetScopeHref={source.kind.startsWith("evm-watch-")
+            ? `/asset-sources/${encodeURIComponent(source.id)}/settings`
+            : undefined}
+          currentDay={currentDay}
+          history={history}
+          holdingsSearchQuery=""
+          onManualAssetRecord={(current, record) => {
+            if (current.id === source.id) setEditingRecord(record ?? undefined);
+          }}
+          onManualAssetRecordDelete={(current, record) => {
+            if (current.id === source.id) setDeletingRecord(record);
+          }}
+          profitColorScheme={profitColorScheme}
+          reportingCurrency={currency}
+          reportingExchangeRates={reportingExchangeRates}
+          showSensitiveInfo={showSensitiveInfo}
+          source={source}
+          trendBenchmark={benchmarkDataState.kind === "ready" ? {
+            comparison: benchmarkDataState.comparison,
+            enabledSymbols: enabledBenchmarkSymbols,
+          } : null}
+          trendDays={sourceTrend.days}
+          trendRange="30d"
+        />
+      </section>
       <SourceLifecycleActions cardHidden={cardHidden} source={source} />
 
       {editingRecord !== null ? (
@@ -550,6 +685,52 @@ export function AssetSourceDetail({
           record={deletingRecord}
           source={source}
         />
+      ) : null}
+      {customRangeDialogOpen ? (
+        <VibeDialog
+          actions={
+            <>
+              <VibeButton
+                onClick={() => setCustomRangeDialogOpen(false)}
+                type="button"
+                variant="text"
+              >
+                取消
+              </VibeButton>
+              <VibeButton
+                disabled={customStartDay > customEndDay}
+                onClick={applyCustomRange}
+                type="button"
+                variant="primary"
+              >
+                应用区间
+              </VibeButton>
+            </>
+          }
+          aria-label="选择来源分析区间"
+          description="仅使用完整每日观测。"
+          eyebrow="SOURCE / CUSTOM RANGE"
+          onClose={() => setCustomRangeDialogOpen(false)}
+          title="选择分析区间"
+          titleId="asset-source-analysis-range-title"
+        >
+          <VibeDateField
+            fieldId="asset-source-analysis-start-day"
+            label="开始日期"
+            max={customEndDay}
+            min={firstSourceTrendDay}
+            onValueChange={setCustomStartDay}
+            value={customStartDay}
+          />
+          <VibeDateField
+            fieldId="asset-source-analysis-end-day"
+            label="结束日期"
+            max={currentDay}
+            min={customStartDay}
+            onValueChange={setCustomEndDay}
+            value={customEndDay}
+          />
+        </VibeDialog>
       ) : null}
     </>
   );

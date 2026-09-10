@@ -31,10 +31,18 @@ export default async function PerformancePage({
   const services = getServices();
   if ((await services.auth.currentSession()) === null) redirect("/");
   const now = services.clock.now();
-  const [cashflows, sources, trendObservations] = await Promise.all([
+  const [
+    cashflows,
+    sources,
+    trendObservations,
+    importedSourceHistoryObservations,
+    fullRefreshState,
+  ] = await Promise.all([
     services.investmentCashflows.list(),
     services.assetSources.list(),
     services.dailyAssetSnapshots.listTrendObservations(),
+    services.dailyAssetSnapshots.listImportedSourceHistoryObservations(),
+    services.assetFullRefreshState.read(),
   ]);
   const usdValuation = buildTotalValuation(sources, "USD", "source");
   const longbridgeRates = longbridgeReferenceRates(sources);
@@ -76,10 +84,16 @@ export default async function PerformancePage({
   return (
     <SessionGuard>
       <WorkbenchShell
-        refreshEnabled={sources.some(
-          (source) =>
-            source.lifecycle !== "disconnected" && source.kind !== "manual",
-        )}
+        refreshEnabled
+        refreshRegistration={{
+          attemptedAt: fullRefreshState.attemptedAt,
+          sources: sources.map((source) => ({
+            id: source.id,
+            kind: source.kind,
+            lifecycle: source.lifecycle,
+            credentialAvailable: source.credentialReference !== null,
+          })),
+        }}
       >
         <div className="page page-workbench-destination">
           <a className="skip-link" href="#main-content">
@@ -91,6 +105,7 @@ export default async function PerformancePage({
               currentDay={shanghaiDay(now)}
               currentObservedAt={now.toISOString()}
               currentTotals={currentTotals}
+              importedSourceHistoryObservations={importedSourceHistoryObservations}
               trendObservations={trendObservations}
             />
           </main>
