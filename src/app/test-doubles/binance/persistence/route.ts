@@ -14,6 +14,7 @@ import {
   BINANCE_USDT_USD_QUOTE,
   binanceFixture,
 } from "@/server/testing/binance-fixtures";
+import { InMemoryAssetFullRefreshState } from "@/server/testing/fakes";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,7 @@ export async function POST() {
       secrets,
       Promise.resolve(),
       { now: () => new Date(BINANCE_OBSERVED_AT) },
+      new InMemoryAssetFullRefreshState(),
     ).connectBinance({
       credentials,
       permissions: ["market-data", "account", "positions"],

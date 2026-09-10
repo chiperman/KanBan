@@ -15,6 +15,7 @@ import { Worker } from "node:worker_threads";
 
 import { isTestEnv } from "@/server/composition";
 import {
+  DatabaseAssetFullRefreshState,
   DatabaseAssetSourceConnections,
   SqliteDashboardDatabase,
   createProductionServices,
@@ -26,6 +27,7 @@ import type {
   BinanceAuthorizationResult,
   DailyAssetSnapshot,
   EvmWatchAuthorizationResult,
+  LongbridgeAuthorizationResult,
 } from "@/server/ports";
 
 export const dynamic = "force-dynamic";
@@ -288,6 +290,19 @@ function longbridgeReferenceSource(): AssetSourceSummary {
   };
 }
 
+function completeLongbridgeAuthorization(
+  accountId: string,
+  credentials: string,
+): LongbridgeAuthorizationResult {
+  const source = longbridgeReferenceSource();
+  return {
+    credentials,
+    permissions: source.permissions,
+    account: { id: accountId, label: `长桥 ${accountId}` },
+    snapshot: source.snapshot,
+  };
+}
+
 function dailySnapshot(
   sourceId: string,
   usd: string,
@@ -516,7 +531,13 @@ export async function POST(request: Request) {
     action !== "evm-token-preference-persistence" &&
     action !== "evm-unrecognized-token-persistence" &&
     action !== "longbridge-option-read-upgrade" &&
-    action !== "manual-source-record-persistence"
+    action !== "manual-source-record-persistence" &&
+    action !== "legacy-refresh-upgrade" &&
+    action !== "full-refresh-state" &&
+    action !== "full-refresh-claim-race" &&
+    action !== "first-connection-refresh-state" &&
+    action !== "first-connection-race" &&
+    action !== "last-source-refresh-clear"
   ) {
     return Response.json({ error: "unknown action" }, { status: 400 });
   }
@@ -526,6 +547,429 @@ export async function POST(request: Request) {
   const previousKey = process.env.PAD_SECRET_ENCRYPTION_KEY;
   process.env.PAD_SECRET_ENCRYPTION_KEY = Buffer.alloc(32, 21).toString("base64");
   try {
+    if (action === "legacy-refresh-upgrade") {
+      await mkdir(dataDirectory, { recursive: true });
+      const databasePath = path.join(dataDirectory, "dashboard.sqlite");
+      const legacyDashboardPath = path.join(dataDirectory, "dashboard.json");
+      const legacyCardsPath = path.join(dataDirectory, "cards.json");
+      const original = new SqliteDashboardDatabase(
+        databasePath,
+        legacyDashboardPath,
+        legacyCardsPath,
+      );
+      const source = (input: {
+        id: string;
+        kind: "binance" | "longbridge";
+        accountId: string;
+        amount: string;
+        lastAttemptAt: string;
+        status: "current" | "expired";
+      }): AssetSourceSummary => ({
+        id: input.id,
+        kind: input.kind,
+        label: input.id,
+        accountId: input.accountId,
+        permissions: ["account", "positions"],
+        credentialReference: `${input.id}-missing-test-reference`,
+        snapshot: {
+          total: { amount: input.amount, currency: "USD" },
+          holdings: [],
+          exchangeRates: [],
+          syncedAt: input.lastAttemptAt,
+        },
+        sync: {
+          status: input.status,
+          lastSuccessfulAt: input.lastAttemptAt,
+          lastAttemptAt: input.lastAttemptAt,
+          error: input.status === "expired" ? "旧同步错误" : null,
+          failedMode: input.status === "expired" ? "prices" : null,
+        },
+      });
+      const sources = [
+        source({
+          id: "legacy-binance",
+          kind: "binance",
+          accountId: "legacy-binance-account",
+          amount: "123.45",
+          lastAttemptAt: "2026-08-18T01:00:00.000Z",
+          status: "expired",
+        }),
+        source({
+          id: "legacy-longbridge",
+          kind: "longbridge",
+          accountId: "legacy-longbridge-account",
+          amount: "678.90",
+          lastAttemptAt: "2026-08-19T02:00:00.000Z",
+          status: "current",
+        }),
+      ];
+      await original.replaceSources(sources);
+      await original.replaceAssetCards(sources.map((item, index) => ({
+        id: `legacy-card-${index + 1}`,
+        kind: "asset" as const,
+        title: item.label,
+        body: "旧版刷新迁移夹具",
+        sourceId: item.id,
+        span: 1 as const,
+      })));
+      const observation = (input: {
+        day: string;
+        capturedAt: string;
+        total: string;
+        binance: string;
+        longbridge: string;
+      }): DailyAssetSnapshot => ({
+        day: input.day,
+        capturedAt: input.capturedAt,
+        complete: true,
+        status: "complete",
+        total: { USD: input.total, CNY: "5760.00", HKD: "6240.00" },
+        exchangeRates: [],
+        sources: [{
+          sourceId: "legacy-binance",
+          label: "legacy-binance",
+          kind: "binance",
+          capturedAt: input.capturedAt,
+          complete: true,
+          status: "complete",
+          total: { USD: input.binance, CNY: "900.00", HKD: "975.00" },
+        }, {
+          sourceId: "legacy-longbridge",
+          label: "legacy-longbridge",
+          kind: "longbridge",
+          capturedAt: input.capturedAt,
+          complete: true,
+          status: "complete",
+          total: {
+            USD: input.longbridge,
+            CNY: "4860.00",
+            HKD: "5265.00",
+          },
+        }],
+      });
+      const firstBaseline = observation({
+        day: "2026-08-18",
+        capturedAt: "2026-08-18T01:00:00.000Z",
+        total: "790.00",
+        binance: "120.00",
+        longbridge: "670.00",
+      });
+      await original.createDailyAssetSnapshotIfAbsent(firstBaseline);
+      await original.recordDailyAssetObservation(observation({
+        day: "2026-08-18",
+        capturedAt: "2026-08-18T03:00:00.000Z",
+        total: "795.00",
+        binance: "125.00",
+        longbridge: "670.00",
+      }), true);
+      const secondBaseline = observation({
+        day: "2026-08-19",
+        capturedAt: "2026-08-19T02:00:00.000Z",
+        total: "802.35",
+        binance: "123.45",
+        longbridge: "678.90",
+      });
+      await original.createDailyAssetSnapshotIfAbsent(secondBaseline);
+
+      const downgrade = new DatabaseSync(databasePath);
+      downgrade.exec(`
+        UPDATE schema_metadata SET value = '15' WHERE key = 'schema_version';
+        DELETE FROM schema_metadata
+        WHERE key IN (
+          'asset_full_refresh_attempted_at',
+          'asset_full_refresh_in_progress_at'
+        );
+      `);
+      downgrade.close();
+
+      const inspect = () => {
+        const database = new DatabaseSync(databasePath, { readOnly: true });
+        const count = (table: string) =>
+          (database.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as {
+            count: number;
+          }).count;
+        const values = {
+          sourceCount: count("asset_sources"),
+          currentSnapshotCount: count("asset_source_snapshots"),
+          syncStateCount: count("asset_source_sync_states"),
+          dailyBaselineCount: count("daily_asset_snapshots"),
+          dailyTrendCount: count("daily_asset_trend_observations"),
+          dailyBaselineSourceCount: count("daily_asset_source_snapshots"),
+          dailyTrendSourceCount: count("daily_asset_source_trend_observations"),
+          sourceIdentities: (database.prepare(`
+            SELECT kind || ':' || account_id AS identity
+            FROM asset_sources ORDER BY id
+          `).all() as Array<{ identity: string }>).map(({ identity }) => identity),
+          currentAmounts: (database.prepare(`
+            SELECT total_amount AS amount
+            FROM asset_source_snapshots ORDER BY source_id
+          `).all() as Array<{ amount: string }>).map(({ amount }) => amount),
+          baselineAmounts: (database.prepare(`
+            SELECT total_usd AS amount
+            FROM daily_asset_snapshots ORDER BY day
+          `).all() as Array<{ amount: string }>).map(({ amount }) => amount),
+          trendAmounts: (database.prepare(`
+            SELECT total_usd AS amount
+            FROM daily_asset_trend_observations ORDER BY day
+          `).all() as Array<{ amount: string }>).map(({ amount }) => amount),
+        };
+        database.close();
+        return values;
+      };
+
+      const before = inspect();
+      const migrated = new SqliteDashboardDatabase(
+        databasePath,
+        legacyDashboardPath,
+        legacyCardsPath,
+      );
+      const after = inspect();
+      const refreshState = new DatabaseAssetFullRefreshState(migrated);
+      const stateBeforeRefresh = await refreshState.read();
+      const sourceAttemptedAtBeforeRefresh = (await migrated.listSources())
+        .toSorted((left, right) => left.id.localeCompare(right.id))
+        .map(({ sync }) => sync.lastAttemptAt);
+
+      const services = createProductionServices(dataDirectory);
+      await services.secrets.get("startup-ready");
+      const firstFailure = await services.assetSynchronization.request({
+        intent: { reason: "page-entry" },
+      });
+      const stateAfterFailure = await services.assetFullRefreshState.read();
+      const restarted = createProductionServices(dataDirectory);
+      await restarted.secrets.get("startup-ready");
+      const afterRestartState = await restarted.assetFullRefreshState.read();
+      const afterRestartReport = await restarted.assetSynchronization.request({
+        intent: { reason: "page-entry" },
+      });
+      const inspection = new DatabaseSync(databasePath, { readOnly: true });
+      const schemaVersion = inspection.prepare(
+        "SELECT value FROM schema_metadata WHERE key = 'schema_version'",
+      ).get() as { value: string };
+      inspection.close();
+
+      return Response.json({
+        schemaVersion: schemaVersion.value,
+        attemptedAtBeforeRefresh: stateBeforeRefresh.attemptedAt,
+        sourceAttemptedAtBeforeRefresh,
+        upgradePreserved: JSON.stringify(after) === JSON.stringify(before),
+        before,
+        firstFailure: {
+          successCount: firstFailure.successCount,
+          failureCount: firstFailure.failureCount,
+          attemptedAtMatchesState:
+            firstFailure.attemptedAt === stateAfterFailure.attemptedAt,
+          inProgressCleared: stateAfterFailure.inProgressAt === null,
+        },
+        afterRestart: {
+          attemptedAtPreserved:
+            afterRestartState.attemptedAt === stateAfterFailure.attemptedAt,
+          inProgressAt: afterRestartState.inProgressAt,
+          skipped: afterRestartReport.skipped,
+          reportUsesPersistedAttemptedAt:
+            afterRestartReport.attemptedAt === stateAfterFailure.attemptedAt,
+        },
+      });
+    }
+
+    if (action === "full-refresh-state") {
+      await mkdir(dataDirectory, { recursive: true });
+      const databasePath = path.join(dataDirectory, "dashboard.sqlite");
+      const legacyDashboardPath = path.join(dataDirectory, "dashboard.json");
+      const legacyCardsPath = path.join(dataDirectory, "cards.json");
+      const database = new SqliteDashboardDatabase(
+        databasePath,
+        legacyDashboardPath,
+        legacyCardsPath,
+      );
+      const state = new DatabaseAssetFullRefreshState(database);
+      const before = await state.read();
+      await state.start("2026-08-20T04:00:00.000Z");
+      const during = await state.read();
+      const restarted = new DatabaseAssetFullRefreshState(
+        new SqliteDashboardDatabase(
+          databasePath,
+          legacyDashboardPath,
+          legacyCardsPath,
+        ),
+      );
+      const afterRestart = await restarted.read();
+      await restarted.finish();
+      const after = await restarted.read();
+      return Response.json({ before, during, afterRestart, after });
+    }
+
+    if (action === "full-refresh-claim-race") {
+      await mkdir(dataDirectory, { recursive: true });
+      const databasePath = path.join(dataDirectory, "dashboard.sqlite");
+      const legacyDashboardPath = path.join(dataDirectory, "dashboard.json");
+      const legacyCardsPath = path.join(dataDirectory, "cards.json");
+      const firstState = new DatabaseAssetFullRefreshState(
+        new SqliteDashboardDatabase(
+          databasePath,
+          legacyDashboardPath,
+          legacyCardsPath,
+        ),
+      );
+      const secondState = new DatabaseAssetFullRefreshState(
+        new SqliteDashboardDatabase(
+          databasePath,
+          legacyDashboardPath,
+          legacyCardsPath,
+        ),
+      );
+      const claim = {
+        attemptedAt: "2026-08-20T04:00:00.000Z",
+        intervalMs: 60 * 60 * 1_000,
+        staleAfterMs: 65_000,
+        force: false,
+      };
+      const claims = await Promise.all([
+        firstState.claim(claim),
+        secondState.claim(claim),
+      ]);
+      return Response.json({
+        claims: claims.toSorted(),
+        firstState: await firstState.read(),
+        secondState: await secondState.read(),
+      });
+    }
+
+    if (action === "first-connection-refresh-state") {
+      await mkdir(dataDirectory, { recursive: true });
+      const database = new SqliteDashboardDatabase(
+        path.join(dataDirectory, "dashboard.sqlite"),
+        path.join(dataDirectory, "dashboard.json"),
+        path.join(dataDirectory, "cards.json"),
+      );
+      const state = new DatabaseAssetFullRefreshState(database);
+      const connections = new DatabaseAssetSourceConnections(
+        database,
+        {
+          async stage() { return "first-connection-reference"; },
+          async commit() {},
+          async put() { return "first-connection-reference"; },
+          async get() { return null; },
+          async replace() {},
+          async remove() {},
+        },
+        Promise.resolve(),
+        { now: () => new Date("2026-08-20T04:00:00.000Z") },
+        state,
+      );
+      await connections.connectBinance(
+        authorization("first-connection", "first-connection-secret"),
+      );
+      return Response.json(await state.read());
+    }
+
+    if (action === "first-connection-race") {
+      const summary = async (
+        directory: string,
+        failFirstCommit: boolean,
+      ) => {
+        await mkdir(directory, { recursive: true });
+        const database = new SqliteDashboardDatabase(
+          path.join(directory, "dashboard.sqlite"),
+          path.join(directory, "dashboard.json"),
+          path.join(directory, "cards.json"),
+        );
+        const state = new DatabaseAssetFullRefreshState(database);
+        let clockCall = 0;
+        const connections = new DatabaseAssetSourceConnections(
+          database,
+          {
+            async stage(value) {
+              return value === "race-first-secret"
+                ? "race-first-reference"
+                : "race-second-reference";
+            },
+            async commit(reference) {
+              if (failFirstCommit && reference === "race-first-reference") {
+                throw new Error("credential commit failed");
+              }
+            },
+            async put() { throw new Error("not used"); },
+            async get() { return null; },
+            async replace() {},
+            async remove() {},
+          },
+          Promise.resolve(),
+          {
+            now: () => new Date(
+              clockCall++ === 0
+                ? "2026-08-20T04:00:00.000Z"
+                : "2026-08-20T05:00:00.000Z",
+            ),
+          },
+          state,
+        );
+        const attempts = await Promise.allSettled([
+          connections.connectLongbridge(
+            completeLongbridgeAuthorization("race-first", "race-first-secret"),
+          ),
+          connections.connectLongbridge(
+            completeLongbridgeAuthorization("race-second", "race-second-secret"),
+          ),
+        ]);
+        const sources = await database.listSources();
+        const accountBySourceId = new Map(
+          sources.map(({ id, accountId }) => [id, accountId]),
+        );
+        const [baseline] = await database.listDailyAssetSnapshots();
+        const [trend] = await database.listDailyAssetTrendObservations();
+        return {
+          rejected: attempts.filter(({ status }) => status === "rejected").length,
+          state: await state.read(),
+          sourceAccounts: sources.map(({ accountId }) => accountId).sort(),
+          baselineSourceAccounts: baseline?.sources.map(
+            ({ sourceId }) => accountBySourceId.get(sourceId),
+          ) ?? [],
+          trendSourceAccounts: trend?.sources.map(
+            ({ sourceId }) => accountBySourceId.get(sourceId),
+          ) ?? [],
+        };
+      };
+
+      return Response.json({
+        bothSucceeded: await summary(path.join(root, "both-succeeded"), false),
+        firstCommitFailed: await summary(path.join(root, "first-commit-failed"), true),
+      });
+    }
+
+    if (action === "last-source-refresh-clear") {
+      const services = createProductionServices(dataDirectory);
+      await services.secrets.get("startup-ready");
+      const state = new DatabaseAssetFullRefreshState(
+        new SqliteDashboardDatabase(
+          path.join(dataDirectory, "dashboard.sqlite"),
+          path.join(dataDirectory, "dashboard.json"),
+          path.join(dataDirectory, "cards.json"),
+        ),
+      );
+      await services.assetSourceConnections.connectBinance(
+        authorization("refresh-cycle", "refresh-cycle-secret"),
+      );
+      const [connected] = await services.assetSources.list();
+      const afterFirstConnection = await state.read();
+      await services.assetSourceLifecycle.disconnect(connected.id);
+      const afterDisconnect = await state.read();
+
+      await services.assetSourceConnections.connectBinance(
+        authorization("refresh-cycle", "refresh-cycle-reconnected-secret"),
+      );
+      const [reconnected] = await services.assetSources.list();
+      const afterReconnect = await state.read();
+      await services.assetSourceLifecycle.deleteData(reconnected.id);
+      const afterDelete = await state.read();
+      return Response.json({
+        afterFirstConnection: afterFirstConnection.attemptedAt !== null,
+        afterDisconnect,
+        afterReconnect: afterReconnect.attemptedAt !== null,
+        afterDelete,
+      });
+    }
+
     if (action === "manual-source-record-persistence") {
       await mkdir(dataDirectory, { recursive: true });
       const databasePath = path.join(dataDirectory, "dashboard.sqlite");
@@ -1495,6 +1939,7 @@ export async function POST(request: Request) {
         failingSecrets,
         Promise.resolve(),
         { now: () => new Date("2026-07-28T02:00:00.000Z") },
+        new DatabaseAssetFullRefreshState(database),
       );
       let rejected = false;
       try {
@@ -1539,6 +1984,7 @@ export async function POST(request: Request) {
             memoryTransactionalSecrets(`reference-${index}`, arrive),
             Promise.resolve(),
             { now: () => new Date("2026-07-28T02:00:00.000Z") },
+            new DatabaseAssetFullRefreshState(database),
           ),
       );
       await Promise.all([
@@ -1601,8 +2047,8 @@ export async function POST(request: Request) {
     if (action === "source-lifecycle") {
       const services = createProductionServices(dataDirectory);
       await services.secrets.get("startup-ready");
-      await services.assetSourceConnections.connectBinance(
-        authorization("lifecycle", "lifecycle-secret"),
+      await services.assetSourceConnections.connectLongbridge(
+        completeLongbridgeAuthorization("lifecycle", "lifecycle-secret"),
       );
       const [connected] = await services.assetSources.list();
       await services.assetSourceLifecycle.setHidden(connected.id, true);
@@ -1616,8 +2062,8 @@ export async function POST(request: Request) {
         lifecycle: disconnectedSource.lifecycle,
         hidden: disconnectedCard.hidden,
         sourceCount: (await services.assetSources.list()).length,
-        dailySourceCount: retainedDailySnapshot.sources.length,
-        trendSourceCount: retainedTrendObservation.sources.length,
+        dailySourceCount: retainedDailySnapshot?.sources.length ?? 0,
+        trendSourceCount: retainedTrendObservation?.sources.length ?? 0,
         secretRemoved:
           connected.credentialReference !== null &&
           (await services.secrets.get(connected.credentialReference)) === null,

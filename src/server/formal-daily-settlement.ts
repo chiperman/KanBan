@@ -24,6 +24,7 @@ import type {
   SecretStore,
   SecuritiesMarket,
 } from "@/server/ports";
+import { isMacOSKeychainCredentialReference } from "@/server/asset-sources/longbridge-keychain-sdk";
 
 const FORMAL_SETTLEMENT_CAPTURE_WINDOW_MS = 2 * 60 * 60_000;
 
@@ -402,9 +403,16 @@ export class ReadOnlyFormalSettlementSourceCapture
     if (input.source.credentialReference === null && !isPublicWatchWallet) {
       throw new Error("只读凭证不可用");
     }
-    const credentials = input.source.credentialReference === null
+    const credentialReference = input.source.credentialReference;
+    const usesKeychainReference =
+      input.source.kind === "longbridge" &&
+      credentialReference !== null &&
+      isMacOSKeychainCredentialReference(credentialReference);
+    const credentials = credentialReference === null
       ? ""
-      : await this.secrets.get(input.source.credentialReference);
+      : usesKeychainReference
+        ? credentialReference
+        : await this.secrets.get(credentialReference);
     if (credentials === null) throw new Error("只读凭证不可用");
     const controller = new AbortController();
     let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -417,9 +425,9 @@ export class ReadOnlyFormalSettlementSourceCapture
             mode: "all",
             attemptedAt: input.attemptedAt,
             signal: controller.signal,
-            persistCredentials: (value) => input.source.credentialReference === null
-              ? Promise.resolve()
-              : this.secrets.replace(input.source.credentialReference, value),
+            persistCredentials: usesKeychainReference || credentialReference === null
+              ? () => Promise.resolve()
+              : (value) => this.secrets.replace(credentialReference, value),
           }),
           new Promise<never>((_, reject) => {
             timeout = setTimeout(() => {

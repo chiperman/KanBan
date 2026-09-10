@@ -12,6 +12,7 @@ import {
   OKX_OBSERVED_AT,
   okxFixtureSnapshot,
 } from "@/server/testing/okx-fixtures";
+import { InMemoryAssetFullRefreshState } from "@/server/testing/fakes";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,7 @@ export async function POST() {
       secrets,
       Promise.resolve(),
       { now: () => new Date(OKX_OBSERVED_AT) },
+      new InMemoryAssetFullRefreshState(),
     ).connectOkx({
       credentials,
       permissions: ["market-data", "account", "positions"],

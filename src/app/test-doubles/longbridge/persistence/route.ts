@@ -9,6 +9,8 @@ import {
   FileEncryptedSecretStore,
 } from "@/server/production";
 import { SourceIsolatedAssetSynchronization } from "@/server/asset-synchronization";
+import { KeychainLongbridgeHoldingCandlestickReader } from "@/server/asset-sources/longbridge";
+import { InMemoryAssetFullRefreshState } from "@/server/testing/fakes";
 import type {
   AssetSourceRefresher,
   LongbridgeAuthorizationResult,
@@ -18,6 +20,7 @@ export const dynamic = "force-dynamic";
 
 const PROBE_SECRET = "production-persistence-probe-secret";
 const ROTATED_SECRET = "production-rotated-refresh-secret";
+const KEYCHAIN_REFERENCE = "macos-keychain:longbridge-persistence-probe";
 
 const RESULT: LongbridgeAuthorizationResult = {
   credentials: PROBE_SECRET,
@@ -29,6 +32,11 @@ const RESULT: LongbridgeAuthorizationResult = {
     exchangeRates: [],
     syncedAt: "2026-01-01T00:00:00.000Z",
   },
+};
+
+const KEYCHAIN_RESULT: LongbridgeAuthorizationResult = {
+  ...RESULT,
+  credentials: KEYCHAIN_REFERENCE,
 };
 
 export async function POST(request: Request) {
@@ -209,7 +217,13 @@ export async function POST(request: Request) {
       path.join(successDir, "legacy-cards.json"),
     );
     const secrets = new FileEncryptedSecretStore(secretPath);
-    await new DatabaseAssetSourceConnections(database, secrets).connectLongbridge(RESULT);
+    await new DatabaseAssetSourceConnections(
+      database,
+      secrets,
+      Promise.resolve(),
+      undefined,
+      new InMemoryAssetFullRefreshState(),
+    ).connectLongbridge(RESULT);
     const sources = await database.listSources();
     const reference = sources[0]?.credentialReference ?? "";
     const dashboardRaw = await readFile(dashboardPath, "utf8");
@@ -233,6 +247,9 @@ export async function POST(request: Request) {
           path.join(failureDir, "legacy-cards.json"),
         ),
         failedSecrets,
+        Promise.resolve(),
+        undefined,
+        new InMemoryAssetFullRefreshState(),
       ).connectLongbridge(RESULT);
     } catch {
       failed = true;
@@ -240,7 +257,17 @@ export async function POST(request: Request) {
     const failureSecretRaw = await readFile(
       path.join(failureDir, "secrets.json"),
       "utf8",
-    );
+    ).catch((error: unknown) => {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        error.code === "ENOENT"
+      ) {
+        return "{}";
+      }
+      throw error;
+    });
 
     const recoveryPath = path.join(root, "recovery", "secrets.json");
     const recoveryStore = new FileEncryptedSecretStore(recoveryPath);
@@ -261,6 +288,9 @@ export async function POST(request: Request) {
     await new DatabaseAssetSourceConnections(
       rotationDashboard,
       rotationSecrets,
+      Promise.resolve(),
+      undefined,
+      new InMemoryAssetFullRefreshState(),
     ).connectLongbridge(RESULT);
     const rotationReference =
       (await rotationDashboard.listSources())[0].credentialReference;
@@ -291,12 +321,114 @@ export async function POST(request: Request) {
         record: (snapshot, createBaseline) =>
           rotationDashboard.recordDailyAssetObservation(snapshot, createBaseline),
       },
+      {
+        read: async () => ({ attemptedAt: null, inProgressAt: null }),
+        initialize: async () => false,
+        claim: async () => "claimed",
+        start: async () => undefined,
+        finish: async () => undefined,
+        clear: async () => undefined,
+      },
     ).refresh("all");
     const rotationRaw = await readFile(
       path.join(rotationDir, "secrets.json"),
       "utf8",
     );
     const rotatedSource = (await rotationDashboard.listSources())[0];
+
+    const keychainDir = path.join(root, "keychain");
+    const keychainDatabase = new FileDashboardDatabase(
+      path.join(keychainDir, "dashboard.json"),
+      path.join(keychainDir, "legacy-cards.json"),
+    );
+    const keychainSecrets = new FileEncryptedSecretStore(
+      path.join(keychainDir, "secrets.json"),
+    );
+    const keychainConnections = new DatabaseAssetSourceConnections(
+      keychainDatabase,
+      keychainSecrets,
+      Promise.resolve(),
+      undefined,
+      new InMemoryAssetFullRefreshState(),
+    );
+    await keychainConnections.connectLongbridge(KEYCHAIN_RESULT);
+    const [keychainSource] = await keychainDatabase.listSources();
+    const keychainDashboardRaw = await readFile(
+      path.join(keychainDir, "dashboard.json"),
+      "utf8",
+    );
+    const keychainSecretsRaw = await readFile(
+      path.join(keychainDir, "secrets.json"),
+      "utf8",
+    ).catch(() => "{}");
+    let refreshReceivedKeychainReference = false;
+    const keychainRefreshReport = await new SourceIsolatedAssetSynchronization(
+      {
+        list: () => keychainDatabase.listSources(),
+        replaceAll: (sources) => keychainDatabase.replaceSources(sources),
+        update: (source) => keychainDatabase.updateSource(source),
+      },
+      keychainSecrets,
+      { now: () => new Date("2026-05-29T00:00:00.000Z") },
+      {
+        async refresh({ credentials }) {
+          refreshReceivedKeychainReference = credentials === KEYCHAIN_REFERENCE;
+          return { snapshot: KEYCHAIN_RESULT.snapshot };
+        },
+      },
+      100,
+      {
+        list: () => keychainDatabase.listDailyAssetSnapshots(),
+        listTrendObservations: () => keychainDatabase.listDailyAssetTrendObservations(),
+        listImportedSourceHistoryObservations: () =>
+          keychainDatabase.listImportedSourceHistoryObservations(),
+        createIfAbsent: (snapshot) =>
+          keychainDatabase.createDailyAssetSnapshotIfAbsent(snapshot),
+        record: (snapshot, createBaseline) =>
+          keychainDatabase.recordDailyAssetObservation(snapshot, createBaseline),
+      },
+      new InMemoryAssetFullRefreshState(),
+    ).refresh("all", "all", keychainSource?.id);
+    const keychainCandles = keychainSource === undefined
+      ? []
+      : await new KeychainLongbridgeHoldingCandlestickReader({
+        credentialReference: () => KEYCHAIN_REFERENCE,
+        async readCandlesticks() {
+          return [{
+            timestamp: 1_746_072_000,
+            open: "100",
+            high: "110",
+            low: "90",
+            close: "105",
+            volume: "1000",
+            turnover: "105000",
+          }];
+        },
+      } as never).readCandlesticks({
+        source: keychainSource,
+        symbol: "NVDA.US",
+        period: "day",
+      });
+
+    const reauthorizationDir = path.join(root, "keychain-reauthorization");
+    const reauthorizationDatabase = new FileDashboardDatabase(
+      path.join(reauthorizationDir, "dashboard.json"),
+      path.join(reauthorizationDir, "legacy-cards.json"),
+    );
+    const reauthorizationSecrets = new FileEncryptedSecretStore(
+      path.join(reauthorizationDir, "secrets.json"),
+    );
+    const reauthorizationConnections = new DatabaseAssetSourceConnections(
+      reauthorizationDatabase,
+      reauthorizationSecrets,
+      Promise.resolve(),
+      undefined,
+      new InMemoryAssetFullRefreshState(),
+    );
+    await reauthorizationConnections.connectLongbridge(RESULT);
+    const [legacySource] = await reauthorizationDatabase.listSources();
+    await reauthorizationConnections.connectLongbridge(KEYCHAIN_RESULT);
+    const [reauthorizedSource] = await reauthorizationDatabase.listSources();
 
     return Response.json({
       dashboardHasOnlyReference:
@@ -322,6 +454,19 @@ export async function POST(request: Request) {
         rotationReference !== null &&
         (await rotationSecrets.get(rotationReference)) === ROTATED_SECRET &&
         !rotationRaw.includes(ROTATED_SECRET),
+      keychainReferencePersistsDirectly:
+        keychainSource?.credentialReference === KEYCHAIN_REFERENCE &&
+        keychainDashboardRaw.includes(KEYCHAIN_REFERENCE) &&
+        keychainSecretsRaw === "{}",
+      keychainReferenceRefreshesAndReadsCandles:
+        keychainRefreshReport.successCount === 1 &&
+        refreshReceivedKeychainReference &&
+        keychainCandles[0]?.close === "105",
+      reauthorizationReplacesLegacySecretReference:
+        legacySource?.credentialReference !== null &&
+        reauthorizedSource?.credentialReference === KEYCHAIN_REFERENCE &&
+        legacySource?.credentialReference !== KEYCHAIN_REFERENCE &&
+        (await reauthorizationSecrets.get(legacySource?.credentialReference ?? "")) === null,
     });
   } finally {
     if (previousKey === undefined) delete process.env.PAD_SECRET_ENCRYPTION_KEY;

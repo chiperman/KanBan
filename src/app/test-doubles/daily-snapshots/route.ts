@@ -87,6 +87,7 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as {
     action?: unknown;
     iso?: unknown;
+    keepSourcesConnected?: unknown;
     rate?: unknown;
   } | null;
   const services = getTestServices();
@@ -403,12 +404,14 @@ export async function POST(request: Request) {
       );
     }
     services.clock.set("2026-03-04T12:00:00.000Z");
-    await services.assetSources.replaceAll(sourceList.map((source) => ({
-      ...source,
-      lifecycle: "disconnected",
-      credentialReference: null,
-    })));
-    services.assetSynchronization.reset("all-failure");
+    if (body?.keepSourcesConnected !== true) {
+      await services.assetSources.replaceAll(sourceList.map((source) => ({
+        ...source,
+        lifecycle: "disconnected",
+        credentialReference: null,
+      })));
+      services.assetSynchronization.reset("all-failure");
+    }
     return Response.json({ ok: true });
   }
 

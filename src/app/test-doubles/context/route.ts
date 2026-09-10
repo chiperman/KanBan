@@ -33,28 +33,45 @@ export async function GET() {
 }
 
 /**
- * 模拟开发服务器热更新后，全局缓存仍保留旧生命周期服务的情形。
+ * 模拟开发服务器热更新后，全局缓存仍保留旧服务契约的情形。
  * 仅测试环境可达，用于验证组合根会在服务契约扩展时自动重建。
  */
-export async function POST() {
+export async function POST(request: Request) {
   if (!isTestEnv()) {
     return Response.json({ error: "not found" }, { status: 404 });
   }
 
+  const body = (await request.json().catch(() => ({}))) as {
+    staleContract?: "asset-source-lifecycle" | "longbridge-holding-candlesticks";
+  };
   const staleServices = getTestServices();
-  Object.defineProperty(
-    staleServices.assetSourceLifecycle,
-    "setEvmTokenPreference",
-    {
-      configurable: true,
-      value: undefined,
-    },
-  );
+  if (body.staleContract === "longbridge-holding-candlesticks") {
+    Object.defineProperty(
+      staleServices.longbridgeHoldingCandlesticks,
+      "readFiveDayTrend",
+      {
+        configurable: true,
+        value: undefined,
+      },
+    );
+  } else {
+    Object.defineProperty(
+      staleServices.assetSourceLifecycle,
+      "setEvmTokenPreference",
+      {
+        configurable: true,
+        value: undefined,
+      },
+    );
+  }
 
   const refreshedServices = getTestServices();
   return Response.json({
     supportsEvmTokenPreferences:
       typeof refreshedServices.assetSourceLifecycle.setEvmTokenPreference ===
+      "function",
+    supportsFiveDayTrend:
+      typeof refreshedServices.longbridgeHoldingCandlesticks.readFiveDayTrend ===
       "function",
   });
 }

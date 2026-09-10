@@ -119,7 +119,11 @@ export function createAssetSourceProviderAdapters({
         longbridgePermissions(revalidated);
         return revalidated;
       },
-      async connect(authorization) {
+      async connect(authorization, reconnectSourceId) {
+        if (reconnectSourceId) {
+          await connections.reconnectLongbridge(reconnectSourceId, authorization);
+          return;
+        }
         await connections.connectLongbridge(authorization);
       },
     },

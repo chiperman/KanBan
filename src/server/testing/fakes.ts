@@ -45,6 +45,7 @@ import type {
   LongbridgeHoldingTrendPoint,
   Card,
   AssetCardStore,
+  AssetFullRefreshState,
   Clock,
   OwnerCredential,
   OwnerCredentialStore,
@@ -336,6 +337,71 @@ export class InMemoryDailyAssetSnapshots implements DailyAssetSnapshots {
       const updated = remove(snapshot);
       return updated ? [updated] : [];
     });
+  }
+}
+
+export class InMemoryAssetFullRefreshState implements AssetFullRefreshState {
+  private attemptedAt: string | null = null;
+  private inProgressAt: string | null = null;
+
+  async read() {
+    return { attemptedAt: this.attemptedAt, inProgressAt: this.inProgressAt };
+  }
+
+  async initialize(attemptedAt: string): Promise<boolean> {
+    if (this.attemptedAt !== null) return false;
+    this.attemptedAt = attemptedAt;
+    return true;
+  }
+
+  async claim(input: {
+    attemptedAt: string;
+    intervalMs: number;
+    staleAfterMs: number;
+    force: boolean;
+  }): Promise<"claimed" | "not-due" | "in-progress"> {
+    const now = Date.parse(input.attemptedAt);
+    const inProgress = this.inProgressAt === null
+      ? Number.NaN
+      : Date.parse(this.inProgressAt);
+    if (
+      this.inProgressAt !== null &&
+      Number.isFinite(now) &&
+      Number.isFinite(inProgress) &&
+      now - inProgress < input.staleAfterMs
+    ) {
+      return "in-progress";
+    }
+    const previous = this.attemptedAt === null
+      ? Number.NaN
+      : Date.parse(this.attemptedAt);
+    if (
+      !input.force &&
+      Number.isFinite(now) &&
+      Number.isFinite(previous) &&
+      now - previous < input.intervalMs
+    ) {
+      return "not-due";
+    }
+    this.attemptedAt = input.attemptedAt;
+    this.inProgressAt = input.attemptedAt;
+    return "claimed";
+  }
+
+  async start(attemptedAt: string): Promise<void> {
+    this.attemptedAt = attemptedAt;
+    this.inProgressAt = attemptedAt;
+  }
+
+  async finish(attemptedAt?: string): Promise<void> {
+    if (attemptedAt === undefined || this.inProgressAt === attemptedAt) {
+      this.inProgressAt = null;
+    }
+  }
+
+  async clear(): Promise<void> {
+    this.attemptedAt = null;
+    this.inProgressAt = null;
   }
 }
 
@@ -1508,6 +1574,30 @@ export class FakeAssetSynchronization implements AssetSynchronization {
     this.releasePending = null;
   }
 
+  async request(
+    input: import("@/server/ports").AssetRefreshRequest,
+  ): Promise<AssetRefreshReport> {
+    const { intent } = input;
+    const sourceIds = input.sourceIds ?? (
+      intent.reason === "manual-source" ? [intent.sourceId] : undefined
+    );
+    this.modes.push("all");
+    this.scopes.push("all");
+    this.sourceIds.push(sourceIds?.[0] ?? null);
+    this.active += 1;
+    try {
+      if (this.holdNext) {
+        this.holdNext = false;
+        await new Promise<void>((resolve) => {
+          this.releasePending = resolve;
+        });
+      }
+      return await this.delegate.request(input);
+    } finally {
+      this.active -= 1;
+    }
+  }
+
   async refresh(
     mode: AssetRefreshMode,
     scope: AssetRefreshScope = "all",
@@ -1664,6 +1754,7 @@ export class InMemoryAssetSourceConnections implements AssetSourceConnections {
     private readonly secrets: InMemorySecretStore,
     private readonly dailySnapshots: InMemoryDailyAssetSnapshots,
     private readonly clock: Clock,
+    private readonly fullRefreshState: AssetFullRefreshState,
   ) {}
 
   failNext(message: string | undefined): void {
@@ -1758,10 +1849,22 @@ export class InMemoryAssetSourceConnections implements AssetSourceConnections {
         },
       ]);
     }
-    await this.dailySnapshots.record(
-      buildDailyAssetSnapshot(updatedSources, this.clock.now().toISOString()),
-      true,
+    const isFirstAutomaticSource = !currentSources.some(
+      (source) =>
+        source.kind !== "manual" &&
+        source.lifecycle !== "disconnected" &&
+        source.credentialReference !== null,
     );
+    const observation = buildDailyAssetSnapshot(
+      updatedSources,
+      this.clock.now().toISOString(),
+    );
+    if (isFirstAutomaticSource && observation.complete) {
+      await this.dailySnapshots.record(observation, true);
+    }
+    if (isFirstAutomaticSource) {
+      await this.fullRefreshState.initialize(this.clock.now().toISOString());
+    }
     const previousReference = existing?.credentialReference ?? null;
     if (
       previousReference !== null &&
@@ -1777,6 +1880,21 @@ export class InMemoryAssetSourceConnections implements AssetSourceConnections {
       title: "长桥资产",
       body: "只读证券账户",
     });
+  }
+
+  reconnectLongbridge(
+    sourceId: string,
+    result: LongbridgeAuthorizationResult,
+  ): Promise<void> {
+    return this.connect(
+      result,
+      {
+        kind: "longbridge",
+        title: "长桥资产",
+        body: "只读证券账户",
+      },
+      sourceId,
+    );
   }
 
   connectBinance(result: BinanceAuthorizationResult): Promise<void> {
@@ -1849,7 +1967,18 @@ export class InMemoryAssetSourceLifecycle implements AssetSourceLifecycle {
     private readonly cards: InMemoryAssetCardStore,
     private readonly secrets: InMemorySecretStore,
     private readonly dailySnapshots: InMemoryDailyAssetSnapshots,
+    private readonly fullRefreshState: AssetFullRefreshState,
   ) {}
+
+  private async clearCycleWhenNoRefreshableSources(): Promise<void> {
+    const hasRefreshableSource = (await this.sources.list()).some(
+      (source) =>
+        source.kind !== "manual" &&
+        source.lifecycle !== "disconnected" &&
+        source.credentialReference !== null,
+    );
+    if (!hasRefreshableSource) await this.fullRefreshState.clear();
+  }
 
   async setHidden(sourceId: string, hidden: boolean): Promise<void> {
     if (!(await this.sources.list()).some((source) => source.id === sourceId)) {
@@ -1939,6 +2068,7 @@ export class InMemoryAssetSourceLifecycle implements AssetSourceLifecycle {
       await this.secrets.remove(source.credentialReference);
     }
     await this.sources.update({ ...source, lifecycle: "disconnected" });
+    await this.clearCycleWhenNoRefreshableSources();
   }
 
   async restore(sourceId: string): Promise<void> {
@@ -1975,6 +2105,7 @@ export class InMemoryAssetSourceLifecycle implements AssetSourceLifecycle {
     if (source.credentialReference !== null) {
       await this.secrets.remove(source.credentialReference);
     }
+    await this.clearCycleWhenNoRefreshableSources();
   }
 }
 
@@ -1987,6 +2118,7 @@ export interface TestServices extends AppServices {
   formalDailySettlementRunner: FormalDailySettlementRunner;
   externalServices: InMemoryExternalServiceConfiguration;
   assetSynchronization: FakeAssetSynchronization;
+  assetFullRefreshState: InMemoryAssetFullRefreshState;
   prices: FakePrices;
   auth: SessionOwnerAuth;
   ownerCredentials: InMemoryOwnerCredentialStore;
@@ -2019,6 +2151,7 @@ export function createTestServices(): TestServices {
     clock,
   );
   const dailyAssetSnapshots = new InMemoryDailyAssetSnapshots();
+  const fullRefreshState = new InMemoryAssetFullRefreshState();
   const formalDailySettlements = new InMemoryFormalDailySettlements();
   const secrets = new InMemorySecretStore();
   const externalServices = new InMemoryExternalServiceConfiguration(clock);
@@ -2032,6 +2165,7 @@ export function createTestServices(): TestServices {
       refreshAdapter,
       100,
       dailyAssetSnapshots,
+      fullRefreshState,
     ),
     refreshAdapter,
   );
@@ -2040,6 +2174,7 @@ export function createTestServices(): TestServices {
     assetCards,
     secrets,
     dailyAssetSnapshots,
+    fullRefreshState,
   );
   const longbridge = new FakeLongbridgeOAuth();
   const longbridgeBenchmarkCandlesticks = new FakeLongbridgeBenchmarkCandlestickReader();
@@ -2055,6 +2190,7 @@ export function createTestServices(): TestServices {
     secrets,
     dailyAssetSnapshots,
     clock,
+    fullRefreshState,
   );
   const manualAssetRecords = new InMemoryManualAssetRecords(
     assetSources,
@@ -2108,6 +2244,7 @@ export function createTestServices(): TestServices {
     formalDailySettlementRunner: new NotDueFormalDailySettlementRunner(),
     externalServices,
     assetSynchronization,
+    assetFullRefreshState: fullRefreshState,
     prices,
     auth: new SessionOwnerAuth(clock),
     ownerCredentials: new InMemoryOwnerCredentialStore(),

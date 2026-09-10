@@ -3,6 +3,7 @@ import type {
   AssetSourceLifecycle,
   AssetSynchronization,
   AssetSourceConnections,
+  AssetFullRefreshState,
   ManualAssetRecords,
   BitReadOnly,
   BinanceReadOnly,
@@ -44,6 +45,7 @@ export interface AppServices {
   assetSources: AssetSources;
   assetSourceLifecycle: AssetSourceLifecycle;
   assetSynchronization: AssetSynchronization;
+  assetFullRefreshState: AssetFullRefreshState;
   dailyAssetSnapshots: DailyAssetSnapshots;
   formalDailySettlements: FormalDailySettlements;
   formalDailySettlementRunner: FormalDailySettlementRunner;

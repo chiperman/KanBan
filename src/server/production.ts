@@ -41,6 +41,7 @@ import type {
 import type {
   AssetSourceSummary,
   AssetSourceLifecycle,
+  AssetFullRefreshState,
   AssetSnapshot,
   AssetSourceConnections,
   AssetSources,
@@ -75,6 +76,7 @@ import type {
 } from "@/server/ports";
 import { SessionOwnerAuth } from "@/server/auth/session-auth";
 import { parseAssetCards } from "@/server/asset-cards";
+import { isMacOSKeychainCredentialReference } from "@/server/asset-sources/longbridge-keychain-sdk";
 import {
   isLongbridgeUsOptionSymbol,
   LongbridgeOAuthState,
@@ -1273,24 +1275,6 @@ export class FileDashboardDatabase {
           error: null,
         },
       };
-      const snapshot = buildDailyAssetSnapshot(state.assetSources, capturedAt);
-      const trendIndex = state.dailyAssetTrendObservations.findIndex(
-        ({ day }) => day === snapshot.day,
-      );
-      if (trendIndex === -1) {
-        state.dailyAssetTrendObservations.push(structuredClone(snapshot));
-      } else {
-        state.dailyAssetTrendObservations[trendIndex] = mergeDailyTrendObservation(
-          state.dailyAssetTrendObservations[trendIndex],
-          snapshot,
-          false,
-        );
-      }
-      if (!state.dailyAssetSnapshots.some(({ day }) => day === snapshot.day)) {
-        state.dailyAssetSnapshots.push(structuredClone(snapshot));
-      }
-      state.dailyAssetSnapshots.sort((left, right) => left.day.localeCompare(right.day));
-      state.dailyAssetTrendObservations.sort((left, right) => left.day.localeCompare(right.day));
       return source.credentialReference;
     });
   }
@@ -1334,6 +1318,9 @@ export class FileDashboardDatabase {
     capturedAt: string,
   ): Promise<void> {
     await this.mutate((state) => {
+      const isFirstAutomaticSource = !state.assetSources.some(
+        (source) => source.kind !== "manual",
+      );
       const connected = buildConnectedSource(
         sourceKind,
         result,
@@ -1342,23 +1329,25 @@ export class FileDashboardDatabase {
       state.assetSources.push(connected.source);
       state.assetCards.push(connected.card);
       const dailySnapshot = buildDailyAssetSnapshot(state.assetSources, capturedAt);
-      const trendIndex = state.dailyAssetTrendObservations.findIndex(
-        ({ day }) => day === dailySnapshot.day,
-      );
-      if (trendIndex === -1) {
-        state.dailyAssetTrendObservations.push(structuredClone(dailySnapshot));
-      } else {
-        state.dailyAssetTrendObservations[trendIndex] = mergeDailyTrendObservation(
-          state.dailyAssetTrendObservations[trendIndex],
-          dailySnapshot,
-          false,
+      if (isFirstAutomaticSource && dailySnapshot.complete) {
+        const trendIndex = state.dailyAssetTrendObservations.findIndex(
+          ({ day }) => day === dailySnapshot.day,
         );
+        if (trendIndex === -1) {
+          state.dailyAssetTrendObservations.push(structuredClone(dailySnapshot));
+        } else {
+          state.dailyAssetTrendObservations[trendIndex] = mergeDailyTrendObservation(
+            state.dailyAssetTrendObservations[trendIndex],
+            dailySnapshot,
+            false,
+          );
+        }
+        if (!state.dailyAssetSnapshots.some(({ day }) => day === dailySnapshot.day)) {
+          state.dailyAssetSnapshots.push(structuredClone(dailySnapshot));
+        }
+        state.dailyAssetSnapshots.sort((left, right) => left.day.localeCompare(right.day));
+        state.dailyAssetTrendObservations.sort((left, right) => left.day.localeCompare(right.day));
       }
-      if (!state.dailyAssetSnapshots.some(({ day }) => day === dailySnapshot.day)) {
-        state.dailyAssetSnapshots.push(structuredClone(dailySnapshot));
-      }
-      state.dailyAssetSnapshots.sort((left, right) => left.day.localeCompare(right.day));
-      state.dailyAssetTrendObservations.sort((left, right) => left.day.localeCompare(right.day));
     });
   }
 }
@@ -2165,6 +2154,106 @@ export class SqliteDashboardDatabase
       .prepare("SELECT value FROM schema_metadata WHERE key = ?")
       .get(key) as SqliteRow | undefined;
     return typeof row?.value === "string" ? row.value : null;
+  }
+
+  async readAssetFullRefreshState(): Promise<{
+    attemptedAt: string | null;
+    inProgressAt: string | null;
+  }> {
+    return {
+      attemptedAt: this.metadata("asset_full_refresh_attempted_at"),
+      inProgressAt: this.metadata("asset_full_refresh_in_progress_at"),
+    };
+  }
+
+  async startAssetFullRefresh(attemptedAt: string): Promise<void> {
+    this.transaction(() => {
+      const write = this.database.prepare(
+        "INSERT OR REPLACE INTO schema_metadata (key, value) VALUES (?, ?)",
+      );
+      write.run("asset_full_refresh_attempted_at", attemptedAt);
+      write.run("asset_full_refresh_in_progress_at", attemptedAt);
+    });
+  }
+
+  async initializeAssetFullRefresh(attemptedAt: string): Promise<boolean> {
+    return this.transaction(() =>
+      this.database
+        .prepare(
+          "INSERT OR IGNORE INTO schema_metadata (key, value) VALUES (?, ?)",
+        )
+        .run("asset_full_refresh_attempted_at", attemptedAt).changes > 0,
+    );
+  }
+
+  async claimAssetFullRefresh(input: {
+    attemptedAt: string;
+    intervalMs: number;
+    staleAfterMs: number;
+    force: boolean;
+  }): Promise<"claimed" | "not-due" | "in-progress"> {
+    return this.transaction(() => {
+      const previousAttemptedAt = this.metadata(
+        "asset_full_refresh_attempted_at",
+      );
+      const inProgressAt = this.metadata(
+        "asset_full_refresh_in_progress_at",
+      );
+      const now = Date.parse(input.attemptedAt);
+      const inProgress = inProgressAt === null ? Number.NaN : Date.parse(inProgressAt);
+      const inProgressIsCurrent =
+        Number.isFinite(inProgress) &&
+        Number.isFinite(now) &&
+        now - inProgress < input.staleAfterMs;
+      if (inProgressAt !== null && inProgressIsCurrent) {
+        return "in-progress";
+      }
+
+      const previous = previousAttemptedAt === null
+        ? Number.NaN
+        : Date.parse(previousAttemptedAt);
+      if (
+        !input.force &&
+        Number.isFinite(previous) &&
+        Number.isFinite(now) &&
+        now - previous < input.intervalMs
+      ) {
+        return "not-due";
+      }
+
+      const write = this.database.prepare(
+        "INSERT OR REPLACE INTO schema_metadata (key, value) VALUES (?, ?)",
+      );
+      write.run("asset_full_refresh_attempted_at", input.attemptedAt);
+      write.run("asset_full_refresh_in_progress_at", input.attemptedAt);
+      return "claimed";
+    });
+  }
+
+  async finishAssetFullRefresh(attemptedAt?: string): Promise<void> {
+    this.transaction(() => {
+      if (attemptedAt === undefined) {
+        this.database
+          .prepare("DELETE FROM schema_metadata WHERE key = ?")
+          .run("asset_full_refresh_in_progress_at");
+        return;
+      }
+      this.database
+        .prepare("DELETE FROM schema_metadata WHERE key = ? AND value = ?")
+        .run("asset_full_refresh_in_progress_at", attemptedAt);
+    });
+  }
+
+  async clearAssetFullRefresh(): Promise<void> {
+    this.transaction(() => {
+      const remove = this.database.prepare(
+        "DELETE FROM schema_metadata WHERE key IN (?, ?)",
+      );
+      remove.run(
+        "asset_full_refresh_attempted_at",
+        "asset_full_refresh_in_progress_at",
+      );
+    });
   }
 
   private assertIntegrity(): void {
@@ -3631,17 +3720,8 @@ export class SqliteDashboardDatabase
           updated.credentialReference,
           "connected",
           updated.id,
-        );
-      this.upsertSourceDetails(updated);
-      const observation = buildDailyAssetSnapshot(
-        this.listSourcesSync(),
-        capturedAt,
       );
-      const hasBaseline = this.database
-        .prepare("SELECT day FROM daily_asset_snapshots WHERE day = ?")
-        .get(observation.day) !== undefined;
-      if (!hasBaseline) this.insertDailyBaseline(observation);
-      this.upsertDailyTrendObservation(observation);
+      this.upsertSourceDetails(updated);
       return source.credentialReference;
     });
   }
@@ -3685,6 +3765,9 @@ export class SqliteDashboardDatabase
     capturedAt: string,
   ): void {
     this.transaction(() => {
+      const isFirstAutomaticSource = this.database
+        .prepare("SELECT 1 FROM asset_sources WHERE kind <> 'manual' LIMIT 1")
+        .get() === undefined;
       const connected = buildConnectedSource(
         sourceKind,
         result,
@@ -3702,11 +3785,13 @@ export class SqliteDashboardDatabase
         this.listSourcesSync(),
         capturedAt,
       );
-      const hasBaseline = this.database
-        .prepare("SELECT day FROM daily_asset_snapshots WHERE day = ?")
-        .get(observation.day) !== undefined;
-      if (!hasBaseline) this.insertDailyBaseline(observation);
-      this.upsertDailyTrendObservation(observation);
+      if (isFirstAutomaticSource && observation.complete) {
+        const hasBaseline = this.database
+          .prepare("SELECT day FROM daily_asset_snapshots WHERE day = ?")
+          .get(observation.day) !== undefined;
+        if (!hasBaseline) this.insertDailyBaseline(observation);
+        this.upsertDailyTrendObservation(observation);
+      }
     });
   }
 }
@@ -3913,6 +3998,30 @@ class DatabaseDailyAssetSnapshots implements DailyAssetSnapshots {
   }
 }
 
+export class DatabaseAssetFullRefreshState implements AssetFullRefreshState {
+  constructor(private readonly database: SqliteDashboardDatabase) {}
+
+  read() { return this.database.readAssetFullRefreshState(); }
+  initialize(attemptedAt: string) {
+    return this.database.initializeAssetFullRefresh(attemptedAt);
+  }
+  claim(input: {
+    attemptedAt: string;
+    intervalMs: number;
+    staleAfterMs: number;
+    force: boolean;
+  }) {
+    return this.database.claimAssetFullRefresh(input);
+  }
+  start(attemptedAt: string) {
+    return this.database.startAssetFullRefresh(attemptedAt);
+  }
+  finish(attemptedAt?: string) {
+    return this.database.finishAssetFullRefresh(attemptedAt);
+  }
+  clear() { return this.database.clearAssetFullRefresh(); }
+}
+
 export class DatabaseFormalDailySettlements implements FormalDailySettlements {
   constructor(private readonly database: SqliteDashboardDatabase) {}
 
@@ -3929,7 +4038,18 @@ class DatabaseAssetSourceLifecycle implements AssetSourceLifecycle {
   constructor(
     private readonly database: DashboardDatabase,
     private readonly secrets: SecretStore,
+    private readonly fullRefreshState: AssetFullRefreshState,
   ) {}
+
+  private async clearCycleWhenNoRefreshableSources(): Promise<void> {
+    const hasRefreshableSource = (await this.database.listSources()).some(
+      (source) =>
+        source.kind !== "manual" &&
+        source.lifecycle !== "disconnected" &&
+        source.credentialReference !== null,
+    );
+    if (!hasRefreshableSource) await this.fullRefreshState.clear();
+  }
 
   setHidden(sourceId: string, hidden: boolean): Promise<void> {
     return this.database.setAssetCardHidden(sourceId, hidden);
@@ -3982,6 +4102,7 @@ class DatabaseAssetSourceLifecycle implements AssetSourceLifecycle {
       await this.secrets.remove(source.credentialReference);
     }
     await this.database.disconnectAssetSource(sourceId);
+    await this.clearCycleWhenNoRefreshableSources();
   }
 
   async restore(sourceId: string): Promise<void> {
@@ -4009,17 +4130,29 @@ class DatabaseAssetSourceLifecycle implements AssetSourceLifecycle {
   async deleteData(sourceId: string): Promise<void> {
     const reference = await this.database.deleteAssetSourceData(sourceId);
     if (reference !== null) await this.secrets.remove(reference);
+    await this.clearCycleWhenNoRefreshableSources();
   }
 }
 
 export class DatabaseAssetSourceConnections implements AssetSourceConnections {
+  private queue: Promise<void> = Promise.resolve();
+
   constructor(
     private readonly database: DashboardDatabase,
     private readonly secrets: TransactionalSecretStore,
     private readonly ready: Promise<void> = Promise.resolve(),
     private readonly clock: Clock = new SystemClock(),
+    private readonly fullRefreshState: AssetFullRefreshState,
   ) {}
+
+  private serialize<T>(operation: () => Promise<T>): Promise<T> {
+    const run = this.queue.then(operation);
+    this.queue = run.then(() => undefined, () => undefined);
+    return run;
+  }
+
   private async connect(
+    sourceKind: SourceConnectionKind,
     result:
       | LongbridgeAuthorizationResult
       | BinanceAuthorizationResult
@@ -4030,10 +4163,24 @@ export class DatabaseAssetSourceConnections implements AssetSourceConnections {
     save: (credentialReference: string, capturedAt: string) => Promise<void>,
   ) {
     await this.ready;
-    const credentialReference = await this.secrets.stage(result.credentials);
+    const capturedAt = this.clock.now().toISOString();
+    const usesKeychainReference =
+      sourceKind === "longbridge" &&
+      isMacOSKeychainCredentialReference(result.credentials);
+    const credentialReference = usesKeychainReference
+      ? result.credentials
+      : await this.secrets.stage(result.credentials);
+    let isFirstAutomaticSource: boolean;
     try {
-      await save(credentialReference, this.clock.now().toISOString());
+      isFirstAutomaticSource = !(await this.database.listSources()).some(
+        (source) =>
+          source.kind !== "manual" &&
+          source.lifecycle !== "disconnected" &&
+          source.credentialReference !== null,
+      );
+      await save(credentialReference, capturedAt);
     } catch (error) {
+      if (usesKeychainReference) throw error;
       try {
         await this.secrets.remove(credentialReference);
       } catch (cleanupError) {
@@ -4044,22 +4191,27 @@ export class DatabaseAssetSourceConnections implements AssetSourceConnections {
       }
       throw error;
     }
-    try {
-      await this.secrets.commit(credentialReference);
-    } catch (error) {
+    if (!usesKeychainReference) {
       try {
-        const source = (await this.database.listSources()).find(
-          (item) => item.credentialReference === credentialReference,
-        );
-        if (source) await this.database.deleteAssetSourceData(source.id);
-        await this.secrets.remove(credentialReference);
-      } catch (cleanupError) {
-        throw new AggregateError(
-          [error, cleanupError],
-          "凭证提交失败，资产来源补偿回滚也未能完成",
-        );
+        await this.secrets.commit(credentialReference);
+      } catch (error) {
+        try {
+          const source = (await this.database.listSources()).find(
+            (item) => item.credentialReference === credentialReference,
+          );
+          if (source) await this.database.deleteAssetSourceData(source.id);
+          await this.secrets.remove(credentialReference);
+        } catch (cleanupError) {
+          throw new AggregateError(
+            [error, cleanupError],
+            "凭证提交失败，资产来源补偿回滚也未能完成",
+          );
+        }
+        throw error;
       }
-      throw error;
+    }
+    if (isFirstAutomaticSource) {
+      await this.fullRefreshState.initialize(capturedAt);
     }
   }
 
@@ -4069,12 +4221,26 @@ export class DatabaseAssetSourceConnections implements AssetSourceConnections {
     result: SourceAuthorizationResult,
   ): Promise<void> {
     await this.ready;
-    const credentialReference = await this.secrets.stage(result.credentials);
-    try {
-      await this.secrets.commit(credentialReference);
-    } catch (error) {
-      await this.secrets.remove(credentialReference);
-      throw error;
+    const isFirstAutomaticSource = !(await this.database.listSources()).some(
+      (source) =>
+        source.kind !== "manual" &&
+        source.lifecycle !== "disconnected" &&
+        source.credentialReference !== null,
+    );
+    const capturedAt = this.clock.now().toISOString();
+    const usesKeychainReference =
+      sourceKind === "longbridge" &&
+      isMacOSKeychainCredentialReference(result.credentials);
+    const credentialReference = usesKeychainReference
+      ? result.credentials
+      : await this.secrets.stage(result.credentials);
+    if (!usesKeychainReference) {
+      try {
+        await this.secrets.commit(credentialReference);
+      } catch (error) {
+        await this.secrets.remove(credentialReference);
+        throw error;
+      }
     }
 
     let previousReference: string | null;
@@ -4084,21 +4250,35 @@ export class DatabaseAssetSourceConnections implements AssetSourceConnections {
         sourceKind,
         result,
         credentialReference,
-        this.clock.now().toISOString(),
+        capturedAt,
       );
     } catch (error) {
-      await this.secrets.remove(credentialReference);
+      if (!usesKeychainReference) await this.secrets.remove(credentialReference);
       throw error;
     }
     if (
       previousReference !== null &&
-      previousReference !== credentialReference
+      previousReference !== credentialReference &&
+      !isMacOSKeychainCredentialReference(previousReference)
     ) {
       await this.secrets.remove(previousReference);
     }
+    if (isFirstAutomaticSource) {
+      await this.fullRefreshState.initialize(capturedAt);
+    }
   }
 
-  private async connectOrReplace(
+  private connectOrReplace(
+    sourceKind: SourceConnectionKind,
+    result: SourceAuthorizationResult,
+    save: (credentialReference: string, capturedAt: string) => Promise<void>,
+  ): Promise<void> {
+    return this.serialize(() =>
+      this.connectOrReplaceSerialized(sourceKind, result, save),
+    );
+  }
+
+  private async connectOrReplaceSerialized(
     sourceKind: SourceConnectionKind,
     result: SourceAuthorizationResult,
     save: (credentialReference: string, capturedAt: string) => Promise<void>,
@@ -4113,12 +4293,21 @@ export class DatabaseAssetSourceConnections implements AssetSourceConnections {
       await this.replaceExisting(existing.id, sourceKind, result);
       return;
     }
-    await this.connect(result, save);
+    await this.connect(sourceKind, result, save);
   }
 
   connectLongbridge(result: LongbridgeAuthorizationResult) {
     return this.connectOrReplace("longbridge", result, (reference, capturedAt) =>
       this.database.connectLongbridge(result, reference, capturedAt));
+  }
+
+  async reconnectLongbridge(
+    sourceId: string,
+    result: LongbridgeAuthorizationResult,
+  ): Promise<void> {
+    await this.serialize(() =>
+      this.replaceExisting(sourceId, "longbridge", result),
+    );
   }
 
   connectBinance(result: BinanceAuthorizationResult) {
@@ -4150,7 +4339,7 @@ export class DatabaseAssetSourceConnections implements AssetSourceConnections {
     sourceId: string,
     result: EvmWatchAuthorizationResult,
   ): Promise<void> {
-    await this.replaceExisting(sourceId, "evm", result);
+    await this.serialize(() => this.replaceExisting(sourceId, "evm", result));
   }
 
 }
@@ -4334,6 +4523,7 @@ export function createProductionServices(
     clock,
   );
   const dailyAssetSnapshots = new DatabaseDailyAssetSnapshots(database);
+  const fullRefreshState = new DatabaseAssetFullRefreshState(database);
   const readySecrets = new ReadySecretStore(secrets, secretRecovery);
   const externalServices: ExternalServiceConfiguration =
     new FileExternalServiceConfiguration(
@@ -4353,6 +4543,7 @@ export function createProductionServices(
     secrets,
     secretRecovery,
     clock,
+    fullRefreshState,
   );
   const assetSourceOnboarding = new AssetSourceOnboarding(
     createAssetSourceProviderAdapters({
@@ -4384,6 +4575,7 @@ export function createProductionServices(
     assetSourceLifecycle: new DatabaseAssetSourceLifecycle(
       database,
       readySecrets,
+      fullRefreshState,
     ),
     dailyAssetSnapshots,
     formalDailySettlements,
@@ -4402,7 +4594,9 @@ export function createProductionServices(
       sourceRefresher,
       60_000,
       dailyAssetSnapshots,
+      fullRefreshState,
     ),
+    assetFullRefreshState: fullRefreshState,
     prices,
     auth: new SessionOwnerAuth(clock),
     ownerCredentials: new FileOwnerCredentialStore(

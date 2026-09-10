@@ -12,6 +12,7 @@ import {
   BITGET_OBSERVED_AT,
   bitgetFixtureSnapshot,
 } from "@/server/testing/bitget-fixtures";
+import { InMemoryAssetFullRefreshState } from "@/server/testing/fakes";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,7 @@ export async function POST() {
       secrets,
       Promise.resolve(),
       { now: () => new Date(BITGET_OBSERVED_AT) },
+      new InMemoryAssetFullRefreshState(),
     ).connectBitget({
       credentials,
       accountMode: "classic",

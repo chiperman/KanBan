@@ -54,6 +54,7 @@ export async function POST(request: Request) {
     action?: unknown;
     scenario?: unknown;
     sourceKind?: unknown;
+    sourceCount?: unknown;
     hold?: unknown;
   } | null;
   const services = getTestServices();
@@ -68,6 +69,13 @@ export async function POST(request: Request) {
   if (body?.action === "reset-schedule") {
     services.assetSynchronization.reset("schedule");
     return Response.json({ ok: true });
+  }
+  if (body?.action === "anchor-full-refresh") {
+    await services.assetFullRefreshState.clear();
+    await services.assetFullRefreshState.initialize(
+      new Date().toISOString(),
+    );
+    return Response.json(await services.assetFullRefreshState.read());
   }
   if (body?.action === "prepare-timeout") {
     services.assetSynchronization.reset("timeout-isolation");
@@ -101,10 +109,13 @@ export async function POST(request: Request) {
   }
   if (
     body?.action !== "configure" ||
-    (body.scenario !== "schedule" && body.scenario !== "partial-failure") ||
+    (body.scenario !== "schedule" &&
+      body.scenario !== "partial-failure" &&
+      body.scenario !== "all-failure") ||
     (body.sourceKind !== undefined &&
       body.sourceKind !== "refresh-fixture" &&
-      body.sourceKind !== "evm-watch-ethereum")
+      body.sourceKind !== "evm-watch-ethereum") ||
+    (body.sourceCount !== undefined && body.sourceCount !== 1 && body.sourceCount !== 2)
   ) {
     return Response.json({ error: "刷新测试配置无效" }, { status: 400 });
   }
@@ -131,7 +142,7 @@ export async function POST(request: Request) {
       amount: "200",
       credentialReference: betaReference,
     }),
-  ];
+  ].slice(0, body.sourceCount === 1 ? 1 : 2);
   const cards: Card[] = sources.map((source, index) => ({
     id: `refresh-card-${index + 1}`,
     kind: "asset",
@@ -153,5 +164,6 @@ export async function GET() {
     scopes: synchronization.scopes,
     sourceIds: synchronization.sourceIds,
     active: synchronization.active,
+    adapterCalls: synchronization.refresher.calls(),
   });
 }
