@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
+import { normalizeAssetSyncState } from "@/server/asset-sync-diagnostics";
 
 import type {
   AssetSourceSummary,
@@ -744,7 +745,7 @@ function restoredState(document: BackupDocument): BusinessDataState {
       credentialReference: null,
       lifecycle: "disconnected" as const,
       sync: {
-        ...(source.sync as unknown as AssetSourceSummary["sync"]),
+        ...normalizeAssetSyncState(source.sync as unknown as AssetSourceSummary["sync"]),
         status: "expired" as const,
         error: "已从备份恢复，需重新授权后才能同步",
       },
@@ -838,7 +839,9 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
       this.store.listFormalDailySettlements(),
     ]);
     const assetSources = sources.map(
-      ({ credentialReference: _credentialReference, ...source }) => source,
+      ({ credentialReference: _credentialReference, ...source }) => ({
+        ...source, sync: normalizeAssetSyncState(source.sync),
+      }),
     );
     const base = {
       format: BACKUP_FORMAT,

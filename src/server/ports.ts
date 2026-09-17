@@ -57,8 +57,31 @@ export interface AssetSourceSyncState {
   lastSuccessfulAt: string;
   lastAttemptAt: string;
   error: string | null;
+  /** 仅保存白名单字段；旧数据缺省，不持久化原始异常或请求 URL。 */
+  diagnostic?: AssetSyncDiagnostic | null;
+  /** 最近 10 次实际尝试（含批次内重试），按发生顺序排列。 */
+  recentAttempts?: AssetSyncAttempt[];
   /** 可选以兼容旧快照；用于防止价格成功掩盖余额同步失败。 */
   failedMode?: AssetRefreshMode | null;
+}
+
+export interface AssetSyncDiagnostic {
+  stage: "credentials" | "request" | "response" | "refresh" | "persist";
+  category: "network" | "timeout" | "rate-limit" | "server" | "authentication" |
+    "permission" | "restricted" | "cancelled" | "invalid-response" | "unknown";
+  httpStatus: number | null;
+  code: string | null;
+  durationMs: number;
+  retryable: boolean;
+}
+
+export interface AssetSyncAttempt {
+  attemptedAt: string;
+  mode: AssetRefreshMode;
+  attempt: number;
+  outcome: "success" | "failure";
+  durationMs: number;
+  diagnostic: AssetSyncDiagnostic | null;
 }
 
 export type AssetRefreshMode = "all" | "prices" | "holdings";

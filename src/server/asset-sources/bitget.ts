@@ -25,6 +25,7 @@ import type {
   PriceQuote,
   Prices,
 } from "@/server/ports";
+import { assetResponseError, hasManagedAssetRetry } from "@/server/asset-sync-diagnostics";
 
 type BitgetFetch = (
   input: string | URL | Request,
@@ -1195,7 +1196,7 @@ class BitgetClient {
       response.status === 429 ||
       response.status >= 500 ||
       ["40725", "45001", "40808", "25000", "25001"].includes(code ?? "");
-    if (transient && retryAttempt < this.runtime.retryDelaysMs.length) {
+    if (!hasManagedAssetRetry() && transient && retryAttempt < this.runtime.retryDelaysMs.length) {
       await this.runtime.sleep(
         this.runtime.retryDelaysMs[retryAttempt],
         this.signal,
@@ -1213,7 +1214,7 @@ class BitgetClient {
       const message = typeof root?.msg === "string" && root.msg
         ? `：${root.msg}`
         : "";
-      throw new Error(`Bitget 读取失败（${errorCode}${message}）`);
+      throw assetResponseError(`Bitget 读取失败（${errorCode}${message}）`, response, code);
     }
     return {
       data: root.data,

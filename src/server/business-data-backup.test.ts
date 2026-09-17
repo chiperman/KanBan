@@ -40,8 +40,23 @@ async function fixture() {
       accountId: "test-owner", permissions: [], credentialReference: null,
       snapshot: { total: { amount: "0", currency: "USD" }, holdings: [], exchangeRates: [],
         syncedAt: observation.capturedAt },
-      sync: { status: "current", lastSuccessfulAt: observation.capturedAt,
-        lastAttemptAt: observation.capturedAt, error: null },
+      sync: {
+        status: "current", lastSuccessfulAt: observation.capturedAt,
+        lastAttemptAt: observation.capturedAt, error: null,
+        diagnostic: {
+          stage: "response", category: "rate-limit", httpStatus: 429,
+          code: "429", durationMs: 12, retryable: true,
+        },
+        recentAttempts: [{
+          attemptedAt: observation.capturedAt, mode: "all", attempt: 1,
+          outcome: "failure", durationMs: 12,
+          diagnostic: {
+            stage: "response", category: "rate-limit", httpStatus: 429,
+            code: "429", durationMs: 12, retryable: true,
+          },
+        }],
+        unsafeRawError: "must not be exported",
+      } as unknown as BusinessDataState["assetSources"][number]["sync"],
     }],
     listDailyAssetSnapshots: async () => [],
     listDailyAssetTrendObservations: async () => [],
@@ -75,6 +90,22 @@ test("备份完整保留来源历史和零金额，旧版缺失字段兼容为�
     await f.rewrite();
     await f.backup.restore("candidate.json");
     assert.deepEqual(f.restored()?.importedAssetSourceHistoryObservations, []);
+  } finally { await rm(f.directory, { recursive: true, force: true }); }
+});
+
+test("备份往返保留可选同步诊断与最近尝试，并丢弃非白名单字段", async () => {
+  const f = await fixture();
+  try {
+    const exported = JSON.parse(await readFile(path.join(f.directory, "valid.json"), "utf8"));
+    const sync = exported.payload.assetSources[0].sync;
+    assert.equal(sync.diagnostic.category, "rate-limit");
+    assert.equal(sync.recentAttempts.length, 1);
+    assert.equal("unsafeRawError" in sync, false);
+    await f.backup.restore("valid.json");
+    const restored = f.restored()!.assetSources[0].sync;
+    assert.equal(restored.diagnostic?.httpStatus, 429);
+    assert.equal(restored.recentAttempts?.[0].outcome, "failure");
+    assert.equal(restored.error, "已从备份恢复，需重新授权后才能同步");
   } finally { await rm(f.directory, { recursive: true, force: true }); }
 });
 

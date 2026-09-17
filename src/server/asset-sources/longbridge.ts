@@ -38,6 +38,7 @@ import {
   isLongbridgeUsOptionSymbol,
   supportsLongbridgeCandlesticks,
 } from "@/domain/longbridge-symbols";
+import { assetResponseError, AssetRequestError, hasManagedAssetRetry } from "@/server/asset-sync-diagnostics";
 
 export { isLongbridgeUsOptionSymbol } from "@/domain/longbridge-symbols";
 
@@ -736,7 +737,7 @@ export class ProductionLongbridgeOAuth implements LongbridgeOAuth {
         cache: "no-store",
       });
       if (!response.ok) {
-        throw new Error(`长桥资产读取失败（HTTP ${response.status}）`);
+        throw assetResponseError(`长桥资产读取失败（HTTP ${response.status}）`, response);
       }
       pages.push(responseData(await response.json()));
     }
@@ -870,7 +871,7 @@ export class ProductionLongbridgeSourceRefresher
       signal,
     });
     if (!response.ok) {
-      throw new Error(`长桥 token 刷新失败（HTTP ${response.status}）`);
+      throw assetResponseError(`长桥 token 刷新失败（HTTP ${response.status}）`, response, undefined, "credentials");
     }
     return parseRefreshTokenResponse(
       await response.json(),
@@ -911,7 +912,7 @@ export class ProductionLongbridgeSourceRefresher
         signal,
       });
       if (!response.ok) {
-        throw new Error(`长桥资产读取失败（HTTP ${response.status}）`);
+        throw assetResponseError(`长桥资产读取失败（HTTP ${response.status}）`, response);
       }
       pages.push(responseData(await response.json()));
     }
@@ -967,6 +968,9 @@ async function withKeychainAuthenticationRetry<T>(
     return await operation();
   } catch (error) {
     if (!isKeychainAuthenticationFailure(error)) throw error;
+    if (hasManagedAssetRetry()) {
+      throw new AssetRequestError("长桥凭证不可用", 401, null, null, "credentials");
+    }
   }
 
   try {

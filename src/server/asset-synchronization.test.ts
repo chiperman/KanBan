@@ -3,6 +3,12 @@ import test from "node:test";
 
 import { buildSnapshotFromPositions } from "@/domain/valuation";
 import { SourceIsolatedAssetSynchronization } from "@/server/asset-synchronization";
+import {
+  AssetRequestError,
+  abortableSyncDelay,
+  diagnoseAssetSyncError,
+  parseRetryAfter,
+} from "@/server/asset-sync-diagnostics";
 import type {
   AssetFullRefreshState,
   AssetSourceRefresher,
@@ -339,7 +345,7 @@ test("完整全量批次冻结当天首个基准并更新趋势", async () => {
   assert.equal((await fixture.dailySnapshots.listTrendObservations())[0]?.total.USD, "304");
 });
 
-test("部分成功写入当天趋势兜底，后续全失败不会覆盖", async () => {
+test("部分成功仅更新来源当前值，全失败不写组合历史", async () => {
   const fixture = await synchronizationFixture();
   const betaBeforeFailure = structuredClone(
     (await fixture.sources.list()).find(({ id }) => id === "source-beta")!,
@@ -361,23 +367,7 @@ test("部分成功写入当天趋势兜底，后续全失败不会覆盖", async
   assert.equal(betaAfterPartial.sync.lastAttemptAt, "2026-08-20T04:00:00.000Z");
   assert.deepEqual(await fixture.dailySnapshots.list(), []);
   const historyBeforeFailure = await fixture.dailySnapshots.listTrendObservations();
-  assert.equal(historyBeforeFailure.length, 1);
-  assert.deepEqual(historyBeforeFailure[0]?.total, {
-    USD: "301",
-    CNY: "2167.2",
-    HKD: "2347.8",
-  });
-  assert.deepEqual(historyBeforeFailure[0] && {
-    day: historyBeforeFailure[0].day,
-    capturedAt: historyBeforeFailure[0].capturedAt,
-    complete: historyBeforeFailure[0].complete,
-    status: historyBeforeFailure[0].status,
-  }, {
-    day: "2026-08-20",
-    capturedAt: "2026-08-20T04:00:00.000Z",
-    complete: true,
-    status: "expired",
-  });
+  assert.deepEqual(historyBeforeFailure, []);
 
   fixture.clock.set("2026-08-20T05:00:00.000Z");
   fixture.refresher.configure("all-failure");
@@ -804,4 +794,176 @@ test("来源生命周期变化使在途读取安全结束，不污染同步错�
     }
     assert.deepEqual(await fixture.dailySnapshots.listTrendObservations(), []);
   }
+});
+
+test("瞬时网络错误在同批次恢复，保留每次尝试且不重置小时周期", async () => {
+  let calls = 0;
+  const fixture = await synchronizationFixture({
+    sourceTimeoutMs: 3_000,
+    refresher: {
+      async refresh({ source, attemptedAt }) {
+        if (source.id === "source-alpha" && ++calls === 1) {
+          throw new TypeError("fetch failed", { cause: Object.assign(new Error("private URL"), { code: "ECONNRESET" }) });
+        }
+        return { snapshot: { ...source.snapshot, syncedAt: attemptedAt } };
+      },
+    },
+  });
+  const report = await fixture.synchronization.request({ intent: { reason: "page-entry" } });
+  assert.equal(report.failureCount, 0);
+  assert.equal(calls, 2);
+  const current = (await fixture.sources.list())[0];
+  assert.equal(current.sync.error, null);
+  assert.equal(current.sync.diagnostic, null);
+  assert.deepEqual(current.sync.recentAttempts?.map(({ outcome }) => outcome), ["failure", "success"]);
+  assert.equal(current.sync.recentAttempts?.[0].diagnostic?.code, "ECONNRESET");
+  assert.equal((await fixture.synchronization.request({ intent: { reason: "foreground" } })).skipped, "not-due");
+});
+
+test("同步失败只保存结构化安全字段，原始异常和 RPC URL 不落盘", async () => {
+  const secret = "secret-token-signature";
+  const fixture = await synchronizationFixture({
+    refresher: {
+      async refresh() {
+        throw Object.assign(new Error(
+          'https://rpc.example/v2/' + secret + '?apiKey=' + secret + ' Authorization: Bearer ' + secret,
+        ), { status: 401, code: secret });
+      },
+    },
+  });
+  const before = structuredClone((await fixture.sources.list())[0]);
+  await fixture.synchronization.refresh("all", "all", "source-alpha");
+  const current = (await fixture.sources.list())[0];
+  assert.deepEqual(current.snapshot, before.snapshot);
+  assert.equal(current.sync.lastSuccessfulAt, before.sync.lastSuccessfulAt);
+  assert.equal(current.sync.diagnostic?.category, "authentication");
+  assert.equal(current.sync.diagnostic?.httpStatus, 401);
+  assert.equal(current.sync.diagnostic?.code, null);
+  assert.ok((current.sync.diagnostic?.durationMs ?? -1) >= 0);
+  assert.doesNotMatch(JSON.stringify(current.sync), /secret-token-signature|rpc.example|apiKey|Authorization/);
+});
+
+test("429 与 5xx 在总预算内有限重试，Retry-After 超预算不重试", async () => {
+  let calls = 0;
+  const fixture = await synchronizationFixture({
+    sourceTimeoutMs: 1_200,
+    refresher: {
+      async refresh() {
+        calls += 1;
+        if (calls === 1) throw new AssetRequestError("限流", 429, null, null);
+        return { snapshot: { ...source({ id: "source-alpha", amount: "100", credentialReference: "alpha-reference" }).snapshot, syncedAt: INITIAL_AT } };
+      },
+    },
+  });
+  const recovered = await fixture.synchronization.refresh("all", "all", "source-alpha");
+  assert.equal(recovered.failureCount, 0);
+  assert.equal(calls, 2);
+
+  calls = 0;
+  const bounded = await synchronizationFixture({
+    sourceTimeoutMs: 700,
+    refresher: {
+      async refresh() {
+        calls += 1;
+        throw new AssetRequestError("服务不可用", 503, null, 2_000);
+      },
+    },
+  });
+  const failed = await bounded.synchronization.refresh("all", "all", "source-alpha");
+  assert.equal(failed.failureCount, 1);
+  assert.equal(calls, 1);
+  assert.equal((await bounded.sources.list())[0].sync.diagnostic?.httpStatus, 503);
+});
+
+test("认证、权限与地区限制错误不重试，取消或预算耗尽保留分类", async () => {
+  for (const [status, category] of [[401, "authentication"], [403, "permission"], [451, "restricted"]] as const) {
+    let calls = 0;
+    const fixture = await synchronizationFixture({
+      refresher: { async refresh() { calls += 1; throw new AssetRequestError("拒绝", status, null, null); } },
+    });
+    await fixture.synchronization.refresh("all", "all", "source-alpha");
+    assert.equal(calls, 1);
+    assert.equal((await fixture.sources.list())[0].sync.diagnostic?.category, category);
+  }
+
+  const fixture = await synchronizationFixture({
+    sourceTimeoutMs: 20,
+    refresher: {
+      async refresh({ signal }) {
+        await new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }));
+        await new Promise<void>(() => {});
+        return { snapshot: source({ id: "source-alpha", amount: "100", credentialReference: "alpha-reference" }).snapshot };
+      },
+    },
+  });
+  await fixture.synchronization.refresh("all", "all", "source-alpha");
+  assert.equal((await fixture.sources.list())[0].sync.diagnostic?.category, "timeout");
+});
+
+test("诊断只将明确的 fetch 网络错误标记为可重试", () => {
+  assert.equal(
+    diagnoseAssetSyncError(
+      new TypeError("Cannot read properties of undefined"),
+      "refresh",
+      1,
+    ).retryable,
+    false,
+  );
+  const wrapped = new Error("安全包装", { cause: new TypeError("fetch failed") });
+  assert.equal(diagnoseAssetSyncError(wrapped, "refresh", 1).category, "network");
+  assert.equal(diagnoseAssetSyncError(wrapped, "refresh", 1).retryable, true);
+  assert.equal(diagnoseAssetSyncError(wrapped, "credentials", 1).retryable, false);
+  assert.equal(parseRetryAfter("2"), 2_000);
+  assert.equal(
+    parseRetryAfter("Thu, 20 Aug 2026 04:00:03 GMT", Date.parse(INITIAL_AT)),
+    3_000,
+  );
+});
+
+test("单来源最多三次尝试，主动取消不重试且最近记录最多十条", async () => {
+  const signals: AbortSignal[] = [];
+  const failed = await synchronizationFixture({
+    sourceTimeoutMs: 5_000,
+    refresher: {
+      async refresh({ signal }) {
+        assert.ok(signals.every((previous) => previous.aborted));
+        signals.push(signal);
+        throw new AssetRequestError("服务不可用", 503, null, null);
+      },
+    },
+  });
+  await failed.synchronization.refresh("all", "all", "source-alpha");
+  assert.equal(signals.length, 3);
+  assert.ok(signals.every((signal) => signal.aborted));
+  assert.deepEqual(
+    (await failed.sources.list())[0].sync.recentAttempts?.map(({ attempt }) => attempt),
+    [1, 2, 3],
+  );
+
+  let calls = 0;
+  const cancelled = await synchronizationFixture({
+    refresher: {
+      async refresh() {
+        calls += 1;
+        throw new DOMException("取消", "AbortError");
+      },
+    },
+  });
+  await cancelled.synchronization.refresh("all", "all", "source-alpha");
+  assert.equal(calls, 1);
+  assert.equal((await cancelled.sources.list())[0].sync.diagnostic?.category, "cancelled");
+
+  const bounded = await synchronizationFixture();
+  for (let index = 0; index < 12; index += 1) {
+    bounded.clock.set(new Date(Date.parse(INITIAL_AT) + index * 3_600_001).toISOString());
+    await bounded.synchronization.refresh("all", "all", "source-alpha");
+  }
+  const attempts = (await bounded.sources.list())[0].sync.recentAttempts!;
+  assert.equal(attempts.length, 10);
+  assert.equal(attempts[0].attemptedAt, "2026-08-20T06:00:00.002Z");
+
+  const controller = new AbortController();
+  const delay = abortableSyncDelay(60_000, controller.signal);
+  controller.abort();
+  await assert.rejects(delay, { name: "AbortError" });
 });

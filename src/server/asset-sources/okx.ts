@@ -24,6 +24,7 @@ import type {
   PriceQuote,
   Prices,
 } from "@/server/ports";
+import { assetResponseError } from "@/server/asset-sync-diagnostics";
 
 type OkxFetch = (
   input: string | URL | Request,
@@ -698,6 +699,9 @@ class OkxClient {
       signal: this.signal,
     });
     const body = await response.json().catch(() => null);
+    if (!response.ok && (body === null || typeof body !== "object")) {
+      throw assetResponseError("OKX 读取失败", response);
+    }
     const root = record(body, "OKX 响应");
     if (root.code === "50102" && privateRequest && retryTimestamp) {
       await this.syncTime();
@@ -706,7 +710,7 @@ class OkxClient {
     if (!response.ok || root.code !== "0") {
       const code = typeof root.code === "string" ? root.code : `HTTP ${response.status}`;
       const message = typeof root.msg === "string" && root.msg ? `：${root.msg}` : "";
-      throw new Error(`OKX 读取失败（${code}${message}）`);
+      throw assetResponseError(`OKX 读取失败（${code}${message}）`, response, root.code);
     }
     return root.data;
   }

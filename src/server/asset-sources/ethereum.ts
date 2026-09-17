@@ -17,6 +17,7 @@ import type {
   EvmWatchAuthorizationResult,
   EvmWatchWalletReadOnly,
 } from "@/server/ports";
+import { assetResponseError, hasManagedAssetRetry } from "@/server/asset-sync-diagnostics";
 
 type JsonRecord = Record<string, unknown>;
 type EvmFetch = (
@@ -334,7 +335,8 @@ class EvmRpcClient {
 
   async call(method: string, params: unknown[]): Promise<unknown> {
     let response: Response | null = null;
-    for (let attempt = 1; attempt <= RPC_NETWORK_ATTEMPTS; attempt += 1) {
+    const maxAttempts = hasManagedAssetRetry() ? 1 : RPC_NETWORK_ATTEMPTS;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
         response = await this.request(this.rpcUrl, {
           method: "POST",
@@ -346,15 +348,16 @@ class EvmRpcClient {
         });
         break;
       } catch (error) {
-        if (!(error instanceof TypeError) || attempt === RPC_NETWORK_ATTEMPTS) {
+        if (!(error instanceof TypeError) || attempt === maxAttempts || this.signal?.aborted) {
           if (error instanceof TypeError) {
-            throw new Error(`EVM RPC ${method} 网络请求失败，请稍后重试`);
+            throw new Error(`EVM RPC ${method} 网络请求失败，请稍后重试`, { cause: error });
           }
           throw error;
         }
       }
     }
     if (!response) throw new Error(`EVM RPC ${method} 网络请求失败，请稍后重试`);
+    if (!response.ok) throw assetResponseError("EVM RPC 读取失败", response);
     const body = record(
       await response.json().catch(() => null),
       "EVM JSON-RPC 响应",
@@ -372,8 +375,9 @@ class EvmRpcClient {
       ) {
         throw new EvmTokenMetadataUnavailableError(message);
       }
-      throw new Error(
+      throw assetResponseError(
         `EVM RPC 读取失败${typeof error?.message === "string" ? `：${error.message}` : `（HTTP ${response.status}）`}`,
+        response,
       );
     }
     if (!("result" in body)) throw new Error("EVM JSON-RPC 响应缺少 result");
@@ -1005,7 +1009,7 @@ class CoinGeckoEvmPrices {
       url.searchParams.set("include_last_updated_at", "true");
       const response = await this.get(url, signal);
       if (response && !response.ok) {
-        throw new Error(`CoinGecko ${config.nativeSymbol} 价格读取失败（HTTP ${response.status}）`);
+        throw assetResponseError(`CoinGecko ${config.nativeSymbol} 价格读取失败（HTTP ${response.status}）`, response);
       }
       if (response) {
         const root = record(await response.json(), `CoinGecko ${config.nativeSymbol} 价格响应`);
@@ -1036,7 +1040,7 @@ class CoinGeckoEvmPrices {
       );
       const response = await this.get(url, signal);
       if (response && !response.ok) {
-        throw new Error(`CoinGecko ${config.tokenStandard} 价格读取失败（HTTP ${response.status}）`);
+        throw assetResponseError(`CoinGecko ${config.tokenStandard} 价格读取失败（HTTP ${response.status}）`, response);
       }
       if (!response) continue;
       const root = record(await response.json(), "CoinGecko 同质化代币价格响应");

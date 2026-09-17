@@ -12,6 +12,7 @@ import type {
   PriceQuote,
   Prices,
 } from "@/server/ports";
+import { assetResponseError } from "@/server/asset-sync-diagnostics";
 
 type JsonRecord = Record<string, unknown>;
 type BitFetch = (
@@ -639,6 +640,7 @@ class BitClient {
     } catch (error) {
       throw new Error(
         `BIT ${apiPath} 网络请求失败（${networkErrorMessage(error)}）`,
+        { cause: error },
       );
     }
     const raw = await response.text().catch(() => "");
@@ -653,7 +655,7 @@ class BitClient {
         typeof body.message === "string"
         ? body.message
         : `HTTP ${response.status}`;
-      throw new Error(`BIT ${apiPath}读取失败（${message}）`);
+      throw assetResponseError(`BIT ${apiPath}读取失败（${message}）`, response);
     }
     return parseEnvelope(body, apiPath);
   }

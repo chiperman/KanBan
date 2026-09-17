@@ -27,6 +27,7 @@ import type {
   PriceQuote,
   Prices,
 } from "@/server/ports";
+import { assetResponseError } from "@/server/asset-sync-diagnostics";
 
 type BinanceFetch = (
   input: string | URL | Request,
@@ -1462,7 +1463,7 @@ class BinanceClient {
         ? body as { code?: unknown; msg?: unknown }
         : null;
       const message = typeof error?.msg === "string" ? `：${error.msg}` : "";
-      throw new Error(`${context}失败（HTTP ${response.status}${message}）`);
+      throw assetResponseError(`${context}失败（HTTP ${response.status}${message}）`, response, error?.code);
     }
     if (
       typeof body === "object" &&
@@ -1472,8 +1473,10 @@ class BinanceClient {
       Number((body as { code: number }).code) < 0
     ) {
       const value = body as { code: number; msg?: unknown };
-      throw new Error(
+      throw assetResponseError(
         `${context}失败（${value.code}${typeof value.msg === "string" ? `：${value.msg}` : ""}）`,
+        response,
+        value.code,
       );
     }
     return body;
@@ -1535,8 +1538,10 @@ class BinanceClient {
         typeof (body as { msg?: unknown }).msg === "string"
         ? `：${(body as { msg: string }).msg}`
         : "";
-      throw new Error(
+      throw assetResponseError(
         `Binance 读取失败${typeof code === "number" ? `（${code}${message}）` : `（HTTP ${response.status}${message}）`}`,
+        response,
+        code,
       );
     }
     return body;

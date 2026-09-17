@@ -87,6 +87,7 @@ import {
   KeychainLongbridgeSourceRefresher,
 } from "@/server/asset-sources/longbridge";
 import { SourceIsolatedAssetSynchronization } from "@/server/asset-synchronization";
+import { normalizeAssetSyncState } from "@/server/asset-sync-diagnostics";
 import {
   MarketCloseFormalDailySettlement,
   ReadOnlyFormalSettlementSourceCapture,
@@ -145,7 +146,7 @@ interface DashboardState {
 }
 
 const DASHBOARD_SCHEMA_VERSION = 9 as const;
-const SQLITE_SCHEMA_VERSION = 17;
+const SQLITE_SCHEMA_VERSION = 18;
 
 type SourceConnectionKind =
   | "longbridge"
@@ -606,7 +607,7 @@ function migrateAssetSource(raw: unknown): AssetSourceSummary {
       exchangeRates,
       ...(coverage === undefined ? {} : { coverage }),
     },
-    sync: source.sync ?? {
+    sync: source.sync ? normalizeAssetSyncState(source.sync) : {
       status: "current",
       lastSuccessfulAt: snapshot.syncedAt,
       lastAttemptAt: snapshot.syncedAt,
@@ -1500,7 +1501,9 @@ export class SqliteDashboardDatabase
         last_successful_at TEXT NOT NULL,
         last_attempt_at TEXT NOT NULL,
         error TEXT,
-        failed_mode TEXT CHECK (failed_mode IS NULL OR failed_mode IN ('all', 'prices', 'holdings'))
+        failed_mode TEXT CHECK (failed_mode IS NULL OR failed_mode IN ('all', 'prices', 'holdings')),
+        diagnostic_json TEXT CHECK (diagnostic_json IS NULL OR json_valid(diagnostic_json)),
+        recent_attempts_json TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(recent_attempts_json))
       ) STRICT;
       CREATE TABLE IF NOT EXISTS manual_asset_records (
         source_id TEXT NOT NULL REFERENCES asset_sources(id) ON DELETE CASCADE,
@@ -1712,6 +1715,10 @@ export class SqliteDashboardDatabase
     if (schemaVersion === "16") {
       this.migrateSchemaVersionSixteen();
       schemaVersion = "17";
+    }
+    if (schemaVersion === "17") {
+      this.migrateSchemaVersionSeventeen();
+      schemaVersion = "18";
     }
     if (schemaVersion !== String(SQLITE_SCHEMA_VERSION)) {
       throw new Error(`不支持的 SQLite schema 版本: ${schemaVersion}`);
@@ -2117,6 +2124,20 @@ export class SqliteDashboardDatabase
     });
   }
 
+  private migrateSchemaVersionSeventeen(): void {
+    this.transaction(() => {
+      this.database.exec(`
+        ALTER TABLE asset_source_sync_states ADD COLUMN diagnostic_json TEXT
+          CHECK (diagnostic_json IS NULL OR json_valid(diagnostic_json));
+        ALTER TABLE asset_source_sync_states ADD COLUMN recent_attempts_json TEXT
+          NOT NULL DEFAULT '[]' CHECK (json_valid(recent_attempts_json));
+      `);
+      this.database
+        .prepare("UPDATE schema_metadata SET value = ? WHERE key = ?")
+        .run("18", "schema_version");
+    });
+  }
+
   private initializeLegacyData(): void {
     if (this.metadata("json_import_complete") === "1") return;
     const state = parseLegacyDashboardStateSync(
@@ -2379,6 +2400,7 @@ export class SqliteDashboardDatabase
   }
 
   private upsertSourceDetails(source: AssetSourceSummary): void {
+    const sync = normalizeAssetSyncState(source.sync);
     this.database
       .prepare(`
         UPDATE asset_sources
@@ -2411,8 +2433,9 @@ export class SqliteDashboardDatabase
     this.database
       .prepare(`
         INSERT OR REPLACE INTO asset_source_sync_states (
-          source_id, status, last_successful_at, last_attempt_at, error, failed_mode
-        ) VALUES (?, ?, ?, ?, ?, ?)
+          source_id, status, last_successful_at, last_attempt_at, error, failed_mode,
+          diagnostic_json, recent_attempts_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `)
       .run(
         source.id,
@@ -2421,6 +2444,9 @@ export class SqliteDashboardDatabase
         source.sync.lastAttemptAt,
         source.sync.error,
         source.sync.failedMode ?? null,
+        sync.diagnostic === undefined || sync.diagnostic === null
+          ? null : JSON.stringify(sync.diagnostic),
+        JSON.stringify(sync.recentAttempts ?? []),
       );
   }
 
@@ -2877,7 +2903,7 @@ export class SqliteDashboardDatabase
               }),
           syncedAt: snapshot.synced_at as string,
         },
-        sync: {
+        sync: normalizeAssetSyncState({
           status: sync.status as "current" | "expired",
           lastSuccessfulAt: sync.last_successful_at as string,
           lastAttemptAt: sync.last_attempt_at as string,
@@ -2885,7 +2911,13 @@ export class SqliteDashboardDatabase
           ...(sync.failed_mode === null
             ? {}
             : { failedMode: sync.failed_mode as "all" | "prices" | "holdings" }),
-        },
+          ...(sync.diagnostic_json === null
+            ? {}
+            : { diagnostic: JSON.parse(sync.diagnostic_json as string) }),
+          ...(sync.recent_attempts_json === "[]" ? {} : {
+            recentAttempts: JSON.parse((sync.recent_attempts_json as string | null) ?? "[]"),
+          }),
+        }),
         ...(row.lifecycle === null
           ? {}
           : { lifecycle: row.lifecycle as "connected" | "disconnected" }),
