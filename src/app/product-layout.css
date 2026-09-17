@@ -45,6 +45,7 @@ html {
   min-width: 0;
 }
 
+/* 抬头工具共用样式；下方断点仅声明布局差异，避免重复覆盖。 */
 .workbench-page-header__utilities > .workbench-utilities {
   position: static;
   z-index: auto;
@@ -539,14 +540,6 @@ html {
     justify-content: end;
     padding-top: var(--vibe-space-3);
     border-top: 1px solid var(--line);
-  }
-}
-
-@media (max-width: 639px) {
-  .workbench-utilities {
-    bottom: calc(
-      var(--vibe-space-24) + var(--vibe-space-6) + env(safe-area-inset-bottom)
-    );
   }
 }
 
@@ -5724,30 +5717,7 @@ body {
   .workbench-page-header__utilities {
     grid-column: 2;
     grid-row: 1;
-    display: block;
     align-self: start;
-  }
-
-  .workbench-page-header__utilities > .workbench-utilities {
-    position: static;
-    z-index: auto;
-    width: auto;
-    display: flex;
-    align-items: stretch;
-    gap: var(--vibe-space-3);
-  }
-
-  .workbench-page-header__utilities .workbench-privacy-toggle.vibe-button {
-    width: auto;
-    background: var(--bg);
-  }
-
-  .workbench-page-header__utilities .workbench-command {
-    background: var(--bg);
-  }
-
-  .workbench-page-header__utilities .workbench-utility-actions {
-    align-self: stretch;
   }
 
   .workbench-page-header__actions {
@@ -5785,17 +5755,13 @@ body {
   }
 
   .workbench-page-header__utilities {
-    display: block;
     grid-column: 1 / -1;
   }
 
   .workbench-page-header__utilities > .workbench-utilities {
-    position: static;
-    z-index: auto;
     width: 100%;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--vibe-space-3);
   }
 
   .workbench-page-header__utilities .workbench-privacy-toggle.vibe-button,
@@ -5804,11 +5770,6 @@ body {
     .workbench-command
     .command-menu-trigger.vibe-button {
     width: 100%;
-  }
-
-  .workbench-page-header__utilities .workbench-privacy-toggle.vibe-button,
-  .workbench-page-header__utilities .workbench-command {
-    background: var(--bg);
   }
 
   .workbench-page-header__utilities .workbench-utility-actions {
