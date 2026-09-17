@@ -82,6 +82,7 @@ export default async function AssetDashboardPage({
               currentDay={demo.currentDay}
               currentObservedAt={now.toISOString()}
               demoMode
+              formalDailySettlements={[]}
               profitColorScheme={DEFAULT_PROFIT_COLOR_SCHEME}
               sources={demo.assetSources}
               trendObservations={demo.dailyAssetTrendObservations}
@@ -136,11 +137,13 @@ export default async function AssetDashboardPage({
     cashflows,
     dailyAssetTrendObservations,
     fullRefreshState,
+    formalDailySettlements,
   ] = await Promise.all([
     services.assetSources.list(),
     services.investmentCashflows.list(),
     services.dailyAssetSnapshots.listTrendObservations(),
     services.assetFullRefreshState.read(),
+    services.formalDailySettlements.list(),
   ])
   const assetSources = storedSources.map(
     ({ credentialReference: _credentialReference, permissions: _permissions, ...source }) => source,
@@ -174,6 +177,7 @@ export default async function AssetDashboardPage({
               cashflows={cashflows}
               currentObservedAt={now.toISOString()}
               currentDay={shanghaiDay(now)}
+              formalDailySettlements={formalDailySettlements}
               profitColorScheme={profitColorScheme}
               sources={assetSources}
               trendObservations={dailyAssetTrendObservations}

@@ -26,11 +26,13 @@ import type {
   AssetSourceSummary,
   DailyAssetSourceSnapshot,
   DailyAssetTrendObservation,
+  FormalDailySettlement,
   InvestmentCashflow,
 } from "@/server/ports";
 import { AssetGlobalRefreshControl } from "@/ui/asset-refresh-controls";
 import { sourceSyncStatus } from "@/ui/asset-source-status";
 import { AssetTrendChart } from "@/ui/asset-trend-chart";
+import { FormalDailySettlementSummary } from "@/ui/formal-daily-settlement-summary";
 import type { ProfitColorScheme } from "@/ui/profit-color-scheme";
 import {
   VibeMetric,
@@ -225,6 +227,7 @@ export function DailyOverviewWorkspace({
   currentDay,
   currentObservedAt,
   demoMode = false,
+  formalDailySettlements,
   profitColorScheme,
   sources,
   trendObservations,
@@ -233,6 +236,7 @@ export function DailyOverviewWorkspace({
   currentDay: string;
   currentObservedAt: string;
   demoMode?: boolean;
+  formalDailySettlements: FormalDailySettlement[];
   profitColorScheme: ProfitColorScheme;
   sources: OverviewSource[];
   trendObservations: DailyAssetTrendObservation[];
@@ -597,8 +601,20 @@ export function DailyOverviewWorkspace({
         )}
       </section>
 
-      <section className="daily-overview__trend" data-testid="overview-trend">
+      {demoMode ? null : (
+        <FormalDailySettlementSummary
+          settlements={formalDailySettlements}
+          currency={currency}
+          showSensitiveInfo={showSensitiveInfo}
+        />
+      )}
+
+      <section
+        className="daily-overview__trend"
+        data-testid="overview-trend"
+      >
         <header>
+          <p className="card-label">总资产趋势</p>
           <h2>近 7 日资产走势</h2>
           <div className="daily-overview__trend-actions">
             <span>

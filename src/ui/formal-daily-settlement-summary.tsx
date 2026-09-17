@@ -90,8 +90,8 @@ export function FormalDailySettlementSummary({
           : ` · 采集于 ${formatShanghaiDateTime(latest.capturedAt)}`}
       </p>
       <p className="formal-daily-settlement-note">
-        证券收盘
-        {hasCrypto ? "；加密采集时价。" : null}
+        证券按官方日 K 常规盘收盘记录
+        {hasCrypto ? "；加密资产按同一采集窗口市价记录。" : "。"}
       </p>
       {latest.diagnostic ? (
         <p className="formal-daily-settlement-diagnostic">{latest.diagnostic}</p>
