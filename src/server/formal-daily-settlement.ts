@@ -237,17 +237,23 @@ function expectedTradingDay(now: Date, market: SecuritiesMarket): string {
     : previousDay(currentDay);
 }
 
-function sourceTotals(source: AssetSourceSummary): Record<"USD" | "CNY" | "HKD", string | null> {
+function sourceTotals(
+  source: AssetSourceSummary,
+  rateSources: AssetSourceSummary[],
+): Record<"USD" | "CNY" | "HKD", string | null> {
   return {
-    USD: buildTotalValuation([source], "USD", "source").amount,
-    CNY: buildTotalValuation([source], "CNY", "source").amount,
-    HKD: buildTotalValuation([source], "HKD", "source").amount,
+    USD: buildTotalValuation([source], "USD", "source", rateSources).amount,
+    CNY: buildTotalValuation([source], "CNY", "source", rateSources).amount,
+    HKD: buildTotalValuation([source], "HKD", "source", rateSources).amount,
   };
 }
 
-function sourceIsComplete(source: AssetSourceSummary): boolean {
-  const usd = buildTotalValuation([source], "USD", "source");
-  const hkd = buildTotalValuation([source], "HKD", "source");
+function sourceIsComplete(
+  source: AssetSourceSummary,
+  rateSources: AssetSourceSummary[],
+): boolean {
+  const usd = buildTotalValuation([source], "USD", "source", rateSources);
+  const hkd = buildTotalValuation([source], "HKD", "source", rateSources);
   return (
     source.sync.status === "current" &&
     !usd.incomplete &&
@@ -604,6 +610,16 @@ export class MarketCloseFormalDailySettlement
       return { outcome: "waiting" };
     }
 
+    const valuationSources = captures.flatMap((capture) => {
+      if (capture.snapshot === null) return [];
+      const revalued = revalueSecurities(
+        capture.source,
+        capture.snapshot,
+        confirmedCloses,
+        attemptedAt,
+      );
+      return [sourceWithSnapshot(capture.source, revalued.snapshot)];
+    });
     const formalSources: FormalSettlementSource[] = [];
     const holdings: FormalSettlementHolding[] = [];
     const valuationDiagnostics: string[] = [];
@@ -620,7 +636,8 @@ export class MarketCloseFormalDailySettlement
         ...(capture.diagnostic === null ? [] : [capture.diagnostic]),
         ...revalued.diagnostics,
       ]);
-      const complete = sourceDiagnostic === null && sourceIsComplete(source);
+      const complete =
+        sourceDiagnostic === null && sourceIsComplete(source, valuationSources);
       formalSources.push({
         sourceId: source.id,
         label: source.label,
@@ -628,7 +645,7 @@ export class MarketCloseFormalDailySettlement
         capturedAt: source.snapshot.syncedAt,
         status: complete ? "complete" : "incomplete",
         diagnostic: sourceDiagnostic,
-        total: sourceTotals(source),
+        total: sourceTotals(source, valuationSources),
       });
       holdings.push(
         ...activeSourceHoldings(source).map((holding) =>
@@ -655,16 +672,6 @@ export class MarketCloseFormalDailySettlement
     const complete =
       formalSources.length === sources.length &&
       formalSources.every((source) => source.status === "complete");
-    const valuationSources = captures.flatMap((capture) => {
-      if (capture.snapshot === null) return [];
-      const revalued = revalueSecurities(
-        capture.source,
-        capture.snapshot,
-        confirmedCloses,
-        attemptedAt,
-      );
-      return [sourceWithSnapshot(capture.source, revalued.snapshot)];
-    });
     const usd = buildTotalValuation(valuationSources, "USD", "source");
     const cny = buildTotalValuation(valuationSources, "CNY", "source");
     const hkd = buildTotalValuation(valuationSources, "HKD", "source");
