@@ -105,6 +105,8 @@ function backupState(): BusinessDataState {
       total: { USD: "100.00", CNY: "720.00", HKD: "780.00" },
     }],
     investmentCashflows: [],
+    manualAssetRecords: [],
+    formalDailySettlements: [],
   };
 }
 
@@ -337,6 +339,8 @@ export async function POST(request: Request) {
         dailyAssetTrendObservations: [],
         importedAssetSourceHistoryObservations: [],
         investmentCashflows: [],
+        manualAssetRecords: [],
+        formalDailySettlements: [],
       });
       await backups.restore(exported.fileName);
       const [restoredSource] = await database.listSources();
@@ -363,6 +367,8 @@ export async function POST(request: Request) {
         dailyAssetTrendObservations: [],
         importedAssetSourceHistoryObservations: [],
         investmentCashflows: [],
+        manualAssetRecords: [],
+        formalDailySettlements: [],
       });
       await backups.restore(exported.fileName);
       const [restoredSource] = await database.listSources();
@@ -422,6 +428,8 @@ export async function POST(request: Request) {
       dailyAssetTrendObservations: [],
       importedAssetSourceHistoryObservations: [],
       investmentCashflows: [],
+      manualAssetRecords: [],
+      formalDailySettlements: [],
     });
     const preview = await backups.previewRestore(exported.fileName);
     await backups.restore(exported.fileName);

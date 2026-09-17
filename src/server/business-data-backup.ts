@@ -10,6 +10,8 @@ import type {
   ImportedAssetSourceHistoryObservation,
   InvestmentCashflow,
   InvestmentCashflowCurrency,
+  FormalDailySettlement,
+  ManualAssetRecord,
 } from "@/server/ports";
 import {
   assertInvestmentCashflowSequence,
@@ -24,11 +26,13 @@ import {
 } from "@/server/local-data-permissions";
 
 const BACKUP_FORMAT = "personal-asset-dashboard-business-data";
-const BACKUP_FORMAT_VERSION = 4;
-const SUPPORTED_BACKUP_VERSIONS = new Set([1, 2, 3, BACKUP_FORMAT_VERSION]);
+const BACKUP_FORMAT_VERSION = 5;
+const SUPPORTED_BACKUP_VERSIONS = new Set([1, 2, 3, 4, BACKUP_FORMAT_VERSION]);
 
 export const SENSITIVE_ASSET_DATA_WARNING =
   "备份仍包含敏感资产数据，请仅存放在受保护的位置。";
+const LEGACY_HISTORY_WARNING =
+  "旧版备份不包含手工多日原始记录和正式日结；恢复不会推算缺失历史，并会替换为空。";
 
 const FORBIDDEN_FIELD_NAMES = new Set([
   "apikey",
@@ -59,6 +63,8 @@ export interface BusinessDataState {
   dailyAssetTrendObservations: DailyAssetTrendObservation[];
   importedAssetSourceHistoryObservations: ImportedAssetSourceHistoryObservation[];
   investmentCashflows: InvestmentCashflow[];
+  manualAssetRecords: ManualAssetRecord[];
+  formalDailySettlements: FormalDailySettlement[];
 }
 
 export interface BackupRestorePreview {
@@ -92,6 +98,8 @@ export interface BusinessDataBackupStore {
     ImportedAssetSourceHistoryObservation[]
   >;
   listInvestmentCashflows(): Promise<InvestmentCashflow[]>;
+  listManualAssetRecords(): Promise<ManualAssetRecord[]>;
+  listFormalDailySettlements(): Promise<FormalDailySettlement[]>;
   validateBusinessData(state: BusinessDataState): Promise<void>;
   replaceBusinessData(state: BusinessDataState): Promise<void>;
 }
@@ -103,6 +111,8 @@ type BackupPayload = {
   dailyAssetTrendObservations: DailyAssetTrendObservation[];
   importedAssetSourceHistoryObservations: ImportedAssetSourceHistoryObservation[];
   investmentCashflows: InvestmentCashflow[];
+  manualAssetRecords: ManualAssetRecord[];
+  formalDailySettlements: FormalDailySettlement[];
 };
 
 type BackupDocument = {
@@ -423,6 +433,149 @@ function restoredCashflows(value: unknown): InvestmentCashflow[] {
   return cashflows;
 }
 
+function enumValue<const T extends readonly string[]>(
+  value: unknown, values: T, label: string,
+): T[number] {
+  if (typeof value !== "string" || !values.includes(value)) {
+    throw new Error('备份字段无效: ' + label);
+  }
+  return value as T[number];
+}
+
+function signedAmount(value: unknown, label: string): string {
+  assertString(value, label);
+  if (!/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value)) {
+    throw new Error('备份字段无效: ' + label);
+  }
+  return value;
+}
+
+function nullableText(value: unknown, label: string): string | null {
+  if (value === null || typeof value === "string") return value;
+  throw new Error('备份字段无效: ' + label);
+}
+
+function nullableTime(value: unknown, label: string): string | null {
+  if (value === null) return null;
+  assertStrictIsoTime(value, label);
+  return value;
+}
+
+function restoredManualRecords(value: unknown): ManualAssetRecord[] {
+  assertArray(value, "payload.manualAssetRecords");
+  return value.map((raw, index) => {
+    const label = 'manualAssetRecords[' + index + ']';
+    if (!isRecord(raw)) throw new Error('备份字段无效: ' + label);
+    assertString(raw.sourceId, label + '.sourceId');
+    assertCalendarDay(raw.day, label + '.day');
+    assertString(raw.amount, label + '.amount');
+    nullableNonNegativeAmount(raw.amount, label + '.amount');
+    assertStrictIsoTime(raw.recordedAt, label + '.recordedAt');
+    return {
+      sourceId: raw.sourceId, day: raw.day, amount: raw.amount,
+      currency: enumValue(raw.currency, ["USD", "CNY", "HKD"], label + '.currency'),
+      recordedAt: raw.recordedAt,
+    };
+  });
+}
+
+const SETTLEMENT_STATUSES = ["complete", "incomplete", "missed"] as const;
+const SECURITIES_MARKETS = ["US", "HK", "SH", "SZ", "SG"] as const;
+
+function settlementValues(raw: Record<string, unknown>, label: string) {
+  if (!isRecord(raw.total)) throw new Error('备份字段无效: ' + label + '.total');
+  // 负持仓/现金可形成负净值；保留符号与精度，不重新估值历史。
+  const amount = (value: unknown, currency: string) => value === null
+    ? null : signedAmount(value, label + '.total.' + currency);
+  return {
+    capturedAt: nullableTime(raw.capturedAt, label + '.capturedAt'),
+    status: enumValue(raw.status, SETTLEMENT_STATUSES, label + '.status'),
+    diagnostic: nullableText(raw.diagnostic, label + '.diagnostic'),
+    total: { USD: amount(raw.total.USD, "USD"), CNY: amount(raw.total.CNY, "CNY"), HKD: amount(raw.total.HKD, "HKD") },
+  };
+}
+
+function restoredFormalSettlements(value: unknown): FormalDailySettlement[] {
+  assertArray(value, "payload.formalDailySettlements");
+  return value.map((raw, index): FormalDailySettlement => {
+    const label = 'formalDailySettlements[' + index + ']';
+    if (!isRecord(raw) || !isRecord(raw.anchor)) throw new Error('备份字段无效: ' + label);
+    const anchor = raw.anchor;
+    assertString(anchor.key, label + '.anchor.key');
+    assertCalendarDay(anchor.tradingDay, label + '.anchor.tradingDay');
+    assertStrictIsoTime(anchor.scheduledCloseAt, label + '.anchor.scheduledCloseAt');
+    const kind = enumValue(anchor.kind, ["securities-close", "crypto-cutoff"], label + '.anchor.kind');
+    const market = kind === "securities-close"
+      ? enumValue(anchor.market, SECURITIES_MARKETS, label + '.anchor.market') : null;
+    if ((kind === "crypto-cutoff" && anchor.market !== null) ||
+        anchor.key !== (kind === "securities-close" ? kind + ':' + market : kind) + ':' + anchor.tradingDay) {
+      throw new Error('备份字段无效: ' + label + '.anchor');
+    }
+    const anchorFields = { key: anchor.key, tradingDay: anchor.tradingDay, scheduledCloseAt: anchor.scheduledCloseAt };
+    const restoredAnchor: FormalDailySettlement["anchor"] = market === null
+      ? { ...anchorFields, kind: "crypto-cutoff", market: null }
+      : { ...anchorFields, kind: "securities-close", market };
+    assertArray(raw.exchangeRates, label + '.exchangeRates');
+    const exchangeRates = raw.exchangeRates.map((rate, rateIndex) => {
+      const rateLabel = label + '.exchangeRates[' + rateIndex + ']';
+      if (!isRecord(rate)) throw new Error('备份字段无效: ' + rateLabel);
+      assertString(rate.baseCurrency, rateLabel + '.baseCurrency');
+      assertString(rate.quoteCurrency, rateLabel + '.quoteCurrency');
+      assertString(rate.rate, rateLabel + '.rate');
+      nullableAmount(rate.rate, rateLabel + '.rate');
+      assertString(rate.source, rateLabel + '.source');
+      assertStrictIsoTime(rate.observedAt, rateLabel + '.observedAt');
+      return { baseCurrency: rate.baseCurrency, quoteCurrency: rate.quoteCurrency,
+        rate: rate.rate, source: rate.source, observedAt: rate.observedAt };
+    });
+    assertArray(raw.sources, label + '.sources');
+    const sources = raw.sources.map((source, sourceIndex) => {
+      const sourceLabel = label + '.sources[' + sourceIndex + ']';
+      if (!isRecord(source)) throw new Error('备份字段无效: ' + sourceLabel);
+      assertString(source.sourceId, sourceLabel + '.sourceId');
+      assertString(source.label, sourceLabel + '.label');
+      assertString(source.kind, sourceLabel + '.kind');
+      return { sourceId: source.sourceId, label: source.label, kind: source.kind,
+        ...settlementValues(source, sourceLabel) };
+    });
+    assertUnique(sources.map(({ sourceId }) => sourceId), label + '.sources重复');
+    assertArray(raw.holdings, label + '.holdings');
+    const holdings = raw.holdings.map((holding, holdingIndex) => {
+      const holdingLabel = label + '.holdings[' + holdingIndex + ']';
+      if (!isRecord(holding)) throw new Error('备份字段无效: ' + holdingLabel);
+      assertString(holding.sourceId, holdingLabel + '.sourceId');
+      assertString(holding.symbol, holdingLabel + '.symbol');
+      assertString(holding.name, holdingLabel + '.name');
+      if (holding.sourceAsset !== null) assertString(holding.sourceAsset, holdingLabel + '.sourceAsset');
+      let price: { amount: string; currency: string } | null = null;
+      if (holding.price !== null) {
+        if (!isRecord(holding.price)) throw new Error('备份字段无效: ' + holdingLabel + '.price');
+        assertString(holding.price.amount, holdingLabel + '.price.amount');
+        nullableNonNegativeAmount(holding.price.amount, holdingLabel + '.price.amount');
+        assertString(holding.price.currency, holdingLabel + '.price.currency');
+        price = { amount: holding.price.amount, currency: holding.price.currency };
+      }
+      if (holding.marketTradingDay !== null) assertCalendarDay(holding.marketTradingDay, holdingLabel + '.marketTradingDay');
+      return {
+        sourceId: holding.sourceId, sourceAsset: holding.sourceAsset,
+        symbol: holding.symbol, name: holding.name,
+        quantity: signedAmount(holding.quantity, holdingLabel + '.quantity'),
+        assetClass: enumValue(holding.assetClass, ["securities", "crypto", "cash"], holdingLabel + '.assetClass'),
+        price,
+        priceBasis: enumValue(holding.priceBasis, ["official-close", "capture-time", "unavailable"], holdingLabel + '.priceBasis'),
+        priceObservedAt: nullableTime(holding.priceObservedAt, holdingLabel + '.priceObservedAt'),
+        market: holding.market === null ? null : enumValue(holding.market, SECURITIES_MARKETS, holdingLabel + '.market'),
+        marketTradingDay: holding.marketTradingDay,
+        marketValue: holding.marketValue === null ? null : signedAmount(holding.marketValue, holdingLabel + '.marketValue'),
+        diagnostic: nullableText(holding.diagnostic, holdingLabel + '.diagnostic'),
+      };
+    });
+    assertUnique(holdings.map(({ sourceId, sourceAsset, symbol }) =>
+      JSON.stringify([sourceId, sourceAsset ?? symbol])), label + '.holdings重复');
+    return { anchor: restoredAnchor, ...settlementValues(raw, label), exchangeRates, sources, holdings };
+  });
+}
+
 function validateReferences(state: BusinessDataState): void {
   assertUnique(state.assetSources.map(({ id }) => id), "资产来源 ID 重复");
   assertUnique(state.assetCards.map(({ id }) => id), "资产卡片 ID 重复");
@@ -476,6 +629,14 @@ function validateReferences(state: BusinessDataState): void {
       );
     }
   }
+  assertUnique(state.manualAssetRecords.map(({ sourceId, day }) => `${sourceId}:${day}`), "手工资产记录重复");
+  for (const record of state.manualAssetRecords) if (!sourceIds.has(record.sourceId)) throw new Error(`备份引用完整性失败: 手工记录引用了不存在的来源 ${record.sourceId}`);
+  assertUnique(state.formalDailySettlements.map(({ anchor }) => anchor.key), "正式日结锚点重复");
+  for (const settlement of state.formalDailySettlements) {
+    const settlementSourceIds = new Set(settlement.sources.map(({ sourceId }) => sourceId));
+    for (const sourceId of settlementSourceIds) if (!sourceIds.has(sourceId)) throw new Error(`备份引用完整性失败: 正式日结引用了不存在的来源 ${sourceId}`);
+    for (const holding of settlement.holdings) if (!settlementSourceIds.has(holding.sourceId)) throw new Error(`备份引用完整性失败: 正式持仓引用了不存在的日结来源 ${holding.sourceId}`);
+  }
   assertUnique(
     state.investmentCashflows.map(({ id }) => id),
     "资金记录 ID 重复",
@@ -515,7 +676,7 @@ function parseDocument(contents: string): BackupDocument {
     const legacy = value as unknown as LegacyBackupDocument;
     return {
       format: BACKUP_FORMAT,
-      formatVersion: BACKUP_FORMAT_VERSION,
+      formatVersion: 1,
       createdAt: legacy.createdAt,
       warning: SENSITIVE_ASSET_DATA_WARNING,
       checksum: legacy.checksum,
@@ -526,6 +687,8 @@ function parseDocument(contents: string): BackupDocument {
         dailyAssetTrendObservations: legacy.data.snapshots,
         importedAssetSourceHistoryObservations: [],
         investmentCashflows: [],
+        manualAssetRecords: [],
+        formalDailySettlements: [],
       },
     };
   }
@@ -534,6 +697,10 @@ function parseDocument(contents: string): BackupDocument {
   assertArray(value.payload.assetSources, "payload.assetSources");
   assertArray(value.payload.dailyAssetSnapshots, "payload.dailyAssetSnapshots");
   const document = value as unknown as BackupDocument;
+  if (document.formatVersion >= 5) {
+    assertArray(document.payload.dailyAssetTrendObservations, "payload.dailyAssetTrendObservations");
+    assertArray(document.payload.investmentCashflows, "payload.investmentCashflows");
+  }
   if (!Array.isArray(document.payload.dailyAssetTrendObservations)) {
     document.payload.dailyAssetTrendObservations = structuredClone(
       document.payload.dailyAssetSnapshots,
@@ -548,6 +715,12 @@ function parseDocument(contents: string): BackupDocument {
   }
   assertArray(document.payload.importedAssetSourceHistoryObservations,
     "payload.importedAssetSourceHistoryObservations");
+  for (const field of ["manualAssetRecords", "formalDailySettlements"] as const) {
+    if (document.formatVersion < 5 && document.payload[field] === undefined) {
+      document.payload[field] = [];
+    }
+    assertArray(document.payload[field], `payload.${field}`);
+  }
   return document;
 }
 
@@ -563,6 +736,9 @@ function restoredState(document: BackupDocument): BusinessDataState {
       throw new Error("资产来源快照格式无效");
     }
     if (!isRecord(source.sync)) throw new Error("资产来源同步状态格式无效");
+    if (source.kind === "manual") {
+      return { ...(source as unknown as Omit<AssetSourceSummary, "credentialReference">), credentialReference: null };
+    }
     return {
       ...(source as unknown as Omit<AssetSourceSummary, "credentialReference">),
       credentialReference: null,
@@ -583,6 +759,8 @@ function restoredState(document: BackupDocument): BusinessDataState {
       document.payload.importedAssetSourceHistoryObservations,
     ),
     investmentCashflows: restoredCashflows(document.payload.investmentCashflows),
+    manualAssetRecords: restoredManualRecords(document.payload.manualAssetRecords),
+    formalDailySettlements: restoredFormalSettlements(document.payload.formalDailySettlements),
   };
   validateReferences(state);
   return state;
@@ -605,14 +783,14 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
     return path.join(this.backupDirectory, fileName);
   }
 
-  private async decode(fileName: string): Promise<BusinessDataState> {
+  private async decode(fileName: string): Promise<{ state: BusinessDataState; formatVersion: number }> {
     const document = parseDocument(await readPrivateFile(this.backupPath(fileName)));
     const state = restoredState(document);
     await this.store.validateBusinessData(state);
-    return state;
+    return { state, formatVersion: document.formatVersion };
   }
 
-  private async previewFor(state: BusinessDataState): Promise<BackupRestorePreview> {
+  private async previewFor(state: BusinessDataState, formatVersion = BACKUP_FORMAT_VERSION): Promise<BackupRestorePreview> {
     const [currentSources, currentCards, currentSnapshots] = await Promise.all([
       this.store.listSources(),
       this.store.listAssetCards(),
@@ -631,7 +809,9 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
         cardCount: currentCards.length,
         snapshotCount: currentSnapshots.length,
       },
-      warning: SENSITIVE_ASSET_DATA_WARNING,
+      warning: formatVersion < BACKUP_FORMAT_VERSION
+        ? `${SENSITIVE_ASSET_DATA_WARNING}${LEGACY_HISTORY_WARNING}`
+        : SENSITIVE_ASSET_DATA_WARNING,
     };
   }
 
@@ -645,6 +825,8 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
       dailyAssetTrendObservations,
       importedAssetSourceHistoryObservations,
       investmentCashflows,
+      manualAssetRecords,
+      formalDailySettlements,
     ] = await Promise.all([
       this.store.listAssetCards(),
       this.store.listSources(),
@@ -652,6 +834,8 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
       this.store.listDailyAssetTrendObservations(),
       this.store.listImportedSourceHistoryObservations(),
       this.store.listInvestmentCashflows(),
+      this.store.listManualAssetRecords(),
+      this.store.listFormalDailySettlements(),
     ]);
     const assetSources = sources.map(
       ({ credentialReference: _credentialReference, ...source }) => source,
@@ -667,6 +851,8 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
         dailyAssetTrendObservations,
         importedAssetSourceHistoryObservations,
         investmentCashflows,
+        manualAssetRecords,
+        formalDailySettlements,
       },
     } satisfies Pick<BackupDocument, "format" | "formatVersion" | "createdAt" | "payload">;
     const checksum = checksumFor(base);
@@ -689,13 +875,14 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
   }
 
   async previewRestore(fileName: string): Promise<BackupRestorePreview> {
-    return this.previewFor(await this.decode(fileName));
+    const decoded = await this.decode(fileName);
+    return this.previewFor(decoded.state, decoded.formatVersion);
   }
 
   async restore(fileName: string): Promise<BackupRestorePreview> {
-    const state = await this.decode(fileName);
-    const preview = await this.previewFor(state);
-    await this.store.replaceBusinessData(state);
+    const decoded = await this.decode(fileName);
+    const preview = await this.previewFor(decoded.state, decoded.formatVersion);
+    await this.store.replaceBusinessData(decoded.state);
     return preview;
   }
 }

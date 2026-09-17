@@ -4,11 +4,24 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { DatabaseSync } from "node:sqlite";
+import { registerHooks } from "node:module";
+import type { SqliteDashboardDatabase as DashboardDatabase } from "@/server/production";
+import type { FormalDailySettlement } from "@/server/ports";
 import {
   CredentialFreeBusinessDataBackup,
   type BusinessDataBackupStore,
   type BusinessDataState,
 } from "@/server/business-data-backup";
+
+// 原生 ESM 不补全 Next 子路径，仅在加载真实持久化实现时适配。
+const nextHook = registerHooks({
+  resolve(specifier, context, nextResolve) {
+    return nextResolve(specifier === "next/headers" ? "next/headers.js" : specifier, context);
+  },
+});
+const { SqliteDashboardDatabase } = await import("@/server/production");
+nextHook.deregister();
 
 const observation = {
   sourceId: "source-test", label: "测试来源", kind: "longbridge",
@@ -34,6 +47,8 @@ async function fixture() {
     listDailyAssetTrendObservations: async () => [],
     listImportedSourceHistoryObservations: async () => [observation],
     listInvestmentCashflows: async () => [],
+    listManualAssetRecords: async () => [],
+    listFormalDailySettlements: async () => [],
     validateBusinessData: async () => {},
     replaceBusinessData: async (state) => { restored = state; },
   };
@@ -85,4 +100,119 @@ test("来源历史恢复拒绝无效字段、重复日期和悬空引用，失�
       assert.equal(f.restored(), null);
     } finally { await rm(f.directory, { recursive: true, force: true }); }
   }
+});
+
+async function readBusinessState(database: DashboardDatabase): Promise<BusinessDataState> {
+  return {
+    assetCards: await database.listAssetCards(),
+    assetSources: await database.listSources(),
+    dailyAssetSnapshots: await database.listDailyAssetSnapshots(),
+    dailyAssetTrendObservations: await database.listDailyAssetTrendObservations(),
+    importedAssetSourceHistoryObservations: await database.listImportedSourceHistoryObservations(),
+    investmentCashflows: await database.listInvestmentCashflows(),
+    manualAssetRecords: await database.listManualAssetRecords(),
+    formalDailySettlements: await database.listFormalDailySettlements(),
+  };
+}
+
+async function sqliteFixture() {
+  const directory = await mkdtemp(path.join(tmpdir(), "kanban-backup-sqlite-"));
+  const databasePath = path.join(directory, "business.sqlite");
+  const database = new SqliteDashboardDatabase(databasePath,
+    path.join(directory, "absent-dashboard.json"), path.join(directory, "absent-cards.json"));
+  const sql = new DatabaseSync(databasePath);
+  const time = "2026-08-03T12:00:00.000Z";
+  await database.createManualAssetSource({ label: "测试多日原始记录" }, time);
+  const source = (await database.listSources())[0];
+  await database.updateSource({ ...source, snapshot: { ...source.snapshot, exchangeRates: [
+    { baseCurrency: "USD", quoteCurrency: "CNY", rate: "7.2", source: "Longbridge", observedAt: time },
+    { baseCurrency: "USD", quoteCurrency: "HKD", rate: "7.8", source: "Longbridge", observedAt: time },
+  ] } });
+  for (const day of ["2026-08-01", "2026-08-02"]) {
+    await database.recordManualAssetSource(source.id, { day, amount: day.endsWith("01") ? "0" : "123.45", currency: "USD" }, time);
+  }
+  for (const trend of await database.listDailyAssetTrendObservations()) {
+    await database.createDailyAssetSnapshotIfAbsent(trend);
+  }
+  // 独立种子写入不依赖待修复的 replaceBusinessData。
+  sql.prepare("INSERT INTO imported_asset_source_history_observations (source_id, day, label, kind, captured_at, complete, status, total_usd, total_cny, total_hkd) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .run(source.id, "2026-07-31", source.label, source.kind, time, 0, "incomplete", "0", null, null);
+  await database.createInvestmentCashflow({
+    id: "initial", kind: "initial-investment", occurredAt: "2026-08-01T00:00:00.000Z",
+    amount: "100", currency: "USD", note: "测试本金",
+    amounts: { USD: "100", CNY: "720", HKD: null },
+    exchangeRates: [{ baseCurrency: "USD", quoteCurrency: "CNY", rate: "7.2", source: "Longbridge", observedAt: time }],
+    createdAt: time, updatedAt: time,
+  });
+  for (const day of ["2026-08-01", "2026-08-02"]) {
+    const settlement: FormalDailySettlement = {
+      anchor: { key: "crypto-cutoff:" + day, kind: "crypto-cutoff", market: null, tradingDay: day, scheduledCloseAt: day + "T16:00:00.000Z" },
+      capturedAt: time, status: "incomplete", diagnostic: "缺少港币汇率",
+      total: { USD: "0", CNY: null, HKD: null },
+      exchangeRates: [{ baseCurrency: "USD", quoteCurrency: "CNY", rate: "7.2", source: "Longbridge", observedAt: time }],
+      sources: [{ sourceId: source.id, label: source.label, kind: source.kind,
+        capturedAt: time, status: "incomplete", diagnostic: "缺少汇率", total: { USD: "0", CNY: null, HKD: null } }],
+      holdings: [{ sourceId: source.id, sourceAsset: "test-cash", symbol: "USD", name: "测试现金", quantity: "0",
+        assetClass: "cash", price: { amount: "1", currency: "USD" }, priceBasis: "capture-time",
+        priceObservedAt: time, market: null, marketTradingDay: null, marketValue: "0", diagnostic: null }],
+    };
+    await database.recordFormalDailySettlementIfAbsent(settlement);
+  }
+  const backup = new CredentialFreeBusinessDataBackup(database, directory, { now: () => new Date(time) });
+  return { directory, database, sql, backup,
+    async close() {
+      sql.close();
+      (database as unknown as { database: DatabaseSync }).database.close();
+      await rm(directory, { recursive: true, force: true });
+    },
+  };
+}
+
+test("真实 SQLite 全业务替换保留多日手工原始记录和正式日结子数据", async () => {
+  const f = await sqliteFixture();
+  try {
+    const before = await readBusinessState(f.database);
+    for (const [name, records] of Object.entries(before)) assert.ok(records.length > 0, name);
+    assert.equal(before.manualAssetRecords.length, 2);
+    assert.equal(before.formalDailySettlements.length, 2);
+    const exported = await f.backup.exportBackup("roundtrip.json");
+    assert.equal(exported.warning.includes("敏感资产数据"), true);
+    await f.database.replaceBusinessData({
+      assetCards: [], assetSources: [], dailyAssetSnapshots: [],
+      dailyAssetTrendObservations: [], importedAssetSourceHistoryObservations: [],
+      investmentCashflows: [], manualAssetRecords: [], formalDailySettlements: [],
+    });
+    await f.backup.restore(exported.fileName);
+    assert.deepEqual(await f.database.listManualAssetRecords(), before.manualAssetRecords);
+    assert.deepEqual(await f.database.listFormalDailySettlements(), before.formalDailySettlements);
+    assert.deepEqual(await readBusinessState(f.database), before);
+  } finally { await f.close(); }
+});
+
+test("损坏备份和恢复中途失败都不覆盖原 SQLite", async () => {
+  const f = await sqliteFixture();
+  try {
+    const before = await readBusinessState(f.database);
+    await f.backup.exportBackup("corrupt.json");
+    const corruptPath = path.join(f.directory, "corrupt.json");
+    const corrupt = JSON.parse(await readFile(corruptPath, "utf8"));
+    corrupt.checksum.value = "0".repeat(64);
+    await writeFile(corruptPath, JSON.stringify(corrupt));
+    await assert.rejects(f.backup.restore("corrupt.json"), /校验和/);
+    assert.deepEqual(await readBusinessState(f.database), before);
+
+    const triggerConnection = new DatabaseSync(path.join(f.directory, "business.sqlite"));
+    triggerConnection.exec(`
+      CREATE TRIGGER reject_restored_holding
+      BEFORE INSERT ON formal_daily_settlement_holdings
+      BEGIN SELECT RAISE(ABORT, 'simulated restore failure'); END;
+    `);
+    try {
+      await assert.rejects(f.database.replaceBusinessData(before), /simulated restore failure/);
+    } finally {
+      triggerConnection.exec("DROP TRIGGER reject_restored_holding");
+      triggerConnection.close();
+    }
+    assert.deepEqual(await readBusinessState(f.database), before);
+  } finally { await f.close(); }
 });

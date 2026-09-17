@@ -2334,6 +2334,21 @@ export class SqliteDashboardDatabase
         .investmentCashflows
       : [];
     cashflows.forEach((cashflow) => this.insertInvestmentCashflow(cashflow));
+    const manualRecords = "manualAssetRecords" in state
+      ? state.manualAssetRecords
+      : [];
+    for (const record of manualRecords) {
+      this.database.prepare(`
+        INSERT INTO manual_asset_records (source_id, day, amount, currency, recorded_at)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(record.sourceId, record.day, record.amount, record.currency, record.recordedAt);
+    }
+    const formalSettlements = "formalDailySettlements" in state
+      ? state.formalDailySettlements
+      : [];
+    for (const settlement of formalSettlements) {
+      if (!this.insertFormalDailySettlement(settlement)) throw new Error("正式日结锚点重复");
+    }
   }
 
   private insertSource(source: AssetSourceSummary, position: number): void {
@@ -3236,17 +3251,17 @@ export class SqliteDashboardDatabase
     });
   }
 
-  async recordFormalDailySettlementIfAbsent(
+  private insertFormalDailySettlement(
     settlement: FormalDailySettlement,
-  ): Promise<boolean> {
-    return this.transaction(() => {
+  ): boolean {
       const inserted = this.database
         .prepare(`
-          INSERT OR IGNORE INTO formal_daily_settlements (
+          INSERT INTO formal_daily_settlements (
             anchor_key, anchor_kind, anchor_market, anchor_trading_day,
             scheduled_close_at, captured_at, status, diagnostic,
             total_usd, total_cny, total_hkd, exchange_rates_json
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(anchor_key) DO NOTHING
         `)
         .run(
           settlement.anchor.key,
@@ -3311,7 +3326,12 @@ export class SqliteDashboardDatabase
         );
       }
       return true;
-    });
+  }
+
+  async recordFormalDailySettlementIfAbsent(
+    settlement: FormalDailySettlement,
+  ): Promise<boolean> {
+    return this.transaction(() => this.insertFormalDailySettlement(settlement));
   }
 
   async validateBusinessData(state: BusinessDataState): Promise<void> {
