@@ -301,7 +301,10 @@ export async function POST(request: Request) {
   if (
     body?.action !== "run-production-shaped" &&
     body?.action !== "run-with-manual-source" &&
-    body?.action !== "run-with-public-evm-source"
+    body?.action !== "run-with-public-evm-source" &&
+    body?.action !== "run-with-public-evm-source-with-reference" &&
+    body?.action !== "run-without-cny-rate" &&
+    body?.action !== "run-without-hkd-rate"
   ) {
     return Response.json({ error: "正式日结测试配置无效" }, { status: 400 });
   }
@@ -312,12 +315,33 @@ export async function POST(request: Request) {
       path.join(root, "dashboard.json"),
       path.join(root, "cards.json"),
     );
+    const isPublicScenario = body.action.startsWith("run-with-public-evm-source");
     const sources = [
-      ...(body.action === "run-with-public-evm-source"
+      ...(isPublicScenario
         ? [publicEvmSourceFixture()]
         : sourceFixture()),
       ...(body.action === "run-with-manual-source" ? [manualSourceFixture()] : []),
     ];
+    if (body.action === "run-with-public-evm-source-with-reference") {
+      const reference = sourceFixture()[0];
+      reference.snapshot = buildSnapshotFromPositions({
+        positions: [],
+        sourceCurrency: "USD",
+        exchangeRates: exchangeRates(PUBLIC_EVM_CAPTURED_AT),
+        syncedAt: PUBLIC_EVM_CAPTURED_AT,
+      });
+      sources.unshift(reference);
+    }
+    const missingCurrency = body.action === "run-without-cny-rate"
+      ? "CNY"
+      : body.action === "run-without-hkd-rate" ? "HKD" : null;
+    if (missingCurrency !== null) {
+      for (const source of sources) {
+        source.snapshot.exchangeRates = source.snapshot.exchangeRates.filter(
+          (rate) => rate.quoteCurrency !== missingCurrency,
+        );
+      }
+    }
     await database.replaceSources(sources);
     const settlements = new DatabaseFormalDailySettlements(database);
     const runner = new MarketCloseFormalDailySettlement(
@@ -329,24 +353,28 @@ export async function POST(request: Request) {
       {
         now: () =>
           new Date(
-            body.action === "run-with-public-evm-source"
+            isPublicScenario
               ? PUBLIC_EVM_CAPTURED_AT
               : CAPTURED_AT,
           ),
       },
       settlements,
-      body.action === "run-with-public-evm-source"
-        ? new ReadOnlyFormalSettlementSourceCapture(
-            publicOnlySecretStore,
-            publicEvmRefresher,
-          )
+      isPublicScenario
+        ? {
+            capture: (input) => input.source.kind === "longbridge"
+              ? sourceCapture.capture(input)
+              : new ReadOnlyFormalSettlementSourceCapture(
+                  publicOnlySecretStore,
+                  publicEvmRefresher,
+                ).capture(input),
+          }
         : sourceCapture,
       candleReader,
     );
     const firstRun = await runner.run();
     if (
       body.action === "run-with-manual-source" ||
-      body.action === "run-with-public-evm-source"
+      isPublicScenario || missingCurrency !== null
     ) {
       return Response.json({
         outcome: firstRun.outcome,

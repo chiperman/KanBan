@@ -154,7 +154,7 @@ test("手工资产保留已知金额但不阻塞正式日结", async ({ request 
   ]));
 });
 
-test("公开观察钱包无需凭证也能进入正式日结", async ({ request }) => {
+test("公开观察钱包没有可靠参考汇率时严格标记不完整", async ({ request }) => {
   const response = await request.post("/test-doubles/formal-settlements", {
     data: { action: "run-with-public-evm-source" },
   });
@@ -162,20 +162,61 @@ test("公开观察钱包无需凭证也能进入正式日结", async ({ request 
   expect(response.ok()).toBeTruthy();
   const result = await response.json();
   expect(result.outcome).toBe("recorded");
-  expect(result.settlement.status).toBe("complete");
+  expect(result.settlement.status).toBe("incomplete");
   expect(result.settlement.sources).toHaveLength(1);
   expect(result.settlement.sources[0]).toMatchObject({
     sourceId: "public-evm-source",
-    status: "complete",
+    status: "incomplete",
   });
 });
+
+test("公开观察钱包带长桥参考汇率时完成正式日结", async ({ request }) => {
+  const response = await request.post("/test-doubles/formal-settlements", {
+    data: { action: "run-with-public-evm-source-with-reference" },
+  });
+
+  expect(response.ok()).toBeTruthy();
+  const result = await response.json();
+  expect(result.outcome).toBe("recorded");
+  expect(result.settlement.status).toBe("complete");
+  expect(result.settlement.exchangeRates).toEqual(expect.arrayContaining([
+    expect.objectContaining({ quoteCurrency: "CNY", rate: "7.2" }),
+    expect.objectContaining({ quoteCurrency: "HKD", rate: "7.8" }),
+  ]));
+  expect(result.settlement.sources).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      sourceId: "public-evm-source",
+      status: "complete",
+    }),
+  ]));
+});
+
+for (const [currency, action] of [
+  ["CNY", "run-without-cny-rate"],
+  ["HKD", "run-without-hkd-rate"],
+] as const) {
+  test(`缺少 ${currency} 汇率时正式日结严格标记不完整`, async ({ request }) => {
+    const response = await request.post("/test-doubles/formal-settlements", {
+      data: { action },
+    });
+
+    expect(response.ok()).toBeTruthy();
+    const result = await response.json();
+    expect(result.outcome).toBe("recorded");
+    expect(result.settlement.status).toBe("incomplete");
+    expect(result.settlement.total[currency]).toBeNull();
+    expect(result.settlement.exchangeRates).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ quoteCurrency: currency })]),
+    );
+  });
+}
 
 test("所有者看板把正式日结与每日趋势观测分开标注", async ({
   page,
   request,
 }) => {
   const configured = await request.post("/test-doubles/daily-snapshots", {
-    data: { action: "configure" },
+    data: { action: "configure-classified" },
   });
   expect(configured.ok()).toBeTruthy();
   const seeded = await request.post("/test-doubles/formal-settlements", {
@@ -190,5 +231,5 @@ test("所有者看板把正式日结与每日趋势观测分开标注", async ({
   await expect(settlement).toContainText("US 常规盘 · 交易日 2026-08-05");
   await expect(settlement).toContainText("证券按官方日 K 常规盘收盘记录");
   await expect(settlement).toContainText("加密资产按同一采集窗口市价记录");
-  await expect(page.getByTestId("total-asset-trend")).toContainText("总资产趋势");
+  await expect(page.getByTestId("overview-trend")).toContainText("总资产趋势");
 });

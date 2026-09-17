@@ -70,13 +70,23 @@ test("资产与持仓把来源总额与明细观察分层，不用持仓差额�
   expect(Math.max(...sourceStatusLefts) - Math.min(...sourceStatusLefts)).toBeLessThanOrEqual(1);
 
   const holdings = workspace.getByTestId("assets-holdings-table");
+  for (const heading of [
+    "资产与来源",
+    "市值",
+    "现价 / 数量",
+    "价格变化",
+    "平台盈亏",
+    "数据状态",
+  ]) {
+    await expect(holdings.getByRole("columnheader", { name: heading, exact: true }))
+      .toBeVisible();
+  }
   await expect(holdings).toContainText("Apple Cross-source");
   await expect(holdings).toContainText("Tether");
   await expect(holdings).toContainText("Mystery Token");
   await expect(holdings).toContainText("来源可用价格变化");
   await expect(holdings).toContainText("平台未提供");
   await expect(holdings).toContainText("未估值");
-  await expect(workspace).toContainText("只有来源明确提供的平台盈亏才显示");
   await expect(workspace).not.toContainText("持仓合计");
 });
 

@@ -46,7 +46,7 @@ async function unlockAsOwner(page: Page): Promise<void> {
 
 async function configure(
   request: APIRequestContext,
-  action = "configure",
+  action = "configure-classified",
 ) {
   const response = await request.post("/test-doubles/daily-snapshots", {
     data: { action },
@@ -392,7 +392,7 @@ test("北京时间日界线建立唯一基准，同日幂等且跨日不回填",
   expect((await history(request)).days.map(({ day }) => day)).toEqual([
     "2026-04-01",
   ]);
-  expect((await history(request)).days[0].total.CNY).toBe("2154.3");
+  expect((await history(request)).days[0].total.CNY).toBe("2174.4");
   expect((await history(request)).trendObservations[0].total.HKD).toBe("2355.6");
   await chooseOverviewOption(page, "计价货币", "CNY");
   await chooseOverviewOption(page, "计价货币", "HKD");
@@ -663,8 +663,8 @@ test("缺少可靠 HKD 汇率时趋势金额不可用且观测不完整", async 
 
   await loginAsOwner(page);
   await chooseOverviewOption(page, "计价货币", "HKD");
-  const overview = page.getByTestId("total-asset-overview");
-  await expect(overview.getByTestId("total-asset-amount")).toHaveText(
+  const overview = page.getByTestId("overview-current-total");
+  await expect(overview).toHaveText(
     "无法折算 HKD",
   );
   await expect(overview).toContainText("当前估值：不完整");
@@ -697,7 +697,7 @@ test("历史 HKD 金额固定使用各自观测时汇率", async ({ page, reques
   await unlockAsOwner(page);
 
   await chooseOverviewOption(page, "计价货币", "HKD");
-  const overview = page.getByTestId("total-asset-overview");
+  const overview = page.getByTestId("overview-current-total");
   await expect(overview).toContainText("USD/HKD 8.0000");
   await expect(page.getByTestId("overview-trend")).toContainText(
     "2,355.60 HKD",

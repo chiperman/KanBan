@@ -1,3 +1,5 @@
+import { randomBytes } from "node:crypto";
+
 function readPort(name: string, fallback: number): number {
   const value = process.env[name];
   if (value === undefined || value.length === 0) return fallback;
@@ -45,7 +47,11 @@ export const sharedPlaywrightConfig = {
 export const testWebServer = {
   command: `pnpm exec next start -p ${TEST_SERVER_PORT}`,
   port: TEST_SERVER_PORT,
-  env: { APP_ENV: "test" },
+  // 测试进程使用临时密钥，不依赖本机真实密钥。
+  env: {
+    APP_ENV: "test",
+    PAD_SECRET_ENCRYPTION_KEY: randomBytes(32).toString("base64"),
+  },
   reuseExistingServer: false,
   timeout: 120_000,
 };
