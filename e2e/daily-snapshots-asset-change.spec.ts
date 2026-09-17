@@ -110,7 +110,9 @@ async function manualRefresh(page: Page, expectedFailureCount = 0) {
   await expect(page.getByTestId("asset-refresh-status")).toContainText(
     expectedFailureCount === 0
       ? "刷新完成"
-      : "部分来源刷新失败",
+      : expectedFailureCount === 2
+        ? "刷新失败"
+        : "部分来源刷新失败",
   );
 }
 
@@ -173,7 +175,7 @@ test("今日资产变化使用昨日最后一条完整趋势快照，不依赖�
   await expect(sourceSummary).not.toContainText("今日变化");
 });
 
-test("今日资产变化直接列出不参与计算的问题来源", async ({
+test("当天部分成功的资产总额会作为今日变化兜底", async ({
   page,
   request,
 }) => {
@@ -190,26 +192,70 @@ test("今日资产变化直接列出不参与计算的问题来源", async ({
 
   await loginAsOwner(page);
   await manualRefresh(page, 1);
+  expect((await history(request)).trendObservations).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      day: "2026-08-06",
+      complete: false,
+      status: "expired",
+      total: { USD: "310", CNY: null, HKD: null },
+    }),
+  ]));
+
+  await request.post("/test-doubles/daily-snapshots", {
+    data: { action: "fail-all" },
+  });
+  await manualRefresh(page, 2);
 
   const change = page.getByRole("heading", { name: "今日资产变化" }).locator("..");
   const issues = change.getByTestId("overview-today-change-issues");
-  await expect(change).toContainText("数据不足");
-  await expect(issues).toContainText("未计入今日变化");
-  await expect(issues).toContainText("Beta Crypto");
-  await expect(issues).toContainText("同步失败 · 数据过期");
-  await expect(issues).toContainText("200.00 USD");
+  await expect(change).toContainText("+10.00 USD");
+  await expect(change).toContainText("较 08月05日");
+  await expect(change).toContainText("当前刷新有失败");
+  await expect(change).toContainText("变化截至");
+  await expect(issues).toHaveCount(0);
   const betaSummary = page.getByTestId("overview-source-summary")
     .getByRole("listitem")
     .filter({ hasText: "Beta Crypto" });
   await expect(betaSummary).toContainText("暂无法比较");
   await expect(betaSummary).not.toContainText("今日变化");
+});
 
-  await page.getByRole("button", { name: "隐藏关键信息" }).click();
-  await expect(issues).toContainText(
-    "已隐藏 1 个来源。",
-  );
-  await expect(issues).not.toContainText("Beta Crypto");
-  await expect(issues).not.toContainText("200.00 USD");
+test("当天完整观测不会因后续刷新失败而失去资产变化", async ({
+  page,
+  request,
+}) => {
+  await configure(request);
+  await setServerTime(request, "2026-08-05T12:00:00.000Z");
+  const yesterdayObservation = await request.post("/test-doubles/daily-snapshots", {
+    data: { action: "record-complete-observation" },
+  });
+  expect(yesterdayObservation.ok()).toBeTruthy();
+  await setServerTime(request, "2026-08-06T12:00:00.000Z");
+  const todayObservation = await request.post("/test-doubles/daily-snapshots", {
+    data: { action: "record-complete-observation" },
+  });
+  expect(todayObservation.ok()).toBeTruthy();
+
+  await loginAsOwner(page);
+  await request.post("/test-doubles/daily-snapshots", {
+    data: { action: "partial-failure" },
+  });
+  await manualRefresh(page, 1);
+  expect((await history(request)).trendObservations).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      day: "2026-08-06",
+      complete: false,
+      status: "expired",
+      total: { USD: "300", CNY: "2160", HKD: "2340" },
+    }),
+  ]));
+
+  const change = page.getByRole("heading", { name: "今日资产变化" }).locator("..");
+  await expect(change).toContainText("+0.00 USD");
+  await expect(change).toContainText("较 08月05日");
+  await expect(change).toContainText("当前刷新有失败");
+  await expect(change).toContainText("变化截至");
+  await expect(change.getByTestId("overview-today-change-issues")).toHaveCount(0);
 });
 
 test("缺少昨日观测时回退到最近完整记录，并明确累计间隔", async ({

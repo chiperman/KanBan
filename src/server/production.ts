@@ -949,7 +949,6 @@ export class FileDashboardDatabase {
         ({ day }) => day === snapshot.day,
       );
       if (index === -1) {
-        if (!createBaseline) return;
         state.dailyAssetTrendObservations.push(structuredClone(snapshot));
       } else {
         state.dailyAssetTrendObservations[index] = mergeDailyTrendObservation(
@@ -3369,18 +3368,16 @@ export class SqliteDashboardDatabase
       const hasTrend = this.database
         .prepare("SELECT day FROM daily_asset_trend_observations WHERE day = ?")
         .get(snapshot.day) !== undefined;
-      if (hasTrend || createBaseline) {
-        const existing = hasTrend
-          ? this.listDailyAssetTrendObservationsSync().find(
-              ({ day }) => day === snapshot.day,
-            )
-          : undefined;
-        this.upsertDailyTrendObservation(
-          existing
-            ? mergeDailyTrendObservation(existing, snapshot, !createBaseline)
-            : snapshot,
-        );
-      }
+      const existing = hasTrend
+        ? this.listDailyAssetTrendObservationsSync().find(
+            ({ day }) => day === snapshot.day,
+          )
+        : undefined;
+      this.upsertDailyTrendObservation(
+        existing
+          ? mergeDailyTrendObservation(existing, snapshot, !createBaseline)
+          : snapshot,
+      );
     });
   }
 

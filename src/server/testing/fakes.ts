@@ -220,12 +220,18 @@ export class InMemoryDailyAssetSnapshots implements DailyAssetSnapshots {
       this.snapshots[baselineIndex] = structuredClone(snapshot);
     }
     const index = this.trendObservations.findIndex(({ day }) => day === snapshot.day);
-    if (index === -1) return;
-    this.trendObservations[index] = mergeDailyTrendObservation(
-      this.trendObservations[index],
-      snapshot,
-      !createBaseline,
-    );
+    if (index === -1) {
+      this.trendObservations = [
+        ...this.trendObservations,
+        structuredClone(snapshot),
+      ].sort((left, right) => left.day.localeCompare(right.day));
+    } else {
+      this.trendObservations[index] = mergeDailyTrendObservation(
+        this.trendObservations[index],
+        snapshot,
+        !createBaseline,
+      );
+    }
   }
 
   async recordManual(

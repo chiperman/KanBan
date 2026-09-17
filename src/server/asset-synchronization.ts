@@ -304,7 +304,7 @@ export class SourceIsolatedAssetSynchronization
     ).length;
 
     if (input.isFullBatch && sources.length > 0) {
-      await this.recordFullBatchHistory(sources, outcomes, attemptedAt);
+      await this.recordFullBatchObservation(sources, outcomes, attemptedAt);
       await this.fullRefreshState.finish(attemptedAt);
     }
     await this.clearCycleWhenNoRefreshableSources();
@@ -402,12 +402,15 @@ export class SourceIsolatedAssetSynchronization
     }
   }
 
-  private async recordFullBatchHistory(
+  private async recordFullBatchObservation(
     sources: AssetSourceSummary[],
     outcomes: SourceOutcome[],
     attemptedAt: string,
   ): Promise<void> {
-    if (!outcomes.every((outcome) => outcome === "success")) return;
+    if (
+      !outcomes.some((outcome) => outcome === "success") ||
+      outcomes.some((outcome) => outcome === "superseded")
+    ) return;
     const connectedSources = (await this.sources.list()).filter(
       (source) => source.lifecycle !== "disconnected",
     );
@@ -422,9 +425,10 @@ export class SourceIsolatedAssetSynchronization
     ) return;
 
     const dailySnapshot = buildDailyAssetSnapshot(connectedSources, attemptedAt);
-    if (dailySnapshot.complete) {
-      await this.dailySnapshots.record(dailySnapshot, true);
-    }
+    await this.dailySnapshots.record(
+      dailySnapshot,
+      dailySnapshot.complete && dailySnapshot.status === "complete",
+    );
   }
 
   private async currentVersion(

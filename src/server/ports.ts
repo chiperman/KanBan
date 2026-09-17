@@ -209,7 +209,10 @@ export interface DailyAssetSnapshots {
     ImportedAssetSourceHistoryObservation[]
   >;
   createIfAbsent(snapshot: DailyAssetSnapshot): Promise<boolean>;
-  /** 仅完整全量批次调用：建立缺失的日初基准并更新当日完整趋势观测。 */
+  /**
+   * 全量批次有可用数据时调用：完整观测可建立日初基准；
+   * 非完整状态的观测仅更新当天趋势兜底。
+   */
   record(
     snapshot: DailyAssetTrendObservation,
     createBaseline: boolean,

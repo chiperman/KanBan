@@ -294,6 +294,30 @@ export function DailyOverviewWorkspace({
     );
   }, [currentObservedAt, longbridgeRates, recordedSources, usdValuation]);
   const current = currentTotals[currency];
+  const recordedTodayObservation = useMemo(
+    () =>
+      trendObservations
+        .filter(
+          (observation) =>
+            observation.day === currentDay &&
+            observation.total[currency] !== null,
+        )
+        .toSorted((left, right) => right.capturedAt.localeCompare(left.capturedAt))
+        .at(0) ?? null,
+    [currentDay, trendObservations],
+  );
+  const recordedTodayTotal = recordedTodayObservation?.total[currency] ?? null;
+  const changeEndpoint = current?.complete
+    ? current
+    : recordedTodayObservation !== null && recordedTodayTotal !== null
+      ? {
+          amount: recordedTodayTotal,
+          complete: true,
+          observedAt: recordedTodayObservation.capturedAt,
+        }
+      : null;
+  const usesRecordedTodayObservation =
+    !current?.complete && changeEndpoint !== null;
   const analysis = useMemo(
     () =>
       analyzeInvestmentPerformance({
@@ -315,9 +339,9 @@ export function DailyOverviewWorkspace({
   const intervalFallback = daysSincePriorObservation !== null &&
     daysSincePriorObservation > 1;
   const comparisonTotal = priorObservation?.total[currency];
-  const todayChange = current?.complete &&
+  const todayChange = changeEndpoint !== null &&
     comparisonTotal != null
-    ? decimalSubtract(current.amount, comparisonTotal)
+    ? decimalSubtract(changeEndpoint.amount, comparisonTotal)
     : null;
   const trend = useMemo(() => {
     const firstTrendDay = trendObservations
@@ -502,6 +526,11 @@ export function DailyOverviewWorkspace({
                 : `较 ${formatShanghaiDayLabel(priorObservation.day)}`}
             </p>
           )}
+          {usesRecordedTodayObservation ? (
+            <p>
+              当前刷新有失败 · 资产变化截至 {formatShanghaiShortDateTime(changeEndpoint.observedAt)}
+            </p>
+          ) : null}
           {todayChange === null &&
           priorObservation !== null &&
           todayChangeIssueSources.length > 0 ? (
