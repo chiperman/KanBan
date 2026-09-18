@@ -448,8 +448,11 @@ export class SourceIsolatedAssetSynchronization
     outcomes: SourceOutcome[],
     attemptedAt: string,
   ): Promise<void> {
-    // 组合历史只接受同一批次全部来源成功；部分成功仅保留来源当前值。
-    if (outcomes.length === 0 || outcomes.some((outcome) => outcome !== "success")) return;
+    // 趋势允许部分成功的过期观测；只有完整且新鲜的观测才能建立日初基准。
+    if (
+      !outcomes.some((outcome) => outcome === "success") ||
+      outcomes.some((outcome) => outcome === "superseded")
+    ) return;
     const connectedSources = (await this.sources.list()).filter(
       (source) => source.lifecycle !== "disconnected",
     );

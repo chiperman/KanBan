@@ -345,7 +345,7 @@ test("完整全量批次冻结当天首个基准并更新趋势", async () => {
   assert.equal((await fixture.dailySnapshots.listTrendObservations())[0]?.total.USD, "304");
 });
 
-test("部分成功仅更新来源当前值，全失败不写组合历史", async () => {
+test("部分成功写入当天趋势兜底，后续全失败不会覆盖", async () => {
   const fixture = await synchronizationFixture();
   const betaBeforeFailure = structuredClone(
     (await fixture.sources.list()).find(({ id }) => id === "source-beta")!,
@@ -367,7 +367,23 @@ test("部分成功仅更新来源当前值，全失败不写组合历史", async
   assert.equal(betaAfterPartial.sync.lastAttemptAt, "2026-08-20T04:00:00.000Z");
   assert.deepEqual(await fixture.dailySnapshots.list(), []);
   const historyBeforeFailure = await fixture.dailySnapshots.listTrendObservations();
-  assert.deepEqual(historyBeforeFailure, []);
+  assert.equal(historyBeforeFailure.length, 1);
+  assert.deepEqual(historyBeforeFailure[0]?.total, {
+    USD: "301",
+    CNY: "2167.2",
+    HKD: "2347.8",
+  });
+  assert.deepEqual(historyBeforeFailure[0] && {
+    day: historyBeforeFailure[0].day,
+    capturedAt: historyBeforeFailure[0].capturedAt,
+    complete: historyBeforeFailure[0].complete,
+    status: historyBeforeFailure[0].status,
+  }, {
+    day: "2026-08-20",
+    capturedAt: "2026-08-20T04:00:00.000Z",
+    complete: true,
+    status: "expired",
+  });
 
   fixture.clock.set("2026-08-20T05:00:00.000Z");
   fixture.refresher.configure("all-failure");
