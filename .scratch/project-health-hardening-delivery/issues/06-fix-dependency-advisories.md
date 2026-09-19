@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 **Phase:** 立即处理
 **Priority:** 严重（公告评级，暴露面待验证）
@@ -47,3 +47,9 @@
 ## 评论
 
 - 2026-09-10：按所有者已确认的拆分发布；状态表示文档可供后续实施，不代表已开始或完成代码变更。
+
+- 2026-09-19：按所有者“继续直到全部完成”授权实施；精确路径分批提交，不 push；隔离构建和测试，不读取真实凭证或执行业务日结。
+
+## 实施证据
+
+详见 docs/operations/dependency-advisories-2026-09-19.md；冻结安装、隔离构建、认证与资产业务回归通过。当前生产审计各严重度均为零。
