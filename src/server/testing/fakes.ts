@@ -1,3 +1,4 @@
+import type { FormalSettlementExecution, FormalSettlementSchedulerStatus } from "@/server/ports";
 import type {
   AssetSourceSummary,
   AssetSourceLifecycle,
@@ -2129,6 +2130,8 @@ export interface TestServices extends AppServices {
   dailyAssetSnapshots: InMemoryDailyAssetSnapshots;
   formalDailySettlements: InMemoryFormalDailySettlements;
   formalDailySettlementRunner: FormalDailySettlementRunner;
+  formalSettlementExecutions: InMemoryFormalSettlementExecutions;
+  formalSettlementScheduler: InMemoryFormalSettlementScheduler;
   externalServices: InMemoryExternalServiceConfiguration;
   assetSynchronization: FakeAssetSynchronization;
   assetFullRefreshState: InMemoryAssetFullRefreshState;
@@ -2255,6 +2258,8 @@ export function createTestServices(): TestServices {
     dailyAssetSnapshots,
     formalDailySettlements,
     formalDailySettlementRunner: new NotDueFormalDailySettlementRunner(),
+    formalSettlementExecutions: new InMemoryFormalSettlementExecutions(),
+    formalSettlementScheduler: new InMemoryFormalSettlementScheduler(),
     externalServices,
     assetSynchronization,
     assetFullRefreshState: fullRefreshState,
@@ -2297,4 +2302,18 @@ export function createTestServices(): TestServices {
       },
     },
   };
+}
+
+export class InMemoryFormalSettlementExecutions {
+  private value: FormalSettlementExecution | null = null;
+  async latest() { return this.value ? structuredClone(this.value) : null; }
+  async record(value: FormalSettlementExecution) {
+    if (!this.value || value.startedAt >= this.value.startedAt) this.value = structuredClone(value);
+  }
+}
+export class InMemoryFormalSettlementScheduler {
+  state: FormalSettlementSchedulerStatus["state"] = "unsupported";
+  async read(): Promise<FormalSettlementSchedulerStatus> {
+    return { state: this.state, checkedAt: "2026-09-18T00:00:00.000Z" };
+  }
 }

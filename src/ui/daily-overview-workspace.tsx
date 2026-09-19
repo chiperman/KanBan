@@ -1,5 +1,7 @@
 "use client";
 
+import type { FormalSettlementExecution } from "@/server/ports";
+
 import { useMemo } from "react";
 
 import {
@@ -228,6 +230,7 @@ export function DailyOverviewWorkspace({
   currentObservedAt,
   demoMode = false,
   formalDailySettlements,
+  formalSettlementExecution,
   profitColorScheme,
   sources,
   trendObservations,
@@ -237,6 +240,7 @@ export function DailyOverviewWorkspace({
   currentObservedAt: string;
   demoMode?: boolean;
   formalDailySettlements: FormalDailySettlement[];
+  formalSettlementExecution?: FormalSettlementExecution | null;
   profitColorScheme: ProfitColorScheme;
   sources: OverviewSource[];
   trendObservations: DailyAssetTrendObservation[];
@@ -606,6 +610,7 @@ export function DailyOverviewWorkspace({
       {demoMode ? null : (
         <FormalDailySettlementSummary
           settlements={formalDailySettlements}
+          execution={formalSettlementExecution}
           currency={currency}
           showSensitiveInfo={showSensitiveInfo}
         />

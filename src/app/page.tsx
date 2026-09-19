@@ -138,12 +138,14 @@ export default async function AssetDashboardPage({
     dailyAssetTrendObservations,
     fullRefreshState,
     formalDailySettlements,
+    formalSettlementExecution,
   ] = await Promise.all([
     services.assetSources.list(),
     services.investmentCashflows.list(),
     services.dailyAssetSnapshots.listTrendObservations(),
     services.assetFullRefreshState.read(),
     services.formalDailySettlements.list(),
+    services.formalSettlementExecutions.latest(),
   ])
   const assetSources = storedSources.map(
     ({ credentialReference: _credentialReference, permissions: _permissions, ...source }) => source,
@@ -178,6 +180,7 @@ export default async function AssetDashboardPage({
               currentObservedAt={now.toISOString()}
               currentDay={shanghaiDay(now)}
               formalDailySettlements={formalDailySettlements}
+              formalSettlementExecution={formalSettlementExecution}
               profitColorScheme={profitColorScheme}
               sources={assetSources}
               trendObservations={dailyAssetTrendObservations}

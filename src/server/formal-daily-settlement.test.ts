@@ -1,3 +1,4 @@
+import { buildSnapshotFromPositions } from "@/domain/valuation";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -210,5 +211,42 @@ for (const observedAt of ["2026-08-04T16:06:00.000Z", "2026-08-06T16:06:00.000Z"
     assert.deepEqual(settlement.total, { USD: "202", CNY: null, HKD: null });
     assert.equal(settlement.sources[1]?.status, "incomplete");
     assert.deepEqual(settlement.sources[1]?.total, { USD: "102", CNY: null, HKD: null });
+  });
+}
+
+test("采集异常与行情等待分离，不向执行结果泄露原始错误", async () => {
+  const crypto = source({ id: "crypto", kind: "binance", label: "私有来源", snapshot: snapshot("100") });
+  const runner = new MarketCloseFormalDailySettlement(new FixedSources([crypto]), new FixedClock(), new RecordedSettlements(), {
+    async capture() { throw new Error("token=PRIVATE_PROVIDER_SECRET"); },
+  }, new NoCandles());
+  assert.deepEqual(await runner.run(), { outcome: "error", reason: "source-read-failed" });
+});
+
+test("recorded不代表完整：错过窗口需返回独立日结质量", async () => {
+  const crypto = source({ id: "crypto", kind: "binance", label: "test", snapshot: snapshot("100") });
+  const runner = new MarketCloseFormalDailySettlement(new FixedSources([crypto]), {
+    now: () => new Date("2026-08-06T15:00:00.000Z"),
+  }, new RecordedSettlements(), new FixedCapture(new Map()), new NoCandles());
+  assert.deepEqual(await runner.run(), { outcome: "recorded", settlementStatus: "missed", reason: "capture-window-missed" });
+});
+
+for (const failure of [false, true]) {
+  test(failure ? "dailyK原始异常只返回安全错误码" : "dailyK暂无官方行情为waiting而非error", async () => {
+    const securitySnapshot = buildSnapshotFromPositions({
+      positions: [{ symbol: "NVDA.US", name: "test", quantity: "1", currency: "USD", assetClass: "securities",
+        currentPrice: { amount: "100", currency: "USD" }, priceSource: "fixture", pricedAt: "2026-08-05T20:05:00Z",
+        costPrice: null, platformProfit: null, changePercent: null }],
+      sourceCurrency: "USD", exchangeRates: [], syncedAt: "2026-08-05T20:05:00Z",
+    });
+    const security = source({ id: "securities", label: "private-name", kind: "longbridge", snapshot: securitySnapshot });
+    const settlements = new RecordedSettlements();
+    const runner = new MarketCloseFormalDailySettlement(new FixedSources([security]), { now: () => new Date("2026-08-05T20:05:00Z") }, settlements,
+      new FixedCapture(new Map([[security.id, securitySnapshot]])), {
+        async readDailyCandles() { if (failure) throw new Error("API_SECRET_private"); return []; },
+      });
+    assert.deepEqual(await runner.run(), failure
+      ? { outcome: "error", reason: "candle-read-failed" }
+      : { outcome: "waiting", reason: "official-close-pending" });
+    assert.deepEqual(settlements.values, []);
   });
 }

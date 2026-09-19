@@ -385,9 +385,35 @@ export interface LongbridgeBenchmarkCandlestickReader {
 }
 
 export interface FormalDailySettlementRunner {
-  run(): Promise<{
-    outcome: "not-due" | "waiting" | "recorded" | "already-recorded";
-  }>;
+  run(): Promise<FormalSettlementRunResult>;
+}
+
+export type FormalSettlementRunReason =
+  | "no-sources" | "before-window" | "official-close-pending"
+  | "source-read-failed" | "candle-read-failed" | "capture-window-missed"
+  | "incomplete-evidence" | "execution-failed" | "execution-record-failed";
+export interface FormalSettlementRunResult {
+  outcome: "not-due" | "waiting" | "recorded" | "already-recorded" | "error";
+  reason?: FormalSettlementRunReason;
+  settlementStatus?: FormalSettlementStatus;
+}
+export interface FormalSettlementExecution {
+  startedAt: string;
+  finishedAt: string;
+  outcome: FormalSettlementRunResult["outcome"];
+  reason: FormalSettlementRunReason | null;
+  settlementStatus: FormalSettlementStatus | null;
+}
+export interface FormalSettlementExecutions {
+  latest(): Promise<FormalSettlementExecution | null>;
+  record(execution: FormalSettlementExecution): Promise<void>;
+}
+export interface FormalSettlementSchedulerStatus {
+  state: "loaded" | "not-loaded" | "plist-missing" | "query-failed" | "unsupported";
+  checkedAt: string;
+}
+export interface FormalSettlementScheduler {
+  read(): Promise<FormalSettlementSchedulerStatus>;
 }
 
 export interface AssetSourceRefreshResult {

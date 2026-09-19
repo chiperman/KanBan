@@ -1,7 +1,9 @@
 "use client";
 
+import { VibeLink } from "@/ui/vibe/vibe-button";
+import { settlementOutcomeLabel } from "@/ui/formal-settlement-status";
 import { decimalToFixed } from "@/domain/decimal";
-import type { FormalDailySettlement } from "@/server/ports";
+import type { FormalDailySettlement, FormalSettlementExecution } from "@/server/ports";
 import type { ReportingCurrency } from "@/domain/valuation";
 import { formatShanghaiDateTime } from "@/ui/shanghai-date-time";
 import { VibeStatusTag } from "@/ui/vibe/vibe-data-instrument";
@@ -13,9 +15,9 @@ function formatAmount(value: string): string {
 
 function statusLabel(status: FormalDailySettlement["status"]): string {
   return status === "complete"
-    ? "已确认"
+    ? "完整"
     : status === "missed"
-      ? "已错过"
+      ? "错过窗口"
       : "不完整";
 }
 
@@ -27,14 +29,24 @@ function anchorLabel(anchor: FormalDailySettlement["anchor"]): string {
 
 export function FormalDailySettlementSummary({
   settlements,
+  execution = null,
   currency,
   showSensitiveInfo,
 }: {
   settlements: FormalDailySettlement[];
+  execution?: FormalSettlementExecution | null;
   currency: ReportingCurrency;
   showSensitiveInfo: boolean;
 }) {
   const latest = settlements[0];
+  const executionHint = (
+    <div className="formal-daily-settlement-runtime">
+      {execution?.outcome === "error" || execution?.outcome === "waiting" ? (
+        <span className="formal-daily-settlement-note">最近一次执行：{settlementOutcomeLabel[execution.outcome]}</span>
+      ) : null}
+      <VibeLink href="/settings#automatic-daily-settlement" variant="text">查看自动日结状态</VibeLink>
+    </div>
+  );
   if (!latest) {
     return (
       <section
@@ -44,11 +56,13 @@ export function FormalDailySettlementSummary({
       >
         <div className="formal-daily-settlement-head">
           <p className="card-label">正式日结</p>
-          <VibeStatusTag tone="muted">等待首次日结</VibeStatusTag>
+          <VibeStatusTag tone="muted">暂无记录</VibeStatusTag>
         </div>
         <p className="trend-empty">
-          等待日结。
+          尚无正式日结记录，实时资产和近7日趋势仍可查看
         </p>
+        <p className="formal-daily-settlement-note">正式日结独立记录收盘窗口资产，证券采用官方常规盘收盘价。</p>
+        {executionHint}
       </section>
     );
   }
@@ -78,9 +92,9 @@ export function FormalDailySettlementSummary({
       <p className="formal-daily-settlement-amount">
         {value === null
           ? "未完整折算"
-          : showSensitiveInfo
+          : <span className="formal-daily-settlement-value">{showSensitiveInfo
             ? formatAmount(value)
-            : "••••••"}{" "}
+            : "••••••"}</span>}{" "}
         {value === null ? "" : currency}
       </p>
       <p className="formal-daily-settlement-provenance">
@@ -93,9 +107,12 @@ export function FormalDailySettlementSummary({
         证券按官方日 K 常规盘收盘记录
         {hasCrypto ? "；加密资产按同一采集窗口市价记录。" : "。"}
       </p>
-      {latest.diagnostic ? (
-        <p className="formal-daily-settlement-diagnostic">{latest.diagnostic}</p>
+      {latest.status !== "complete" ? (
+        <p className="formal-daily-settlement-diagnostic">
+          {latest.status === "missed" ? "采集窗口内未形成日结，未使用之后的实时数据补写。" : "估值或来源证据不完整，已知金额不代表完整资产总额。"}
+        </p>
       ) : null}
+      {executionHint}
     </section>
   );
 }

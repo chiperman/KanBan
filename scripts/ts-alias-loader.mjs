@@ -3,6 +3,10 @@ import { pathToFileURL } from "node:url";
 const sourceRoot = pathToFileURL(`${process.cwd()}/src/`);
 
 export async function resolve(specifier, context, nextResolve) {
+  // Standalone production CLIs load session-auth outside Next's bundler.
+  if (specifier === "next/headers") {
+    return nextResolve("next/headers.js", context);
+  }
   if (specifier.startsWith("@/")) {
     return nextResolve(
       new URL(`${specifier.slice(2)}.ts`, sourceRoot).href,

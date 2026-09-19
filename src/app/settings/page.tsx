@@ -1,3 +1,4 @@
+import { AutomaticDailySettlementSettings } from "@/ui/automatic-daily-settlement-settings";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 
@@ -38,6 +39,10 @@ export default async function SettingsPage({
     ? savedProfitColorScheme
     : null;
   const externalServiceStatus = await services.externalServices.status();
+  const [execution, scheduler] = await Promise.all([
+    services.formalSettlementExecutions.latest(),
+    services.formalSettlementScheduler.read(),
+  ]);
 
   return (
     <SessionGuard>
@@ -71,6 +76,7 @@ export default async function SettingsPage({
                 <RecoverySetup configured={recoveryConfigured} />
               </div>
             </section>
+            <AutomaticDailySettlementSettings execution={execution} scheduler={scheduler} />
             <BusinessDataBackupSettings />
             <section
               className="settings-section"

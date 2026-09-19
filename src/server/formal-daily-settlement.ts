@@ -14,6 +14,7 @@ import type {
   Clock,
   FormalDailySettlement,
   FormalDailySettlementRunner,
+  FormalSettlementRunResult,
   FormalDailySettlements,
   FormalSettlementAnchor,
   FormalSettlementCandleReader,
@@ -465,9 +466,7 @@ export class MarketCloseFormalDailySettlement
     private readonly captureWindowMs = FORMAL_SETTLEMENT_CAPTURE_WINDOW_MS,
   ) {}
 
-  async run(): Promise<{
-    outcome: "not-due" | "waiting" | "recorded" | "already-recorded";
-  }> {
+  async run(): Promise<FormalSettlementRunResult> {
     const now = this.clock.now();
     const attemptedAt = now.toISOString();
     const sources = (await this.sources.list()).filter(
@@ -475,7 +474,7 @@ export class MarketCloseFormalDailySettlement
         source.lifecycle !== "disconnected" &&
         (source.kind !== "manual" || source.hasManualRecord !== false),
     );
-    if (sources.length === 0) return { outcome: "not-due" };
+    if (sources.length === 0) return { outcome: "not-due", reason: "no-sources" };
     const securities = securityCandidates(sources);
     const anchor = securities.length > 0
       ? anchorForSecurities(now, securities)
@@ -483,16 +482,16 @@ export class MarketCloseFormalDailySettlement
     const existing = (await this.settlements.list()).find(
       (settlement) => settlement.anchor.key === anchor.key,
     );
-    if (existing) return { outcome: "already-recorded" };
+    if (existing) return { outcome: "already-recorded", settlementStatus: existing.status };
 
     const scheduledAt = Date.parse(anchor.scheduledCloseAt);
-    if (now.getTime() < scheduledAt) return { outcome: "not-due" };
+    if (now.getTime() < scheduledAt) return { outcome: "not-due", reason: "before-window" };
     if (now.getTime() > scheduledAt + this.captureWindowMs) {
       return this.recordIfAbsent({
         anchor,
         capturedAt: null,
         status: "missed",
-        diagnostic: "正式日结任务未在采集窗口内运行，未使用之后的实时数据补写",
+        diagnostic: "采集窗口内未形成正式日结，未使用之后的实时数据补写",
         total: { USD: null, CNY: null, HKD: null },
         exchangeRates: [],
         sources: [],
@@ -528,11 +527,11 @@ export class MarketCloseFormalDailySettlement
             snapshot: await this.sourceCapture.capture({ source, attemptedAt }),
             diagnostic: null,
           };
-        } catch (error) {
+        } catch {
           return {
             source,
             snapshot: null,
-            diagnostic: error instanceof Error ? error.message : "日结来源读取失败",
+            diagnostic: "日结来源读取失败",
           };
         }
       }),
@@ -553,6 +552,7 @@ export class MarketCloseFormalDailySettlement
       ),
     );
     const closeErrors: string[] = [];
+    let candleReadFailed = false;
     const confirmedCloses = new Map<string, ConfirmedClose>();
     const securitiesBySource = new Map<string, SecurityCandidate[]>();
     for (const security of capturedSecurities) {
@@ -593,10 +593,8 @@ export class MarketCloseFormalDailySettlement
               tradingDay,
             });
           }
-        } catch (error) {
-          closeErrors.push(
-            error instanceof Error ? error.message : `${capture.source.label} 日 K 读取失败`,
-          );
+        } catch {
+          candleReadFailed = true;
         }
       }),
     );
@@ -606,9 +604,9 @@ export class MarketCloseFormalDailySettlement
         ? [`${capture.source.label}：${capture.diagnostic ?? "日结来源读取失败"}`]
         : [],
     );
-    if (captureErrors.length > 0 || closeErrors.length > 0) {
-      return { outcome: "waiting" };
-    }
+    if (captureErrors.length > 0) return { outcome: "error", reason: "source-read-failed" };
+    if (candleReadFailed) return { outcome: "error", reason: "candle-read-failed" };
+    if (closeErrors.length > 0) return { outcome: "waiting", reason: "official-close-pending" };
 
     const valuationSources = captures.flatMap((capture) => {
       if (capture.snapshot === null) return [];
@@ -700,10 +698,17 @@ export class MarketCloseFormalDailySettlement
 
   private async recordIfAbsent(
     settlement: FormalDailySettlement,
-  ): Promise<{ outcome: "recorded" | "already-recorded" }> {
-    return (await this.settlements.recordIfAbsent(settlement))
-      ? { outcome: "recorded" }
-      : { outcome: "already-recorded" };
+  ): Promise<FormalSettlementRunResult> {
+    const recorded = await this.settlements.recordIfAbsent(settlement);
+    const actual = recorded ? settlement : (await this.settlements.list()).find(
+      (value) => value.anchor.key === settlement.anchor.key,
+    );
+    return {
+      outcome: recorded ? "recorded" : "already-recorded",
+      settlementStatus: actual?.status,
+      ...(actual?.status === "missed" ? { reason: "capture-window-missed" as const } :
+        actual?.status === "incomplete" ? { reason: "incomplete-evidence" as const } : {}),
+    };
   }
 }
 

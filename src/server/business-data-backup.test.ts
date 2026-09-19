@@ -247,3 +247,24 @@ test("损坏备份和恢复中途失败都不覆盖原 SQLite", async () => {
     assert.deepEqual(await readBusinessState(f.database), before);
   } finally { await f.close(); }
 });
+
+test("业务备份排除运维执行记录，恢复业务数据也不改写最近执行", async () => {
+  const f = await sqliteFixture();
+  try {
+    const execution = {
+      startedAt: "2026-09-18T00:05:00.000Z", finishedAt: "2026-09-18T00:05:01.000Z",
+      outcome: "error" as const, reason: "source-read-failed" as const, settlementStatus: null,
+    };
+    await f.database.recordFormalSettlementExecution(execution);
+    await f.backup.exportBackup("without-operations.json");
+    const raw = await readFile(path.join(f.directory, "without-operations.json"), "utf8");
+    assert.ok(!raw.includes("source-read-failed"));
+    const payload = JSON.parse(raw).payload;
+    assert.deepEqual(Object.keys(payload).sort(), [
+      "assetCards", "assetSources", "dailyAssetSnapshots", "dailyAssetTrendObservations",
+      "formalDailySettlements", "importedAssetSourceHistoryObservations", "investmentCashflows", "manualAssetRecords",
+    ].sort());
+    await f.backup.restore("without-operations.json");
+    assert.deepEqual(await f.database.latestFormalSettlementExecution(), execution);
+  } finally { await f.close(); }
+});

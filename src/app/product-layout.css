@@ -4487,10 +4487,14 @@ body {
 }
 
 .formal-daily-settlement-amount {
-  font-family: var(--display);
+  font-family: var(--f-mono);
   font-size: clamp(1.35rem, 3vw, 1.75rem);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.04em;
+}
+
+.formal-daily-settlement-value {
+  font-family: var(--f-display);
 }
 
 .formal-daily-settlement-provenance,
@@ -8836,3 +8840,12 @@ body {
     margin: 0;
   }
 }
+
+.formal-daily-settlement-runtime {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--vibe-space-2);
+}
+#automatic-daily-settlement { scroll-margin-top: var(--vibe-space-4); }
+#automatic-daily-settlement dd { overflow-wrap: anywhere; }

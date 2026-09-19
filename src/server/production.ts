@@ -1,3 +1,5 @@
+import { ObservedFormalSettlementRunner } from "@/server/formal-settlement-execution";
+import { LocalFormalSettlementScheduler } from "@/server/formal-settlement-scheduler";
 import {
   createCipheriv,
   createDecipheriv,
@@ -57,6 +59,8 @@ import type {
   DailyAssetSnapshots,
   ImportedAssetSourceHistoryObservation,
   FormalDailySettlement,
+  FormalSettlementExecution,
+  FormalSettlementExecutions,
   FormalDailySettlements,
   InvestmentCashflow,
   ManualAssetRecord,
@@ -1591,6 +1595,11 @@ export class SqliteDashboardDatabase
         total_cny TEXT,
         total_hkd TEXT,
         PRIMARY KEY (source_id, day)
+      ) STRICT;
+      CREATE TABLE IF NOT EXISTS formal_settlement_execution (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        started_at TEXT NOT NULL,
+        payload_json TEXT NOT NULL CHECK (json_valid(payload_json))
       ) STRICT;
       CREATE TABLE IF NOT EXISTS formal_daily_settlements (
         anchor_key TEXT PRIMARY KEY,
@@ -3191,6 +3200,21 @@ export class SqliteDashboardDatabase
     });
   }
 
+  async latestFormalSettlementExecution(): Promise<FormalSettlementExecution | null> {
+    const row = this.database.prepare(
+      "SELECT payload_json FROM formal_settlement_execution WHERE id = 1",
+    ).get() as { payload_json: string } | undefined;
+    return row ? JSON.parse(row.payload_json) as FormalSettlementExecution : null;
+  }
+
+  async recordFormalSettlementExecution(execution: FormalSettlementExecution): Promise<void> {
+    this.database.prepare(
+      "INSERT INTO formal_settlement_execution (id, started_at, payload_json) VALUES (1, ?, ?) " +
+      "ON CONFLICT(id) DO UPDATE SET started_at = excluded.started_at, payload_json = excluded.payload_json " +
+      "WHERE excluded.started_at >= formal_settlement_execution.started_at",
+    ).run(execution.startedAt, JSON.stringify(execution));
+  }
+
   async listFormalDailySettlements(): Promise<FormalDailySettlement[]> {
     const rows = this.database
       .prepare(`
@@ -4071,6 +4095,14 @@ export class DatabaseAssetFullRefreshState implements AssetFullRefreshState {
   clear() { return this.database.clearAssetFullRefresh(); }
 }
 
+export class DatabaseFormalSettlementExecutions implements FormalSettlementExecutions {
+  constructor(private readonly database: SqliteDashboardDatabase) {}
+  latest() { return this.database.latestFormalSettlementExecution(); }
+  record(execution: FormalSettlementExecution) {
+    return this.database.recordFormalSettlementExecution(execution);
+  }
+}
+
 export class DatabaseFormalDailySettlements implements FormalDailySettlements {
   constructor(private readonly database: SqliteDashboardDatabase) {}
 
@@ -4540,7 +4572,7 @@ export class FileOwnerRecoveryCredentialStore
 }
 
 export function createProductionServices(
-  dataDir = path.join(process.cwd(), "data"),
+  dataDir = process.env.KANBAN_DATA_DIR?.trim() || path.join(process.cwd(), "data"),
 ): AppServices {
   hardenLocalDataPermissions(dataDir);
   const clock = new SystemClock();
@@ -4615,6 +4647,7 @@ export function createProductionServices(
     "evm-watch-bsc": evmRefresher,
   });
   const formalDailySettlements = new DatabaseFormalDailySettlements(database);
+  const formalSettlementExecutions = new DatabaseFormalSettlementExecutions(database);
   return {
     clock,
     assetCards: new DatabaseAssetCardStore(database),
@@ -4628,13 +4661,15 @@ export function createProductionServices(
     ),
     dailyAssetSnapshots,
     formalDailySettlements,
-    formalDailySettlementRunner: new MarketCloseFormalDailySettlement(
+    formalSettlementExecutions,
+    formalSettlementScheduler: new LocalFormalSettlementScheduler(undefined, { workspace: process.cwd(), dataDir }),
+    formalDailySettlementRunner: new ObservedFormalSettlementRunner(new MarketCloseFormalDailySettlement(
       assetSources,
       clock,
       formalDailySettlements,
       new ReadOnlyFormalSettlementSourceCapture(readySecrets, sourceRefresher),
       new KeychainLongbridgeFormalSettlementCandleReader(),
-    ),
+    ), formalSettlementExecutions, clock),
     externalServices,
     assetSynchronization: new SourceIsolatedAssetSynchronization(
       assetSources,

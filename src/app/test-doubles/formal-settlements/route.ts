@@ -250,20 +250,35 @@ const candleReader: FormalSettlementCandleReader = {
 
 export async function POST(request: Request) {
   if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
-  const body = (await request.json().catch(() => null)) as { action?: unknown } | null;
+  const body = (await request.json().catch(() => null)) as { action?: unknown; quality?: unknown; scenario?: unknown } | null;
+  if (body?.action === "seed-runtime-view") {
+    const services = getTestServices();
+    const scenario = body.scenario;
+    if (!["not-loaded", "unknown", "error", "waiting"].includes(String(scenario))) return Response.json({ error: "invalid scenario" }, { status: 400 });
+    services.formalSettlementScheduler.state = scenario === "not-loaded" ? "not-loaded" : "query-failed";
+    if (scenario === "error" || scenario === "waiting") {
+      await services.formalSettlementExecutions.record({
+        startedAt: "2026-09-18T00:00:00.000Z", finishedAt: "2026-09-18T00:01:00.000Z",
+        outcome: scenario, reason: scenario === "error" ? "candle-read-failed" : "official-close-pending", settlementStatus: null,
+      });
+    }
+    return Response.json({ ok: true });
+  }
   if (body?.action === "seed-owner-view") {
+    const quality = body.quality ?? "complete";
+    if (quality !== "complete" && quality !== "incomplete" && quality !== "missed") return Response.json({ error: "invalid quality" }, { status: 400 });
     await getTestServices().formalDailySettlements.recordIfAbsent({
       anchor: {
-        key: "securities-close:US:2026-08-05",
+        key: `securities-close:US:2026-08-05:${quality}`,
         kind: "securities-close",
         market: "US",
         tradingDay: "2026-08-05",
         scheduledCloseAt: "2026-08-05T20:00:00.000Z",
       },
-      capturedAt: CAPTURED_AT,
-      status: "complete",
+      capturedAt: quality === "missed" ? null : CAPTURED_AT,
+      status: quality,
       diagnostic: null,
-      total: { USD: "313.94", CNY: "2260.368", HKD: "2448.732" },
+      total: quality === "missed" ? { USD: null, CNY: null, HKD: null } : { USD: "313.94", CNY: "2260.368", HKD: "2448.732" },
       exchangeRates: exchangeRates(CAPTURED_AT),
       sources: [],
       holdings: [{

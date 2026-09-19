@@ -15,6 +15,8 @@ import type {
   DailyAssetSnapshots,
   ExternalServiceConfiguration,
   FormalDailySettlementRunner,
+  FormalSettlementExecutions,
+  FormalSettlementScheduler,
   FormalDailySettlements,
   InvestmentCashflows,
   LongbridgeBenchmarkCandlestickReader,
@@ -49,6 +51,8 @@ export interface AppServices {
   dailyAssetSnapshots: DailyAssetSnapshots;
   formalDailySettlements: FormalDailySettlements;
   formalDailySettlementRunner: FormalDailySettlementRunner;
+  formalSettlementExecutions: FormalSettlementExecutions;
+  formalSettlementScheduler: FormalSettlementScheduler;
   externalServices: ExternalServiceConfiguration;
   prices: Prices;
   auth: OwnerAuth;
@@ -94,6 +98,8 @@ function hasCurrentServices(
   return (
     services !== null &&
     services.externalServices !== undefined &&
+    typeof services.formalSettlementExecutions?.latest === "function" &&
+    typeof services.formalSettlementScheduler?.read === "function" &&
     typeof services.dailyAssetSnapshots
       .listImportedSourceHistoryObservations === "function" &&
     services.longbridgeBenchmarkCandlesticks !== undefined &&
