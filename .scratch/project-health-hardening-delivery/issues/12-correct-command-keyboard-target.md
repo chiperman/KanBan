@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 **Phase:** 本迭代处理
 **Priority:** 中
@@ -46,3 +46,10 @@
 ## 评论
 
 - 2026-09-10：按所有者已确认的拆分发布；状态表示文档可供后续实施，不代表已开始或完成代码变更。
+
+- 2026-09-19：按所有者“继续直到全部完成”授权实施；精确路径分批提交，不 push；隔离构建和测试，不读取真实凭证或执行业务日结。
+
+## 答案
+
+- 2026-09-19：先复现关闭按钮 Enter 误执行，再验证聚焦关闭/命令按钮、搜索方向键与 Enter、输入法 Escape、空结果和焦点恢复。5 项菜单/挑战回归全通过；同时补齐数据健康页既有 WorkbenchPageHeader，恢复公共工具栏。
+- 验证环境：macOS arm64、Node 24.15.0，隔离 next build --webpack 通过；虚拟认证器不代表真实设备验收。

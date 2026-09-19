@@ -63,6 +63,7 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
 
   useEffect(() => {
     function shortcut(event: globalThis.KeyboardEvent) {
+      if (event.isComposing) return;
       if (open && event.key === "Escape") {
         event.preventDefault();
         close();
@@ -163,7 +164,7 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
       close();
       return;
     }
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    if (event.target === searchRef.current && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
       event.preventDefault();
       if (filtered.length === 0) return;
       const direction = event.key === "ArrowDown" ? 1 : -1;
@@ -172,7 +173,7 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
       );
       return;
     }
-    if (event.key === "Enter" && filtered[activeIndex]) {
+    if (event.target === searchRef.current && event.key === "Enter" && filtered[activeIndex]) {
       event.preventDefault();
       filtered[activeIndex].action();
       return;

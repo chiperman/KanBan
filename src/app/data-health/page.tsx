@@ -12,6 +12,7 @@ import {
 } from "@/ui/data-health-diagnostics";
 import { SessionGuard } from "@/ui/session-guard";
 import { WorkbenchShell } from "@/ui/workbench-shell";
+import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
 
 export const dynamic = "force-dynamic";
 
@@ -40,8 +41,7 @@ export default async function DataHealthPage({
             跳到主要内容
           </a>
           <main id="main-content">
-            <p className="card-label">WORKBENCH / 03</p>
-            <h1>数据健康</h1>
+            <WorkbenchPageHeader eyebrow="WORKBENCH / 03" title="数据健康" />
             <DataHealthDiagnostics
               currentDay={shanghaiDay(services.clock.now())}
               history={history}

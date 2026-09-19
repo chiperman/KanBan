@@ -191,3 +191,33 @@ test("鼠标可打开菜单、刷新资产并锁定", async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByRole("dialog", { name: "快捷命令" })).toHaveCount(0);
 });
+
+test("键盘焦点决定关闭和执行目标且保留输入法事件", async ({ page }) => {
+  await loginAsOwner(page);
+  await page.goto("/settings");
+  const trigger = page.getByRole("button", { name: "打开快捷命令" });
+  const menu = page.getByRole("dialog", { name: "快捷命令" });
+  await trigger.click();
+  const search = page.getByRole("searchbox", { name: "搜索命令" });
+  await expect(search).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(menu.getByRole("button", { name: "关闭", exact: true })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(menu).toHaveCount(0);
+  await expect(page).toHaveURL("/settings");
+  await expect(trigger).toBeFocused();
+  await trigger.click();
+  await menu.getByRole("button", { name: "前往数据健康" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL("/data-health");
+  await trigger.click();
+  await search.dispatchEvent("keydown", { key: "Escape", isComposing: true });
+  await expect(menu).toBeVisible();
+  await search.fill("不存在的命令");
+  await page.keyboard.press("Enter");
+  await expect(menu).toBeVisible();
+  await search.fill("前往");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL("/assets");
+});
