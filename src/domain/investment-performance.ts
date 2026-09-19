@@ -226,6 +226,30 @@ export function assertInvestmentCashflowSequence(
   }
 }
 
+/** 当前摘要以 USD 为计算基准，展示时折算；不修改历史账本与区间收益。 */
+export function analyzeCurrentInvestmentPerformance(input: {
+  currency: InvestmentCashflowCurrency;
+  asOf: string;
+  currentUsdTotal: PortfolioObservation | null;
+  cashflows: InvestmentCashflow[];
+  exchangeRates: AssetExchangeRate[];
+}): InvestmentPerformanceAnalysis["current"] {
+  const { current } = analyzeInvestmentPerformance({
+    currency: "USD",
+    asOf: input.asOf,
+    currentTotal: input.currentUsdTotal,
+    cashflows: input.cashflows,
+    interval: null,
+  });
+  const convert = (amount: string | null) => amount === null
+    ? null
+    : convertCurrencyAmount(amount, "USD", input.currency, input.exchangeRates);
+  return {
+    cumulativeNetInvestment: convert(current.cumulativeNetInvestment),
+    investmentProfit: convert(current.investmentProfit),
+  };
+}
+
 export function analyzeInvestmentPerformance(input: {
   currency: InvestmentCashflowCurrency;
   asOf: string;

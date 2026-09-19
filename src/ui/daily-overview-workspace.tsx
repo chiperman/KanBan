@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 
 import {
-  analyzeInvestmentPerformance,
+  analyzeCurrentInvestmentPerformance,
   longbridgeReferenceRates,
   type PortfolioObservation,
 } from "@/domain/investment-performance";
@@ -324,14 +324,14 @@ export function DailyOverviewWorkspace({
     !current?.complete && changeEndpoint !== null;
   const analysis = useMemo(
     () =>
-      analyzeInvestmentPerformance({
+      analyzeCurrentInvestmentPerformance({
         currency,
         asOf: currentObservedAt,
-        currentTotal: current,
+        currentUsdTotal: currentTotals.USD,
         cashflows,
-        interval: null,
+        exchangeRates: longbridgeRates,
       }),
-    [cashflows, currency, current, currentObservedAt],
+    [cashflows, currency, currentTotals.USD, currentObservedAt, longbridgeRates],
   );
   const priorObservation = latestCompletedPriorObservation(
     trendObservations,
@@ -577,8 +577,9 @@ export function DailyOverviewWorkspace({
           <MetricValue
             currency={currency}
             hidden={!showSensitiveInfo}
-            value={analysis.current.cumulativeNetInvestment}
+            value={analysis.cumulativeNetInvestment}
           />
+          {currency !== "USD" ? <span>按当前汇率折算</span> : null}
         </article>
         <article data-testid="overview-investment-profit">
           <p>组合投资盈亏</p>
@@ -586,8 +587,9 @@ export function DailyOverviewWorkspace({
             currency={currency}
             hidden={!showSensitiveInfo}
             signed
-            value={analysis.current.investmentProfit}
+            value={analysis.investmentProfit}
           />
+          {currency !== "USD" ? <span>按当前汇率折算</span> : null}
         </article>
         {demoMode ? null : (
           <div className="daily-overview__summary-actions">

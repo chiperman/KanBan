@@ -105,6 +105,7 @@ export default async function PerformancePage({
               currentDay={shanghaiDay(now)}
               currentObservedAt={now.toISOString()}
               currentTotals={currentTotals}
+              currentExchangeRates={longbridgeRates}
               importedSourceHistoryObservations={importedSourceHistoryObservations}
               trendObservations={trendObservations}
             />

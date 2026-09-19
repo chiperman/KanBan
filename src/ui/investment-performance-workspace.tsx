@@ -3,6 +3,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 
 import {
+  analyzeCurrentInvestmentPerformance,
   analyzeInvestmentPerformance,
   type PortfolioObservation,
 } from "@/domain/investment-performance";
@@ -23,6 +24,7 @@ import {
 } from "@/domain/decimal";
 import type { ReportingCurrency } from "@/domain/valuation";
 import type {
+  AssetExchangeRate,
   DailyAssetTrendObservation,
   ImportedAssetSourceHistoryObservation,
   InvestmentCashflow,
@@ -427,6 +429,7 @@ export function InvestmentPerformanceWorkspace({
   currentDay,
   currentObservedAt,
   currentTotals,
+  currentExchangeRates,
   importedSourceHistoryObservations,
   trendObservations,
 }: {
@@ -434,6 +437,7 @@ export function InvestmentPerformanceWorkspace({
   currentDay: string;
   currentObservedAt: string;
   currentTotals: CurrentTotals;
+  currentExchangeRates: AssetExchangeRate[];
   importedSourceHistoryObservations: ImportedAssetSourceHistoryObservation[];
   trendObservations: DailyAssetTrendObservation[];
 }) {
@@ -559,6 +563,16 @@ export function InvestmentPerformanceWorkspace({
   const chartEndDay = chartPoints.at(-1)?.day ?? null;
 
   const current = currentTotals[currency];
+  const currentAnalysis = useMemo(
+    () => analyzeCurrentInvestmentPerformance({
+      asOf: currentObservedAt,
+      cashflows,
+      currency,
+      currentUsdTotal: currentTotals.USD,
+      exchangeRates: currentExchangeRates,
+    }),
+    [cashflows, currency, currentTotals.USD, currentObservedAt, currentExchangeRates],
+  );
   const analysis = useMemo(
     () =>
       analyzeInvestmentPerformance({
@@ -581,7 +595,7 @@ export function InvestmentPerformanceWorkspace({
   );
   const currentReason = reasonForCurrent(
     current,
-    analysis.current.cumulativeNetInvestment,
+    currentAnalysis.cumulativeNetInvestment,
   );
   const intervalReason = reasonForInterval({
     days: portfolioTrend.days,
@@ -667,21 +681,23 @@ export function InvestmentPerformanceWorkspace({
           <p className="card-label">PRINCIPAL / NET</p>
           <h2>累计净投入</h2>
           <MetricValue
-            amount={analysis.current.cumulativeNetInvestment}
+            amount={currentAnalysis.cumulativeNetInvestment}
             currency={currency}
             hidden={showSensitiveInfo === false}
             signed
           />
+          {currency !== "USD" ? <p>按当前汇率折算</p> : null}
         </article>
         <article data-testid="performance-current-profit">
           <p className="card-label">PERFORMANCE / CURRENT</p>
           <h2>组合投资盈亏</h2>
           <MetricValue
-            amount={analysis.current.investmentProfit}
+            amount={currentAnalysis.investmentProfit}
             currency={currency}
             hidden={showSensitiveInfo === false}
             signed
           />
+          {currency !== "USD" ? <p>按当前汇率折算</p> : null}
         </article>
       </section>
       {currentReason ? <VibeNotice tone="info">{currentReason}</VibeNotice> : null}

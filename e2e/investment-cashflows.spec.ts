@@ -27,6 +27,46 @@ test.beforeEach(async ({ request }) => {
   });
 });
 
+test("USD 历史账本在总览和收益分析按当前汇率切换 CNY、HKD", async ({ page }) => {
+  await page.request.post("/test-doubles/clock", {
+    data: { now: "2026-04-01T08:00:00.000Z" },
+  });
+  await page.request.post("/test-doubles/owner-session");
+  const created = await page.request.post("/api/investment-cashflows", {
+    data: { kind: "initial-investment", amount: "100", currency: "USD",
+      occurredAt: "2026-03-01T00:00:00.000Z", note: null },
+  });
+  expect(created.status()).toBe(201);
+  const before = await (await page.request.get("/api/investment-cashflows")).json();
+  expect(before.cashflows[0].amounts).toEqual({ USD: "100", CNY: null, HKD: null });
+  await page.request.post("/test-doubles/valuation?scenario=longbridge-cash");
+  await page.request.post("/test-doubles/refresh", {
+    data: { action: "anchor-full-refresh" },
+  });
+
+  for (const [url, netId, profitId] of [
+    ["/", "overview-net-investment", "overview-investment-profit"],
+    ["/performance", "performance-net-investment", "performance-current-profit"],
+  ]) {
+    await page.goto(url);
+    for (const [currency, net, profit] of [
+      ["CNY", "712.34 CNY", "+4,864.00 CNY"],
+      ["HKD", "781.25 HKD", "+5,334.53 HKD"],
+      ["USD", "100.00 USD", "+682.82 USD"],
+    ]) {
+      await page.getByRole("button", { name: "计价货币", exact: true }).click();
+      await page.getByRole("option", { name: currency, exact: true }).click();
+      await expect(page.getByTestId(netId)).toContainText(net);
+      await expect(page.getByTestId(profitId)).toContainText(profit);
+      if (currency !== "USD") {
+        await expect(page.getByTestId(netId)).toContainText("按当前汇率折算");
+        await expect(page.getByTestId(profitId)).toContainText("按当前汇率折算");
+      }
+    }
+  }
+  expect(await (await page.request.get("/api/investment-cashflows")).json()).toEqual(before);
+});
+
 test("资金账本 API 仅限所有者，并校验、编辑和明确删除资金记录", async ({
   page,
   request,
