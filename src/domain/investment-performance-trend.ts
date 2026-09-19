@@ -80,7 +80,7 @@ function dayAtMonthOffset(day: string, offset: number): string {
   ).toISOString().slice(0, 10);
 }
 
-function rangeDays(
+export function rangeDays(
   preset: InvestmentPerformanceIntervalPreset,
   currentDay: string,
   firstTrendDay: string | undefined,

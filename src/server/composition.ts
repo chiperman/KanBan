@@ -1,5 +1,8 @@
 import type {
   AssetSources,
+  AssetSourceSummary,
+  ManualAssetRecord,
+  DailyAssetTrendObservation,
   AssetSourceLifecycle,
   AssetSynchronization,
   AssetSourceConnections,
@@ -45,6 +48,7 @@ export interface AppServices {
   clock: Clock;
   assetCards: AssetCardStore;
   assetSources: AssetSources;
+  assetSourceDetails?: { readSourceDetail(query: {sourceId: string; from?: string; to?: string}): Promise<{sources: AssetSourceSummary[]; manualRecords: ManualAssetRecord[]; history: DailyAssetTrendObservation[]; firstDay?: string}> };
   assetSourceLifecycle: AssetSourceLifecycle;
   assetSynchronization: AssetSynchronization;
   assetFullRefreshState: AssetFullRefreshState;

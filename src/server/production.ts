@@ -2845,19 +2845,20 @@ export class SqliteDashboardDatabase
     });
   }
 
-  private listSourcesSync(): AssetSourceSummary[] {
+  private listSourcesSync(detailSourceId?: string): AssetSourceSummary[] {
     const rows = this.database
       .prepare("SELECT * FROM asset_sources ORDER BY position")
       .all() as SqliteRow[];
-    const snapshotStatement = this.database.prepare(
-      "SELECT * FROM asset_source_snapshots WHERE source_id = ?",
-    );
-    const syncStatement = this.database.prepare(
-      "SELECT * FROM asset_source_sync_states WHERE source_id = ?",
-    );
+    // Retain global rates/registration metadata without decoding unrelated holdings.
+    const snapshots = this.database.prepare(detailSourceId === undefined
+      ? "SELECT * FROM asset_source_snapshots"
+      : "SELECT source_id, total_amount, total_currency, synced_at, exchange_rates_json, CASE WHEN source_id = ? THEN holdings_json ELSE '[]' END AS holdings_json, CASE WHEN source_id = ? THEN unrecognized_evm_tokens_json ELSE '[]' END AS unrecognized_evm_tokens_json, CASE WHEN source_id = ? THEN coverage_json ELSE NULL END AS coverage_json FROM asset_source_snapshots")
+      .all(...(detailSourceId === undefined ? [] : [detailSourceId, detailSourceId, detailSourceId])) as SqliteRow[];
+    const snapshotMap = new Map(snapshots.map((row) => [row.source_id, row]));
+    const syncMap = new Map((this.database.prepare("SELECT * FROM asset_source_sync_states").all() as SqliteRow[]).map((row) => [row.source_id, row]));
     return rows.map((row) => {
-      const snapshot = snapshotStatement.get(row.id as string) as SqliteRow;
-      const sync = syncStatement.get(row.id as string) as SqliteRow;
+      const snapshot = snapshotMap.get(row.id)!;
+      const sync = syncMap.get(row.id)!;
       const unrecognizedEvmTokens = JSON.parse(
         (snapshot.unrecognized_evm_tokens_json as string | null) ?? "[]",
       );
@@ -2934,14 +2935,15 @@ export class SqliteDashboardDatabase
     });
   }
 
-  private listManualAssetRecordsSync(): ManualAssetRecord[] {
+  private listManualAssetRecordsSync(sourceId?: string): ManualAssetRecord[] {
     const rows = this.database
       .prepare(`
         SELECT source_id, day, amount, currency, recorded_at
         FROM manual_asset_records
+        ${sourceId === undefined ? "" : "WHERE source_id = ?"}
         ORDER BY source_id, day DESC
       `)
-      .all() as SqliteRow[];
+      .all(...(sourceId === undefined ? [] : [sourceId])) as SqliteRow[];
     return rows.map((row) => ({
       sourceId: row.source_id as string,
       day: row.day as string,
@@ -3020,10 +3022,23 @@ export class SqliteDashboardDatabase
       | "daily_asset_source_snapshots"
       | "daily_asset_source_trend_observations",
     day?: string,
+    query?: { sourceId: string; from?: string; to?: string },
   ): DailyAssetSnapshot[] {
-    const rows = this.database
-      .prepare(`SELECT * FROM ${snapshotTable} ${day === undefined ? "" : "WHERE day = ?"} ORDER BY day`)
-      .all(...(day === undefined ? [] : [day])) as SqliteRow[];
+    const conditions: string[] = [];
+    const args: string[] = [];
+    if (day !== undefined) { conditions.push("day = ?"); args.push(day); }
+    if (query?.from) { conditions.push("day >= ?"); args.push(query.from); }
+    if (query?.to) { conditions.push("day <= ?"); args.push(query.to); }
+    const where = conditions.length ? " WHERE " + conditions.join(" AND ") : "";
+    const rows = this.database.prepare("SELECT * FROM " + snapshotTable + where + " ORDER BY day").all(...args) as SqliteRow[];
+    const sourceWhere = query ? (where ? where + " AND " : " WHERE ") + "source_id = ?" : where;
+    const children = this.database.prepare("SELECT * FROM " + sourceTable + sourceWhere + " ORDER BY day, source_id")
+      .all(...args, ...(query ? [query.sourceId] : [])) as SqliteRow[];
+    const byDay = new Map<string, SqliteRow[]>();
+    for (const child of children) {
+      const items = byDay.get(child.day as string) ?? [];
+      items.push(child); byDay.set(child.day as string, items);
+    }
     return rows.map((row) => migrateDailyObservation({
       day: row.day as string,
       capturedAt: row.captured_at as string,
@@ -3037,7 +3052,7 @@ export class SqliteDashboardDatabase
       exchangeRates: JSON.parse(
         (row.exchange_rates_json as string | null) ?? "[]",
       ),
-      sources: this.dailySourceRows(row.day as string, sourceTable).map((source) => ({
+      sources: (byDay.get(row.day as string) ?? []).map((source) => ({
         sourceId: source.source_id as string,
         label: source.label as string,
         kind: source.kind as string,
@@ -3058,6 +3073,16 @@ export class SqliteDashboardDatabase
             }),
       })),
     }));
+  }
+
+  async readSourceDetail(query: { sourceId: string; from?: string; to?: string }) {
+    const first = this.database.prepare("SELECT MIN(day) AS day FROM daily_asset_source_trend_observations WHERE source_id = ?").get(query.sourceId) as SqliteRow;
+    return {
+      sources: this.listSourcesSync(query.sourceId),
+      manualRecords: this.listManualAssetRecordsSync(query.sourceId),
+      history: this.listDailyObservationsSync("daily_asset_trend_observations", "daily_asset_source_trend_observations", undefined, query),
+      firstDay: typeof first.day === "string" ? first.day : undefined,
+    };
   }
 
   async listAssetCards(): Promise<Card[]> {
@@ -4653,6 +4678,7 @@ export function createProductionServices(
     clock,
     assetCards: new DatabaseAssetCardStore(database),
     assetSources,
+    assetSourceDetails: database,
     manualAssetRecords,
     investmentCashflows,
     assetSourceLifecycle: new DatabaseAssetSourceLifecycle(

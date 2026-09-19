@@ -1,7 +1,7 @@
 "use client";
 
 import { WorkbenchHeaderUtilitiesSlot } from "@/ui/workbench-shell";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
@@ -434,6 +434,9 @@ function SourceLifecycleActions({
 }
 
 export function AssetSourceDetail({
+  initialPreset = "month-to-date",
+  initialCustomRange = null,
+  firstDay,
   cardHidden,
   currentDay,
   history,
@@ -441,6 +444,9 @@ export function AssetSourceDetail({
   reportingExchangeRates,
   source,
 }: {
+  initialPreset?: InvestmentPerformanceIntervalPreset;
+  initialCustomRange?: InvestmentPerformanceCustomRange | null;
+  firstDay?: string;
   cardHidden: boolean;
   currentDay: string;
   history: DailyAssetTrendObservation[];
@@ -459,11 +465,16 @@ export function AssetSourceDetail({
   const [deletingRecord, setDeletingRecord] = useState<ManualAssetRecord | null>(
     null,
   );
-  const [preset, setPreset] = useState<InvestmentPerformanceIntervalPreset>(
-    "month-to-date",
-  );
-  const [customRange, setCustomRange] =
-    useState<InvestmentPerformanceCustomRange | null>(null);
+  const preset = initialPreset;
+  const customRange = initialCustomRange;
+  const router = useRouter();
+  const [rangePending, startRangeTransition] = useTransition();
+  function navigateRange(value: InvestmentPerformanceIntervalPreset, range?: InvestmentPerformanceCustomRange) {
+    const params = new URLSearchParams({interval:value});
+    if (range) { params.set("from", range.startDay); params.set("to", range.endDay); }
+    startRangeTransition(() => router.push("/asset-sources/" + encodeURIComponent(source.id) + "?" + params, {scroll:false}));
+  }
+
   const [customRangeDialogOpen, setCustomRangeDialogOpen] = useState(false);
   const [customStartDay, setCustomStartDay] = useState(currentDay);
   const [customEndDay, setCustomEndDay] = useState(currentDay);
@@ -473,12 +484,12 @@ export function AssetSourceDetail({
   const name = assetSourceDisplayName(source);
   const manual = source.kind === "manual";
   const firstSourceTrendDay = useMemo(
-    () => history.flatMap((observation) =>
+    () => firstDay ?? history.flatMap((observation) =>
       observation.sources.some((item) => item.sourceId === source.id)
         ? [observation.day]
         : []
     ).toSorted().at(0),
-    [history, source.id],
+    [firstDay, history, source.id],
   );
   const sourceTrend = useMemo(
     () => projectAssetSourceTrend({
@@ -510,13 +521,12 @@ export function AssetSourceDetail({
       openCustomRangeDialog();
       return;
     }
-    setPreset(value);
+    navigateRange(value);
   }
 
   function applyCustomRange() {
     if (customStartDay > customEndDay) return;
-    setCustomRange({ startDay: customStartDay, endDay: customEndDay });
-    setPreset("custom");
+    navigateRange("custom", { startDay: customStartDay, endDay: customEndDay });
     setCustomRangeDialogOpen(false);
   }
 
@@ -616,7 +626,7 @@ export function AssetSourceDetail({
                   key={option.value}
                   aria-pressed={selected}
                   className="investment-performance__range-option"
-                  disabled={option.value === "custom" && firstSourceTrendDay === undefined}
+                  disabled={rangePending || (option.value === "custom" && firstSourceTrendDay === undefined)}
                   onClick={() => choosePreset(option.value)}
                   type="button"
                   variant={selected ? "primary" : "outline"}
