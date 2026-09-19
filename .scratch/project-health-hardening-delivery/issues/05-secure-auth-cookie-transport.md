@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 **Phase:** 立即处理
 **Priority:** 中
@@ -47,3 +47,10 @@
 ## 评论
 
 - 2026-09-10：按所有者已确认的拆分发布；状态表示文档可供后续实施，不代表已开始或完成代码变更。
+
+- 2026-09-19：按所有者“继续直到全部完成”授权实施；精确路径分批提交，不 push；隔离构建和测试，不读取真实凭证或执行业务日结。
+
+## 答案
+
+- 2026-09-19：隔离 HTTPS 代理与 Chromium 虚拟认证器完成注册、登录、失败挑战清理、退出、Secure/HttpOnly/SameSite/会话期和 Cookie 删除验证；localhost HTTP 注册登录及退出回归通过。部署约束见 docs/operations/auth-transport.md。未验证真实域名或代理配置。
+- 验证环境：macOS arm64、Node 24.15.0，隔离 next build --webpack 通过；虚拟认证器不代表真实设备验收。
