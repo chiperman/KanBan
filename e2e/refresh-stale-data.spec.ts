@@ -114,10 +114,16 @@ test("统一周期只在可见且聚焦时到期刷新，恢复前台事件合�
   await page.clock.fastForward("00:00:30");
   expect((await metrics(request)).adapterCalls).toBe(2);
 
+  // 模拟真实交互并等待续期确认，避免仅续期服务端而让页面空闲一小时。
+  for (const now of ["2026-04-02T08:20:00.000Z", "2026-04-02T08:40:00.000Z"]) {
+    await request.post("/test-doubles/clock", { data: { now } });
+    await page.clock.setFixedTime(new Date(now));
+    const acknowledged = page.waitForResponse("**/api/auth/session/activity");
+    await page.keyboard.press("Shift");
+    expect((await acknowledged).ok()).toBeTruthy();
+  }
   await setFocus(page, false);
   await setVisibility(page, "hidden");
-  await keepOwnerSessionAlive(page, "2026-04-02T08:20:00.000Z");
-  await keepOwnerSessionAlive(page, "2026-04-02T08:40:00.000Z");
   await request.post("/test-doubles/clock", {
     data: { now: "2026-04-02T09:00:01.000Z" },
   });
