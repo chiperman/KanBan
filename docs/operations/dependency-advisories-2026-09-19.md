@@ -12,7 +12,7 @@
 | [GHSA-r28c-9q8g-f849](https://github.com/advisories/GHSA-r28c-9q8g-f849) | PostCSS 8.4.31 | 8.5.18 | 非可信 CSS source map 路径遍历 |
 | [GHSA-qx2v-qp2m-jg93](https://github.com/advisories/GHSA-qx2v-qp2m-jg93) | PostCSS 8.4.31 | 8.5.10 | 内联非可信 CSS 闭合 style 引发 XSS |
 | [GHSA-fxqj-rqcc-2cmp](https://github.com/advisories/GHSA-fxqj-rqcc-2cmp) | PostCSS 8.4.31 | 8.5.23 | 前述 source map 修复的无 from 绕过 |
-| [GHSA-2v37-7h3g-55p8](https://github.com/advisories/GHSA-2v37-7h3g-55p8) | nanoid 3.3.11 | 3.3.18 | customAlphabet/customRandom size=0；业务未调用 |
+| [GHSA-2v37-7h3g-55p8](https://github.com/advisories/GHSA-2v37-7h3g-55p8) | nanoid 3.3.16 | 3.3.18 | customAlphabet/customRandom size=0；业务未调用 |
 
 最终锁定：Next 16.3.3、Sharp 0.35.4、PostCSS 8.5.23、nanoid 3.3.19。应用未发现处理非可信 CSS 的入口；所有公告仍通过升级处置，无需依赖“不可达”豁免。构建平台证据仅覆盖本机 macOS，不宣称其他平台已验收。
 
