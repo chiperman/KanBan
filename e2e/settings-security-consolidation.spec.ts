@@ -113,6 +113,30 @@ test("备份与恢复入口不回显外部来源凭证，且可用键盘预演�
   ).toBeVisible();
 });
 
+test("旧备份明确展示丢弃范围，只有确认后才发送丢弃凭据", async ({ page }) => {
+  await loginAsOwner(page);
+  await page.goto("/settings");
+  const requests: Array<{action: string; discardConfirmation?: string}> = [];
+  // This verifies the confirmation UI contract; real decoding/restore uses the SQLite suite.
+  await page.route("**/api/business-data-backups", async (route) => {
+    const body = route.request().postDataJSON();
+    requests.push(body);
+    await route.fulfill({ json: { sourceCount: 1, cardCount: 1, snapshotRange: { from: null, to: null }, replaces: { sourceCount: 2, cardCount: 2, snapshotCount: 3 }, warning: "敏感资产数据", omittedHistory: { manualAssetRecords: 7, formalDailySettlements: 9 }, discardConfirmation: "isolated-confirmation" } });
+  });
+  await page.getByLabel("备份文件名").fill("legacy.json");
+  await page.getByRole("button", { name: "预演恢复" }).click();
+  await page.getByRole("button", { name: "恢复此业务数据备份" }).click();
+  const dialog = page.getByRole("dialog", { name: "确认恢复业务数据" });
+  await expect(dialog).toContainText("7 条手工记录、9 条正式日结");
+  expect(requests.map((request) => request.action)).toEqual(["preview"]);
+  await page.keyboard.press("Escape");
+  expect(requests).toHaveLength(1);
+  await page.getByRole("button", { name: "恢复此业务数据备份" }).click();
+  await dialog.getByRole("button", { name: "确认恢复" }).click();
+  await expect.poll(() => requests.length).toBe(2);
+  expect(requests[1]).toMatchObject({ action: "restore", discardConfirmation: "isolated-confirmation" });
+});
+
 test("设置与安全在锁定态不泄露内容，手机端保持键盘可用且无横向溢出", async ({
   page,
 }) => {
