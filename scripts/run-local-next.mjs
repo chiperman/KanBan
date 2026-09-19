@@ -1,3 +1,5 @@
+import { checkToolchain } from "./check-toolchain.mjs";
+checkToolchain();
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";

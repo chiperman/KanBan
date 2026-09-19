@@ -36,7 +36,8 @@
     "test:ticket-07:quick": "playwright test --config=playwright.ticket-07.config.ts",
     "test:ticket-07": "pnpm build && pnpm test:ticket-07:quick",
     "test:regression": "pnpm build && pnpm test:browser",
-    "test": "pnpm typecheck && pnpm test:unit && pnpm test:smoke"
+    "test": "pnpm typecheck && pnpm test:unit && pnpm test:smoke",
+    "preinstall": "node scripts/check-toolchain.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "6.3.1",
@@ -54,5 +55,10 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "typescript": "^5.9.2"
-  }
+  },
+  "engines": {
+    "node": "24.15.0",
+    "pnpm": "11.25.0"
+  },
+  "packageManager": "pnpm@11.25.0"
 }

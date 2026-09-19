@@ -1,3 +1,5 @@
+import { checkToolchain } from "./check-toolchain.mjs";
+checkToolchain();
 import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
