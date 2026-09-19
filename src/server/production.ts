@@ -3223,6 +3223,18 @@ export class SqliteDashboardDatabase
         ORDER BY scheduled_close_at DESC, anchor_key DESC
       `)
       .all() as SqliteRow[];
+    const grouped = (table: "formal_daily_settlement_sources" | "formal_daily_settlement_holdings") => {
+      const groups = new Map<string, SqliteRow[]>();
+      for (const child of this.database.prepare("SELECT * FROM " + table + " ORDER BY rowid").all() as SqliteRow[]) {
+        const key = child.anchor_key as string;
+        const values = groups.get(key) ?? [];
+        values.push(child);
+        groups.set(key, values);
+      }
+      return groups;
+    };
+    const sourceGroups = grouped("formal_daily_settlement_sources");
+    const holdingGroups = grouped("formal_daily_settlement_holdings");
     return rows.map((row) => {
       const anchor = row.anchor_kind === "securities-close"
         ? {
@@ -3243,20 +3255,8 @@ export class SqliteDashboardDatabase
             tradingDay: row.anchor_trading_day as string,
             scheduledCloseAt: row.scheduled_close_at as string,
           };
-      const sources = this.database
-        .prepare(`
-          SELECT * FROM formal_daily_settlement_sources
-          WHERE anchor_key = ?
-          ORDER BY rowid
-        `)
-        .all(row.anchor_key) as SqliteRow[];
-      const holdings = this.database
-        .prepare(`
-          SELECT * FROM formal_daily_settlement_holdings
-          WHERE anchor_key = ?
-          ORDER BY rowid
-        `)
-        .all(row.anchor_key) as SqliteRow[];
+      const sources = sourceGroups.get(row.anchor_key as string) ?? [];
+      const holdings = holdingGroups.get(row.anchor_key as string) ?? [];
       return {
         anchor,
         capturedAt: row.captured_at as string | null,
