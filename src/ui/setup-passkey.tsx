@@ -79,7 +79,7 @@ export function SetupPasskey() {
             role="alert"
             tone="error"
           >
-            此浏览器或设备不支持 Passkey。
+            当前浏览器或设备不支持 Passkey，请改用支持 WebAuthn 的浏览器或设备。
           </VibeNotice>
           <div className="setup-feedback-actions">
             <VibeLink className="setup-secondary-action" href="/" variant="text">
