@@ -3019,10 +3019,11 @@ export class SqliteDashboardDatabase
     sourceTable:
       | "daily_asset_source_snapshots"
       | "daily_asset_source_trend_observations",
+    day?: string,
   ): DailyAssetSnapshot[] {
     const rows = this.database
-      .prepare(`SELECT * FROM ${snapshotTable} ORDER BY day`)
-      .all() as SqliteRow[];
+      .prepare(`SELECT * FROM ${snapshotTable} ${day === undefined ? "" : "WHERE day = ?"} ORDER BY day`)
+      .all(...(day === undefined ? [] : [day])) as SqliteRow[];
     return rows.map((row) => migrateDailyObservation({
       day: row.day as string,
       capturedAt: row.captured_at as string,
@@ -3445,9 +3446,9 @@ export class SqliteDashboardDatabase
         .prepare("SELECT day FROM daily_asset_trend_observations WHERE day = ?")
         .get(snapshot.day) !== undefined;
       const existing = hasTrend
-        ? this.listDailyAssetTrendObservationsSync().find(
-            ({ day }) => day === snapshot.day,
-          )
+        ? this.listDailyObservationsSync(
+            "daily_asset_trend_observations", "daily_asset_source_trend_observations", snapshot.day,
+          )[0]
         : undefined;
       this.upsertDailyTrendObservation(
         existing
