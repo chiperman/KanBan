@@ -17,3 +17,5 @@ next-env.d.ts
 
 # 真实本地资产审计截图仅可本地保存；提交内容必须使用演示或已脱敏素材。
 docs/audits/**/assets/local/
+
+/native/longbridge-keychain-sdk/artifact.json

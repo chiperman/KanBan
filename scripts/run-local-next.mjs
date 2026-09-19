@@ -1,3 +1,5 @@
+import { checkNativeArtifact } from "./native-artifact.mjs";
+checkNativeArtifact();
 import { checkToolchain } from "./check-toolchain.mjs";
 checkToolchain();
 import { spawn } from "node:child_process";

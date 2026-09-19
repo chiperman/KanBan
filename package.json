@@ -7,9 +7,9 @@
     "longbridge:keychain:repair": "node scripts/longbridge-keychain.mjs repair",
     "daily-settlement:run": "node --experimental-transform-types --import ./scripts/register-ts-alias.mjs ./scripts/run-formal-daily-settlement.ts",
     "daily-settlement:launchd": "node ./scripts/formal-daily-settlement-launchd.mjs",
-    "predev": "pnpm native:longbridge:build",
+    "predev": "pnpm native:longbridge:check",
     "prebuild": "pnpm native:longbridge:build",
-    "prestart": "pnpm native:longbridge:build",
+    "prestart": "pnpm native:longbridge:check",
     "dev": "node scripts/run-local-next.mjs dev",
     "build": "next build",
     "start": "node scripts/run-local-next.mjs start",
@@ -37,7 +37,8 @@
     "test:ticket-07": "pnpm build && pnpm test:ticket-07:quick",
     "test:regression": "pnpm build && pnpm test:browser",
     "test": "pnpm typecheck && pnpm test:unit && pnpm test:smoke",
-    "preinstall": "node scripts/check-toolchain.mjs"
+    "preinstall": "node scripts/check-toolchain.mjs",
+    "native:longbridge:check": "node scripts/native-artifact.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "6.3.1",

@@ -5,13 +5,17 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 
+import { writeArtifactManifest } from "./native-artifact.mjs";
+
+const rust = execFileSync("rustc", ["--version"], { encoding: "utf8" });
+if (!rust.startsWith("rustc 1.97.1 ")) throw new Error("请使用已验证 Rust 1.97.1 构建原生产物。");
 const root = process.cwd();
 const nativeRoot = path.join(root, "native", "longbridge-keychain-sdk");
 const manifest = path.join(nativeRoot, "Cargo.toml");
 const target = path.join(nativeRoot, "target", "release", "libkanban_longbridge_keychain_sdk.dylib");
 const output = path.join(nativeRoot, "kanban_longbridge_keychain_sdk.node");
 
-execFileSync("cargo", ["build", "--release", "--manifest-path", manifest], {
+execFileSync("cargo", ["build", "--locked", "--release", "--manifest-path", manifest], {
   cwd: root,
   stdio: "inherit",
 });
@@ -24,3 +28,5 @@ execFileSync("codesign", ["--force", "--sign", "-", output], {
   cwd: root,
   stdio: "inherit",
 });
+
+writeArtifactManifest(root);
