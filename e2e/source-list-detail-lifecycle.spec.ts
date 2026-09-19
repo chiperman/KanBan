@@ -24,6 +24,21 @@ test.beforeEach(async ({ request }) => {
   await request.post("/test-doubles/reset");
 });
 
+test("详情区间通过服务器导航切换并支持刷新和后退", async ({ page, request }) => {
+  await request.post("/test-doubles/release-acceptance", { data: { action: "seed" } });
+  await loginAsOwner(page);
+  await page.getByRole("link", { name: "查看 Binance 只读账户 的资产明细" }).click();
+  await page.getByRole("button", { name: "近 1 年", exact: true }).click();
+  await expect(page).toHaveURL(/interval=1y/);
+  await expect(page.getByRole("button", { name: "近 1 年", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "全部", exact: true }).click();
+  await expect(page).toHaveURL(/interval=all/);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "全部", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await page.goBack();
+  await expect(page.getByRole("button", { name: "近 1 年", exact: true })).toHaveAttribute("aria-pressed", "true");
+});
+
 test("资产来源统一列出自动账户、观察钱包和手工资产，并从总览摘要进入真实详情", async ({
   page,
   request,
