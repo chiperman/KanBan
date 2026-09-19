@@ -39,3 +39,35 @@ for (const failed of [false, true]) {
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 }
+
+for (const ready of [false, true]) {
+  test("真实 CLI 确定性手工来源：" + (ready ? "采集窗口" : "窗口未到"), async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "kanban-cli-window-"));
+    try {
+      const preload = path.join(root, "clock.mjs");
+      const time = ready ? "2026-08-05T16:06:00.000Z" : "2026-08-05T16:01:00.000Z";
+      const productionUrl = pathToFileURL(path.join(workspace, "src/server/production.ts")).href;
+      const runnerUrl = pathToFileURL(path.join(workspace, "src/server/formal-daily-settlement.ts")).href;
+      await writeFile(preload, [
+        'const { createProductionServices } = await import(' + JSON.stringify(productionUrl) + ');',
+        'const services = createProductionServices(); await services.manualAssetRecords.create({label:"CLI样例"});',
+        'const [source] = await services.assetSources.list(); await services.manualAssetRecords.record(source.id,{day:"2026-08-05",amount:"1",currency:"USD"});',
+        'const { MarketCloseFormalDailySettlement } = await import(' + JSON.stringify(runnerUrl) + ');',
+        'const run = MarketCloseFormalDailySettlement.prototype.run; MarketCloseFormalDailySettlement.prototype.run = function () { this.clock = {now:()=>new Date(' + JSON.stringify(time) + ')}; return run.call(this); };',
+      ].join("\n"));
+      const env = { ...process.env, APP_ENV: "production", KANBAN_DATA_DIR: root, LONGBRIDGE_OAUTH_CLIENT_ID: "isolated-test", PAD_SECRET_ENCRYPTION_KEY: randomBytes(32).toString("base64") };
+      const result = await execute(process.execPath, ["--experimental-transform-types", "--import", "./scripts/register-ts-alias.mjs", "--import", preload, "./scripts/run-formal-daily-settlement.ts"], { cwd: workspace, env });
+      const value = JSON.parse(result.stdout);
+      assert.equal(value.outcome, ready ? "recorded" : "not-due");
+      if (ready) assert.equal(value.settlementStatus, "incomplete");
+      else assert.equal(value.reason, "before-window");
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+}
+
+test("launchd 仅打印的命令与真实 CLI 模块加载参数一致", async () => {
+  const { stdout } = await execute(process.execPath, ["scripts/formal-daily-settlement-launchd.mjs", "print"]);
+  const block = stdout.match(/<key>ProgramArguments<\/key>\s*<array>([\s\S]*?)<\/array>/)[1];
+  const args = [...block.matchAll(/<string>(.*?)<\/string>/g)].map((match) => match[1]);
+  assert.deepEqual(args, [process.execPath, "--experimental-transform-types", "--import", path.join(workspace, "scripts/register-ts-alias.mjs"), path.join(workspace, "scripts/run-formal-daily-settlement.ts")]);
+});

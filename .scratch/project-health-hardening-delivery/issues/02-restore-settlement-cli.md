@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 **Phase:** 立即处理
 **Priority:** 高
@@ -46,3 +46,7 @@
 ## 评论
 
 - 2026-09-10：按所有者已确认的拆分发布；状态表示文档可供后续实施，不代表已开始或完成代码变更。
+
+## 实施证据（2026-09-19）
+
+真实独立 CLI 五项通过：空来源、异常脱敏、确定性窗口未到及窗口内手工来源、launchd print 参数等价。正式业务执行和 SQLite 保存为真，时间与来源为隔离合成样例；无真实市场采集。HTTPS 认证独立通过。
