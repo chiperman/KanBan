@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic";
 type BackupRequest = {
   action?: unknown;
   fileName?: unknown;
+  discardConfirmation?: unknown;
 };
 
 export async function POST(request: Request) {
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
     ) {
       const result = body.action === "preview"
         ? await services.businessDataBackups.previewRestore(body.fileName)
-        : await services.businessDataBackups.restore(body.fileName);
+        : await services.businessDataBackups.restore(body.fileName, typeof body.discardConfirmation === "string" ? body.discardConfirmation : undefined);
       return Response.json(result);
     }
     return Response.json({ error: "备份操作无效" }, { status: 400 });

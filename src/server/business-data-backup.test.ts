@@ -268,3 +268,51 @@ test("业务备份排除运维执行记录，恢复业务数据也不改写最�
     assert.deepEqual(await f.database.latestFormalSettlementExecution(), execution);
   } finally { await f.close(); }
 });
+
+for (const version of [1, 2, 3, 4]) {
+  test("旧版本 " + version + " 默认保护已有历史并绑定显式丢弃确认", async () => {
+    const f = await sqliteFixture();
+    try {
+      await f.backup.exportBackup("legacy.json");
+      const file = path.join(f.directory, "legacy.json");
+      const document = JSON.parse(await readFile(file, "utf8"));
+      document.formatVersion = version;
+      delete document.payload.manualAssetRecords;
+      delete document.payload.formalDailySettlements;
+      if (version < 4) delete document.payload.importedAssetSourceHistoryObservations;
+      if (version === 1) {
+        document.data = { cards: document.payload.assetCards, sources: document.payload.assetSources, snapshots: document.payload.dailyAssetSnapshots };
+        delete document.payload;
+      }
+      const base = { format: document.format, formatVersion: version, createdAt: document.createdAt,
+        ...(version === 1 ? { data: document.data } : { payload: document.payload }) };
+      document.checksum.value = createHash("sha256").update(JSON.stringify(base)).digest("hex");
+      await writeFile(file, JSON.stringify(document));
+      const before = await readBusinessState(f.database);
+      const preview = await f.backup.previewRestore("legacy.json");
+      assert.deepEqual(preview.omittedHistory, { manualAssetRecords: 2, formalDailySettlements: 2 });
+      assert.deepEqual(await readBusinessState(f.database), before);
+      await assert.rejects(f.backup.restore("legacy.json"), /明确确认/);
+      await assert.rejects(f.backup.restore("legacy.json", "invalid"), /明确确认/);
+      assert.deepEqual(await readBusinessState(f.database), before);
+      await f.backup.restore("legacy.json", preview.discardConfirmation);
+      assert.deepEqual(await f.database.listFormalDailySettlements(), []);
+    } finally { await f.close(); }
+  });
+}
+
+test("恢复后手工记录仍可编辑，同日唯一，删除最新值回退", async () => {
+  const f = await sqliteFixture();
+  try {
+    await f.backup.exportBackup("editable.json");
+    await f.backup.restore("editable.json");
+    await f.backup.restore("editable.json");
+    const [source] = await f.database.listSources();
+    await f.database.recordManualAssetSource(source.id, {day:"2026-08-02",amount:"99",currency:"USD"}, "2026-08-03T12:00:00.000Z");
+    assert.equal((await f.database.listManualAssetRecords()).length, 2);
+    assert.equal((await f.database.listSources())[0].snapshot.total.amount, "99");
+    await f.database.deleteManualAssetSourceRecord(source.id, "2026-08-02", "2026-08-03T12:00:00.000Z");
+    assert.equal((await f.database.listSources())[0].snapshot.total.amount, "0");
+    assert.equal((await f.database.listManualAssetRecords()).length, 1);
+  } finally { await f.close(); }
+});

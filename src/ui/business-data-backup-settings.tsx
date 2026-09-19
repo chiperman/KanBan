@@ -8,6 +8,8 @@ import { VibeField } from "@/ui/vibe/vibe-field";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
 
 interface BackupPreview {
+  discardConfirmation?: string;
+  omittedHistory?: { manualAssetRecords: number; formalDailySettlements: number };
   cardCount: number;
   replaces: {
     cardCount: number;
@@ -31,12 +33,13 @@ interface BackupExport {
 async function requestBackup<T>(
   action: "export" | "preview" | "restore",
   fileName?: string,
+  discardConfirmation?: string,
 ): Promise<T> {
   const response = await fetch("/api/business-data-backups", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(
-      fileName === undefined ? { action } : { action, fileName },
+      fileName === undefined ? { action } : { action, fileName, discardConfirmation },
     ),
   });
   const result = (await response.json().catch(() => null)) as
@@ -116,7 +119,7 @@ export function BusinessDataBackupSettings() {
     setPending("restore");
     setError("");
     try {
-      const result = await requestBackup<BackupPreview>("restore", candidate);
+      const result = await requestBackup<BackupPreview>("restore", candidate, preview?.discardConfirmation);
       setPreview(result);
       setRestored(result);
       setConfirmOpen(false);
@@ -222,6 +225,7 @@ export function BusinessDataBackupSettings() {
           description={
             <>
               将替换当前业务数据。{preview.warning} 自动来源需重新授权。
+              {preview.omittedHistory ? "本备份缺少的历史域将替换为空：" + preview.omittedHistory.manualAssetRecords + " 条手工记录、" + preview.omittedHistory.formalDailySettlements + " 条正式日结。确认恢复即确认丢弃这些记录。" : null}
             </>
           }
           eyebrow="LOCAL BACKUP / RESTORE"

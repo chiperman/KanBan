@@ -69,6 +69,9 @@ export interface BusinessDataState {
 }
 
 export interface BackupRestorePreview {
+  /** Explicit loss consent binds to this file and current omitted facts. */
+  discardConfirmation?: string;
+  omittedHistory?: { manualAssetRecords: number; formalDailySettlements: number };
   sourceCount: number;
   cardCount: number;
   snapshotRange: { from: string | null; to: string | null };
@@ -87,7 +90,7 @@ export interface BusinessDataBackup {
     warning: string;
   }>;
   previewRestore(fileName: string): Promise<BackupRestorePreview>;
-  restore(fileName: string): Promise<BackupRestorePreview>;
+  restore(fileName: string, discardConfirmation?: string): Promise<BackupRestorePreview>;
 }
 
 export interface BusinessDataBackupStore {
@@ -792,13 +795,18 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
   }
 
   private async previewFor(state: BusinessDataState, formatVersion = BACKUP_FORMAT_VERSION): Promise<BackupRestorePreview> {
-    const [currentSources, currentCards, currentSnapshots] = await Promise.all([
+    const [currentSources, currentCards, currentSnapshots, manualRecords, settlements] = await Promise.all([
       this.store.listSources(),
       this.store.listAssetCards(),
       this.store.listDailyAssetSnapshots(),
+      this.store.listManualAssetRecords(),
+      this.store.listFormalDailySettlements(),
     ]);
+    const dropsHistory = formatVersion < BACKUP_FORMAT_VERSION && (manualRecords.length > 0 || settlements.length > 0);
     const days = state.dailyAssetSnapshots.map(({ day }) => day).sort();
     return {
+      ...(formatVersion < BACKUP_FORMAT_VERSION ? { omittedHistory: { manualAssetRecords: manualRecords.length, formalDailySettlements: settlements.length } } : {}),
+      ...(dropsHistory ? { discardConfirmation: createHash("sha256").update(JSON.stringify({state, manualRecords, settlements})).digest("hex") } : {}),
       sourceCount: state.assetSources.length,
       cardCount: state.assetCards.length,
       snapshotRange: {
@@ -882,9 +890,12 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
     return this.previewFor(decoded.state, decoded.formatVersion);
   }
 
-  async restore(fileName: string): Promise<BackupRestorePreview> {
+  async restore(fileName: string, discardConfirmation?: string): Promise<BackupRestorePreview> {
     const decoded = await this.decode(fileName);
     const preview = await this.previewFor(decoded.state, decoded.formatVersion);
+    if (preview.discardConfirmation && discardConfirmation !== preview.discardConfirmation) {
+      throw new Error("旧备份将丢弃现有手工历史和正式日结，请重新预演并明确确认丢弃范围");
+    }
     await this.store.replaceBusinessData(decoded.state);
     return preview;
   }
