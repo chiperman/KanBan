@@ -673,6 +673,8 @@ export async function POST(request: Request) {
 
       const downgrade = new DatabaseSync(databasePath);
       downgrade.exec(`
+        ALTER TABLE asset_source_sync_states DROP COLUMN diagnostic_json;
+        ALTER TABLE asset_source_sync_states DROP COLUMN recent_attempts_json;
         UPDATE schema_metadata SET value = '15' WHERE key = 'schema_version';
         DELETE FROM schema_metadata
         WHERE key IN (
@@ -1042,6 +1044,8 @@ export async function POST(request: Request) {
       const downgrade = new DatabaseSync(databasePath);
       downgrade.exec(`
         ALTER TABLE asset_sources DROP COLUMN has_manual_record;
+        ALTER TABLE asset_source_sync_states DROP COLUMN diagnostic_json;
+        ALTER TABLE asset_source_sync_states DROP COLUMN recent_attempts_json;
         UPDATE schema_metadata SET value = '8' WHERE key = 'schema_version';
       `);
       downgrade.close();
@@ -1115,6 +1119,8 @@ export async function POST(request: Request) {
       const downgrade = new DatabaseSync(databasePath);
       downgrade.exec(`
         DROP TABLE investment_cashflows;
+        ALTER TABLE asset_source_sync_states DROP COLUMN diagnostic_json;
+        ALTER TABLE asset_source_sync_states DROP COLUMN recent_attempts_json;
         UPDATE schema_metadata SET value = '12' WHERE key = 'schema_version';
       `);
       downgrade.close();
@@ -1198,6 +1204,8 @@ export async function POST(request: Request) {
         DROP COLUMN asset_class_totals_json;
         ALTER TABLE daily_asset_source_trend_observations
         DROP COLUMN asset_class_totals_json;
+        ALTER TABLE asset_source_sync_states DROP COLUMN diagnostic_json;
+        ALTER TABLE asset_source_sync_states DROP COLUMN recent_attempts_json;
         UPDATE schema_metadata SET value = '14' WHERE key = 'schema_version';
       `);
       downgrade.close();
@@ -1325,6 +1333,8 @@ export async function POST(request: Request) {
         SET asset_class_totals_json = '{"securities":{"complete":true,"status":"complete","total":{"USD":"100","CNY":"720","HKD":"780"}},"crypto":{"complete":true,"status":"complete","total":{"USD":"0","CNY":"0","HKD":"0"}}}';
         UPDATE daily_asset_source_trend_observations
         SET asset_class_totals_json = '{"securities":{"complete":true,"status":"complete","total":{"USD":"100","CNY":"720","HKD":"780"}},"crypto":{"complete":true,"status":"complete","total":{"USD":"0","CNY":"0","HKD":"0"}}}';
+        ALTER TABLE asset_source_sync_states DROP COLUMN diagnostic_json;
+        ALTER TABLE asset_source_sync_states DROP COLUMN recent_attempts_json;
         UPDATE schema_metadata SET value = '15' WHERE key = 'schema_version';
       `);
       downgrade.close();
@@ -1369,6 +1379,8 @@ export async function POST(request: Request) {
         ALTER TABLE asset_sources DROP COLUMN display_name;
         ALTER TABLE asset_sources DROP COLUMN ignored_asset_keys_json;
         ALTER TABLE asset_sources DROP COLUMN included_asset_keys_json;
+        ALTER TABLE asset_source_sync_states DROP COLUMN diagnostic_json;
+        ALTER TABLE asset_source_sync_states DROP COLUMN recent_attempts_json;
         UPDATE schema_metadata SET value = '2' WHERE key = 'schema_version';
       `);
       downgrade.close();
@@ -1437,6 +1449,8 @@ export async function POST(request: Request) {
         DROP TABLE daily_asset_trend_observations;
         ALTER TABLE asset_sources DROP COLUMN ignored_asset_keys_json;
         ALTER TABLE asset_sources DROP COLUMN included_asset_keys_json;
+        ALTER TABLE asset_source_sync_states DROP COLUMN diagnostic_json;
+        ALTER TABLE asset_source_sync_states DROP COLUMN recent_attempts_json;
         UPDATE schema_metadata SET value = '4' WHERE key = 'schema_version';
       `);
       downgrade.close();
@@ -1698,6 +1712,8 @@ export async function POST(request: Request) {
         ALTER TABLE daily_asset_source_trend_observations DROP COLUMN total_hkd;
         ALTER TABLE asset_sources DROP COLUMN ignored_asset_keys_json;
         ALTER TABLE asset_sources DROP COLUMN included_asset_keys_json;
+        ALTER TABLE asset_source_sync_states DROP COLUMN diagnostic_json;
+        ALTER TABLE asset_source_sync_states DROP COLUMN recent_attempts_json;
         UPDATE schema_metadata SET value = '6' WHERE key = 'schema_version';
       `);
       downgrade.close();

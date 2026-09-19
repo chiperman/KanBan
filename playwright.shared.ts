@@ -50,6 +50,7 @@ export const testWebServer = {
   // 测试进程使用临时密钥，不依赖本机真实密钥。
   env: {
     APP_ENV: "test",
+    LONGBRIDGE_OAUTH_CLIENT_ID: "isolated-playwright",
     PAD_SECRET_ENCRYPTION_KEY: randomBytes(32).toString("base64"),
   },
   reuseExistingServer: false,
