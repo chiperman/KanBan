@@ -1,3 +1,4 @@
+import { clearChallenges } from "@/server/auth/challenges";
 import { randomUUID } from "node:crypto";
 
 import type { OwnerSession } from "@/server/ports";
@@ -120,6 +121,7 @@ export function completeRecoveryTotpAttempt(
 
 /** 测试重置时清空全部会话，保证每条浏览器测试从锁定状态开始。 */
 export function clearAllSessions(): void {
+  clearChallenges();
   slot().sessions.clear();
   slot().recoveryTotpFailures = null;
 }
