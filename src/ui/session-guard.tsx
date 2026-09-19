@@ -4,8 +4,8 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import {
   OWNER_LOCK_EVENT,
-  SESSION_IDLE_TIMEOUT_MS,
 } from "@/shared/session-policy";
+import { trackSessionActivity } from "@/ui/session-activity";
 import { VibeDotIcon } from "@/ui/vibe/vibe-dot-icon";
 
 /** 锁定罩的最小停留时间，让“已锁定”状态可被感知后再跳转登录入口。 */
@@ -20,36 +20,21 @@ export function SessionGuard({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (locked) return;
-    let timeout: ReturnType<typeof setTimeout>;
-
-    function lock() {
-      setLocked(true);
-    }
-
-    function schedule() {
-      clearTimeout(timeout);
-      timeout = setTimeout(lock, SESSION_IDLE_TIMEOUT_MS);
-    }
-
-    function activity() {
-      schedule();
-      void fetch("/api/auth/session/activity", { method: "POST" })
-        .then((response) => {
-          if (!response.ok) {
-            setLocked(true);
-            window.location.reload();
-          }
-        })
-        .catch(() => undefined);
-    }
-
-    schedule();
+    function lock() { setLocked(true); }
+    const tracker = trackSessionActivity({
+      notify: (signal) => fetch("/api/auth/session/activity", { method: "POST", signal }),
+      lock,
+      visible: () => document.visibilityState === "visible",
+    });
+    const activity = tracker.activity;
+    document.addEventListener("visibilitychange", tracker.visibilityChanged);
     window.addEventListener("pointerdown", activity);
     window.addEventListener("keydown", activity);
     window.addEventListener("touchstart", activity);
     window.addEventListener(OWNER_LOCK_EVENT, lock);
     return () => {
-      clearTimeout(timeout);
+      tracker.dispose();
+      document.removeEventListener("visibilitychange", tracker.visibilityChanged);
       window.removeEventListener("pointerdown", activity);
       window.removeEventListener("keydown", activity);
       window.removeEventListener("touchstart", activity);
