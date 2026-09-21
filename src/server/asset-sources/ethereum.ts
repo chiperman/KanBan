@@ -518,6 +518,13 @@ interface EvmProtocolPositionAdapter {
   };
 }
 
+export function shouldExposeProtocolCoverage(input: {
+  balances: readonly DiscoveredBalance[];
+  coverage: AssetProductCoverage;
+}): boolean {
+  return input.balances.length > 0 || input.coverage.capability !== "detailed";
+}
+
 function abiWord(value: bigint): string {
   if (value < 0n) throw new Error("EVM ABI 不支持负数");
   return value.toString(16).padStart(64, "0");
@@ -1140,7 +1147,9 @@ async function readFullSnapshot(input: {
         client,
       });
       protocolBalances.push(...result.balances);
-      protocolProducts.push(result.coverage);
+      if (shouldExposeProtocolCoverage(result)) {
+        protocolProducts.push(result.coverage);
+      }
     } catch (error) {
       protocolReadFailed = true;
       const failure = adapter.failure({ config: input.config, error });

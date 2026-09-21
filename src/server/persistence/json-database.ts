@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { buildDailyAssetSnapshot, mergeDailyTrendObservation, shanghaiDay } from "@/domain/daily-asset-snapshots";
+import { withEffectiveEvmSnapshotCoverage } from "@/domain/evm-token-preferences";
 import { assertManualAssetRecordNotFuture, } from "@/domain/manual-asset-records";
 import { parseAssetCards } from "@/server/asset-cards";
 import { atomicWritePrivateFile, readPrivateFile } from "@/server/local-data-permissions";
@@ -58,7 +59,9 @@ export class FileDashboardDatabase {
     ) {
       throw new Error(`Dashboard 数据文件格式无效: ${this.filePath}`);
     }
-    const assetSources = value.assetSources.map(migrateAssetSource);
+    const assetSources = value.assetSources
+      .map(migrateAssetSource)
+      .map(withEffectiveEvmSnapshotCoverage);
     const sourceById = new Map(assetSources.map((source) => [source.id, source]));
     const manualAssetRecords = uniqueManualAssetRecords(
       Array.isArray(value.manualAssetRecords)

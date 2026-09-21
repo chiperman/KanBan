@@ -4,7 +4,10 @@ import { DashboardSchema } from "./sqlite-schema";
 
 import { buildDailyAssetSnapshot, mergeDailyTrendObservation, shanghaiDay } from "@/domain/daily-asset-snapshots";
 import { decimalAdd } from "@/domain/decimal";
-import { normalizeIgnoredAssetKeys } from "@/domain/evm-token-preferences";
+import {
+  normalizeIgnoredAssetKeys,
+  withEffectiveEvmSnapshotCoverage,
+} from "@/domain/evm-token-preferences";
 import { assertManualAssetRecordNotFuture, } from "@/domain/manual-asset-records";
 import { normalizeAssetSyncState } from "@/server/asset-sync-diagnostics";
 import { type BusinessDataState } from "@/server/business-data-backup";
@@ -773,7 +776,7 @@ export class SqliteDashboardDatabase
       const unrecognizedEvmTokens = JSON.parse(
         (snapshot.unrecognized_evm_tokens_json as string | null) ?? "[]",
       );
-      return migrateAssetSource({
+      return withEffectiveEvmSnapshotCoverage(migrateAssetSource({
         id: row.id as string,
         kind: row.kind as string,
         label: row.label as string,
@@ -842,7 +845,7 @@ export class SqliteDashboardDatabase
         ...(row.lifecycle === null
           ? {}
           : { lifecycle: row.lifecycle as "connected" | "disconnected" }),
-      });
+      }));
     });
   }
 

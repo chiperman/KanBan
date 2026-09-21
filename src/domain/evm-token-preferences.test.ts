@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  effectiveEvmSnapshotCoverage,
   normalizeIgnoredAssetKeys,
   portfolioSourceTotal,
   updateEvmTokenPreferences,
@@ -130,4 +131,51 @@ test("未确认的未估值 EVM 代币不阻断组合估值，明确纳入后才
   );
   assert.equal(includedValuation.incomplete, true);
   assert.equal(includedValuation.unvaluedCount, 1);
+});
+
+test("忽略当前未估值代币后，来源覆盖恢复为完整", () => {
+  const token = "evm:56:0x6051c1354ccc51b4d561e43b02735deae64768b8";
+  const current = source();
+  current.kind = "evm-watch-bsc";
+  current.snapshot.coverage = {
+    status: "partial",
+    products: [{
+      product: "lista-slisbnb-withdrawal-request",
+      capability: "detailed",
+      freshness: "current",
+      message: "未发现未领取申请",
+    }],
+    unexplainedValue: null,
+    excludedPositiveAccounts: [],
+  };
+  current.snapshot.holdings[1]!.sourceAsset = token;
+  current.snapshot.holdings[1]!.valuation = {
+    status: "unvalued",
+    reason: "CoinGecko 未返回可靠 USD 参考价格",
+  };
+  current.ignoredAssetKeys = [token];
+
+  const coverage = effectiveEvmSnapshotCoverage(current);
+  assert.equal(coverage?.status, "complete");
+  assert.deepEqual(coverage?.products, []);
+});
+
+test("明确纳入未估值代币后，来源覆盖重新标记为不完整", () => {
+  const token = "evm:56:0x6051c1354ccc51b4d561e43b02735deae64768b8";
+  const current = source();
+  current.kind = "evm-watch-bsc";
+  current.snapshot.coverage = {
+    status: "complete",
+    products: [],
+    unexplainedValue: null,
+    excludedPositiveAccounts: [],
+  };
+  current.snapshot.holdings[1]!.sourceAsset = token;
+  current.snapshot.holdings[1]!.valuation = {
+    status: "unvalued",
+    reason: "CoinGecko 未返回可靠 USD 参考价格",
+  };
+  current.includedAssetKeys = [token];
+
+  assert.equal(effectiveEvmSnapshotCoverage(current)?.status, "partial");
 });

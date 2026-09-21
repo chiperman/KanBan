@@ -1,5 +1,6 @@
 import type {
   AssetHolding,
+  AssetSnapshotCoverage,
   AssetSourceSummary,
   EvmUnrecognizedToken,
 } from "@/server/ports";
@@ -120,6 +121,69 @@ export function includedAssetKeySet(
   source: Pick<AssetSourceSummary, "includedAssetKeys">,
 ): Set<string> {
   return new Set(source.includedAssetKeys ?? []);
+}
+
+export function effectiveEvmSnapshotCoverage(
+  source: SourceWithEvmTokenPreferences,
+): AssetSnapshotCoverage | undefined {
+  const coverage = source.snapshot.coverage;
+  if (!source.kind.startsWith("evm-watch-") || coverage === undefined) {
+    return coverage;
+  }
+  const products = coverage.products.filter(
+    ({ product, capability }) =>
+      capability !== "detailed" ||
+      source.snapshot.holdings.some(
+        (holding) => holding.sourceProduct === product,
+      ),
+  );
+  const effectiveCoverage = products.length === coverage.products.length
+    ? coverage
+    : { ...coverage, products };
+  if (
+    effectiveCoverage.unexplainedValue !== null ||
+    effectiveCoverage.excludedPositiveAccounts.length > 0
+  ) {
+    return effectiveCoverage;
+  }
+  if (effectiveCoverage.products.some(({ capability }) => capability === "unknown")) {
+    return effectiveCoverage;
+  }
+  const ignored = ignoredAssetKeySet(source);
+  const included = includedAssetKeySet(source);
+  const activeUnvaluedHolding = source.snapshot.holdings.some((holding) => {
+    if (holding.valuation.status !== "unvalued") return false;
+    if (holding.sourceAsset !== undefined && ignored.has(holding.sourceAsset)) {
+      return false;
+    }
+    return !isUnrecognizedEvmTokenHolding(source, holding);
+  });
+  const includedUnrecognizedToken = unrecognizedEvmTokenCandidates(source).some(
+    ({ sourceAsset }) => included.has(sourceAsset) && !ignored.has(sourceAsset),
+  );
+  if (activeUnvaluedHolding || includedUnrecognizedToken) {
+    return effectiveCoverage.status === "complete"
+      ? { ...effectiveCoverage, status: "partial" }
+      : effectiveCoverage;
+  }
+  if (effectiveCoverage.status === "unknown") return effectiveCoverage;
+  return effectiveCoverage.status === "complete"
+    ? effectiveCoverage
+    : { ...effectiveCoverage, status: "complete" };
+}
+
+export function withEffectiveEvmSnapshotCoverage<T extends SourceWithEvmTokenPreferences>(
+  source: T,
+): T {
+  const coverage = effectiveEvmSnapshotCoverage(source);
+  if (coverage === source.snapshot.coverage) return source;
+  const { coverage: _coverage, ...snapshotWithoutCoverage } = source.snapshot;
+  return {
+    ...source,
+    snapshot: coverage === undefined
+      ? snapshotWithoutCoverage
+      : { ...snapshotWithoutCoverage, coverage },
+  } as T;
 }
 
 export function activeSourceHoldings(
