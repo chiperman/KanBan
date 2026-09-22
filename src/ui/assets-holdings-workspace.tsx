@@ -268,7 +268,11 @@ function AssetSourceTotalRow({
         </div>
         <div className="assets-holdings__source-value">
           {showSensitiveInfo && total !== null ? (
-            <VibeMetric animate={source.kind !== "longbridge"} unit={currency} value={money(total)} />
+            <VibeMetric
+              animationKey={source.kind === "longbridge" ? source.snapshot.syncedAt : undefined}
+              unit={currency}
+              value={money(total)}
+            />
           ) : (
             <strong
               className={

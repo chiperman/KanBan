@@ -672,6 +672,9 @@ export async function POST(request: Request) {
         : 1,
   }));
   const services = getTestServices();
+  if (scenario === "longbridge-cash" && url.searchParams.get("refreshable") === "true") {
+    sources[0].credentialReference = await services.secrets.put("longbridge-cash-test-secret");
+  }
   await services.assetSources.replaceAll(sources);
   await services.assetCards.replaceAll(cards);
   return Response.json({ ok: true });

@@ -662,7 +662,7 @@ export function AssetSourceDetail({
 
         <LongbridgeRealtimeNotice state={realtimeState} retry={retry} />
         <AssetSourceCard
-          animateTotal={source.kind !== "longbridge"}
+          totalAnimationKey={source.kind === "longbridge" ? source.snapshot.syncedAt : undefined}
           assetScopeHref={source.kind.startsWith("evm-watch-")
             ? `/asset-sources/${encodeURIComponent(source.id)}/settings`
             : undefined}

@@ -65,4 +65,11 @@ test("减少动态效果时直接显示最终数字", async ({ page }) => {
     .locator('[data-vibe-component="live-counter"]');
   await expect(total).toHaveAttribute("data-counter-state", "complete");
   await expect(total).toHaveText("142,548.00");
+
+  await page.getByRole("link", { name: "查看 长桥账户 的资产明细" }).click();
+  const sourceTotal = page.getByTestId("asset-source-total")
+    .locator('[data-vibe-component="live-counter"]');
+  await sourceTotal.scrollIntoViewIfNeeded();
+  await expect(sourceTotal).toHaveAttribute("data-counter-state", "complete", { timeout: 100 });
+  await expect(sourceTotal).toHaveText("100,000.00");
 });

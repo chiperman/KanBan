@@ -64,22 +64,50 @@ function zeroValue(style: ParsedCounterValue): ParsedCounterValue {
 
 export function VibeLiveCounter({
   animate = true,
+  animationKey,
   resetKey,
   value,
 }: {
   animate?: boolean;
+  /** 同一批次内的实时值直接更新；换批次时恢复计数动画。 */
+  animationKey?: string;
   resetKey?: string;
   value: string;
 }) {
   const counterRef = useRef<HTMLSpanElement>(null);
   const renderedValueRef = useRef<ParsedCounterValue | null>(null);
   const previousResetKeyRef = useRef(resetKey);
+  const previousAnimationRef = useRef<{ key?: string; animate: boolean } | null>(null);
+  const cancelAnimationRef = useRef<(() => void) | null>(null);
+  const latestValueRef = useRef(value);
+  // 文本由计数器管理，避免 React 在行情到达时覆盖正在播放的帧。
+  const initialValueRef = useRef(value);
 
   useLayoutEffect(() => {
     const counter = counterRef.current;
     if (!counter) return;
 
     const target = parseCounterValue(value);
+    latestValueRef.current = value;
+    const sameBatch = animationKey !== undefined &&
+      previousAnimationRef.current?.key === animationKey &&
+      previousAnimationRef.current?.animate === animate &&
+      previousResetKeyRef.current === resetKey &&
+      renderedValueRef.current !== null;
+    previousAnimationRef.current = { key: animationKey, animate };
+    const reducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    if (sameBatch && target && animate && !reducedMotion) {
+      // 不打断首次/刷新动画；结束时一次显示期间收到的最新金额。
+      if (cancelAnimationRef.current === null) {
+        counter.textContent = value;
+        renderedValueRef.current = target;
+      }
+      return;
+    }
+    cancelAnimationRef.current?.();
+    cancelAnimationRef.current = null;
     if (!target) {
       counter.textContent = value;
       counter.dataset.counterState = "static";
@@ -88,9 +116,6 @@ export function VibeLiveCounter({
       return;
     }
 
-    const reducedMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
     if (!animate || reducedMotion) {
       counter.textContent = value;
       counter.dataset.counterState = "complete";
@@ -149,9 +174,10 @@ export function VibeLiveCounter({
           return;
         }
 
-        counter.textContent = value;
+        counter.textContent = latestValueRef.current;
         counter.dataset.counterState = "complete";
-        renderedValueRef.current = target;
+        renderedValueRef.current = parseCounterValue(latestValueRef.current);
+        cancelAnimationRef.current = null;
       };
 
       animationFrame = window.requestAnimationFrame(step);
@@ -171,12 +197,19 @@ export function VibeLiveCounter({
       startAnimation();
     }
 
-    return () => {
+    cancelAnimationRef.current = () => {
       cancelled = true;
       observer?.disconnect();
       window.cancelAnimationFrame(animationFrame);
     };
-  }, [animate, resetKey, value]);
+  }, [animate, animationKey, resetKey, value]);
+
+  useLayoutEffect(() => () => {
+    cancelAnimationRef.current?.();
+    cancelAnimationRef.current = null;
+    renderedValueRef.current = null;
+    previousAnimationRef.current = null;
+  }, []);
 
   return (
     <span
@@ -187,7 +220,7 @@ export function VibeLiveCounter({
       data-vibe-component="live-counter"
       ref={counterRef}
     >
-      {value}
+      {initialValueRef.current}
     </span>
   );
 }

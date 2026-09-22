@@ -631,7 +631,7 @@ function HoldingDetailRow({
 }
 
 export function AssetSourceCard({
-  animateTotal = true,
+  totalAnimationKey,
   refreshDisabled = false,
   source,
   history,
@@ -649,7 +649,7 @@ export function AssetSourceCard({
   profitColorScheme,
   showSensitiveInfo,
 }: {
-  animateTotal?: boolean;
+  totalAnimationKey?: string;
   refreshDisabled?: boolean;
   source: AssetSourceView;
   history: DailyAssetTrendObservation[];
@@ -1001,7 +1001,7 @@ export function AssetSourceCard({
         ) : null}
         {hasManualRecord ? (
           <VibeMetric
-            animate={animateTotal}
+            animationKey={totalAnimationKey}
             className="asset-total"
             data-testid="asset-source-total"
             unit={reportingCurrency}

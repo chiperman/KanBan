@@ -161,6 +161,16 @@ test("长桥实时 SSE 行情只在页面内更新价格、市值与来源总额
 // 保留真实页面订阅与投影，只替换外部行情传输。
 async function installQuoteStream(page: Page) {
   await page.addInitScript(() => {
+    const counterStarts = new WeakMap<Element, string[]>();
+    new MutationObserver((records) => {
+      for (const record of records) {
+        const counter = record.target as HTMLElement;
+        if (counter.dataset.counterState !== "running") continue;
+        const starts = counterStarts.get(counter) ?? [];
+        starts.push(counter.textContent ?? "");
+        counterStarts.set(counter, starts);
+      }
+    }).observe(document, { subtree: true, attributes: true, attributeFilter: ["data-counter-state"] });
     class QuoteStream extends EventTarget {
       static active = new Set<QuoteStream>();
       constructor(_url: string) {
@@ -170,6 +180,7 @@ async function installQuoteStream(page: Page) {
       close() { QuoteStream.active.delete(this); }
     }
     Object.assign(window, {
+      counterStarts,
       EventSource: QuoteStream,
       activeQuoteStreams: () => QuoteStream.active.size,
       emitQuote: (price: string, timestamp = 1790038800) => {
@@ -191,6 +202,46 @@ async function emitQuote(page: Page, price: string, timestamp = 1790038800) {
     (window as unknown as { emitQuote(price: string, timestamp: number): void })
       .emitQuote(price, timestamp);
   }, { price, timestamp });
+}
+
+for (const path of ["/assets", "/asset-sources/source-longbridge-cash"]) {
+  test("长桥首次从零计数、完整刷新有动画、实时行情不重播：" + path, async ({ page, request }) => {
+    await request.post("/test-doubles/valuation?scenario=longbridge-cash&refreshable=true");
+    await installQuoteStream(page);
+    await loginAsOwner(page);
+    await page.goto(path);
+    const counter = page.getByTestId(path === "/assets"
+      ? "assets-source-total-source-longbridge-cash" : "asset-source-total")
+      .locator('[data-vibe-component="live-counter"]');
+    await counter.scrollIntoViewIfNeeded();
+    await expect(counter).toHaveAttribute("data-counter-state", "running");
+    const starts = () => counter.evaluate((element) =>
+      (window as unknown as { counterStarts: WeakMap<Element, string[]> }).counterStarts.get(element) ?? [],
+    );
+    expect(await starts()).toEqual(["0.00"]);
+    // 首次计数尚未结束就收到行情，也应完成原动画而不是中断或重启。
+    await emitQuote(page, "123");
+    await expect(counter).toHaveAttribute("data-counter-target", "805.82");
+    await expect(counter).toHaveAttribute("data-counter-state", "running", { timeout: 100 });
+    await expect(counter).toHaveAttribute("data-counter-state", "complete");
+    await expect(counter).toHaveText("805.82");
+    expect(await starts()).toEqual(["0.00"]);
+
+    // 使用测试来源刷新器，走真实按钮、刷新协调器和路由重新取数。
+    await request.post("/test-doubles/refresh", { data: { action: "reset-schedule" } });
+    await page.getByRole("button", { name: path === "/assets"
+      ? "立即刷新资产" : "刷新 长桥账户", exact: true }).click();
+    await counter.scrollIntoViewIfNeeded();
+    await expect(counter).toHaveAttribute("data-counter-state", "running");
+    expect(await starts()).toEqual(["0.00", "805.82"]);
+    await expect(counter).toHaveAttribute("data-counter-state", "complete");
+    await expect(counter).toHaveText("123.00");
+    await emitQuote(page, "124", 1790038802);
+    await expect(counter).toHaveAttribute("data-counter-target", "124.00");
+    await expect(counter).toHaveAttribute("data-counter-state", "complete", { timeout: 100 });
+    await expect(counter).toHaveText("124.00");
+    expect(await starts()).toEqual(["0.00", "805.82"]);
+  });
 }
 
 test("高频行情合并更新且金额不反复播放计数动画", async ({ page, request }, testInfo) => {
@@ -227,6 +278,7 @@ test("来源详情持续接收行情且乱序消息不回退价格", async ({ pa
   await page.goto("/asset-sources/source-longbridge-cash");
   const total = page.getByTestId("asset-source-total");
   await expect(total).toBeVisible();
+  await total.scrollIntoViewIfNeeded();
   await emitQuote(page, "123");
   await expect(total).toContainText("805.82");
   await emitQuote(page, "124", 1790038802);
