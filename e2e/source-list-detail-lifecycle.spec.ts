@@ -228,9 +228,10 @@ test("来源详情内的单来源刷新和手工记录编辑保持各自边界",
   await page.getByRole("link", { name: /私募基金.*手工资产记录/ }).click();
   await page.getByRole("button", { name: "添加数据" }).click();
   const record = page.getByRole("dialog", { name: "记录 私募基金 数据" });
+  await expect(record.getByRole("button", { name: "币种", exact: true })).toHaveText("CNY");
   await record.getByLabel("资产总额").fill("120000");
   await record.getByRole("button", { name: "保存数据" }).click();
-  await expect(page.getByLabel("私募基金历史记录")).toContainText("120,000.00 USD");
+  await expect(page.getByLabel("私募基金历史记录")).toContainText("120,000.00 CNY");
   await expect(page.getByRole("button", { name: /刷新 私募基金/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "断开来源" })).toHaveCount(0);
 });

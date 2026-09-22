@@ -2,6 +2,7 @@ import type {
   AssetSourceSummary,
   CreateManualAssetSourceInput,
   ManualAssetClass,
+  ManualAssetRecord,
   ManualAssetRecordInput,
 } from "@/server/ports";
 
@@ -130,4 +131,21 @@ export function parseCreateManualAssetSourceInput(
   return {
     label: normalizeLabel(value.label),
   };
+}
+
+export function defaultManualAssetRecordCurrency(
+  records: readonly ManualAssetRecord[] | undefined,
+): ManualAssetRecord["currency"] {
+  const latestFirst = records?.toSorted((left, right) => right.day.localeCompare(left.day)) ?? [];
+  const counts = new Map<ManualAssetRecord["currency"], number>();
+  for (const record of latestFirst) {
+    counts.set(record.currency, (counts.get(record.currency) ?? 0) + 1);
+  }
+  return latestFirst.reduce<ManualAssetRecord["currency"]>(
+    (preferred, record) =>
+      (counts.get(record.currency) ?? 0) > (counts.get(preferred) ?? 0)
+        ? record.currency
+        : preferred,
+    latestFirst[0]?.currency ?? "CNY",
+  );
 }

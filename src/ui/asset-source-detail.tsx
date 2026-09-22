@@ -5,6 +5,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
+import { defaultManualAssetRecordCurrency } from "@/domain/manual-asset-records";
 import {
   DEFAULT_MARKET_BENCHMARK_SYMBOLS,
   type MarketBenchmarkSymbol,
@@ -121,7 +122,7 @@ function ManualRecordDialog({
   const [day, setDay] = useState(record?.day ?? currentDay);
   const [amount, setAmount] = useState(record?.amount ?? "");
   const [currency, setCurrency] = useState<"USD" | "CNY" | "HKD">(
-    record?.currency ?? "USD",
+    record?.currency ?? defaultManualAssetRecordCurrency(source.manualRecords),
   );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
