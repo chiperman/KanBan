@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 
 import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
 import { longbridgeReferenceRates } from "@/domain/investment-performance";
@@ -8,6 +8,10 @@ import {
   decimalCompare,
   decimalToFixed,
 } from "@/domain/decimal";
+import {
+  applyLongbridgeRealtimeQuote,
+  type LongbridgeRealtimeQuote,
+} from "@/domain/longbridge-realtime";
 import { activeSourceHoldings, portfolioSourceTotal } from "@/domain/evm-token-preferences";
 import {
   convertCurrencyAmount,
@@ -312,13 +316,54 @@ export function AssetsHoldingsWorkspace({
   const [sourceId, setSourceId] = useState("all");
   const [assetClass, setAssetClass] = useState<AssetClassFilter>("all");
   const [valuation, setValuation] = useState<ValuationFilter>("all");
+  const [liveQuotes, setLiveQuotes] = useState<Record<string, LongbridgeRealtimeQuote>>({});
+  const longbridgeSymbols = useMemo(
+    () => [...new Set(
+      sources
+        .filter((source) => source.kind === "longbridge")
+        .flatMap((source) => source.snapshot.holdings)
+        .map((holding) => holding.symbol)
+        .filter((symbol) => !symbol.startsWith("CASH.")),
+    )].sort().join(","),
+    [sources],
+  );
+
+  useEffect(() => {
+    if (longbridgeSymbols.length === 0) return;
+    const eventSource = new EventSource("/api/asset-sources/stream");
+    const handleQuote = (event: Event) => {
+      try {
+        const quote = JSON.parse((event as MessageEvent<string>).data) as LongbridgeRealtimeQuote;
+        if (typeof quote.symbol !== "string" || typeof quote.last_done !== "string") return;
+        setLiveQuotes((current) => ({ ...current, [quote.symbol]: quote }));
+      } catch {
+        // 断线由 EventSource 自动重连；单条异常消息不影响后续行情。
+      }
+    };
+    eventSource.addEventListener("quote", handleQuote);
+    return () => {
+      eventSource.removeEventListener("quote", handleQuote);
+      eventSource.close();
+    };
+  }, [longbridgeSymbols]);
+
+  const liveSources = useMemo(() => {
+    if (Object.keys(liveQuotes).length === 0) return sources;
+    return sources.map((source) => {
+      if (source.kind !== "longbridge") return source;
+      return Object.values(liveQuotes).reduce(
+        (current, quote) => applyLongbridgeRealtimeQuote(current, quote),
+        source,
+      );
+    });
+  }, [liveQuotes, sources]);
 
   const recordedSources = useMemo(
     () =>
-      sources.filter(
+      liveSources.filter(
         (source) => source.kind !== "manual" || source.hasManualRecord !== false,
       ),
-    [sources],
+    [liveSources],
   );
   const reportingRates = useMemo(
     () => longbridgeReferenceRates(recordedSources),
@@ -327,21 +372,21 @@ export function AssetsHoldingsWorkspace({
   const sourceOptions = useMemo<readonly VibeSelectOption<string>[]>(
     () => [
       { value: "all", label: "全部来源" },
-      ...sources.map((source) => ({
+      ...liveSources.map((source) => ({
         value: source.id,
         label: assetSourceDisplayName(source),
       })),
     ],
-    [sources],
+    [liveSources],
   );
   const observations = useMemo<HoldingObservation[]>(
     () =>
-      sources.flatMap((source) =>
+      liveSources.flatMap((source) =>
         source.kind === "manual"
           ? []
           : activeSourceHoldings(source).map((holding) => ({ holding, source })),
       ),
-    [sources],
+    [liveSources],
   );
   const filteredObservations = useMemo(
     () =>
@@ -418,7 +463,7 @@ export function AssetsHoldingsWorkspace({
             <h2 id="assets-source-totals-title">来源账户与平台总额</h2>
           </div>
         </header>
-        {sources.length === 0 ? (
+        {liveSources.length === 0 ? (
           <div className="empty-state">
             <p className="empty-title">尚未接入资产来源</p>
             <VibeLink href="/asset-sources/new" variant="outline">
@@ -439,7 +484,7 @@ export function AssetsHoldingsWorkspace({
               <span>来源总额</span>
             </div>
             <ol>
-              {sources.map((source) => (
+              {liveSources.map((source) => (
                 <AssetSourceTotalRow
                   currency={currency}
                   key={source.id}

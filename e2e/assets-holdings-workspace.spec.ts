@@ -115,6 +115,44 @@ test("来源、类别与估值筛选只收缩观察列表，不混淆上方来�
   ).toBeVisible();
 });
 
+test("长桥实时 SSE 行情只在页面内更新价格、市值与来源总额", async ({
+  page,
+  request,
+}) => {
+  const configured = await request.post("/test-doubles/valuation?scenario=longbridge-cash");
+  expect(configured.ok()).toBeTruthy();
+
+  await page.route("**/api/asset-sources/stream", async (route) => {
+    await route.fulfill({
+      status: 200,
+      headers: {
+        "cache-control": "no-cache",
+        "content-type": "text/event-stream; charset=utf-8",
+      },
+      body: [
+        "event: ready",
+        "data: {\"provider\":\"longbridge\",\"symbols\":[\"AAPL.US\"],\"mode\":\"serve\"}",
+        "",
+        "event: quote",
+        "data: {\"symbol\":\"AAPL.US\",\"last_done\":\"123\",\"prev_close\":\"120\",\"timestamp\":1790038800}",
+        "",
+        "",
+      ].join("\n"),
+    });
+  });
+
+  await loginAsOwner(page);
+  await page.goto("/assets");
+
+  const workspace = page.getByTestId("assets-holdings-workspace");
+  const row = workspace.getByRole("row").filter({ hasText: "AAPL.US" });
+  await expect(row).toContainText("123.00");
+  await expect(row).toContainText("123.00 USD");
+  await expect(
+    workspace.getByTestId("assets-source-total-source-longbridge-cash"),
+  ).toContainText("805.82 USD");
+});
+
 test("产品覆盖展开保持主行对齐，并将覆盖信息铺满来源整行", async ({
   page,
   request,
