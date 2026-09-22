@@ -10,6 +10,12 @@ const EXCHANGE_RATES = [{
   rate: "7.2",
   source: "发布验收汇率",
   observedAt: OBSERVED_AT,
+}, {
+  baseCurrency: "USD",
+  quoteCurrency: "HKD",
+  rate: "7.8",
+  source: "发布验收汇率",
+  observedAt: OBSERVED_AT,
 }];
 
 function valuedHolding(input: {

@@ -1,4 +1,4 @@
-import { expect, test, type CDPSession, type Page } from "@playwright/test";
+import { expect, test, type CDPSession, type Page, type Request } from "@playwright/test";
 
 async function loginAsOwner(page: Page): Promise<void> {
   const client: CDPSession = await page.context().newCDPSession(page);
@@ -54,7 +54,7 @@ test("资产来源统一列出自动账户、观察钱包和手工资产，并�
   expect(created.ok()).toBeTruthy();
 
   await page
-    .getByRole("link", { name: "查看 Binance 只读账户 来源详情" })
+    .getByRole("link", { name: "查看 Binance 只读账户 的资产明细" })
     .click();
   await expect(page).toHaveURL(/\/asset-sources\/[^/]+$/);
 
@@ -148,6 +148,20 @@ test("来源详情可以切换 USD、CNY 与 HKD 计价货币", async ({
   await expect(page.getByTestId("asset-source-total")).toContainText("10,000.00 USD");
   await expect(page.getByTestId("asset-source-total")).not.toContainText("无法折算");
 
+  const history = page.getByLabel("A 股历史记录");
+  await expect(history.getByRole("listitem")).toHaveCount(1);
+  await expect(history).toContainText("72,000.00 CNY");
+  const originalHistory = await history.getByRole("listitem").allTextContents();
+  const mutationRequests: string[] = [];
+  const recordMutation = (request: Request) => {
+    if (
+      request.method() !== "GET" &&
+      request.url().includes("/api/asset-sources/")
+    ) {
+      mutationRequests.push(request.method() + " " + request.url());
+    }
+  };
+  page.on("request", recordMutation);
   const currency = page.getByRole("button", { name: "计价货币" });
   await currency.click();
   await page.getByRole("option", { name: "CNY", exact: true }).click();
@@ -160,9 +174,18 @@ test("来源详情可以切换 USD、CNY 与 HKD 计价货币", async ({
   await currency.click();
   await page.getByRole("option", { name: "USD", exact: true }).click();
   await expect(page.getByTestId("asset-source-total")).toContainText("10,000.00 USD");
+  expect(mutationRequests).toEqual([]);
+  // 切换期间不应写入资产；页面重载会独立触发自动刷新，另用历史回读验证。
+  page.off("request", recordMutation);
+  await page.reload();
+  await expect(history.getByRole("listitem")).toHaveText(originalHistory);
+  await history.getByRole("button", { name: "编辑", exact: true }).click();
+  await expect(record.getByLabel("资产总额")).toHaveValue("72000");
+  await expect(record.getByRole("button", { name: "币种", exact: true })).toHaveText("CNY");
+  await record.getByRole("button", { name: "取消", exact: true }).click();
 });
 
-test("来源详情保留隐藏、断开、恢复与永久删除的确认保护", async ({
+test("来源详情保留隐藏、断开、缺少凭证的恢复保护与永久删除确认", async ({
   page,
   request,
 }) => {
@@ -183,7 +206,7 @@ test("来源详情保留隐藏、断开、恢复与永久删除的确认保护",
   const disconnect = page.getByRole("dialog", {
     name: "确认断开 Binance 只读账户",
   });
-  await expect(disconnect).toContainText("停止后续同步");
+  await expect(disconnect).toContainText("停止同步；历史数据保留");
   await page.keyboard.press("Escape");
   await expect(disconnect).toHaveCount(0);
 
@@ -194,11 +217,15 @@ test("来源详情保留隐藏、断开、恢复与永久删除的确认保护",
     .click();
   await expect(page.getByText("已断开", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "恢复连接" }).click();
-  await expect(page.getByText("已连接（只读）", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "危险操作" }).getByRole("alert")).toContainText(
+    "原连接凭证已不存在，无法直接恢复",
+  );
+  await expect(page.getByText("已断开", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "更换授权 / 重新授权" })).toBeVisible();
 
   await page.getByRole("button", { name: "永久删除数据" }).click();
   const firstDelete = page.getByRole("dialog", { name: "永久删除来源数据" });
-  await expect(firstDelete).toContainText("全部资产快照");
+  await expect(firstDelete).toContainText("永久删除来源及全部历史数据，无法恢复");
   await firstDelete.getByRole("button", { name: "继续删除" }).click();
   const secondDelete = page.getByRole("dialog", { name: "第二次确认永久删除" });
   await secondDelete.getByRole("button", { name: "取消" }).click();
