@@ -25,6 +25,8 @@ import {
   AssetSourceCard,
   type AssetSourceView,
 } from "@/ui/longbridge-asset-card";
+import { LongbridgeRealtimeNotice } from "@/ui/longbridge-realtime-notice";
+import { useLongbridgeRealtime } from "@/ui/use-longbridge-realtime";
 import { MarketBenchmarkControls } from "@/ui/market-benchmark-controls";
 import { useMarketBenchmarkComparison } from "@/ui/market-benchmark";
 import type { ProfitColorScheme } from "@/ui/profit-color-scheme";
@@ -460,6 +462,8 @@ export function AssetSourceDetail({
     setCurrency,
     showSensitiveInfo,
   } = useWorkbenchDisplayPreferences();
+  const realtimeSources = useMemo(() => [source], [source]);
+  const { liveSources, state: realtimeState, retry } = useLongbridgeRealtime(realtimeSources);
   const [editingRecord, setEditingRecord] = useState<ManualAssetRecord | null | undefined>(
     null,
   );
@@ -656,7 +660,9 @@ export function AssetSourceDetail({
           />
         ) : null}
 
+        <LongbridgeRealtimeNotice state={realtimeState} retry={retry} />
         <AssetSourceCard
+          animateTotal={source.kind !== "longbridge"}
           assetScopeHref={source.kind.startsWith("evm-watch-")
             ? `/asset-sources/${encodeURIComponent(source.id)}/settings`
             : undefined}
@@ -673,7 +679,7 @@ export function AssetSourceDetail({
           reportingCurrency={currency}
           reportingExchangeRates={reportingExchangeRates}
           showSensitiveInfo={showSensitiveInfo}
-          source={source}
+          source={liveSources[0]}
           trendBenchmark={benchmarkDataState.kind === "ready" ? {
             comparison: benchmarkDataState.comparison,
             enabledSymbols: enabledBenchmarkSymbols,

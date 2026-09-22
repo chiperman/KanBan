@@ -32,7 +32,7 @@ test("资产数字复用 44 Live Counter 并保留财务格式", async ({ page }
   await loginAsOwner(page);
 
   const total = page
-    .getByTestId("total-asset-amount")
+    .getByTestId("overview-current-total")
     .locator('[data-vibe-component="live-counter"]');
   await expect(total).toHaveAttribute("data-vibe-component", "live-counter");
   await expect(total).toHaveAttribute("data-counter-target", "142,548.00");
@@ -40,7 +40,7 @@ test("资产数字复用 44 Live Counter 并保留财务格式", async ({ page }
   await expect(total).toHaveText("142,548.00");
   await expect(total).toHaveAccessibleName("142,548.00");
 
-  await page.getByRole("link", { name: "查看 长桥资产来源详情" }).click();
+  await page.getByRole("link", { name: "查看 长桥账户 的资产明细" }).click();
   const sourceTotal = page
     .getByTestId("longbridge-card")
     .getByTestId("asset-source-total")
@@ -61,7 +61,7 @@ test("减少动态效果时直接显示最终数字", async ({ page }) => {
   await loginAsOwner(page);
 
   const total = page
-    .getByTestId("total-asset-amount")
+    .getByTestId("overview-current-total")
     .locator('[data-vibe-component="live-counter"]');
   await expect(total).toHaveAttribute("data-counter-state", "complete");
   await expect(total).toHaveText("142,548.00");

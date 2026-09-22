@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 
 import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
 import { longbridgeReferenceRates } from "@/domain/investment-performance";
@@ -8,10 +8,6 @@ import {
   decimalCompare,
   decimalToFixed,
 } from "@/domain/decimal";
-import {
-  applyLongbridgeRealtimeQuote,
-  type LongbridgeRealtimeQuote,
-} from "@/domain/longbridge-realtime";
 import { activeSourceHoldings, portfolioSourceTotal } from "@/domain/evm-token-preferences";
 import {
   convertCurrencyAmount,
@@ -33,7 +29,7 @@ import {
 import { formatAssetUnitPrice } from "@/ui/asset-price-display";
 import { sourceSyncStatus } from "@/ui/asset-source-status";
 import { formatShanghaiDateTime } from "@/ui/shanghai-date-time";
-import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
+import { VibeLink } from "@/ui/vibe/vibe-button";
 import {
   VibeSelect,
   type VibeSelectOption,
@@ -44,6 +40,8 @@ import {
   useWorkbenchDisplayPreferences,
 } from "@/ui/workbench-display-preferences";
 import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
+import { LongbridgeRealtimeNotice } from "@/ui/longbridge-realtime-notice";
+import { useLongbridgeRealtime } from "@/ui/use-longbridge-realtime";
 import { AssetGlobalRefreshControl } from "@/ui/asset-refresh-controls";
 
 type WorkspaceSource = Omit<
@@ -60,15 +58,6 @@ type HoldingObservation = {
   holding: AssetHolding;
   source: WorkspaceSource;
 };
-
-type RealtimeState =
-  | "idle"
-  | "connecting"
-  | "ready"
-  | "reconnecting"
-  | "authentication-required"
-  | "cli-unavailable"
-  | "unavailable";
 
 const CURRENCY_OPTIONS: readonly VibeSelectOption<ReportingCurrency>[] = [
   { value: "USD", label: "USD" },
@@ -279,7 +268,7 @@ function AssetSourceTotalRow({
         </div>
         <div className="assets-holdings__source-value">
           {showSensitiveInfo && total !== null ? (
-            <VibeMetric unit={currency} value={money(total)} />
+            <VibeMetric animate={source.kind !== "longbridge"} unit={currency} value={money(total)} />
           ) : (
             <strong
               className={
@@ -325,163 +314,7 @@ export function AssetsHoldingsWorkspace({
   const [sourceId, setSourceId] = useState("all");
   const [assetClass, setAssetClass] = useState<AssetClassFilter>("all");
   const [valuation, setValuation] = useState<ValuationFilter>("all");
-  const [liveQuotes, setLiveQuotes] = useState<Record<string, LongbridgeRealtimeQuote>>({});
-  const [realtimeState, setRealtimeState] = useState<RealtimeState>("idle");
-  const [streamRetryKey, setStreamRetryKey] = useState(0);
-  const longbridgeSymbols = useMemo(
-    () => [...new Set(
-      sources
-        .filter((source) => source.kind === "longbridge")
-        .flatMap((source) => source.snapshot.holdings)
-        .map((holding) => holding.symbol)
-        .filter((symbol) => !symbol.startsWith("CASH.")),
-    )].sort().join(","),
-    [sources],
-  );
-
-  useEffect(() => {
-    if (longbridgeSymbols.length === 0) {
-      setRealtimeState("idle");
-      return;
-    }
-    setRealtimeState("connecting");
-    const eventSource = new EventSource("/api/asset-sources/stream");
-    const handleQuote = (event: Event) => {
-      try {
-        const quote = JSON.parse((event as MessageEvent<string>).data) as LongbridgeRealtimeQuote;
-        if (typeof quote.symbol !== "string" || typeof quote.last_done !== "string") return;
-        setLiveQuotes((current) => ({ ...current, [quote.symbol]: quote }));
-      } catch {
-        // 断线由 EventSource 自动重连；单条异常消息不影响后续行情。
-      }
-    };
-    const handleStatus = (event: Event) => {
-      try {
-        const status = JSON.parse((event as MessageEvent<string>).data) as {
-          state?: string;
-          code?: string;
-        };
-        if (status.state === "connecting") setRealtimeState("connecting");
-        else if (status.state === "ready") setRealtimeState("ready");
-        else if (status.state === "error") {
-          setRealtimeState(
-            status.code === "authentication-required"
-              ? "authentication-required"
-              : status.code === "cli-unavailable"
-                ? "cli-unavailable"
-                : "unavailable",
-          );
-        }
-      } catch {
-        setRealtimeState("unavailable");
-      }
-    };
-    const handleError = () => {
-      setRealtimeState((current) =>
-        current === "authentication-required" || current === "cli-unavailable"
-          ? current
-          : "reconnecting",
-      );
-    };
-    eventSource.addEventListener("quote", handleQuote);
-    eventSource.addEventListener("stream-status", handleStatus);
-    eventSource.addEventListener("error", handleError);
-    return () => {
-      eventSource.removeEventListener("quote", handleQuote);
-      eventSource.removeEventListener("stream-status", handleStatus);
-      eventSource.removeEventListener("error", handleError);
-      eventSource.close();
-    };
-  }, [longbridgeSymbols, streamRetryKey]);
-
-  const realtimeNotice = (() => {
-    if (realtimeState === "idle" || realtimeState === "ready") return null;
-    const retry = (
-      <VibeButton
-        onClick={() => {
-          setRealtimeState("connecting");
-          setStreamRetryKey((current) => current + 1);
-        }}
-        type="button"
-        variant="outline"
-      >
-        重新检测
-      </VibeButton>
-    );
-    if (realtimeState === "authentication-required") {
-      return (
-        <VibeNotice
-          className="assets-holdings__realtime-notice"
-          code="LONGBRIDGE / LOGIN"
-          role="alert"
-          tone="error"
-        >
-          <p>未检测到当前电脑的 Longbridge CLI 登录状态。请先完成一次 <code>longbridge auth login</code>，然后回到这里重新检测。</p>
-          <div className="assets-holdings__realtime-actions">{retry}</div>
-        </VibeNotice>
-      );
-    }
-    if (realtimeState === "cli-unavailable") {
-      return (
-        <VibeNotice
-          className="assets-holdings__realtime-notice"
-          code="LONGBRIDGE / CLI"
-          role="alert"
-          tone="error"
-        >
-          <p>未找到 Longbridge CLI，暂时无法建立实时行情连接。请安装或配置 CLI 后重新检测。</p>
-          <div className="assets-holdings__realtime-actions">{retry}</div>
-        </VibeNotice>
-      );
-    }
-    if (realtimeState === "reconnecting") {
-      return (
-        <VibeNotice
-          className="assets-holdings__realtime-notice"
-          code="LONGBRIDGE / RECONNECTING"
-          role="status"
-          tone="info"
-        >
-          <p>实时行情连接中断，正在自动重连。当前页面仍保留已有数据。</p>
-          <div className="assets-holdings__realtime-actions">{retry}</div>
-        </VibeNotice>
-      );
-    }
-    if (realtimeState === "connecting") {
-      return (
-        <VibeNotice
-          className="assets-holdings__realtime-notice"
-          code="LONGBRIDGE / CONNECTING"
-          role="status"
-          tone="info"
-        >
-          正在验证长桥实时行情连接…
-        </VibeNotice>
-      );
-    }
-    return (
-      <VibeNotice
-        className="assets-holdings__realtime-notice"
-        code="LONGBRIDGE / UNAVAILABLE"
-        role="alert"
-        tone="error"
-      >
-        <p>长桥实时行情暂时不可用。当前页面仍可查看最近一次完整数据。</p>
-        <div className="assets-holdings__realtime-actions">{retry}</div>
-      </VibeNotice>
-    );
-  })();
-
-  const liveSources = useMemo(() => {
-    if (Object.keys(liveQuotes).length === 0) return sources;
-    return sources.map((source) => {
-      if (source.kind !== "longbridge") return source;
-      return Object.values(liveQuotes).reduce(
-        (current, quote) => applyLongbridgeRealtimeQuote(current, quote),
-        source,
-      );
-    });
-  }, [liveQuotes, sources]);
+  const { liveSources, state: realtimeState, retry } = useLongbridgeRealtime(sources);
 
   const recordedSources = useMemo(
     () =>
@@ -578,7 +411,7 @@ export function AssetsHoldingsWorkspace({
         titleId="assets-holdings-title"
       />
 
-      {realtimeNotice}
+      <LongbridgeRealtimeNotice state={realtimeState} retry={retry} />
 
       <section
         className="assets-holdings__source-totals"

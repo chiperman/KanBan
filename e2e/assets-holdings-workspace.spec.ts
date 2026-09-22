@@ -41,6 +41,11 @@ test.beforeEach(async ({ request }) => {
 test("资产与持仓把来源总额与明细观察分层，不用持仓差额改写总额", async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  // 本例检查已有快照布局；模拟自动刷新尚未到期，避免演示凭证刷新失败改写状态。
+  await page.route("**/api/asset-sources/refresh", (route) => route.fulfill({
+    json: { successCount: 0, failureCount: 0, skipped: "not-due", attemptedAt: new Date().toISOString() },
+  }));
   await loginAsOwner(page);
   await page.goto("/assets");
 
@@ -153,40 +158,136 @@ test("长桥实时 SSE 行情只在页面内更新价格、市值与来源总额
   ).toContainText("805.82 USD");
 });
 
-test("长桥 CLI 未登录时资产页明确提示登录并提供重新检测", async ({
-  page,
-  request,
-}) => {
-  const configured = await request.post("/test-doubles/valuation?scenario=longbridge-cash");
-  expect(configured.ok()).toBeTruthy();
-
-  await page.route("**/api/asset-sources/stream", async (route) => {
-    await route.fulfill({
-      status: 200,
-      headers: {
-        "cache-control": "no-cache",
-        "content-type": "text/event-stream; charset=utf-8",
+// 保留真实页面订阅与投影，只替换外部行情传输。
+async function installQuoteStream(page: Page) {
+  await page.addInitScript(() => {
+    class QuoteStream extends EventTarget {
+      static active = new Set<QuoteStream>();
+      constructor(_url: string) {
+        super();
+        QuoteStream.active.add(this);
+      }
+      close() { QuoteStream.active.delete(this); }
+    }
+    Object.assign(window, {
+      EventSource: QuoteStream,
+      activeQuoteStreams: () => QuoteStream.active.size,
+      emitQuote: (price: string, timestamp = 1790038800) => {
+        for (const stream of QuoteStream.active) {
+          stream.dispatchEvent(new MessageEvent("stream-status", {
+            data: JSON.stringify({ state: "ready" }),
+          }));
+          stream.dispatchEvent(new MessageEvent("quote", {
+            data: JSON.stringify({ symbol: "AAPL.US", last_done: price, timestamp }),
+          }));
+        }
       },
-      body: [
-        "event: ready",
-        'data: {"provider":"longbridge","symbols":["AAPL.US"],"mode":"serve"}',
-        "",
-        "event: stream-status",
-        'data: {"state":"error","code":"authentication-required"}',
-        "",
-        "",
-      ].join("\n"),
     });
   });
+}
 
+async function emitQuote(page: Page, price: string, timestamp = 1790038800) {
+  await page.evaluate(({ price, timestamp }) => {
+    (window as unknown as { emitQuote(price: string, timestamp: number): void })
+      .emitQuote(price, timestamp);
+  }, { price, timestamp });
+}
+
+test("高频行情合并更新且金额不反复播放计数动画", async ({ page, request }, testInfo) => {
+  await request.post("/test-doubles/valuation?scenario=longbridge-cash");
+  await installQuoteStream(page);
   await loginAsOwner(page);
   await page.goto("/assets");
-
-  const notice = page.locator(".assets-holdings__realtime-notice");
-  await expect(notice).toContainText("未检测到当前电脑的 Longbridge CLI 登录状态");
-  await expect(notice).toContainText("longbridge auth login");
-  await expect(notice.getByRole("button", { name: "重新检测" })).toBeVisible();
+  const counter = page.getByTestId("assets-source-total-source-longbridge-cash")
+    .locator('[data-vibe-component="live-counter"]');
+  await expect(counter).toHaveAttribute("data-counter-state", "complete");
+  const updates = await counter.evaluate(async (element) => {
+    let count = 0;
+    const observer = new MutationObserver((records) => { count += records.length; });
+    observer.observe(element, { attributes: true, attributeFilter: ["data-counter-target"] });
+    const emit = (window as unknown as { emitQuote(price: string): void }).emitQuote;
+    for (let i = 0; i < 20; i++) {
+      emit(String(123 + i));
+      await new Promise((resolve) => setTimeout(resolve, 40));
+    }
+    observer.disconnect();
+    return count;
+  });
+  expect(updates).toBeLessThanOrEqual(3);
+  await expect(counter).toHaveAttribute("data-counter-target", "824.82");
+  await expect(counter).toHaveAttribute("data-counter-state", "complete", { timeout: 100 });
+  await expect(counter).toHaveText("824.82");
+  await page.getByTestId("assets-source-totals").screenshot({ path: testInfo.outputPath("realtime-totals.png") });
 });
+
+test("来源详情持续接收行情且乱序消息不回退价格", async ({ page, request }, testInfo) => {
+  await request.post("/test-doubles/valuation?scenario=longbridge-cash");
+  await installQuoteStream(page);
+  await loginAsOwner(page);
+  await page.goto("/asset-sources/source-longbridge-cash");
+  const total = page.getByTestId("asset-source-total");
+  await expect(total).toBeVisible();
+  await emitQuote(page, "123");
+  await expect(total).toContainText("805.82");
+  await emitQuote(page, "124", 1790038802);
+  await emitQuote(page, "100", 1790038801);
+  await expect(total).toContainText("806.82");
+  await page.waitForTimeout(600);
+  await expect(total).toContainText("806.82");
+  await expect(total.locator('[data-vibe-component="live-counter"]')).toHaveAttribute("data-counter-state", "complete");
+  await page.getByTestId("longbridge-card").screenshot({ path: testInfo.outputPath("realtime-detail.png") });
+  await page.getByRole("link", { name: "资产与持仓", exact: true }).click();
+  await expect(page.getByTestId("assets-holdings-workspace")).toBeVisible();
+  await expect.poll(() => page.evaluate(() =>
+    (window as unknown as { activeQuoteStreams(): number }).activeQuoteStreams(),
+  )).toBe(1);
+  await emitQuote(page, "125", 1790038803);
+  await expect(page.getByTestId("assets-source-total-source-longbridge-cash")).toContainText("807.82");
+});
+
+for (const path of ["/assets", "/asset-sources/source-longbridge-cash"]) {
+  test("长桥 CLI 未登录时明确提示登录并提供重新检测：" + path, async ({
+    page,
+    request,
+  }) => {
+    const configured = await request.post("/test-doubles/valuation?scenario=longbridge-cash");
+    expect(configured.ok()).toBeTruthy();
+
+    let streamRequests = 0;
+    await page.route("**/api/asset-sources/stream", async (route) => {
+      streamRequests++;
+      await route.fulfill({
+        status: 200,
+        headers: {
+          "cache-control": "no-cache",
+          "content-type": "text/event-stream; charset=utf-8",
+        },
+        body: [
+          "event: ready",
+          'data: {"provider":"longbridge","symbols":["AAPL.US"],"mode":"serve"}',
+          "",
+          "event: stream-status",
+          'data: {"state":"error","code":"authentication-required"}',
+          "",
+          "",
+        ].join("\n"),
+      });
+    });
+
+    await loginAsOwner(page);
+    await page.goto(path);
+
+    const notice = page.locator(".assets-holdings__realtime-notice");
+    await expect(notice).toContainText("未检测到当前电脑的 Longbridge CLI 登录状态");
+    await expect(notice).toContainText("longbridge auth login");
+    const retry = notice.getByRole("button", { name: "重新检测" });
+    await expect(retry).toBeVisible();
+    const beforeRetry = streamRequests;
+    await retry.click();
+    await expect.poll(() => streamRequests).toBeGreaterThan(beforeRetry);
+    await expect(notice).toContainText("未检测到当前电脑的 Longbridge CLI 登录状态");
+  });
+}
 
 test("产品覆盖展开保持主行对齐，并将覆盖信息铺满来源整行", async ({
   page,
