@@ -81,7 +81,7 @@ test("未登录可进入零落盘演示模式，且不请求或泄露真实资�
   await expect(page.getByTestId("overview-source-summary").getByRole("listitem")).toHaveCount(7);
   await expect(page.getByText("CONTROL DECK")).toHaveCount(0);
   await expect(page.locator(".overview-card-summary--source")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "立即刷新资产" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "立即刷新资产" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "计价货币" })).toContainText("USD");
   await expect(
     page.locator('a[href="/assets"], a[href="/performance"], a[href^="/asset-sources"]'),

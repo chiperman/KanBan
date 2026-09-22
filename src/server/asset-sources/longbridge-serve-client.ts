@@ -2,14 +2,9 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createInterface } from "node:readline";
 
-export interface LongbridgeServeQuote {
-  symbol: string;
-  last_done: string;
-  prev_close?: string;
-  timestamp?: number | string;
-  trade_status?: string;
-  trade_session?: string;
-}
+import { longbridgeQuoteTime, longbridgeQuotePeriod, type LongbridgeRealtimeQuote } from "@/domain/longbridge-realtime";
+
+export type LongbridgeServeQuote = LongbridgeRealtimeQuote;
 
 interface JsonRpcResponse {
   jsonrpc?: string;
@@ -97,9 +92,24 @@ function quoteFrom(value: unknown): LongbridgeServeQuote | null {
   return value as unknown as LongbridgeServeQuote;
 }
 
+function snapshotQuote(value: unknown): LongbridgeServeQuote | null {
+  const regular = quoteFrom(value);
+  if (!regular || !isRecord(value)) return null;
+  let latest = { ...regular, trade_session: regular.trade_session ?? "Intraday" };
+  for (const [field, session] of [["pre_market_quote", "Pre"], ["post_market_quote", "Post"], ["overnight_quote", "Overnight"]]) {
+    const extended = value[field];
+    if (!isRecord(extended)) continue;
+    const candidate = quoteFrom({ ...extended, symbol: regular.symbol, trade_session: session, trade_status: regular.trade_status });
+    if (!candidate) continue;
+    const time = longbridgeQuoteTime(candidate.timestamp);
+    if (time !== null && time > (longbridgeQuoteTime(latest.timestamp) ?? 0)) latest = { ...candidate, trade_session: session };
+  }
+  return latest;
+}
+
 function quoteList(value: unknown): LongbridgeServeQuote[] {
   if (Array.isArray(value)) return value.flatMap((item) => {
-    const quote = quoteFrom(item);
+    const quote = snapshotQuote(item);
     return quote ? [quote] : [];
   });
   if (!isRecord(value)) return [];
@@ -171,7 +181,12 @@ export class LongbridgeServeClient {
     const uniqueSymbols = [...new Set(symbols.map((symbol) => symbol.trim()).filter(Boolean))];
     if (uniqueSymbols.length === 0) return [];
     const result = await this.call("quote.subscribe", { symbols: uniqueSymbols });
+    if (isRecord(result) && !Array.isArray(result.quotes)) return this.quotes(uniqueSymbols);
     return quoteList(result);
+  }
+
+  async quotes(symbols: string[]): Promise<LongbridgeServeQuote[]> {
+    return quoteList(await this.call("quote.quote", { symbols }));
   }
 
   async close(): Promise<void> {
@@ -288,8 +303,7 @@ export interface LongbridgeServeQuoteSubscription {
 
 type StatusListener = (status: LongbridgeServeStatus) => void;
 
-class LongbridgeServeQuoteHub {
-  private readonly client = new LongbridgeServeClient();
+export class LongbridgeServeQuoteHub {
   private readonly subscribers = new Map<string, {
     symbols: Set<string>;
     listener: QuoteListener;
@@ -298,12 +312,60 @@ class LongbridgeServeQuoteHub {
   private subscribedSymbols = new Set<string>();
   private subscribePromise: Promise<void> | null = null;
 
-  constructor() {
-    this.client.onQuote((quote) => {
-      for (const subscriber of this.subscribers.values()) {
-        if (subscriber.symbols.has(quote.symbol)) subscriber.listener(quote);
+  private readonly latest = new Map<string, LongbridgeServeQuote>();
+  private readonly referenceAttempts = new Map<string, { period: string; at: number }>();
+  private readonly referenceQueue = new Set<string>();
+  private refreshingReferences = false;
+
+  constructor(private readonly client = new LongbridgeServeClient()) {
+    this.client.onQuote((quote) => this.receive(quote, true));
+  }
+
+  private receive(quote: LongbridgeServeQuote, pushed = false): void {
+    if (![...this.subscribers.values()].some(s => s.symbols.has(quote.symbol))) return;
+    const time = longbridgeQuoteTime(quote.timestamp);
+    if (time === null) return;
+    const previous = this.latest.get(quote.symbol);
+    const samePeriod = previous && longbridgeQuotePeriod(previous) === longbridgeQuotePeriod(quote);
+    if (previous && time < (longbridgeQuoteTime(previous.timestamp) ?? 0)) {
+      // A slower snapshot can supply the reference price, but never roll back a newer tick.
+      if (!pushed && samePeriod && quote.prev_close !== undefined) quote = { ...previous, prev_close: quote.prev_close };
+      else return;
+    } else if (samePeriod && quote.prev_close === undefined) {
+      quote = { ...quote, prev_close: previous.prev_close };
+    }
+    this.latest.set(quote.symbol, quote);
+    for (const subscriber of this.subscribers.values()) {
+      if (subscriber.symbols.has(quote.symbol)) subscriber.listener(quote);
+    }
+    if (pushed && quote.prev_close === undefined) {
+      const period = longbridgeQuotePeriod(quote);
+      const attempt = this.referenceAttempts.get(quote.symbol);
+      if (!attempt || attempt.period !== period || Date.now() - attempt.at >= 30_000) {
+        this.referenceAttempts.set(quote.symbol, { period, at: Date.now() });
+        this.referenceQueue.add(quote.symbol);
+        if (!this.refreshingReferences) {
+          this.refreshingReferences = true;
+          setTimeout(() => void this.refreshReferences(), 100);
+        }
       }
-    });
+    }
+  }
+
+  private async refreshReferences(): Promise<void> {
+    try {
+      // Batch and serialize session changes across symbols; never query on every tick.
+      while (this.referenceQueue.size > 0) {
+        const symbols = [...this.referenceQueue];
+        this.referenceQueue.clear();
+        try {
+          if (this.subscribePromise) await this.subscribePromise;
+          for (const quote of await this.client.quotes(symbols)) this.receive(quote);
+        } catch {
+          // Keep streaming prices; missing references remain unknown until a later tick retries.
+        }
+      }
+    } finally { this.refreshingReferences = false; }
   }
 
   subscribe(
@@ -320,6 +382,10 @@ class LongbridgeServeQuoteHub {
       listener,
       statusListener,
     });
+    for (const symbol of normalizedSymbols) {
+      const quote = this.latest.get(symbol);
+      if (quote) listener(quote);
+    }
     statusListener?.({ state: "connecting" });
     void this.sync([...normalizedSymbols]).catch((error) => {
       const status: LongbridgeServeStatus = {
@@ -342,11 +408,7 @@ class LongbridgeServeQuoteHub {
       while (this.subscribedSymbols.size > 0) {
         const pending = [...this.subscribedSymbols];
         const quotes = await this.client.subscribe(pending);
-        for (const quote of quotes) {
-          for (const subscriber of this.subscribers.values()) {
-            if (subscriber.symbols.has(quote.symbol)) subscriber.listener(quote);
-          }
-        }
+        for (const quote of quotes) this.receive(quote);
         for (const subscriber of this.subscribers.values()) {
           subscriber.statusListener?.({ state: "ready" });
         }

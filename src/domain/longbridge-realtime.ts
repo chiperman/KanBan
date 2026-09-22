@@ -6,7 +6,7 @@ import {
   decimalSubtract,
 } from "@/domain/decimal";
 import { convertCurrencyAmount } from "@/domain/valuation";
-import type { AssetSnapshot, AssetSourceSummary } from "@/server/ports";
+import type { AssetQuoteSession, AssetSourceSummary } from "@/server/ports";
 
 export interface LongbridgeRealtimeQuote {
   symbol: string;
@@ -14,28 +14,32 @@ export interface LongbridgeRealtimeQuote {
   prev_close?: string;
   timestamp?: number | string;
   trade_status?: string;
+  trade_session?: string | number;
 }
 
-function quoteObservedAt(quote: LongbridgeRealtimeQuote, fallback: string): string {
-  const raw = quote.timestamp;
-  const seconds = typeof raw === "number"
-    ? raw
-    : typeof raw === "string" && /^\d+(?:\.\d+)?$/.test(raw)
-      ? Number(raw)
-      : Number.NaN;
-  if (!Number.isFinite(seconds) || seconds <= 0) return fallback;
-  const date = new Date(seconds * 1_000);
-  return Number.isNaN(date.getTime()) ? fallback : date.toISOString();
+/** serve uses RFC3339; the OpenAPI protocol also accepts Unix seconds. */
+export function longbridgeQuoteTime(raw: unknown): number | null {
+  const milliseconds = typeof raw === "number" || (typeof raw === "string" && /^\d+(?:\.\d+)?$/.test(raw))
+    ? Number(raw) * 1_000
+    : typeof raw === "string" && /^\d{4}-\d{2}-\d{2}T/.test(raw) ? Date.parse(raw) : NaN;
+  return Number.isFinite(milliseconds) && milliseconds > 0 && !Number.isNaN(new Date(milliseconds).getTime())
+    ? milliseconds : null;
 }
 
-function newerThanCurrent(
-  quote: LongbridgeRealtimeQuote,
-  current: AssetSnapshot["holdings"][number],
-): boolean {
-  const currentAt = current.quoteEvidence?.quotedAt;
-  if (!currentAt) return true;
-  const nextAt = quoteObservedAt(quote, currentAt);
-  return nextAt >= currentAt;
+export function longbridgeQuoteSession(raw: unknown): AssetQuoteSession {
+  switch (String(raw).toLowerCase()) {
+    case "0": case "intraday": return "regular";
+    case "1": case "pre": return "pre-market";
+    case "2": case "post": return "post-market";
+    case "3": case "overnight": return "overnight";
+    default: return "unknown";
+  }
+}
+
+/** Reference prices may only be reused within the same session and date. */
+export function longbridgeQuotePeriod(quote: LongbridgeRealtimeQuote): string {
+  const time = longbridgeQuoteTime(quote.timestamp);
+  return longbridgeQuoteSession(quote.trade_session) + ":" + (time === null ? "" : new Date(time).toISOString().slice(0, 10));
 }
 
 export function applyLongbridgeRealtimeQuote<T extends Pick<AssetSourceSummary, "kind" | "snapshot">>(
@@ -49,9 +53,14 @@ export function applyLongbridgeRealtimeQuote<T extends Pick<AssetSourceSummary, 
   const index = source.snapshot.holdings.findIndex((holding) => holding.symbol === quote.symbol);
   if (index < 0) return source;
   const current = source.snapshot.holdings[index];
-  if (current.assetClass === "cash" || !newerThanCurrent(quote, current)) return source;
+  const time = longbridgeQuoteTime(quote.timestamp);
+  const currentTime = longbridgeQuoteTime(current.quoteEvidence?.quotedAt);
+  if (current.assetClass === "cash" || time === null || (currentTime !== null && time < currentTime)) return source;
 
-  const quotedAt = quoteObservedAt(quote, observedAt);
+  const quotedAt = new Date(time).toISOString();
+  const session = longbridgeQuoteSession(quote.trade_session);
+  const samePeriod = session !== "unknown" && session === current.quoteEvidence?.session &&
+    currentTime !== null && quotedAt.slice(0, 10) === new Date(currentTime).toISOString().slice(0, 10);
   const price = quote.last_done;
   const marketValue = decimalMultiply(current.quantity, price);
   const sourceMarketValueAmount = convertCurrencyAmount(
@@ -70,9 +79,9 @@ export function applyLongbridgeRealtimeQuote<T extends Pick<AssetSourceSummary, 
   const platformProfit = current.costPrice === null
     ? current.platformProfit
     : decimalMultiply(current.quantity, decimalSubtract(price, current.costPrice));
-  const previousClose = quote.prev_close ?? current.previousClose?.amount ?? null;
+  const previousClose = quote.prev_close ?? (samePeriod ? current.previousClose?.amount ?? null : null);
   const changePercent = previousClose === null || decimalCompare(previousClose, "0") === 0
-    ? current.changePercent
+    ? null
     : decimalMultiply(decimalDivide(decimalSubtract(price, previousClose), previousClose), "100");
   const valuation = sourceMarketValueAmount === null
     ? { status: "unvalued" as const, reason: "缺少实时行情折算汇率" }
@@ -86,12 +95,12 @@ export function applyLongbridgeRealtimeQuote<T extends Pick<AssetSourceSummary, 
       ? null
       : { amount: sourceMarketValueAmount, currency: source.snapshot.total.currency },
     previousClose: previousClose === null
-      ? current.previousClose ?? null
+      ? null
       : { amount: previousClose, currency: current.currency },
     platformProfit,
     changePercent,
     quoteEvidence: {
-      session: current.quoteEvidence?.session ?? "unknown",
+      session,
       quotedAt,
       observedAt,
       freshness: "current" as const,

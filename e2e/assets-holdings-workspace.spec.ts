@@ -183,13 +183,13 @@ async function installQuoteStream(page: Page) {
       counterStarts,
       EventSource: QuoteStream,
       activeQuoteStreams: () => QuoteStream.active.size,
-      emitQuote: (price: string, timestamp = 1790038800) => {
+      emitQuote: (price: string, timestamp: string | number = 1790038800, trade_session = "Intraday") => {
         for (const stream of QuoteStream.active) {
           stream.dispatchEvent(new MessageEvent("stream-status", {
             data: JSON.stringify({ state: "ready" }),
           }));
           stream.dispatchEvent(new MessageEvent("quote", {
-            data: JSON.stringify({ symbol: "AAPL.US", last_done: price, timestamp }),
+            data: JSON.stringify({ symbol: "AAPL.US", last_done: price, timestamp, trade_session }),
           }));
         }
       },
@@ -197,11 +197,11 @@ async function installQuoteStream(page: Page) {
   });
 }
 
-async function emitQuote(page: Page, price: string, timestamp = 1790038800) {
-  await page.evaluate(({ price, timestamp }) => {
-    (window as unknown as { emitQuote(price: string, timestamp: number): void })
-      .emitQuote(price, timestamp);
-  }, { price, timestamp });
+async function emitQuote(page: Page, price: string, timestamp: string | number = 1790038800, trade_session = "Intraday") {
+  await page.evaluate(({ price, timestamp, trade_session }) => {
+    (window as unknown as { emitQuote(price: string, timestamp: string | number, trade_session: string): void })
+      .emitQuote(price, timestamp, trade_session);
+  }, { price, timestamp, trade_session });
 }
 
 for (const path of ["/assets", "/asset-sources/source-longbridge-cash"]) {
@@ -350,7 +350,7 @@ test("来源详情持续接收行情且乱序消息不回退价格", async ({ pa
   await expect(page.getByTestId("assets-source-total-source-longbridge-cash")).toContainText("807.82", { timeout: 5_000 });
 });
 
-for (const path of ["/assets", "/asset-sources/source-longbridge-cash"]) {
+for (const path of ["/", "/performance", "/assets", "/asset-sources/source-longbridge-cash"]) {
   test("长桥 CLI 未登录时明确提示登录并提供重新检测：" + path, async ({
     page,
     request,
@@ -521,3 +521,40 @@ test("资产观察在 390px 可键盘筛选、切换币种且没有横向页面�
     ),
   ).toBeLessThanOrEqual(0);
 });
+
+for (const [path, totalId] of [["/", "overview-current-total"], ["/performance", "performance-current-total"], ["/asset-sources/source-longbridge-cash", "asset-source-total"]]) {
+  test("各页当前资产按真实 serve 时间更新且拒绝旧行情：" + path, async ({ page, request }, testInfo) => {
+    await request.post("/test-doubles/valuation?scenario=longbridge-cash");
+    await page.route("**/api/asset-sources/refresh", route => route.fulfill({
+      json: { successCount: 0, failureCount: 0, skipped: "not-due", attemptedAt: new Date().toISOString() },
+    }));
+    await installQuoteStream(page);
+    await loginAsOwner(page);
+    if (path !== "/") await page.goto(path);
+    const total = page.getByTestId(totalId);
+    const counter = total.locator('[data-vibe-component="live-counter"]');
+    await total.scrollIntoViewIfNeeded();
+    await expect(counter).toHaveAttribute("data-counter-state", "complete");
+    await expect(counter).toHaveAttribute("data-counter-target", "782.82");
+    for (const [session, price, time, expected] of [
+      ["Pre", "123", "2026-09-22T13:00:00Z", "805.82"],
+      ["Intraday", "124", "2026-09-22T20:00:00Z", "806.82"],
+      ["Post", "125", "2026-09-22T21:00:00Z", "807.82"],
+      ["Overnight", "126", "2026-09-23T01:00:00Z", "808.82"],
+    ]) {
+      await emitQuote(page, price, time, session);
+      await emitQuote(page, "1", "2026-09-22T01:00:00Z", "Intraday");
+      await expect(counter).toHaveAttribute("data-counter-target", expected, { timeout: 5_000 });
+      await expect(counter).toHaveAttribute("data-counter-state", "complete");
+      await expect(counter).toHaveText(expected);
+    }
+    await expect.poll(() => page.evaluate(() =>
+      (window as unknown as { activeQuoteStreams(): number }).activeQuoteStreams(),
+    )).toBe(1);
+    await total.screenshot({ path: testInfo.outputPath("realtime-current-total.png") });
+    // Reload with no new push: live projection must not have overwritten the stored snapshot.
+    await page.reload();
+    await expect(page.getByTestId(totalId).locator('[data-vibe-component="live-counter"]'))
+      .toHaveAttribute("data-counter-target", "782.82");
+  });
+}

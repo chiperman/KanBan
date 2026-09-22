@@ -28,6 +28,11 @@ test.beforeEach(async ({ request }) => {
 });
 
 test("USD 历史账本在总览和收益分析按当前汇率切换 CNY、HKD", async ({ page }) => {
+  // This regression compares a fixed valuation; live quote updates have separate coverage.
+  await page.route("**/api/asset-sources/stream", route => route.fulfill({
+    contentType: "text/event-stream",
+    body: ": fixed valuation\n\n",
+  }));
   await page.request.post("/test-doubles/clock", {
     data: { now: "2026-04-01T08:00:00.000Z" },
   });

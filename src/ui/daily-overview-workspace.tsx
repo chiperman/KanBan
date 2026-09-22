@@ -3,6 +3,9 @@
 import type { FormalSettlementExecution } from "@/server/ports";
 
 import { useMemo } from "react";
+import { useLongbridgeRealtime } from "@/ui/use-longbridge-realtime";
+import { LongbridgeRealtimeNotice } from "@/ui/longbridge-realtime-notice";
+import { VibeLiveCounter } from "@/ui/vibe/vibe-live-counter";
 
 import {
   analyzeCurrentInvestmentPerformance,
@@ -251,9 +254,10 @@ export function DailyOverviewWorkspace({
     showSensitiveInfo,
   } = useWorkbenchDisplayPreferences();
 
+  const { liveSources, state: realtimeState, retry } = useLongbridgeRealtime(sources, !demoMode);
   const recordedSources = useMemo(
-    () => sources.filter(hasManualAssetRecord),
-    [sources],
+    () => liveSources.filter(hasManualAssetRecord),
+    [liveSources],
   );
   const refreshEnabled = recordedSources.some(
     (source) =>
@@ -653,6 +657,7 @@ export function DailyOverviewWorkspace({
         />
       </section>
 
+      <LongbridgeRealtimeNotice state={realtimeState} retry={retry} />
       <section className="daily-overview__sources" data-testid="overview-source-summary">
         <header>
           <div>
@@ -692,7 +697,7 @@ export function DailyOverviewWorkspace({
                     <strong className="daily-overview__source-total">
                       {sourceAmount === null
                         ? "无法折算"
-                        : `${amount(sourceAmount)} ${currency}`}
+                        : <><VibeLiveCounter value={amount(sourceAmount)} resetKey={currency} /> {currency}</>}
                     </strong>
                     <div
                       className="daily-overview__source-change"
@@ -703,7 +708,6 @@ export function DailyOverviewWorkspace({
                           <div className="daily-overview__source-change-today">
                             <span>今日变化</span>
                             <VibeMetric
-                              animate={false}
                               className="profit-color-value"
                               data-profit-color-scheme={profitColorScheme}
                               data-profit-direction={profitDirection(comparison.change)}

@@ -5,16 +5,9 @@ import {
   type PageSearchParams,
 } from "@/server/auth/canonical-origin";
 import { getServices } from "@/server/composition";
-import {
-  buildTotalValuation,
-  convertCurrencyAmount,
-  type ReportingCurrency,
-} from "@/domain/valuation";
-import { hasManualAssetRecord } from "@/domain/manual-asset-records";
 import { shanghaiDay } from "@/domain/daily-asset-snapshots";
 import {
   longbridgeReferenceRates,
-  type PortfolioObservation,
 } from "@/domain/investment-performance";
 import { InvestmentPerformanceWorkspace } from "@/ui/investment-performance-workspace";
 import { SessionGuard } from "@/ui/session-guard";
@@ -44,42 +37,7 @@ export default async function PerformancePage({
     services.dailyAssetSnapshots.listImportedSourceHistoryObservations(),
     services.assetFullRefreshState.read(),
   ]);
-  const usdValuation = buildTotalValuation(sources, "USD", "source");
   const longbridgeRates = longbridgeReferenceRates(sources);
-  const recordedSources = sources.filter(hasManualAssetRecord);
-  const currentTotals = (["USD", "CNY", "HKD"] as const).reduce(
-    (totals, currency) => {
-      const amount = usdValuation.amount === null
-        ? null
-        : currency === "USD"
-          ? usdValuation.amount
-          : convertCurrencyAmount(
-            usdValuation.amount,
-            "USD",
-            currency,
-            longbridgeRates,
-          );
-      const complete =
-        amount !== null &&
-        usdValuation.incomplete === false &&
-        usdValuation.expiredCount === 0 &&
-        recordedSources.length > 0 &&
-        recordedSources.every(
-          (source) =>
-            source.lifecycle !== "disconnected" &&
-            source.sync.status === "current",
-        );
-      totals[currency] = amount === null
-        ? null
-        : {
-            amount,
-            complete,
-            observedAt: now.toISOString(),
-          };
-      return totals;
-    },
-    {} as Record<ReportingCurrency, PortfolioObservation | null>,
-  );
 
   return (
     <SessionGuard>
@@ -104,7 +62,7 @@ export default async function PerformancePage({
               cashflows={cashflows}
               currentDay={shanghaiDay(now)}
               currentObservedAt={now.toISOString()}
-              currentTotals={currentTotals}
+              sources={sources.map(({ credentialReference: _credential, permissions: _permissions, ...source }) => source)}
               currentExchangeRates={longbridgeRates}
               importedSourceHistoryObservations={importedSourceHistoryObservations}
               trendObservations={trendObservations}

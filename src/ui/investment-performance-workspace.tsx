@@ -22,9 +22,13 @@ import {
   decimalMultiply,
   decimalToFixed,
 } from "@/domain/decimal";
-import type { ReportingCurrency } from "@/domain/valuation";
+import { buildTotalValuation, convertCurrencyAmount, type ReportingCurrency } from "@/domain/valuation";
+import { hasManualAssetRecord } from "@/domain/manual-asset-records";
+import { useLongbridgeRealtime } from "@/ui/use-longbridge-realtime";
+import { LongbridgeRealtimeNotice } from "@/ui/longbridge-realtime-notice";
 import type {
   AssetExchangeRate,
+  AssetSourceSummary,
   DailyAssetTrendObservation,
   ImportedAssetSourceHistoryObservation,
   InvestmentCashflow,
@@ -428,7 +432,7 @@ export function InvestmentPerformanceWorkspace({
   cashflows: initialCashflows,
   currentDay,
   currentObservedAt,
-  currentTotals,
+  sources,
   currentExchangeRates,
   importedSourceHistoryObservations,
   trendObservations,
@@ -436,11 +440,27 @@ export function InvestmentPerformanceWorkspace({
   cashflows: InvestmentCashflow[];
   currentDay: string;
   currentObservedAt: string;
-  currentTotals: CurrentTotals;
+  sources: Omit<AssetSourceSummary, "credentialReference" | "permissions">[];
   currentExchangeRates: AssetExchangeRate[];
   importedSourceHistoryObservations: ImportedAssetSourceHistoryObservation[];
   trendObservations: DailyAssetTrendObservation[];
 }) {
+  const { liveSources, state: realtimeState, retry } = useLongbridgeRealtime(sources);
+  const currentTotals = useMemo(() => {
+    const recorded = liveSources.filter(hasManualAssetRecord);
+    const valuation = buildTotalValuation(recorded, "USD", "source");
+    return (["USD", "CNY", "HKD"] as const).reduce((totals, currency) => {
+      const amount = valuation.amount === null ? null : currency === "USD" ? valuation.amount
+        : convertCurrencyAmount(valuation.amount, "USD", currency, currentExchangeRates);
+      totals[currency] = amount === null ? null : {
+        amount,
+        complete: !valuation.incomplete && valuation.expiredCount === 0 && recorded.length > 0 &&
+          recorded.every(source => source.lifecycle !== "disconnected" && source.sync.status === "current"),
+        observedAt: currentObservedAt,
+      };
+      return totals;
+    }, {} as CurrentTotals);
+  }, [liveSources, currentExchangeRates, currentObservedAt]);
   const [cashflows, setCashflows] = useState(() => sortCashflows(initialCashflows));
   const {
     currency,
@@ -671,6 +691,7 @@ export function InvestmentPerformanceWorkspace({
         title="收益分析"
       />
 
+      <LongbridgeRealtimeNotice state={realtimeState} retry={retry} />
       <section className="investment-performance__current" aria-label="当前组合结论">
         <article data-testid="performance-current-total">
           <p className="card-label">CURRENT / TOTAL</p>

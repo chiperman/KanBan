@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   applyLongbridgeRealtimeQuote,
+  longbridgeQuoteTime,
+  longbridgeQuotePeriod,
   type LongbridgeRealtimeQuote,
 } from "@/domain/longbridge-realtime";
 import type { AssetSourceSummary } from "@/server/ports";
@@ -23,14 +25,14 @@ type QuoteBatch = { key: string; quotes: Map<string, ReceivedQuote> };
 // 给 1.2 秒金额动画留出播放与停顿时间。
 const QUOTE_BATCH_MS = 2_000;
 
-export function useLongbridgeRealtime<T extends RealtimeSource>(sources: T[]) {
+export function useLongbridgeRealtime<T extends RealtimeSource>(sources: T[], enabled = true) {
   const [state, setState] = useState<LongbridgeRealtimeState>("idle");
   const [retryKey, setRetryKey] = useState(0);
   const [batch, setBatch] = useState<QuoteBatch>(() => ({ key: "", quotes: new Map() }));
   const latest = useRef<QuoteBatch>({ key: "", quotes: new Map() });
   const { subscriptionKey, symbolsKey } = useMemo(() => {
     const connected = sources.filter((source) =>
-      source.kind === "longbridge" && source.lifecycle !== "disconnected",
+      enabled && source.kind === "longbridge" && source.lifecycle !== "disconnected",
     );
     const symbols = [...new Set(connected.flatMap((source) => source.snapshot.holdings)
       .filter((holding) => holding.assetClass !== "cash" && !holding.symbol.startsWith("CASH."))
@@ -39,7 +41,7 @@ export function useLongbridgeRealtime<T extends RealtimeSource>(sources: T[]) {
       subscriptionKey: symbols ? JSON.stringify([connected.map((source) => source.id).sort(), symbols]) : "",
       symbolsKey: symbols,
     };
-  }, [sources]);
+  }, [sources, enabled]);
 
   useEffect(() => {
     if (latest.current.key !== subscriptionKey) {
@@ -56,17 +58,20 @@ export function useLongbridgeRealtime<T extends RealtimeSource>(sources: T[]) {
     const stream = new EventSource("/api/asset-sources/stream");
     const handleQuote = (event: Event) => {
       try {
-        const quote = JSON.parse((event as MessageEvent<string>).data) as LongbridgeRealtimeQuote;
+        let quote = JSON.parse((event as MessageEvent<string>).data) as LongbridgeRealtimeQuote;
         if (!quote || !symbols.has(quote.symbol) || typeof quote.last_done !== "string" ||
-          !/^\d+(?:\.\d+)?$/.test(quote.last_done)) return;
+          !/^\d+(?:\.\d+)?$/.test(quote.last_done) || longbridgeQuoteTime(quote.timestamp) === null) return;
         const previous = latest.current.quotes.get(quote.symbol)?.quote;
         if (previous) {
-          const previousAt = Number(previous.timestamp);
-          const nextAt = Number(quote.timestamp);
-          if (Number.isFinite(previousAt) && Number.isFinite(nextAt) &&
-            previousAt > 0 && nextAt > 0 && nextAt < previousAt) return;
+          const previousAt = longbridgeQuoteTime(previous.timestamp);
+          const nextAt = longbridgeQuoteTime(quote.timestamp);
+          if (nextAt === null || (previousAt !== null && nextAt < previousAt)) return;
+          if (quote.prev_close === undefined && longbridgeQuotePeriod(quote) === longbridgeQuotePeriod(previous)) {
+            quote = { ...quote, prev_close: previous.prev_close };
+          }
           if (previous.last_done === quote.last_done && previous.timestamp === quote.timestamp &&
-            previous.prev_close === quote.prev_close && previous.trade_status === quote.trade_status) return;
+            previous.prev_close === quote.prev_close && previous.trade_status === quote.trade_status &&
+            previous.trade_session === quote.trade_session) return;
         }
         latest.current.quotes.set(quote.symbol, { quote, observedAt: new Date().toISOString() });
         // 固定窗口合并行情，持续推送时也按时显示最新值。重连保留已收到的行情。
