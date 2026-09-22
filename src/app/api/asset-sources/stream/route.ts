@@ -48,13 +48,18 @@ export async function GET(request: Request): Promise<Response> {
         mode: "serve",
       }));
       if (symbols.length > 0) {
-        subscription = getLongbridgeServeQuoteHub().subscribe(symbols, (quote) => {
+        const send = (name: string, value: unknown) => {
           try {
-            controller.enqueue(event(encoder, "quote", quote));
+            controller.enqueue(event(encoder, name, value));
           } catch {
             close();
           }
-        });
+        };
+        subscription = getLongbridgeServeQuoteHub().subscribe(
+          symbols,
+          (quote) => send("quote", quote),
+          (status) => send("stream-status", status),
+        );
       }
       keepAlive = setInterval(() => {
         try {

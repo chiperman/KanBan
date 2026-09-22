@@ -4,6 +4,7 @@ import { PassThrough, Writable } from "node:stream";
 import test from "node:test";
 
 import {
+  classifyLongbridgeServeError,
   LongbridgeServeClient,
   type LongbridgeServeQuote,
 } from "@/server/asset-sources/longbridge-serve-client";
@@ -49,6 +50,21 @@ function makeClient(process: FakeServeProcess, requestTimeoutMs = 500): Longbrid
     spawnProcess: () => process as never,
   });
 }
+
+test("长桥 serve 错误会区分登录、CLI 缺失和其他不可用状态", () => {
+  const authenticationError = classifyLongbridgeServeError(
+    new Error("not logged in: authentication required"),
+  );
+  assert.equal(authenticationError.code, "authentication-required");
+
+  const cliError = classifyLongbridgeServeError(
+    Object.assign(new Error("spawn longbridge ENOENT"), { code: "ENOENT" }),
+  );
+  assert.equal(cliError.code, "cli-unavailable");
+
+  const unavailableError = classifyLongbridgeServeError(new Error("服务响应超时"));
+  assert.equal(unavailableError.code, "unavailable");
+});
 
 test("JSON-RPC 响应按 id 匹配，支持乱序响应和行情通知分流", async () => {
   const process = new FakeServeProcess();

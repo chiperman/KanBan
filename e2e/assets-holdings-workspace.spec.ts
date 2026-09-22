@@ -153,6 +153,41 @@ test("长桥实时 SSE 行情只在页面内更新价格、市值与来源总额
   ).toContainText("805.82 USD");
 });
 
+test("长桥 CLI 未登录时资产页明确提示登录并提供重新检测", async ({
+  page,
+  request,
+}) => {
+  const configured = await request.post("/test-doubles/valuation?scenario=longbridge-cash");
+  expect(configured.ok()).toBeTruthy();
+
+  await page.route("**/api/asset-sources/stream", async (route) => {
+    await route.fulfill({
+      status: 200,
+      headers: {
+        "cache-control": "no-cache",
+        "content-type": "text/event-stream; charset=utf-8",
+      },
+      body: [
+        "event: ready",
+        'data: {"provider":"longbridge","symbols":["AAPL.US"],"mode":"serve"}',
+        "",
+        "event: stream-status",
+        'data: {"state":"error","code":"authentication-required"}',
+        "",
+        "",
+      ].join("\n"),
+    });
+  });
+
+  await loginAsOwner(page);
+  await page.goto("/assets");
+
+  const notice = page.locator(".assets-holdings__realtime-notice");
+  await expect(notice).toContainText("未检测到当前电脑的 Longbridge CLI 登录状态");
+  await expect(notice).toContainText("longbridge auth login");
+  await expect(notice.getByRole("button", { name: "重新检测" })).toBeVisible();
+});
+
 test("产品覆盖展开保持主行对齐，并将覆盖信息铺满来源整行", async ({
   page,
   request,

@@ -26,6 +26,59 @@ interface JsonRpcNotification {
 
 type QuoteListener = (quote: LongbridgeServeQuote) => void;
 
+export type LongbridgeServeErrorCode =
+  | "authentication-required"
+  | "cli-unavailable"
+  | "unavailable";
+
+export type LongbridgeServeStatus =
+  | { state: "connecting" }
+  | { state: "ready" }
+  | { state: "error"; code: LongbridgeServeErrorCode };
+
+export class LongbridgeServeError extends Error {
+  readonly code: LongbridgeServeErrorCode;
+
+  constructor(code: LongbridgeServeErrorCode, cause?: unknown) {
+    super(code === "authentication-required"
+      ? "未检测到长桥 CLI 登录状态"
+      : code === "cli-unavailable"
+        ? "未找到长桥 CLI"
+        : "长桥实时行情暂时不可用");
+    this.name = "LongbridgeServeError";
+    this.code = code;
+    this.cause = cause;
+  }
+}
+
+function rawErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  return "";
+}
+
+function isErrno(error: unknown, code: string): boolean {
+  return isRecord(error) && error.code === code;
+}
+
+export function classifyLongbridgeServeError(
+  error: unknown,
+): LongbridgeServeError {
+  if (error instanceof LongbridgeServeError) return error;
+  const message = rawErrorMessage(error).toLowerCase();
+  if (isErrno(error, "ENOENT")) {
+    return new LongbridgeServeError("cli-unavailable", error);
+  }
+  if (
+    /auth|unauthor|credential|login|logged in|token|permission|认证|授权|登录|凭证/.test(
+      message,
+    )
+  ) {
+    return new LongbridgeServeError("authentication-required", error);
+  }
+  return new LongbridgeServeError("unavailable", error);
+}
+
 const WRITE_METHODS = new Set([
   "trade.submit_order",
   "trade.cancel_order",
@@ -233,11 +286,14 @@ export interface LongbridgeServeQuoteSubscription {
   close(): void;
 }
 
+type StatusListener = (status: LongbridgeServeStatus) => void;
+
 class LongbridgeServeQuoteHub {
   private readonly client = new LongbridgeServeClient();
   private readonly subscribers = new Map<string, {
     symbols: Set<string>;
     listener: QuoteListener;
+    statusListener?: StatusListener;
   }>();
   private subscribedSymbols = new Set<string>();
   private subscribePromise: Promise<void> | null = null;
@@ -250,7 +306,11 @@ class LongbridgeServeQuoteHub {
     });
   }
 
-  subscribe(symbols: string[], listener: QuoteListener): LongbridgeServeQuoteSubscription {
+  subscribe(
+    symbols: string[],
+    listener: QuoteListener,
+    statusListener?: StatusListener,
+  ): LongbridgeServeQuoteSubscription {
     const id = randomUUID();
     const normalizedSymbols = new Set(
       symbols.map((symbol) => symbol.trim()).filter(Boolean),
@@ -258,9 +318,17 @@ class LongbridgeServeQuoteHub {
     this.subscribers.set(id, {
       symbols: normalizedSymbols,
       listener,
+      statusListener,
     });
-    void this.sync([...normalizedSymbols]).catch(() => {
-      // 后续订阅会再次尝试；SSE 客户端不应收到未处理 Promise rejection。
+    statusListener?.({ state: "connecting" });
+    void this.sync([...normalizedSymbols]).catch((error) => {
+      const status: LongbridgeServeStatus = {
+        state: "error",
+        code: classifyLongbridgeServeError(error).code,
+      };
+      for (const subscriber of this.subscribers.values()) {
+        subscriber.statusListener?.(status);
+      }
     });
     return {
       close: () => this.subscribers.delete(id),
@@ -278,6 +346,9 @@ class LongbridgeServeQuoteHub {
           for (const subscriber of this.subscribers.values()) {
             if (subscriber.symbols.has(quote.symbol)) subscriber.listener(quote);
           }
+        }
+        for (const subscriber of this.subscribers.values()) {
+          subscriber.statusListener?.({ state: "ready" });
         }
         const stillPending = pending.some((symbol) => !this.subscribedSymbols.has(symbol));
         if (!stillPending && pending.length === this.subscribedSymbols.size) break;

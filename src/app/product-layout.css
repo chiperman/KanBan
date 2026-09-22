@@ -1136,6 +1136,28 @@ html {
   padding-bottom: var(--vibe-space-16);
 }
 
+.assets-holdings__realtime-notice {
+  max-width: none;
+  margin: 0;
+}
+
+.assets-holdings__realtime-notice p {
+  margin: 0;
+}
+
+.assets-holdings__realtime-notice code {
+  color: var(--display);
+  font-family: var(--f-mono);
+  font-size: 0.95em;
+}
+
+.assets-holdings__realtime-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--vibe-space-2);
+  margin-top: var(--vibe-space-3);
+}
+
 .assets-holdings__source-totals,
 .assets-holdings__observations {
   min-width: 0;
