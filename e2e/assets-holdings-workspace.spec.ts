@@ -205,7 +205,7 @@ async function emitQuote(page: Page, price: string, timestamp = 1790038800) {
 }
 
 for (const path of ["/assets", "/asset-sources/source-longbridge-cash"]) {
-  test("长桥首次从零计数、完整刷新有动画、实时行情不重播：" + path, async ({ page, request }) => {
+  test("长桥首次从零计数、完整刷新和后续行情平滑过渡：" + path, async ({ page, request }) => {
     await request.post("/test-doubles/valuation?scenario=longbridge-cash&refreshable=true");
     await installQuoteStream(page);
     await loginAsOwner(page);
@@ -219,13 +219,13 @@ for (const path of ["/assets", "/asset-sources/source-longbridge-cash"]) {
       (window as unknown as { counterStarts: WeakMap<Element, string[]> }).counterStarts.get(element) ?? [],
     );
     expect(await starts()).toEqual(["0.00"]);
-    // 首次计数尚未结束就收到行情，也应完成原动画而不是中断或重启。
+    // 首次计数中收到行情，合并窗口到期后从已显示的金额继续动画。
     await emitQuote(page, "123");
     await expect(counter).toHaveAttribute("data-counter-target", "805.82");
     await expect(counter).toHaveAttribute("data-counter-state", "running", { timeout: 100 });
     await expect(counter).toHaveAttribute("data-counter-state", "complete");
     await expect(counter).toHaveText("805.82");
-    expect(await starts()).toEqual(["0.00"]);
+    expect(await starts()).toEqual(["0.00", "782.82"]);
 
     // 使用测试来源刷新器，走真实按钮、刷新协调器和路由重新取数。
     await request.post("/test-doubles/refresh", { data: { action: "reset-schedule" } });
@@ -233,41 +233,94 @@ for (const path of ["/assets", "/asset-sources/source-longbridge-cash"]) {
       ? "立即刷新资产" : "刷新 长桥账户", exact: true }).click();
     await counter.scrollIntoViewIfNeeded();
     await expect(counter).toHaveAttribute("data-counter-state", "running");
-    expect(await starts()).toEqual(["0.00", "805.82"]);
+    expect(await starts()).toEqual(["0.00", "782.82", "805.82"]);
     await expect(counter).toHaveAttribute("data-counter-state", "complete");
     await expect(counter).toHaveText("123.00");
     await emitQuote(page, "124", 1790038802);
     await expect(counter).toHaveAttribute("data-counter-target", "124.00");
-    await expect(counter).toHaveAttribute("data-counter-state", "complete", { timeout: 100 });
+    await expect(counter).toHaveAttribute("data-counter-state", "running", { timeout: 100 });
+    await expect.poll(async () => Number(await counter.textContent())).toBeGreaterThan(123);
+    expect(Number(await counter.textContent())).toBeLessThan(124);
+    await expect(counter).toHaveAttribute("data-counter-state", "complete");
     await expect(counter).toHaveText("124.00");
-    expect(await starts()).toEqual(["0.00", "805.82"]);
+    expect(await starts()).toEqual(["0.00", "782.82", "805.82", "123.00"]);
+    await emitQuote(page, "120", 1790038803);
+    await expect(counter).toHaveAttribute("data-counter-target", "120.00");
+    await expect(counter).toHaveAttribute("data-counter-state", "running", { timeout: 100 });
+    await expect(counter).toHaveAttribute("data-counter-state", "complete");
+    await expect(counter).toHaveText("120.00");
+    expect(await starts()).toEqual(["0.00", "782.82", "805.82", "123.00", "124.00"]);
   });
 }
 
-test("高频行情合并更新且金额不反复播放计数动画", async ({ page, request }, testInfo) => {
+test("完整刷新动画期间收到行情，完成当前目标后平滑追上最新值", async ({ page, request }) => {
+  await request.post("/test-doubles/valuation?scenario=longbridge-cash&refreshable=true");
+  await installQuoteStream(page);
+  await loginAsOwner(page);
+  await page.goto("/assets");
+  const counter = page.getByTestId("assets-source-total-source-longbridge-cash")
+    .locator('[data-vibe-component="live-counter"]');
+  await counter.scrollIntoViewIfNeeded();
+  await expect(counter).toHaveAttribute("data-counter-state", "complete");
+  await request.post("/test-doubles/refresh", { data: { action: "reset-schedule" } });
+  await emitQuote(page, "123");
+  await page.waitForTimeout(1_300);
+  await page.getByRole("button", { name: "立即刷新资产", exact: true }).click();
+  await counter.scrollIntoViewIfNeeded();
+  await expect(counter).toHaveAttribute("data-counter-target", "201.00");
+  await expect(counter).toHaveAttribute("data-counter-state", "running");
+  await expect(counter).toHaveAttribute("data-counter-target", "123.00");
+  const starts = () => counter.evaluate((element) =>
+    (window as unknown as { counterStarts: WeakMap<Element, string[]> }).counterStarts.get(element) ?? [],
+  );
+  // 行情到达时原动画仍在播放，不能重启或直接跳到 123。
+  expect(await starts()).toEqual(["0.00", "782.82"]);
+  expect(Number(await counter.textContent())).toBeGreaterThan(201);
+  await expect(counter).toHaveAttribute("data-counter-state", "complete");
+  await expect(counter).toHaveText("123.00");
+  expect(await starts()).toEqual(["0.00", "782.82", "201.00"]);
+});
+
+test("高频行情每两秒合并，动画完成后从旧值过渡且相同金额不重播", async ({ page, request }, testInfo) => {
   await request.post("/test-doubles/valuation?scenario=longbridge-cash");
   await installQuoteStream(page);
   await loginAsOwner(page);
   await page.goto("/assets");
   const counter = page.getByTestId("assets-source-total-source-longbridge-cash")
     .locator('[data-vibe-component="live-counter"]');
+  await counter.scrollIntoViewIfNeeded();
   await expect(counter).toHaveAttribute("data-counter-state", "complete");
   const updates = await counter.evaluate(async (element) => {
-    let count = 0;
-    const observer = new MutationObserver((records) => { count += records.length; });
+    const times: number[] = [];
+    const statesBeforeUpdate: string[] = [];
+    const observer = new MutationObserver(() => { times.push(performance.now()); });
     observer.observe(element, { attributes: true, attributeFilter: ["data-counter-target"] });
-    const emit = (window as unknown as { emitQuote(price: string): void }).emitQuote;
-    for (let i = 0; i < 20; i++) {
-      emit(String(123 + i));
-      await new Promise((resolve) => setTimeout(resolve, 40));
+    const emit = (window as unknown as { emitQuote(price: string, timestamp?: number): void }).emitQuote;
+    for (let i = 0; i < 50; i++) {
+      if (i === 18 || i === 38) statesBeforeUpdate.push((element as HTMLElement).dataset.counterState ?? "");
+      emit(String(123 + i), 1790038800 + i);
+      await new Promise((resolve) => setTimeout(resolve, 100));
     }
     observer.disconnect();
-    return count;
+    return { times, statesBeforeUpdate };
   });
-  expect(updates).toBeLessThanOrEqual(3);
-  await expect(counter).toHaveAttribute("data-counter-target", "824.82");
-  await expect(counter).toHaveAttribute("data-counter-state", "complete", { timeout: 100 });
-  await expect(counter).toHaveText("824.82");
+  expect(updates.times).toHaveLength(2);
+  expect(updates.times[1] - updates.times[0]).toBeGreaterThanOrEqual(1_900);
+  expect(updates.statesBeforeUpdate).toEqual(["complete", "complete"]);
+  await expect(counter).toHaveAttribute("data-counter-target", "854.82");
+  await expect(counter).toHaveAttribute("data-counter-state", "running", { timeout: 100 });
+  await expect(counter).toHaveAttribute("data-counter-state", "complete");
+  await expect(counter).toHaveText("854.82");
+  const starts = () => counter.evaluate((element) =>
+    (window as unknown as { counterStarts: WeakMap<Element, string[]> }).counterStarts.get(element) ?? [],
+  );
+  const before = await starts();
+  expect(before).toHaveLength(4);
+  expect(before[0]).toBe("0.00");
+  expect(before.slice(1)).not.toContain("0.00");
+  await emitQuote(page, "172", 1790038900);
+  await page.waitForTimeout(2_200);
+  expect(await starts()).toEqual(before);
   await page.getByTestId("assets-source-totals").screenshot({ path: testInfo.outputPath("realtime-totals.png") });
 });
 
@@ -280,10 +333,10 @@ test("来源详情持续接收行情且乱序消息不回退价格", async ({ pa
   await expect(total).toBeVisible();
   await total.scrollIntoViewIfNeeded();
   await emitQuote(page, "123");
-  await expect(total).toContainText("805.82");
+  await expect(total).toContainText("805.82", { timeout: 5_000 });
   await emitQuote(page, "124", 1790038802);
   await emitQuote(page, "100", 1790038801);
-  await expect(total).toContainText("806.82");
+  await expect(total).toContainText("806.82", { timeout: 5_000 });
   await page.waitForTimeout(600);
   await expect(total).toContainText("806.82");
   await expect(total.locator('[data-vibe-component="live-counter"]')).toHaveAttribute("data-counter-state", "complete");
@@ -294,7 +347,7 @@ test("来源详情持续接收行情且乱序消息不回退价格", async ({ pa
     (window as unknown as { activeQuoteStreams(): number }).activeQuoteStreams(),
   )).toBe(1);
   await emitQuote(page, "125", 1790038803);
-  await expect(page.getByTestId("assets-source-total-source-longbridge-cash")).toContainText("807.82");
+  await expect(page.getByTestId("assets-source-total-source-longbridge-cash")).toContainText("807.82", { timeout: 5_000 });
 });
 
 for (const path of ["/assets", "/asset-sources/source-longbridge-cash"]) {

@@ -69,7 +69,7 @@ export function VibeLiveCounter({
   value,
 }: {
   animate?: boolean;
-  /** 同一批次内的实时值直接更新；换批次时恢复计数动画。 */
+  /** 同一快照内的行情等待当前动画结束，再过渡到最新值。 */
   animationKey?: string;
   resetKey?: string;
   value: string;
@@ -98,12 +98,8 @@ export function VibeLiveCounter({
     const reducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
-    if (sameBatch && target && animate && !reducedMotion) {
-      // 不打断首次/刷新动画；结束时一次显示期间收到的最新金额。
-      if (cancelAnimationRef.current === null) {
-        counter.textContent = value;
-        renderedValueRef.current = target;
-      }
+    if (sameBatch && target && animate && !reducedMotion && cancelAnimationRef.current !== null) {
+      // 仅保留最新目标，不打断当前动画，也不积压中间行情。
       return;
     }
     cancelAnimationRef.current?.();
@@ -130,8 +126,6 @@ export function VibeLiveCounter({
       ? zeroValue(target)
       : renderedValue;
     const startScaledValue = rescale(startValue, target.scale);
-    const targetScaledValue = target.scaledValue;
-    const delta = targetScaledValue - startScaledValue;
     let animationFrame = 0;
     let observer: IntersectionObserver | null = null;
     let cancelled = false;
@@ -143,9 +137,27 @@ export function VibeLiveCounter({
     };
     previousResetKeyRef.current = resetKey;
 
-    const startAnimation = () => {
+    const startAnimation = (nextTarget = target, targetText = value) => {
       if (cancelled) return;
-      counter.textContent = formatCounterValue(startScaledValue, target);
+      const startScaledValue = rescale(renderedValueRef.current!, nextTarget.scale);
+      const delta = nextTarget.scaledValue - startScaledValue;
+      const finish = () => {
+        counter.textContent = targetText;
+        renderedValueRef.current = nextTarget;
+        const queuedText = latestValueRef.current;
+        const queuedTarget = parseCounterValue(queuedText);
+        if (queuedTarget && queuedText !== targetText) {
+          startAnimation(queuedTarget, queuedText);
+          return;
+        }
+        counter.dataset.counterState = "complete";
+        cancelAnimationRef.current = null;
+      };
+      if (delta === 0n) {
+        finish();
+        return;
+      }
+      counter.textContent = formatCounterValue(startScaledValue, nextTarget);
       counter.dataset.counterState = "running";
       const startedAt = performance.now();
 
@@ -163,9 +175,9 @@ export function VibeLiveCounter({
           startScaledValue +
           (delta * easingStep) / BigInt(EASING_PRECISION);
 
-        counter.textContent = formatCounterValue(nextValue, target);
+        counter.textContent = formatCounterValue(nextValue, nextTarget);
         renderedValueRef.current = {
-          ...target,
+          ...nextTarget,
           scaledValue: nextValue,
         };
 
@@ -174,13 +186,16 @@ export function VibeLiveCounter({
           return;
         }
 
-        counter.textContent = latestValueRef.current;
-        counter.dataset.counterState = "complete";
-        renderedValueRef.current = parseCounterValue(latestValueRef.current);
-        cancelAnimationRef.current = null;
+        finish();
       };
 
       animationFrame = window.requestAnimationFrame(step);
+    };
+
+    cancelAnimationRef.current = () => {
+      cancelled = true;
+      observer?.disconnect();
+      window.cancelAnimationFrame(animationFrame);
     };
 
     if ("IntersectionObserver" in window) {
@@ -196,12 +211,6 @@ export function VibeLiveCounter({
     } else {
       startAnimation();
     }
-
-    cancelAnimationRef.current = () => {
-      cancelled = true;
-      observer?.disconnect();
-      window.cancelAnimationFrame(animationFrame);
-    };
   }, [animate, animationKey, resetKey, value]);
 
   useLayoutEffect(() => () => {

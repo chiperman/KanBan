@@ -20,7 +20,8 @@ export type LongbridgeRealtimeState =
 type RealtimeSource = Pick<AssetSourceSummary, "id" | "kind" | "lifecycle" | "snapshot">;
 type ReceivedQuote = { quote: LongbridgeRealtimeQuote; observedAt: string };
 type QuoteBatch = { key: string; quotes: Map<string, ReceivedQuote> };
-const QUOTE_BATCH_MS = 500;
+// 给 1.2 秒金额动画留出播放与停顿时间。
+const QUOTE_BATCH_MS = 2_000;
 
 export function useLongbridgeRealtime<T extends RealtimeSource>(sources: T[]) {
   const [state, setState] = useState<LongbridgeRealtimeState>("idle");
