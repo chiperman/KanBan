@@ -247,16 +247,24 @@ function WorkbenchUtilities({
 }) {
   return (
     <div className="workbench-utilities" data-testid="workbench-utilities">
-      <WorkbenchPrivacyToggle />
-      <div className="workbench-utility-actions">
-        <ThemeSwitcher />
-        <LogoutButton />
-      </div>
-      {commandMenu ? (
-        <div className="workbench-command">
-          <CommandMenu refreshEnabled={refreshEnabled} />
+      <div className="workbench-utility-group">
+        <span className="workbench-utility-group__label">视图工具</span>
+        <div className="workbench-utility-group__controls workbench-utility-primary">
+          <WorkbenchPrivacyToggle />
+          {commandMenu ? (
+            <div className="workbench-command">
+              <CommandMenu refreshEnabled={refreshEnabled} />
+            </div>
+          ) : null}
         </div>
-      ) : null}
+      </div>
+      <div className="workbench-utility-group">
+        <span className="workbench-utility-group__label">账户工具</span>
+        <div className="workbench-utility-group__controls workbench-utility-actions">
+          <ThemeSwitcher showLabel />
+          <LogoutButton showLabel />
+        </div>
+      </div>
     </div>
   );
 }

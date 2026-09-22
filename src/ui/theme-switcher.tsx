@@ -80,7 +80,13 @@ function ThemeIcon({ choice }: { choice: ThemeChoice }) {
   return <VibeDotIcon name={THEME_ICONS[choice]} size={24} />;
 }
 
-export function ThemeSwitcher({ persist = true }: { persist?: boolean }) {
+export function ThemeSwitcher({
+  persist = true,
+  showLabel = false,
+}: {
+  persist?: boolean;
+  showLabel?: boolean;
+}) {
   const [choice, setChoice] = useState<ThemeChoice>("system");
 
   useEffect(() => {
@@ -109,10 +115,11 @@ export function ThemeSwitcher({ persist = true }: { persist?: boolean }) {
     <VibeTooltip align="end" label={tooltipLabel}>
       <button
         type="button"
-        className="theme-toggle"
+        className={showLabel ? "theme-toggle theme-toggle--labeled" : "theme-toggle"}
         aria-label={`当前主题：${THEME_LABELS[choice]}；点击切换为${THEME_LABELS[nextChoice]}`}
         onClick={() => selectTheme(nextChoice)}
       >
+        {showLabel ? <span>主题</span> : null}
         <ThemeIcon choice={choice} />
       </button>
     </VibeTooltip>

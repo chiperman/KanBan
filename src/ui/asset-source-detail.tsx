@@ -538,21 +538,23 @@ export function AssetSourceDetail({
             <p className="card-label">SOURCE / DETAIL</p>
             <h1>来源详情</h1>
           </div>
-          <div className="asset-source-detail__actions">
-            <VibeSelect
-              fieldId="asset-source-detail-reporting-currency"
-              label="计价货币"
-              onValueChange={setCurrency}
-              options={REPORTING_CURRENCY_OPTIONS}
-              value={currency}
-              variant="compact"
-            />
-            <VibeLink href="/asset-sources" variant="outline">
-              返回资产来源
-            </VibeLink>
+          <div className="asset-source-detail__control-rail">
+            <div className="asset-source-detail__actions" data-label="页面操作">
+              <VibeSelect
+                fieldId="asset-source-detail-reporting-currency"
+                label="计价货币"
+                onValueChange={setCurrency}
+                options={REPORTING_CURRENCY_OPTIONS}
+                value={currency}
+                variant="compact"
+              />
+              <VibeLink href="/asset-sources" variant="outline">
+                返回资产来源
+              </VibeLink>
+            </div>
+            <WorkbenchHeaderUtilitiesSlot />
           </div>
         </div>
-        <WorkbenchHeaderUtilitiesSlot />
       </section>
 
       <section aria-label="来源身份" className="asset-source-detail__metadata">

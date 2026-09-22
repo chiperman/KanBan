@@ -60,19 +60,23 @@ export default async function AssetDashboardPage({
             </span>
           </div>
           <div className="header-side">
-            <span className="header-system demo-mode-indicator">
-              DEMO DATA / NO PERSISTENCE
-            </span>
-            <LocalClock initialTime={now.toISOString()} compact />
-            <VibeLink
-              aria-label="退出演示"
-              className="header-demo-link"
-              href="/"
-              variant="outline"
-            >
-              EXIT
-            </VibeLink>
-            <ThemeSwitcher persist={false} />
+            <div className="page-header__context">
+              <span className="header-system demo-mode-indicator">
+                DEMO DATA / NO PERSISTENCE
+              </span>
+              <LocalClock initialTime={now.toISOString()} compact />
+            </div>
+            <div className="page-header__actions" aria-label="页面操作">
+              <VibeLink
+                aria-label="退出演示模式"
+                className="header-demo-link"
+                href="/"
+                variant="outline"
+              >
+                退出演示
+              </VibeLink>
+              <ThemeSwitcher persist={false} showLabel />
+            </div>
           </div>
         </header>
         <main id="main-content">
@@ -112,16 +116,20 @@ export default async function AssetDashboardPage({
             </span>
           </div>
           <div className="header-side">
-            <LocalClock initialTime={new Date().toISOString()} compact />
-            <VibeLink
-              aria-label="进入演示模式"
-              className="header-demo-link"
-              href="/?mode=demo"
-              variant="outline"
-            >
-              DEMO
-            </VibeLink>
-            <ThemeSwitcher />
+            <div className="page-header__context">
+              <LocalClock initialTime={new Date().toISOString()} compact />
+            </div>
+            <div className="page-header__actions" aria-label="页面操作">
+              <VibeLink
+                aria-label="进入演示模式"
+                className="header-demo-link"
+                href="/?mode=demo"
+                variant="outline"
+              >
+                演示模式
+              </VibeLink>
+              <ThemeSwitcher showLabel />
+            </div>
           </div>
         </header>
         <main id="main-content" className="login-main">

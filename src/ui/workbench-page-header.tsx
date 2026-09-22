@@ -26,15 +26,18 @@ export function WorkbenchPageHeader({
         <h1 id={titleId}>{title}</h1>
         {description ? <p>{description}</p> : null}
       </div>
-      {actions ? (
-        <div
-          aria-label={actionsLabel}
-          className="workbench-page-header__actions"
-        >
-          {actions}
-        </div>
-      ) : null}
-      <WorkbenchHeaderUtilitiesSlot />
+      <div className="workbench-page-header__control-rail">
+        {actions ? (
+          <div
+            aria-label={actionsLabel}
+            className="workbench-page-header__actions"
+            data-label="页面操作"
+          >
+            {actions}
+          </div>
+        ) : null}
+        <WorkbenchHeaderUtilitiesSlot />
+      </div>
     </header>
   );
 }
