@@ -7,6 +7,7 @@ import {
   type PageSearchParams,
 } from "@/server/auth/canonical-origin"
 import { getServices } from "@/server/composition"
+import { readAssetRefreshState } from "@/server/asset-refresh-state"
 import { DailyOverviewWorkspace } from "@/ui/daily-overview-workspace"
 import { AssetRefreshReset } from "@/ui/asset-refresh-provider"
 import { LocalClock } from "@/ui/local-clock"
@@ -151,7 +152,7 @@ export default async function AssetDashboardPage({
     services.assetSources.list(),
     services.investmentCashflows.list(),
     services.dailyAssetSnapshots.listTrendObservations(),
-    services.assetFullRefreshState.read(),
+    readAssetRefreshState(services),
     services.formalDailySettlements.list(),
     services.formalSettlementExecutions.latest(),
   ])
@@ -169,7 +170,7 @@ export default async function AssetDashboardPage({
       <WorkbenchShell
         refreshEnabled
         refreshRegistration={{
-          attemptedAt: fullRefreshState.attemptedAt,
+          ...fullRefreshState,
           sources: storedSources.map((source) => ({
             id: source.id,
             kind: source.kind,

@@ -5,6 +5,7 @@ import {
   type PageSearchParams,
 } from "@/server/auth/canonical-origin";
 import { getServices } from "@/server/composition";
+import { readAssetRefreshState } from "@/server/asset-refresh-state";
 import { AssetsHoldingsWorkspace } from "@/ui/assets-holdings-workspace";
 import { SessionGuard } from "@/ui/session-guard";
 import { WorkbenchShell } from "@/ui/workbench-shell";
@@ -22,7 +23,7 @@ export default async function AssetsPage({
   const [storedSources, manualRecords, fullRefreshState] = await Promise.all([
     services.assetSources.list(),
     services.manualAssetRecords.list(),
-    services.assetFullRefreshState.read(),
+    readAssetRefreshState(services),
   ]);
   const manualRecordsBySource = new Map<string, typeof manualRecords>();
   for (const record of manualRecords) {
@@ -45,7 +46,7 @@ export default async function AssetsPage({
       <WorkbenchShell
         refreshEnabled
         refreshRegistration={{
-          attemptedAt: fullRefreshState.attemptedAt,
+          ...fullRefreshState,
           sources: storedSources.map((source) => ({
             id: source.id,
             kind: source.kind,

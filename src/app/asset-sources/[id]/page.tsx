@@ -9,6 +9,7 @@ import {
   type PageSearchParams,
 } from "@/server/auth/canonical-origin";
 import { getServices } from "@/server/composition";
+import { readAssetRefreshState } from "@/server/asset-refresh-state";
 import { AssetSourceDetail } from "@/ui/asset-source-detail";
 import {
   DEFAULT_PROFIT_COLOR_SCHEME,
@@ -54,7 +55,7 @@ export default async function AssetSourceDetailPage({
         history: allHistory.filter((day) => (!detailQuery.from || day.day >= detailQuery.from) && (!detailQuery.to || day.day <= detailQuery.to)).map((day) => ({...day, sources: day.sources.filter((source) => source.sourceId === id)})) };
     })(),
     services.assetCards.list(),
-    services.assetFullRefreshState.read(),
+    readAssetRefreshState(services),
   ]);
   const { sources, manualRecords, history } = detail;
   const storedSource = sources.find((source) => source.id === id);
@@ -77,7 +78,7 @@ export default async function AssetSourceDetailPage({
       <WorkbenchShell
         refreshEnabled={false}
         refreshRegistration={{
-          attemptedAt: fullRefreshState.attemptedAt,
+          ...fullRefreshState,
           sources: sources.map((item) => ({
             id: item.id,
             kind: item.kind,

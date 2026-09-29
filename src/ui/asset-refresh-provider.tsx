@@ -23,6 +23,7 @@ import {
 
 export interface AssetRefreshRegistration {
   attemptedAt: string | null;
+  inProgressAt?: string | null;
   sources: RefreshableAssetSource[];
 }
 
@@ -68,6 +69,16 @@ async function requestAssetRefresh(
   return result;
 }
 
+async function readAssetRefreshState() {
+  const response = await fetch("/api/asset-sources/refresh", { cache: "no-store" });
+  if (response.status === 401) {
+    window.dispatchEvent(new Event(OWNER_LOCK_EVENT));
+    throw new Error("所有者会话已失效");
+  }
+  if (!response.ok) throw new Error("读取资产刷新状态失败");
+  return await response.json() as { attemptedAt: string | null; inProgressAt: string | null };
+}
+
 export function AssetRefreshProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const routerRef = useRef(router);
@@ -79,9 +90,11 @@ export function AssetRefreshProvider({ children }: { children: ReactNode }) {
     coordinatorRef.current = new AssetRefreshCoordinator({
       now: () => new Date(),
       request: requestAssetRefresh,
+      readState: readAssetRefreshState,
       schedule: (callback, delayMs) => window.setTimeout(callback, delayMs),
       cancel: (handle) => window.clearTimeout(handle as number),
       onReport: () => routerRef.current.refresh(),
+      onRecovered: () => routerRef.current.refresh(),
     });
   }
   const coordinator = coordinatorRef.current;

@@ -78,6 +78,8 @@ export interface AssetRefreshCoordinatorOptions {
   request: (intent: AssetRefreshIntent) => Promise<AssetRefreshReport>;
   schedule: (callback: () => void, delayMs: number) => unknown;
   cancel: (handle: unknown) => void;
+  readState?: () => Promise<{ attemptedAt: string | null; inProgressAt: string | null }>;
+  onRecovered?: () => void;
   onReport?: (input: {
     intent: AssetRefreshIntent;
     report: AssetRefreshReport;
@@ -86,6 +88,7 @@ export interface AssetRefreshCoordinatorOptions {
 
 export interface AssetRefreshRegistration {
   attemptedAt: string | null;
+  inProgressAt?: string | null;
   sources: RefreshableAssetSource[];
   visible: boolean;
   focused: boolean;
@@ -99,6 +102,8 @@ export class AssetRefreshCoordinator {
   private visible = false;
   private focused = false;
   private timer: unknown = null;
+  private recoveryTimer: unknown = null;
+  private recovering = false;
   private fullRequest: Promise<void> | null = null;
   private readonly sourceRequests = new Map<string, Promise<void>>();
   private fullActivity = idleStatus();
@@ -140,7 +145,7 @@ export class AssetRefreshCoordinator {
 
   register(registration: AssetRefreshRegistration): Promise<void> {
     this.setSources(registration.sources);
-    this.hydrate({ attemptedAt: registration.attemptedAt });
+    this.hydrate(registration);
     this.setBrowserState({
       visible: registration.visible,
       focused: registration.focused,
@@ -150,7 +155,7 @@ export class AssetRefreshCoordinator {
       : Promise.resolve();
   }
 
-  hydrate(state: { attemptedAt: string | null }): void {
+  hydrate(state: { attemptedAt: string | null; inProgressAt?: string | null }): void {
     const currentAttemptedAt = this.attemptedAt === null
       ? Number.NaN
       : Date.parse(this.attemptedAt);
@@ -160,6 +165,23 @@ export class AssetRefreshCoordinator {
     if (!Number.isFinite(currentAttemptedAt) ||
         hydratedAttemptedAt > currentAttemptedAt) {
       this.attemptedAt = state.attemptedAt;
+    }
+    if (state.inProgressAt !== undefined && this.fullRequest === null) {
+      const recovering = state.inProgressAt !== null && this.canRefresh;
+      if (recovering) {
+        this.fullActivity = {
+          state: "refreshing",
+          message: "",
+          feedback: "silent",
+          intent: null,
+        };
+        this.latestTerminal = null;
+      } else if (this.recovering) {
+        this.fullActivity = idleStatus();
+      }
+      this.recovering = recovering;
+      this.updateAggregate();
+      this.scheduleRecoveryCheck();
     }
     this.scheduleNext();
     this.notify();
@@ -193,6 +215,8 @@ export class AssetRefreshCoordinator {
     this.sources.clear();
     this.attemptedAt = null;
     this.clearTimer();
+    this.clearRecoveryTimer();
+    this.recovering = false;
     this.fullRequest = null;
     this.sourceRequests.clear();
     this.fullActivity = idleStatus();
@@ -215,6 +239,7 @@ export class AssetRefreshCoordinator {
   }
 
   request(intent: AssetRefreshIntent): Promise<void> {
+    if (this.recovering) return Promise.resolve();
     const plan = planAssetRefresh({
       now: this.options.now(),
       attemptedAt: this.attemptedAt,
@@ -263,6 +288,11 @@ export class AssetRefreshCoordinator {
         if (report.skipped !== undefined) {
           this.setActivity(intent, idleStatus());
           this.latestTerminal = null;
+          if (report.skipped === "in-progress") {
+            this.recovering = true;
+            this.fullActivity = { ...activity, feedback: "silent" };
+            this.scheduleRecoveryCheck();
+          }
           this.updateAggregate();
           this.scheduleNext();
           this.notify();
@@ -376,6 +406,30 @@ export class AssetRefreshCoordinator {
     if (this.timer === null) return;
     this.options.cancel(this.timer);
     this.timer = null;
+  }
+
+  private clearRecoveryTimer(): void {
+    if (this.recoveryTimer === null) return;
+    this.options.cancel(this.recoveryTimer);
+    this.recoveryTimer = null;
+  }
+
+  private scheduleRecoveryCheck(): void {
+    this.clearRecoveryTimer();
+    const readState = this.options.readState;
+    if (!this.recovering || !readState) return;
+    const generation = this.generation;
+    this.recoveryTimer = this.options.schedule(() => {
+      this.recoveryTimer = null;
+      void readState().then((state) => {
+        if (generation !== this.generation) return;
+        const recovering = this.recovering;
+        this.hydrate(state);
+        if (recovering && !this.recovering) this.options.onRecovered?.();
+      }).catch(() => {
+        if (generation === this.generation) this.scheduleRecoveryCheck();
+      });
+    }, 1_000);
   }
 
   private notify(): void {

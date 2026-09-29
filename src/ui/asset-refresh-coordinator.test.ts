@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { setImmediate } from "node:timers/promises";
 
 import {
   AssetRefreshCoordinator,
@@ -20,6 +21,77 @@ const REFRESHABLE_SOURCE_BETA = {
   lifecycle: "connected" as const,
   credentialReference: "beta-reference",
 };
+
+test("页面重载恢复服务端在途全量状态并阻止重复手动请求", async () => {
+  const calls: AssetRefreshIntent[] = [];
+  const coordinator = new AssetRefreshCoordinator({
+    now: () => new Date(INITIAL_AT),
+    request: async (intent) => {
+      calls.push(intent);
+      return { successCount: 1, failureCount: 0 };
+    },
+    schedule: () => null,
+    cancel: () => undefined,
+  });
+  await coordinator.register({
+    attemptedAt: INITIAL_AT,
+    inProgressAt: INITIAL_AT,
+    sources: [REFRESHABLE_SOURCE],
+    visible: true,
+    focused: true,
+    pageEntry: true,
+  });
+  assert.equal(coordinator.globalStatus().state, "refreshing");
+  await coordinator.request({ reason: "manual-global" });
+  await coordinator.request({ reason: "manual-source", sourceId: REFRESHABLE_SOURCE.id });
+  assert.deepEqual(calls, []);
+});
+
+test("恢复状态查询失败继续禁用，锁定后丢弃旧查询和页面重读", async () => {
+  const timers = new Set<() => void>();
+  let queries = 0;
+  let pageReads = 0;
+  let resolve!: (state: { attemptedAt: string | null; inProgressAt: string | null }) => void;
+  const coordinator = new AssetRefreshCoordinator({
+    now: () => new Date(INITIAL_AT),
+    request: async () => { throw new Error("不应发起刷新"); },
+    readState: async () => {
+      queries += 1;
+      if (queries === 1) throw new Error("network");
+      return new Promise((done) => { resolve = done; });
+    },
+    schedule: (callback, delay) => {
+      if (delay === 1_000) timers.add(callback);
+      return callback;
+    },
+    cancel: (handle) => { timers.delete(handle as () => void); },
+    onRecovered: () => { pageReads += 1; },
+  });
+  await coordinator.register({
+    attemptedAt: INITIAL_AT,
+    inProgressAt: INITIAL_AT,
+    sources: [REFRESHABLE_SOURCE],
+    visible: true,
+    focused: true,
+    pageEntry: true,
+  });
+  const first = [...timers][0]!;
+  timers.delete(first);
+  first();
+  await setImmediate();
+  assert.equal(coordinator.globalStatus().state, "refreshing");
+  assert.equal(timers.size, 1);
+  const retry = [...timers][0]!;
+  timers.delete(retry);
+  retry();
+  coordinator.clear();
+  resolve({ attemptedAt: INITIAL_AT, inProgressAt: null });
+  await setImmediate();
+  assert.equal(coordinator.canRefresh, false);
+  assert.equal(coordinator.globalStatus().state, "idle");
+  assert.equal(timers.size, 0);
+  assert.equal(pageReads, 0);
+});
 
 test("首次页面注册使用当下可见性与焦点判断到期刷新", async () => {
   const calls: AssetRefreshIntent[] = [];
@@ -91,7 +163,7 @@ test("自动计划只在可见、有焦点且统一周期到期时申请一次�
   assert.deepEqual(calls, [{ reason: "foreground" }]);
 });
 
-test("新标签吸收服务端 skipped 锚点并静默安排下一周期", async () => {
+test("新标签吸收服务端 skipped 锚点并恢复在途状态或安排下一周期", async () => {
   for (const scenario of [{
     skipped: "not-due" as const,
     now: "2026-08-20T04:30:00.000Z",
@@ -130,7 +202,7 @@ test("新标签吸收服务端 skipped 锚点并静默安排下一周期", async
 
     await coordinator.request({ reason: "page-entry" });
 
-    assert.equal(coordinator.state, "idle");
+    assert.equal(coordinator.state, scenario.skipped === "in-progress" ? "refreshing" : "idle");
     assert.equal(coordinator.message, "");
     assert.equal(scheduled.at(-1)?.delayMs, scenario.expectedDelayMs);
   }

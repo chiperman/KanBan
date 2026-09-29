@@ -27,6 +27,7 @@ import type {
 } from "@/server/ports";
 import { buildDailyAssetSnapshot } from "@/domain/daily-asset-snapshots";
 import { isMacOSKeychainCredentialReference } from "@/server/asset-sources/longbridge-keychain-sdk";
+import { ASSET_SOURCE_TIMEOUT_MS, fullRefreshLeaseMs } from "@/server/asset-refresh-state";
 
 const FULL_REFRESH_INTERVAL_MS = 60 * 60 * 1_000;
 
@@ -70,7 +71,7 @@ export class SourceIsolatedAssetSynchronization
     private readonly secrets: SecretStore,
     private readonly clock: Clock,
     private readonly refresher: AssetSourceRefresher,
-    private readonly sourceTimeoutMs = 60_000,
+    private readonly sourceTimeoutMs = ASSET_SOURCE_TIMEOUT_MS,
     private readonly dailySnapshots: DailyAssetSnapshots,
     private readonly fullRefreshState: AssetFullRefreshState,
   ) {}
@@ -267,7 +268,7 @@ export class SourceIsolatedAssetSynchronization
       const claim = await this.fullRefreshState.claim({
         attemptedAt,
         intervalMs: FULL_REFRESH_INTERVAL_MS,
-        staleAfterMs: Math.max(this.sourceTimeoutMs + 5_000, 60_000),
+        staleAfterMs: fullRefreshLeaseMs(this.sourceTimeoutMs),
         force: !job.automatic,
       });
       if (claim !== "claimed") {

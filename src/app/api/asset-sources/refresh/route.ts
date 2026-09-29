@@ -1,4 +1,5 @@
 import { getServices } from "@/server/composition";
+import { readAssetRefreshState } from "@/server/asset-refresh-state";
 import type {
   AssetRefreshIntent,
   AssetRefreshMode,
@@ -6,6 +7,16 @@ import type {
 } from "@/server/ports";
 
 export const dynamic = "force-dynamic";
+
+export async function GET() {
+  const services = getServices();
+  if ((await services.auth.currentSession()) === null) {
+    return Response.json({ error: "需要所有者身份" }, { status: 401 });
+  }
+  return Response.json(await readAssetRefreshState(services), {
+    headers: { "Cache-Control": "no-store" },
+  });
+}
 
 export async function POST(request: Request) {
   const services = getServices();

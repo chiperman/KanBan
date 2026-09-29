@@ -5,6 +5,7 @@ import {
   type PageSearchParams,
 } from "@/server/auth/canonical-origin";
 import { getServices } from "@/server/composition";
+import { readAssetRefreshState } from "@/server/asset-refresh-state";
 import { shanghaiDay } from "@/domain/daily-asset-snapshots";
 import {
   longbridgeReferenceRates,
@@ -35,7 +36,7 @@ export default async function PerformancePage({
     services.assetSources.list(),
     services.dailyAssetSnapshots.listTrendObservations(),
     services.dailyAssetSnapshots.listImportedSourceHistoryObservations(),
-    services.assetFullRefreshState.read(),
+    readAssetRefreshState(services),
   ]);
   const longbridgeRates = longbridgeReferenceRates(sources);
 
@@ -44,7 +45,7 @@ export default async function PerformancePage({
       <WorkbenchShell
         refreshEnabled
         refreshRegistration={{
-          attemptedAt: fullRefreshState.attemptedAt,
+          ...fullRefreshState,
           sources: sources.map((source) => ({
             id: source.id,
             kind: source.kind,

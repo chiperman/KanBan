@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { setImmediate } from "node:timers/promises";
 
 import { buildSnapshotFromPositions } from "@/domain/valuation";
 import { SourceIsolatedAssetSynchronization } from "@/server/asset-synchronization";
+import { readAssetRefreshState } from "@/server/asset-refresh-state";
+import { AssetRefreshCoordinator } from "@/ui/asset-refresh-coordinator";
 import {
   AssetRequestError,
   abortableSyncDelay,
@@ -578,6 +581,83 @@ test("自动全量只在统一周期到期后执行，并复用同一批次", as
       attemptedAt: "2026-08-20T05:00:00.000Z",
     },
   );
+});
+
+test("全量刷新中重建页面协调器恢复禁用，结束后只重读页面一次", async () => {
+  const refresher = new ControllableRefresher();
+  const alpha = refresher.hold("source-alpha");
+  const fixture = await synchronizationFixture({ refresher, sourceTimeoutMs: 60_000 });
+  const readState = () => readAssetRefreshState({
+    assetFullRefreshState: fixture.fullRefreshState,
+    clock: fixture.clock,
+  });
+  const timers = new Set<() => void>();
+  let pageReads = 0;
+  let requests = 0;
+  const options = {
+    now: () => fixture.clock.now(),
+    request: (intent: import("@/server/ports").AssetRefreshIntent) => {
+      requests += 1;
+      return fixture.synchronization.request({ intent });
+    },
+    readState,
+    schedule: (callback: () => void, delay: number) => {
+      if (delay === 1_000) timers.add(callback);
+      return callback;
+    },
+    cancel: (handle: unknown) => { timers.delete(handle as () => void); },
+    onReport: () => { pageReads += 1; },
+    onRecovered: () => { pageReads += 1; },
+  };
+  const oldPage = new AssetRefreshCoordinator(options);
+  oldPage.setSources(await fixture.sources.list());
+  const running = oldPage.request({ reason: "manual-global" });
+  await alpha.started;
+  oldPage.clear();
+  const reloadedPage = new AssetRefreshCoordinator(options);
+  try {
+    await reloadedPage.register({
+      ...await readState(),
+      sources: await fixture.sources.list(),
+      visible: true,
+      focused: true,
+      pageEntry: true,
+    });
+    assert.equal(reloadedPage.globalStatus().state, "refreshing");
+    await reloadedPage.request({ reason: "manual-global" });
+    await reloadedPage.request({ reason: "manual-source", sourceId: "source-alpha" });
+    assert.equal(requests, 1);
+    assert.equal(timers.size, 1);
+    alpha.release();
+    await running;
+    const poll = [...timers][0]!;
+    timers.delete(poll);
+    poll();
+    await setImmediate();
+    assert.equal(reloadedPage.globalStatus().state, "idle");
+    assert.equal(timers.size, 0);
+    assert.equal(pageReads, 1);
+    assert.deepEqual(refresher.calls.toSorted(), ["source-alpha", "source-beta"]);
+    await reloadedPage.request({ reason: "manual-global" });
+    assert.equal(requests, 2);
+  } finally {
+    alpha.release();
+    reloadedPage.clear();
+    await running;
+  }
+});
+
+test("刷新状态查询忽略过期或无效租约，不删除持久化诊断", async () => {
+  const fixture = await synchronizationFixture();
+  const services = { assetFullRefreshState: fixture.fullRefreshState, clock: fixture.clock };
+  await fixture.fullRefreshState.start(INITIAL_AT);
+  fixture.clock.set("2026-08-20T04:01:04.999Z");
+  assert.equal((await readAssetRefreshState(services)).inProgressAt, INITIAL_AT);
+  fixture.clock.set("2026-08-20T04:01:05.000Z");
+  assert.equal((await readAssetRefreshState(services)).inProgressAt, null);
+  assert.equal((await fixture.fullRefreshState.read()).inProgressAt, INITIAL_AT);
+  await fixture.fullRefreshState.start("invalid");
+  assert.equal((await readAssetRefreshState(services)).inProgressAt, null);
 });
 
 test("两个协调器共享持久化预占时只允许一份自动全量读取", async () => {
