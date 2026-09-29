@@ -18,6 +18,7 @@ use oauth2::{
     CsrfToken, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope, TokenResponse, TokenUrl,
 };
 use serde::{Deserialize, Serialize};
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 
 const KEYCHAIN_SERVICE: &str = "com.xiaox.kanban.longbridge";
 const AUTHORIZATION_URL_WAIT: Duration = Duration::from_secs(3);
@@ -174,6 +175,28 @@ static WEB_AUTHORIZATION_SESSIONS: LazyLock<Mutex<HashMap<String, WebAuthorizati
 
 fn napi_error(message: impl Into<String>) -> NapiError {
     NapiError::new(Status::GenericFailure, message.into())
+}
+
+// 仅提取本地已授权账户的身份；即使刷新令牌过期也不需要联网或暴露 Token。
+fn token_account_identity(access_token: &str) -> NapiResult<String> {
+    let invalid = || napi_error("长桥已授权账户身份不可用，请重新连接");
+    let payload = access_token.split('.').nth(1).ok_or_else(invalid)?;
+    let decoded = URL_SAFE_NO_PAD.decode(payload.trim_end_matches('=')).map_err(|_| invalid())?;
+    let claims: serde_json::Value = serde_json::from_slice(&decoded).map_err(|_| invalid())?;
+    let subject: serde_json::Value = serde_json::from_str(
+        claims["sub"].as_str().ok_or_else(invalid)?
+    ).map_err(|_| invalid())?;
+    let member_id = subject["member_id"].as_u64().filter(|id| *id > 0).ok_or_else(invalid)?;
+    let channel = subject["account_channel"].as_str().filter(|v| !v.is_empty()).ok_or_else(invalid)?;
+    Ok(serde_json::json!({"memberId": member_id.to_string(), "accountChannel": channel}).to_string())
+}
+
+#[napi]
+pub fn account_identity(client_id: String) -> NapiResult<String> {
+    let token = KeychainTokenStorage::new(&client_id).load_checked(&client_id)
+        .map_err(|_| napi_error("无法读取长桥已授权账户身份"))?
+        .ok_or_else(|| napi_error("长桥尚未在 macOS Keychain 完成授权"))?;
+    token_account_identity(&token.access_token)
 }
 
 fn state_for(client_id: &str) -> Option<AuthorizationState> {
@@ -707,7 +730,32 @@ pub fn keychain_service_name() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{validate_account_read_scope_values, KeychainTokenStorage};
+    use super::{token_account_identity, validate_account_read_scope_values, KeychainTokenStorage};
+    use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+
+    #[test]
+    fn expired_token_exposes_only_account_identity() {
+        let claims = serde_json::json!({
+            "exp": 1,
+            "sub": serde_json::json!({
+                "member_id": 123,
+                "account_channel": "lb",
+                "account_no": "private-account-number",
+                "client_id": "client"
+            }).to_string()
+        });
+        let token = format!("header.{}.signature", URL_SAFE_NO_PAD.encode(claims.to_string()));
+        let identity: serde_json::Value = serde_json::from_str(&token_account_identity(&token).unwrap()).unwrap();
+        assert_eq!(identity, serde_json::json!({"memberId": "123", "accountChannel": "lb"}));
+    }
+
+    #[test]
+    fn malformed_or_missing_identity_fails_closed() {
+        for token in ["", "opaque-secret", "header.invalid.signature", "header.e30.signature"] {
+            let error = token_account_identity(token).unwrap_err();
+            assert_eq!(error.reason, "长桥已授权账户身份不可用，请重新连接");
+        }
+    }
 
     #[test]
     fn stores_each_oauth_client_under_the_kanban_keychain_service() {

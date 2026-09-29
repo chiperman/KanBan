@@ -9,8 +9,9 @@ import { CoinGeckoUsdtUsdPrices, ProductionBinanceReadOnly, ProductionBinanceSou
 import { ProductionBitReadOnly, ProductionBitSourceRefresher, } from "@/server/asset-sources/bit";
 import { ProductionBitgetReadOnly, ProductionBitgetSourceRefresher, } from "@/server/asset-sources/bitget";
 import { ProductionEvmWatchSourceRefresher, ProductionEvmWatchWallet, } from "@/server/asset-sources/ethereum";
-import { KeychainLongbridgeBenchmarkCandlestickReader, KeychainLongbridgeFormalSettlementCandleReader, KeychainLongbridgeHoldingCandlestickReader, KeychainLongbridgeOAuth, KeychainLongbridgeSourceRefresher, LongbridgeOAuthState } from "@/server/asset-sources/longbridge";
+import { KeychainLongbridgeBenchmarkCandlestickReader, KeychainLongbridgeFormalSettlementCandleReader, KeychainLongbridgeHoldingCandlestickReader, KeychainLongbridgeOAuth, LongbridgeOAuthState } from "@/server/asset-sources/longbridge";
 import { ProductionOkxReadOnly, ProductionOkxSourceRefresher, } from "@/server/asset-sources/okx";
+import { ServeFirstLongbridgeSourceRefresher } from "@/server/asset-sources/longbridge-serve-assets";
 import { RoutedAssetSourceRefresher } from "@/server/asset-sources/router";
 import { SourceIsolatedAssetSynchronization } from "@/server/asset-synchronization";
 import { SessionOwnerAuth } from "@/server/auth/session-auth";
@@ -94,7 +95,7 @@ export function createProductionServices(
     }),
   );
   const sourceRefresher = new RoutedAssetSourceRefresher({
-    longbridge: new KeychainLongbridgeSourceRefresher(),
+    longbridge: new ServeFirstLongbridgeSourceRefresher(),
     binance: new ProductionBinanceSourceRefresher(prices),
     okx: new ProductionOkxSourceRefresher(prices),
     bitget: new ProductionBitgetSourceRefresher(prices),

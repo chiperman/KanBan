@@ -1,6 +1,7 @@
 import path from "node:path";
 
 type NativeLongbridgeSdk = {
+  accountIdentity(clientId: string): string;
   beginAuthorization(clientId: string, callbackPort: number): string;
   authorizationStatus(clientId: string): string;
   beginBrowserAuthorization(clientId: string, redirectUri: string): string;
@@ -44,6 +45,11 @@ type NativeLongbridgeSdk = {
 export interface LongbridgeSdkAuthorization {
   status: "idle" | "authorizing" | "authorized";
   authorizationUrl: string | null;
+}
+
+export interface LongbridgeAccountIdentity {
+  memberId: string;
+  accountChannel: string;
 }
 
 export interface LongbridgeBrowserAuthorization {
@@ -166,6 +172,10 @@ function parse<T>(value: unknown, message: string): T {
 export class LongbridgeKeychainSdk {
   private readonly clientId = requiredClientId();
   private readonly port = callbackPort();
+
+  accountIdentity(): LongbridgeAccountIdentity {
+    return parse(nativeSdk().accountIdentity(this.clientId), "长桥账户身份格式无效");
+  }
 
   beginAuthorization(): LongbridgeSdkAuthorization {
     return parse(

@@ -1010,7 +1010,7 @@ async function keychainSnapshot(
   });
 }
 
-function snapshotWithQuotes(
+export function snapshotWithQuotes(
   snapshot: AssetSnapshot,
   quotes: LongbridgeNativeQuote[],
   syncedAt: string,
@@ -1067,7 +1067,7 @@ function snapshotWithQuotes(
  * 完整持仓刷新已成功时，单标的报价仍可能因权限或供应商部分响应缺失。
  * 保留最后一份可核验报价，并明确其不是本次确认的报价。
  */
-function snapshotRetainingMissingQuotes(
+export function snapshotRetainingMissingQuotes(
   snapshot: AssetSnapshot,
   previous: AssetSnapshot,
 ): AssetSnapshot {
