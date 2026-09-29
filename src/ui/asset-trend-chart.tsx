@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState, type ComponentProps } from "react";
 import {
   CartesianGrid,
   Line,
@@ -9,6 +10,7 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  useIsTooltipActive,
   type TooltipContentProps,
 } from "recharts";
 
@@ -56,6 +58,32 @@ function percentage(value: number, signed = false): string {
   return `${signed && normalized > 0 ? "+" : ""}${(normalized * 100).toFixed(2)}%`;
 }
 
+function TrendChartTooltip(props: ComponentProps<typeof Tooltip>) {
+  const isActive = useIsTooltipActive();
+  const [canAnimate, setCanAnimate] = useState(false);
+
+  useEffect(() => {
+    setCanAnimate(false);
+    if (!isActive) return;
+
+    // Let Recharts measure and paint the initial position before animating moves.
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => setCanAnimate(true));
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [isActive]);
+
+  return (
+    <Tooltip
+      {...props}
+      filterNull={false}
+      isAnimationActive={isActive && canAnimate ? "auto" : false}
+      animationDuration={200}
+      animationEasing="ease-in-out"
+    />
+  );
+}
+
 function HiddenTrendState({
   variant,
 }: {
@@ -91,15 +119,11 @@ function TrendTooltip({
   if (!active || !point) return null;
   const amount = point.amount ?? point.historicalAmount;
   const showingHistorical = point.amount === null && point.historicalAmount !== null;
-  const quality = amount === null
-    ? point.status === "complete"
-      ? "未估值"
-      : `未估值 · ${point.status === "expired" ? "过期" : "不完整"}`
-    : point.status === "expired"
-      ? "过期"
-      : point.status === "incomplete"
-        ? "不完整"
-        : null;
+  const quality = point.status === "expired"
+    ? "过期"
+    : point.status === "incomplete"
+      ? "不完整"
+      : null;
 
   return (
     <div className="asset-trend-tooltip">
@@ -358,7 +382,7 @@ export function AssetTrendChart({
                 tickLine={false}
                 width={56}
               />
-              <Tooltip
+              <TrendChartTooltip
                 content={(props) => (
                   <BenchmarkTrendTooltip
                     {...props}
@@ -491,7 +515,7 @@ export function AssetTrendChart({
               tickLine={false}
               width={variant === "source" ? 48 : 56}
             />
-            <Tooltip
+            <TrendChartTooltip
               content={(props) => (
                 <TrendTooltip
                   {...props}

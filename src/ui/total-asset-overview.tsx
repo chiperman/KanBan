@@ -686,7 +686,6 @@ export function TotalAssetOverview({
             incompleteCount={0}
             isSensitiveHidden
             points={[]}
-            showCurrency={false}
             unavailableCount={0}
           />
         ) : history.length === 0 ? (
@@ -703,7 +702,6 @@ export function TotalAssetOverview({
               incompleteCount={abnormalTrendPoints.length}
               lineType={hasAutomatedSources ? "linear" : "stepAfter"}
               points={totalTrendPoints}
-              showCurrency={false}
               unavailableCount={unavailableTrendPoints.length}
             />
             {intervalStart && intervalEnd && intervalChange !== null ? (

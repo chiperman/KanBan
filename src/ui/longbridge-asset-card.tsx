@@ -1029,7 +1029,6 @@ export function AssetSourceCard({
               incompleteCount={0}
               isSensitiveHidden
               points={[]}
-              showCurrency={false}
               unavailableCount={0}
               variant="source"
             />
@@ -1052,7 +1051,6 @@ export function AssetSourceCard({
                 incompleteCount={abnormalSourceTrendPoints.length}
                 lineType={isManual ? "stepAfter" : "linear"}
                 points={sourceTrendPoints}
-                showCurrency={false}
                 unavailableCount={unavailableSourceTrendPoints.length}
                 variant="source"
               />
