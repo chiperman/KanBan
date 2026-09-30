@@ -1,5 +1,6 @@
 import { getServices } from "@/server/composition";
 import { InvalidAssetSourceDisplayNameError } from "@/domain/asset-source-display-name";
+import { InvalidSourceInvestmentRecordError, parseSourceInvestmentRecordInput } from "@/domain/source-investment-records";
 import { InvalidEvmTokenPreferenceError } from "@/domain/evm-token-preferences";
 import {
   InvalidManualAssetRecordError,
@@ -23,10 +24,20 @@ async function existingSource(id: string) {
   return { services, source };
 }
 
+function rejectCrossOrigin(request: Request): Response | null {
+  const origin = request.headers.get("origin");
+  if ((origin && origin !== new URL(request.url).origin) || request.headers.get("sec-fetch-site") === "cross-site") {
+    return Response.json({ error: "请求来源不匹配" }, { status: 403 });
+  }
+  return null;
+}
+
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const originError = rejectCrossOrigin(request);
+  if (originError) return originError;
   const { id } = await params;
   const context = await existingSource(id);
   if ("response" in context) return context.response;
@@ -41,6 +52,8 @@ export async function PATCH(
     day?: unknown;
     manualAssetClass?: unknown;
     addresses?: unknown;
+    id?: unknown;
+    kind?: unknown;
   } | null;
 
   try {
@@ -80,6 +93,9 @@ export async function PATCH(
         id,
         parseManualAssetRecordInput(body),
       );
+    } else if (body?.action === "investment-record") {
+      const capturedAt = context.services.clock.now().toISOString();
+      await context.services.assetSourceDetails!.saveSourceInvestmentRecord(id, parseSourceInvestmentRecordInput(body, capturedAt), capturedAt);
     } else if (body?.action === "manual-asset-class") {
       if (context.source.kind !== "manual") {
         return Response.json(
@@ -142,7 +158,8 @@ export async function PATCH(
         status:
           error instanceof InvalidAssetSourceDisplayNameError ||
             error instanceof InvalidEvmTokenPreferenceError ||
-            error instanceof InvalidManualAssetRecordError
+            error instanceof InvalidManualAssetRecordError ||
+            error instanceof InvalidSourceInvestmentRecordError
             ? 400
             : 500,
       },
@@ -155,6 +172,8 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const originError = rejectCrossOrigin(request);
+  if (originError) return originError;
   const { id } = await params;
   const context = await existingSource(id);
   if ("response" in context) return context.response;
@@ -162,6 +181,7 @@ export async function DELETE(
     action?: unknown;
     day?: unknown;
     confirmation?: unknown;
+    recordId?: unknown;
   } | null;
   if (body?.action === "manual-record") {
     try {
@@ -184,6 +204,16 @@ export async function DELETE(
       );
     }
     return Response.json({ ok: true });
+  }
+  if (body?.action === "investment-record") {
+    try {
+      if (typeof body.recordId !== "string") throw new InvalidSourceInvestmentRecordError("记录 ID 无效");
+      await context.services.assetSourceDetails!.deleteSourceInvestmentRecord(id, body.recordId);
+      return Response.json({ ok: true });
+    } catch (error) {
+      return Response.json({ error: error instanceof Error ? error.message : "删除来源投资记录失败" },
+        { status: error instanceof InvalidSourceInvestmentRecordError ? 400 : 500 });
+    }
   }
   if (body?.confirmation !== "DELETE_SOURCE_DATA") {
     return Response.json({ error: "必须明确确认永久删除" }, { status: 400 });

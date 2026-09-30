@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { parseSourceInvestmentHistory, type SourceInvestmentHistory } from "@/domain/source-investment-history";
+import { parseSourceInvestmentRecordInput, type SourceInvestmentRecord } from "@/domain/source-investment-records";
 import path from "node:path";
 import { normalizeAssetSyncState } from "@/server/asset-sync-diagnostics";
 
@@ -27,8 +29,8 @@ import {
 } from "@/server/local-data-permissions";
 
 const BACKUP_FORMAT = "personal-asset-dashboard-business-data";
-const BACKUP_FORMAT_VERSION = 5;
-const SUPPORTED_BACKUP_VERSIONS = new Set([1, 2, 3, 4, BACKUP_FORMAT_VERSION]);
+const BACKUP_FORMAT_VERSION = 7;
+const SUPPORTED_BACKUP_VERSIONS = new Set([1, 2, 3, 4, 5, 6, BACKUP_FORMAT_VERSION]);
 
 export const SENSITIVE_ASSET_DATA_WARNING =
   "备份仍包含敏感资产数据，请仅存放在受保护的位置。";
@@ -58,6 +60,8 @@ const FORBIDDEN_FIELD_NAMES = new Set([
 ]);
 
 export interface BusinessDataState {
+  sourceInvestmentHistories?: SourceInvestmentHistory[];
+  sourceInvestmentRecords?: SourceInvestmentRecord[];
   assetCards: Card[];
   assetSources: AssetSourceSummary[];
   dailyAssetSnapshots: DailyAssetSnapshot[];
@@ -71,7 +75,7 @@ export interface BusinessDataState {
 export interface BackupRestorePreview {
   /** Explicit loss consent binds to this file and current omitted facts. */
   discardConfirmation?: string;
-  omittedHistory?: { manualAssetRecords: number; formalDailySettlements: number };
+  omittedHistory?: { manualAssetRecords: number; formalDailySettlements: number; sourceInvestmentHistories?: number; sourceInvestmentRecords?: number };
   sourceCount: number;
   cardCount: number;
   snapshotRange: { from: string | null; to: string | null };
@@ -94,6 +98,8 @@ export interface BusinessDataBackup {
 }
 
 export interface BusinessDataBackupStore {
+  listSourceInvestmentHistories?(): Promise<SourceInvestmentHistory[]>;
+  listSourceInvestmentRecords?(sourceId?: string): Promise<SourceInvestmentRecord[]>;
   listAssetCards(): Promise<Card[]>;
   listSources(): Promise<AssetSourceSummary[]>;
   listDailyAssetSnapshots(): Promise<DailyAssetSnapshot[]>;
@@ -109,6 +115,8 @@ export interface BusinessDataBackupStore {
 }
 
 type BackupPayload = {
+  sourceInvestmentHistories?: SourceInvestmentHistory[];
+  sourceInvestmentRecords?: SourceInvestmentRecord[];
   assetCards: Card[];
   assetSources: Array<Omit<AssetSourceSummary, "credentialReference">>;
   dailyAssetSnapshots: DailyAssetSnapshot[];
@@ -589,6 +597,31 @@ function validateReferences(state: BusinessDataState): void {
     "每日趋势观测日期重复",
   );
   const sourceIds = new Set(state.assetSources.map(({ id }) => id));
+  assertUnique((state.sourceInvestmentHistories ?? []).map(({ sourceId }) => sourceId), "来源投资历史重复");
+  for (const history of state.sourceInvestmentHistories ?? []) {
+    parseSourceInvestmentHistory(history);
+    const source = state.assetSources.find(row => row.id === history.sourceId);
+    if (!source || (source.kind !== "manual" && source.kind !== "longbridge") || source.label !== history.sourceLabel) {
+      throw new Error("来源投资历史引用了不存在或身份不匹配的来源");
+    }
+  }
+  assertUnique((state.sourceInvestmentRecords ?? []).map(row => row.id), "来源投资记录 ID 重复");
+  const bySource = new Map<string, SourceInvestmentRecord[]>();
+  for (const record of state.sourceInvestmentRecords ?? []) {
+    parseSourceInvestmentRecordInput(record, record.recordedAt);
+    if (!sourceIds.has(record.sourceId)) throw new Error("来源投资记录引用了不存在的来源");
+    const group = bySource.get(record.sourceId) ?? [];
+    group.push(record); bySource.set(record.sourceId, group);
+  }
+  for (const [sourceId, records] of bySource) {
+    const history = (state.sourceInvestmentHistories ?? []).find(row => row.sourceId === sourceId);
+    const opening = records.filter(row => row.kind === "opening");
+    if (opening.length > 1 || (opening.length && history)) throw new Error("来源投资记录期初本金冲突");
+    if (opening.length && records.some(row => row.day < opening[0].day)) throw new Error("来源投资记录早于期初本金");
+    if (history && records.some(row => row.day < history.openingInvestment.day)) throw new Error("来源投资记录早于导入历史期初日期");
+    if (records.some(row => row.currency !== records[0].currency || (history && row.currency !== history.currency))) throw new Error("来源投资记录币种冲突");
+    assertUnique(records.filter(row => row.kind === "valuation").map(row => row.day), "来源同日资产金额重复");
+  }
   for (const card of state.assetCards) {
     if (card.sourceId !== undefined && !sourceIds.has(card.sourceId)) {
       throw new Error(`备份引用完整性失败: 资产卡片 ${card.id} 引用了不存在的来源`);
@@ -701,6 +734,10 @@ function parseDocument(contents: string): BackupDocument {
   assertArray(value.payload.assetSources, "payload.assetSources");
   assertArray(value.payload.dailyAssetSnapshots, "payload.dailyAssetSnapshots");
   const document = value as unknown as BackupDocument;
+  if (document.formatVersion >= 6) assertArray(document.payload.sourceInvestmentHistories, "payload.sourceInvestmentHistories");
+  else document.payload.sourceInvestmentHistories = [];
+  if (document.formatVersion >= 7) assertArray(document.payload.sourceInvestmentRecords, "payload.sourceInvestmentRecords");
+  else document.payload.sourceInvestmentRecords = [];
   if (document.formatVersion >= 5) {
     assertArray(document.payload.dailyAssetTrendObservations, "payload.dailyAssetTrendObservations");
     assertArray(document.payload.investmentCashflows, "payload.investmentCashflows");
@@ -755,6 +792,12 @@ function restoredState(document: BackupDocument): BusinessDataState {
     };
   });
   const state = {
+    sourceInvestmentHistories: (document.payload.sourceInvestmentHistories ?? []).map(parseSourceInvestmentHistory),
+    sourceInvestmentRecords: (document.payload.sourceInvestmentRecords ?? []).map(record => {
+      if (!isRecord(record) || typeof record.sourceId !== "string" || typeof record.recordedAt !== "string" ||
+          !Number.isFinite(Date.parse(record.recordedAt))) throw new Error("来源投资记录备份格式无效");
+      return { ...parseSourceInvestmentRecordInput(record, record.recordedAt), sourceId: record.sourceId, recordedAt: record.recordedAt };
+    }),
     assetCards: document.payload.assetCards,
     assetSources: sources,
     dailyAssetSnapshots: document.payload.dailyAssetSnapshots,
@@ -795,18 +838,20 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
   }
 
   private async previewFor(state: BusinessDataState, formatVersion = BACKUP_FORMAT_VERSION): Promise<BackupRestorePreview> {
-    const [currentSources, currentCards, currentSnapshots, manualRecords, settlements] = await Promise.all([
+    const [currentSources, currentCards, currentSnapshots, manualRecords, settlements, sourceHistories, sourceRecords] = await Promise.all([
       this.store.listSources(),
       this.store.listAssetCards(),
       this.store.listDailyAssetSnapshots(),
       this.store.listManualAssetRecords(),
       this.store.listFormalDailySettlements(),
+      this.store.listSourceInvestmentHistories?.() ?? Promise.resolve([]),
+      this.store.listSourceInvestmentRecords?.() ?? Promise.resolve([]),
     ]);
-    const dropsHistory = formatVersion < BACKUP_FORMAT_VERSION && (manualRecords.length > 0 || settlements.length > 0);
+    const dropsHistory = (formatVersion < 5 && (manualRecords.length > 0 || settlements.length > 0)) || (formatVersion < 6 && sourceHistories.length > 0) || (formatVersion < 7 && sourceRecords.length > 0);
     const days = state.dailyAssetSnapshots.map(({ day }) => day).sort();
     return {
-      ...(formatVersion < BACKUP_FORMAT_VERSION ? { omittedHistory: { manualAssetRecords: manualRecords.length, formalDailySettlements: settlements.length } } : {}),
-      ...(dropsHistory ? { discardConfirmation: createHash("sha256").update(JSON.stringify({state, manualRecords, settlements})).digest("hex") } : {}),
+      ...(formatVersion < BACKUP_FORMAT_VERSION ? { omittedHistory: { manualAssetRecords: formatVersion < 5 ? manualRecords.length : 0, formalDailySettlements: formatVersion < 5 ? settlements.length : 0, ...(formatVersion < 6 && sourceHistories.length ? { sourceInvestmentHistories: sourceHistories.length } : {}), ...(formatVersion < 7 && sourceRecords.length ? { sourceInvestmentRecords: sourceRecords.length } : {}) } } : {}),
+      ...(dropsHistory ? { discardConfirmation: createHash("sha256").update(JSON.stringify({state, manualRecords, settlements, sourceHistories, sourceRecords})).digest("hex") } : {}),
       sourceCount: state.assetSources.length,
       cardCount: state.assetCards.length,
       snapshotRange: {
@@ -819,7 +864,7 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
         snapshotCount: currentSnapshots.length,
       },
       warning: formatVersion < BACKUP_FORMAT_VERSION
-        ? `${SENSITIVE_ASSET_DATA_WARNING}${LEGACY_HISTORY_WARNING}`
+        ? `${SENSITIVE_ASSET_DATA_WARNING}${formatVersion < 5 ? LEGACY_HISTORY_WARNING : ""}${formatVersion < 6 ? "旧版备份不包含来源投资历史。" : ""}旧版备份不包含来源手工投资记录。`
         : SENSITIVE_ASSET_DATA_WARNING,
     };
   }
@@ -836,6 +881,8 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
       investmentCashflows,
       manualAssetRecords,
       formalDailySettlements,
+      sourceInvestmentHistories,
+      sourceInvestmentRecords,
     ] = await Promise.all([
       this.store.listAssetCards(),
       this.store.listSources(),
@@ -845,6 +892,8 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
       this.store.listInvestmentCashflows(),
       this.store.listManualAssetRecords(),
       this.store.listFormalDailySettlements(),
+      this.store.listSourceInvestmentHistories?.() ?? Promise.resolve([]),
+      this.store.listSourceInvestmentRecords?.() ?? Promise.resolve([]),
     ]);
     const assetSources = sources.map(
       ({ credentialReference: _credentialReference, ...source }) => ({
@@ -864,6 +913,8 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
         investmentCashflows,
         manualAssetRecords,
         formalDailySettlements,
+        sourceInvestmentHistories,
+        sourceInvestmentRecords,
       },
     } satisfies Pick<BackupDocument, "format" | "formatVersion" | "createdAt" | "payload">;
     const checksum = checksumFor(base);
@@ -894,7 +945,7 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
     const decoded = await this.decode(fileName);
     const preview = await this.previewFor(decoded.state, decoded.formatVersion);
     if (preview.discardConfirmation && discardConfirmation !== preview.discardConfirmation) {
-      throw new Error("旧备份将丢弃现有手工历史和正式日结，请重新预演并明确确认丢弃范围");
+      throw new Error("旧备份将丢弃现有历史数据，请重新预演并明确确认丢弃范围");
     }
     await this.store.replaceBusinessData(decoded.state);
     return preview;

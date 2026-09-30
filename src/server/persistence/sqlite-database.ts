@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { parseSourceInvestmentHistory, type SourceInvestmentHistory } from "@/domain/source-investment-history";
+import { InvalidSourceInvestmentRecordError, parseSourceInvestmentRecordInput, type SourceInvestmentRecord, type SourceInvestmentRecordInput } from "@/domain/source-investment-records";
 import { chmodSync, copyFileSync, existsSync, readFileSync, } from "node:fs";
 import { DashboardSchema } from "./sqlite-schema";
 
@@ -278,6 +280,12 @@ export class SqliteDashboardDatabase
         .investmentCashflows
       : [];
     cashflows.forEach((cashflow) => this.insertInvestmentCashflow(cashflow));
+    if ("sourceInvestmentHistories" in state) {
+      for (const history of state.sourceInvestmentHistories ?? []) this.writeSourceInvestmentHistory(history);
+    }
+    if ("sourceInvestmentRecords" in state) {
+      for (const record of state.sourceInvestmentRecords ?? []) this.insertSourceInvestmentRecord(record);
+    }
     const manualRecords = "manualAssetRecords" in state
       ? state.manualAssetRecords
       : [];
@@ -991,12 +999,102 @@ export class SqliteDashboardDatabase
 
   async readSourceDetail(query: { sourceId: string; from?: string; to?: string }) {
     const first = this.database.prepare("SELECT MIN(day) AS day FROM daily_asset_source_trend_observations WHERE source_id = ?").get(query.sourceId) as SqliteRow;
+    const row = this.database.prepare("SELECT payload_json FROM asset_source_investment_histories WHERE source_id = ?").get(query.sourceId) as { payload_json: string } | undefined;
+    const investmentHistory = row ? parseSourceInvestmentHistory(JSON.parse(row.payload_json)) : null;
     return {
       sources: this.listSourcesSync(query.sourceId),
       manualRecords: this.listManualAssetRecordsSync(query.sourceId),
       history: this.listDailyObservationsSync("daily_asset_trend_observations", "daily_asset_source_trend_observations", undefined, query),
-      firstDay: typeof first.day === "string" ? first.day : undefined,
+      firstDay: [typeof first.day === "string" ? first.day : undefined, investmentHistory?.openingInvestment.day, this.listSourceInvestmentRecordsSync(query.sourceId)[0]?.day].filter((day): day is string => day !== undefined).sort()[0],
+      investmentHistory,
+      investmentRecords: this.listSourceInvestmentRecordsSync(query.sourceId),
     };
+  }
+
+  private listSourceInvestmentRecordsSync(sourceId?: string): SourceInvestmentRecord[] {
+    const rows = this.database.prepare("SELECT id, source_id, day, kind, amount, currency, recorded_at FROM source_investment_records " +
+      (sourceId === undefined ? "" : "WHERE source_id = ? ") + "ORDER BY source_id, day, id")
+      .all(...(sourceId === undefined ? [] : [sourceId])) as SqliteRow[];
+    return rows.map(row => ({ id: row.id as string, sourceId: row.source_id as string,
+      day: row.day as string, kind: row.kind as SourceInvestmentRecord["kind"],
+      amount: row.amount as string, currency: row.currency as SourceInvestmentRecord["currency"],
+      recordedAt: row.recorded_at as string }));
+  }
+
+  async listSourceInvestmentRecords(sourceId?: string): Promise<SourceInvestmentRecord[]> {
+    return this.listSourceInvestmentRecordsSync(sourceId);
+  }
+
+  private insertSourceInvestmentRecord(record: SourceInvestmentRecord): void {
+    this.database.prepare("INSERT INTO source_investment_records (id, source_id, day, kind, amount, currency, recorded_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .run(record.id, record.sourceId, record.day, record.kind, record.amount, record.currency, record.recordedAt);
+  }
+
+  async saveSourceInvestmentRecord(sourceId: string, input: SourceInvestmentRecordInput, capturedAt: string): Promise<void> {
+    const record = parseSourceInvestmentRecordInput(input, capturedAt);
+    this.transaction(() => {
+      if (!this.database.prepare("SELECT id FROM asset_sources WHERE id = ?").get(sourceId)) throw new InvalidSourceInvestmentRecordError("资产来源不存在");
+      const existing = this.listSourceInvestmentRecordsSync(sourceId);
+      const other = this.database.prepare("SELECT source_id FROM source_investment_records WHERE id = ?").get(record.id) as { source_id: string } | undefined;
+      if (other && other.source_id !== sourceId) throw new InvalidSourceInvestmentRecordError("记录 ID 属于其他来源");
+      const unchanged = existing.find(row => row.id === record.id);
+      if (unchanged && ["day", "kind", "amount", "currency"].every(key => unchanged[key as keyof SourceInvestmentRecord] === record[key as keyof SourceInvestmentRecordInput])) return;
+      const remaining = existing.filter(row => row.id !== record.id);
+      const historyRow = this.database.prepare("SELECT payload_json FROM asset_source_investment_histories WHERE source_id = ?").get(sourceId) as { payload_json: string } | undefined;
+      const history = historyRow ? parseSourceInvestmentHistory(JSON.parse(historyRow.payload_json)) : null;
+      if (history && record.currency !== history.currency) throw new InvalidSourceInvestmentRecordError("来源投资记录币种与导入历史不一致");
+      if (history && record.day < history.openingInvestment.day) throw new InvalidSourceInvestmentRecordError("记录不能早于导入历史期初日期");
+      if (remaining.some(row => row.currency !== record.currency)) throw new InvalidSourceInvestmentRecordError("同一来源投资记录币种必须一致");
+      if (record.kind === "opening") {
+        if (history) throw new InvalidSourceInvestmentRecordError("已有导入历史，不能新增期初本金");
+        if (remaining.some(row => row.kind === "opening" || row.day < record.day)) throw new InvalidSourceInvestmentRecordError("期初本金必须唯一且不晚于其他记录");
+      } else if (remaining.some(row => row.kind === "opening" && row.day > record.day)) {
+        throw new InvalidSourceInvestmentRecordError("记录不能早于期初本金");
+      }
+      if (record.kind === "valuation" && remaining.some(row => row.kind === "valuation" && row.day === record.day)) throw new InvalidSourceInvestmentRecordError("同日资产金额只能记录一次");
+      this.database.prepare("INSERT INTO source_investment_records (id, source_id, day, kind, amount, currency, recorded_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET day = excluded.day, kind = excluded.kind, amount = excluded.amount, currency = excluded.currency, recorded_at = excluded.recorded_at")
+        .run(record.id, sourceId, record.day, record.kind, record.amount, record.currency, capturedAt);
+    });
+  }
+
+  async deleteSourceInvestmentRecord(sourceId: string, id: string): Promise<void> {
+    if (!id.trim()) throw new InvalidSourceInvestmentRecordError("记录 ID 无效");
+    this.transaction(() => {
+      if (!this.database.prepare("SELECT id FROM asset_sources WHERE id = ?").get(sourceId)) throw new InvalidSourceInvestmentRecordError("资产来源不存在");
+      const result = this.database.prepare("DELETE FROM source_investment_records WHERE source_id = ? AND id = ?").run(sourceId, id);
+      if (!result.changes) throw new InvalidSourceInvestmentRecordError("来源投资记录不存在");
+    });
+  }
+
+  async listSourceInvestmentHistories(): Promise<SourceInvestmentHistory[]> {
+    return (this.database.prepare("SELECT payload_json FROM asset_source_investment_histories ORDER BY source_id").all() as { payload_json: string }[])
+      .map(row => parseSourceInvestmentHistory(JSON.parse(row.payload_json)));
+  }
+
+  private writeSourceInvestmentHistory(history: SourceInvestmentHistory): void {
+    this.database.prepare("INSERT INTO asset_source_investment_histories (source_id, payload_json) VALUES (?, ?) ON CONFLICT(source_id) DO UPDATE SET payload_json = excluded.payload_json")
+      .run(history.sourceId, JSON.stringify(history));
+  }
+
+  async importSourceInvestmentHistory(input: unknown): Promise<{ imported: boolean; records: number }> {
+    const history = parseSourceInvestmentHistory(input);
+    return this.transaction(() => {
+      const source = this.database.prepare("SELECT kind, label FROM asset_sources WHERE id = ?").get(history.sourceId) as { kind: string; label: string } | undefined;
+      if (!source || (source.kind !== "manual" && source.kind !== "longbridge") || source.label !== history.sourceLabel) throw new Error("导入目标来源身份不匹配");
+      const local = this.listSourceInvestmentRecordsSync(history.sourceId);
+      if (local.some(record => record.kind === "opening" || record.currency !== history.currency || record.day < history.openingInvestment.day)) throw new Error("导入历史与已有手工记录期初、币种或日期冲突");
+      const row = this.database.prepare("SELECT payload_json FROM asset_source_investment_histories WHERE source_id = ?").get(history.sourceId) as { payload_json: string } | undefined;
+      if (row) {
+        const old = parseSourceInvestmentHistory(JSON.parse(row.payload_json));
+        if (old.accountId !== history.accountId || old.provider !== history.provider || old.currency !== history.currency ||
+            JSON.stringify(old.openingInvestment) !== JSON.stringify(history.openingInvestment)) throw new Error("导入账户与已有历史不一致");
+        const incoming = new Map(history.records.map(record => [record.id, record]));
+        if (old.records.some(record => JSON.stringify(record) !== JSON.stringify(incoming.get(record.id)))) throw new Error("导入包含历史覆盖或删除冲突");
+        if (old.records.length === history.records.length) return { imported: false, records: old.records.length };
+      }
+      this.writeSourceInvestmentHistory(history);
+      return { imported: true, records: history.records.length };
+    });
   }
 
   async listAssetCards(): Promise<Card[]> {

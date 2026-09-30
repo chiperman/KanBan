@@ -35,6 +35,8 @@ import { createProductionServices } from "@/server/production";
 import { clearAllSessions } from "@/server/auth/session";
 import { LongbridgeOAuthState } from "@/server/asset-sources/longbridge";
 import type { BusinessDataBackup } from "@/server/business-data-backup";
+import type { SourceInvestmentHistory } from "@/domain/source-investment-history";
+import type { SourceInvestmentRecord, SourceInvestmentRecordInput } from "@/domain/source-investment-records";
 import type { AssetSourceOnboarding } from "@/server/asset-source-onboarding";
 import {
   createTestServices,
@@ -48,7 +50,13 @@ export interface AppServices {
   clock: Clock;
   assetCards: AssetCardStore;
   assetSources: AssetSources;
-  assetSourceDetails?: { readSourceDetail(query: {sourceId: string; from?: string; to?: string}): Promise<{sources: AssetSourceSummary[]; manualRecords: ManualAssetRecord[]; history: DailyAssetTrendObservation[]; firstDay?: string}> };
+  assetSourceDetails?: {
+    readSourceDetail(query: {sourceId: string; from?: string; to?: string}): Promise<{sources: AssetSourceSummary[]; manualRecords: ManualAssetRecord[]; history: DailyAssetTrendObservation[]; firstDay?: string; investmentHistory?: SourceInvestmentHistory | null; investmentRecords: SourceInvestmentRecord[]}>;
+    listSourceInvestmentHistories?(): Promise<SourceInvestmentHistory[]>;
+    listSourceInvestmentRecords(sourceId?: string): Promise<SourceInvestmentRecord[]>;
+    saveSourceInvestmentRecord(sourceId: string, input: SourceInvestmentRecordInput, capturedAt: string): Promise<void>;
+    deleteSourceInvestmentRecord(sourceId: string, id: string): Promise<void>;
+  };
   assetSourceLifecycle: AssetSourceLifecycle;
   assetSynchronization: AssetSynchronization;
   assetFullRefreshState: AssetFullRefreshState;
@@ -101,6 +109,10 @@ function hasCurrentServices(
 ): services is AppServices {
   return (
     services !== null &&
+    (isTestEnv() || (typeof services.assetSourceDetails?.listSourceInvestmentHistories === "function" &&
+      typeof services.assetSourceDetails?.listSourceInvestmentRecords === "function" &&
+      typeof services.assetSourceDetails?.saveSourceInvestmentRecord === "function" &&
+      typeof services.assetSourceDetails?.deleteSourceInvestmentRecord === "function")) &&
     services.externalServices !== undefined &&
     typeof services.formalSettlementExecutions?.latest === "function" &&
     typeof services.formalSettlementScheduler?.read === "function" &&

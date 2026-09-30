@@ -144,6 +144,23 @@ export class DashboardSchema {
         total_hkd TEXT,
         PRIMARY KEY (source_id, day)
       ) STRICT;
+      CREATE TABLE IF NOT EXISTS asset_source_investment_histories (
+        source_id TEXT PRIMARY KEY REFERENCES asset_sources(id) ON DELETE CASCADE,
+        payload_json TEXT NOT NULL CHECK (json_valid(payload_json))
+      ) STRICT;
+      CREATE TABLE IF NOT EXISTS source_investment_records (
+        id TEXT PRIMARY KEY,
+        source_id TEXT NOT NULL REFERENCES asset_sources(id) ON DELETE CASCADE,
+        day TEXT NOT NULL,
+        kind TEXT NOT NULL CHECK (kind IN ('opening', 'deposit', 'withdrawal', 'valuation')),
+        amount TEXT NOT NULL,
+        currency TEXT NOT NULL CHECK (currency IN ('USD', 'CNY', 'HKD')),
+        recorded_at TEXT NOT NULL
+      ) STRICT;
+      CREATE UNIQUE INDEX IF NOT EXISTS source_investment_records_one_opening
+        ON source_investment_records(source_id) WHERE kind = 'opening';
+      CREATE UNIQUE INDEX IF NOT EXISTS source_investment_records_one_daily_valuation
+        ON source_investment_records(source_id, day) WHERE kind = 'valuation';
       CREATE TABLE IF NOT EXISTS formal_settlement_execution (
         id INTEGER PRIMARY KEY CHECK (id = 1),
         started_at TEXT NOT NULL,
@@ -276,6 +293,14 @@ export class DashboardSchema {
     if (schemaVersion === "17") {
       this.migrateSchemaVersionSeventeen();
       schemaVersion = "18";
+    }
+    if (schemaVersion === "18") {
+      this.database.prepare("UPDATE schema_metadata SET value = '19' WHERE key = 'schema_version'").run();
+      schemaVersion = "19";
+    }
+    if (schemaVersion === "19") {
+      this.database.prepare("UPDATE schema_metadata SET value = '20' WHERE key = 'schema_version'").run();
+      schemaVersion = "20";
     }
     if (schemaVersion !== String(SQLITE_SCHEMA_VERSION)) {
       throw new Error(`不支持的 SQLite schema 版本: ${schemaVersion}`);

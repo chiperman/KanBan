@@ -12,7 +12,7 @@ export interface DashboardState {
 }
 
 export const DASHBOARD_SCHEMA_VERSION = 9 as const;
-export const SQLITE_SCHEMA_VERSION = 18;
+export const SQLITE_SCHEMA_VERSION = 20;
 
 export interface DashboardDatabase {
   listAssetCards(): Promise<Card[]>;

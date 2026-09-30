@@ -263,6 +263,7 @@ test("业务备份排除运维执行记录，恢复业务数据也不改写最�
     assert.deepEqual(Object.keys(payload).sort(), [
       "assetCards", "assetSources", "dailyAssetSnapshots", "dailyAssetTrendObservations",
       "formalDailySettlements", "importedAssetSourceHistoryObservations", "investmentCashflows", "manualAssetRecords",
+      "sourceInvestmentHistories", "sourceInvestmentRecords",
     ].sort());
     await f.backup.restore("without-operations.json");
     assert.deepEqual(await f.database.latestFormalSettlementExecution(), execution);
