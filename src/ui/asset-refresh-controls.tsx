@@ -52,13 +52,15 @@ export function AssetGlobalRefreshControl() {
       <VibeButton
         aria-busy={pending}
         aria-label="立即刷新资产"
+        className="asset-refresh-button"
         disabled={pending}
         onClick={() => void refresh.request({ reason: "manual-global" })}
         type="button"
+        title="刷新全部已连接的自动来源"
         variant="outline"
       >
         <AssetRefreshIcon className="asset-global-refresh-icon" />
-        <span>{pending ? "刷新中…" : "立即刷新资产"}</span>
+        <span>{pending ? "刷新中…" : "刷新资产"}</span>
       </VibeButton>
       {showStatus ? (
         <VibeStatusTag
@@ -109,7 +111,7 @@ export function AssetSourceRefreshButton({
       <VibeButton
         aria-busy={pending}
         aria-label={`刷新 ${sourceName}`}
-        className="asset-source-refresh-button"
+        className="asset-refresh-button asset-source-refresh-button"
         data-demo-disabled={disabled && onDisabledClick ? "true" : undefined}
         disabled={pending || (disabled && !onDisabledClick)}
         onClick={() => {
@@ -120,6 +122,7 @@ export function AssetSourceRefreshButton({
           void refresh.request({ reason: "manual-source", sourceId });
         }}
         type="button"
+        title={`仅刷新 ${sourceName}`}
         variant="outline"
       >
         <AssetRefreshIcon className="asset-source-refresh-icon" />

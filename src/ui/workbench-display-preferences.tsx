@@ -18,6 +18,8 @@ type WorkbenchDisplayPreferences = {
   setCurrency(currency: ReportingCurrency): void;
   showSensitiveInfo: boolean;
   toggleSensitiveInfo(): void;
+  sidebarCollapsed: boolean;
+  toggleSidebar(): void;
 };
 
 const WorkbenchDisplayPreferencesContext =
@@ -56,15 +58,25 @@ export function WorkbenchDisplayPreferencesProvider({
   const persistenceEnabled = persist && !isDemoModeLocation();
   const [currency, setCurrentCurrency] = useState<ReportingCurrency>("USD");
   const [showSensitiveInfo, setShowSensitiveInfo] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     if (!persistenceEnabled) {
       setCurrentCurrency("USD");
       setShowSensitiveInfo(true);
+      setSidebarCollapsed(false);
+      document.documentElement.dataset.sidebarCollapsed = "false";
       return;
     }
     setCurrentCurrency(storedCurrency());
     setShowSensitiveInfo(!sensitiveInfoIsHidden());
+    try {
+      const collapsed = window.localStorage.getItem("pad-sidebar-collapsed") === "true";
+      setSidebarCollapsed(collapsed);
+      document.documentElement.dataset.sidebarCollapsed = String(collapsed);
+    } catch {
+      // 存储不可用时保留可操作的展开导航。
+    }
   }, [persistenceEnabled]);
 
   useEffect(() => {
@@ -110,14 +122,28 @@ export function WorkbenchDisplayPreferencesProvider({
     });
   }, [persistenceEnabled]);
 
+  const toggleSidebar = useCallback(() => {
+    const next = !sidebarCollapsed;
+    setSidebarCollapsed(next);
+    document.documentElement.dataset.sidebarCollapsed = String(next);
+    if (!persistenceEnabled) return;
+    try {
+      window.localStorage.setItem("pad-sidebar-collapsed", String(next));
+    } catch {
+      // 不影响当前页面的侧栏交互。
+    }
+  }, [persistenceEnabled, sidebarCollapsed]);
+
   const value = useMemo(
     () => ({
       currency,
       setCurrency,
       showSensitiveInfo,
       toggleSensitiveInfo,
+      sidebarCollapsed,
+      toggleSidebar,
     }),
-    [currency, setCurrency, showSensitiveInfo, toggleSensitiveInfo],
+    [currency, setCurrency, showSensitiveInfo, toggleSensitiveInfo, sidebarCollapsed, toggleSidebar],
   );
 
   return (

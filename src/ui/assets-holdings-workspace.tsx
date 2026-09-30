@@ -40,7 +40,7 @@ import {
   useWorkbenchDisplayPreferences,
 } from "@/ui/workbench-display-preferences";
 import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
-import { LongbridgeRealtimeNotice } from "@/ui/longbridge-realtime-notice";
+import { LongbridgeRealtimeNotice, LongbridgeRealtimeStatus } from "@/ui/longbridge-realtime-notice";
 import { useLongbridgeRealtime } from "@/ui/use-longbridge-realtime";
 import { AssetGlobalRefreshControl } from "@/ui/asset-refresh-controls";
 
@@ -318,7 +318,7 @@ export function AssetsHoldingsWorkspace({
   const [sourceId, setSourceId] = useState("all");
   const [assetClass, setAssetClass] = useState<AssetClassFilter>("all");
   const [valuation, setValuation] = useState<ValuationFilter>("all");
-  const { liveSources, state: realtimeState, retry } = useLongbridgeRealtime(sources);
+  const { active: realtimeActive, liveSources, state: realtimeState, retry } = useLongbridgeRealtime(sources);
 
   const recordedSources = useMemo(
     () =>
@@ -397,6 +397,7 @@ export function AssetsHoldingsWorkspace({
       aria-labelledby="assets-holdings-title"
     >
       <WorkbenchPageHeader
+        description={realtimeActive ? <LongbridgeRealtimeStatus state={realtimeState} /> : undefined}
         actions={
           <>
           <VibeSelect

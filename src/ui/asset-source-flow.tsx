@@ -1,5 +1,7 @@
 "use client";
 
+import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
+
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -449,12 +451,10 @@ export function AssetSourceFlow({
 
   return (
     <section className="asset-source-flow" aria-label={flowTitle}>
-      <header className="asset-source-flow__header">
-        <p className="card-label">
-          {isReauthorizing ? "SOURCE / REAUTHORIZE" : "SOURCE / ONBOARDING"}
-        </p>
-        <h1>{flowTitle}</h1>
-      </header>
+      <WorkbenchPageHeader
+        eyebrow={isReauthorizing ? "SOURCE / REAUTHORIZE" : "SOURCE / ONBOARDING"}
+        title={flowTitle}
+      />
 
       <ol aria-label="来源接入步骤" className="asset-source-flow__steps">
         {!isReauthorizing ? (
@@ -479,8 +479,7 @@ export function AssetSourceFlow({
       {step === "choose" ? (
         <section aria-labelledby="source-flow-choose-title" className="asset-source-flow__panel">
           <h2 id="source-flow-choose-title">选择来源类型</h2>
-          <fieldset className="source-provider-list">
-            <legend className="sr-only">来源类型</legend>
+          <fieldset aria-label="来源类型" className="source-provider-list">
             {PROVIDER_OPTIONS.map((description) => (
               <label
                 className="source-option vibe-choice"

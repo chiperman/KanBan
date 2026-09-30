@@ -43,7 +43,7 @@ type BenchmarkChartDatum = AssetTrendChartPoint & {
 
 type AssetTrendBenchmark = {
   assetScopeLabel: string;
-  comparison: MarketBenchmarkComparison;
+  comparison: MarketBenchmarkComparison | null;
   enabledSymbols: MarketBenchmarkSymbol[];
 };
 
@@ -282,9 +282,33 @@ export function AssetTrendChart({
       />
     </header>
   ) : null;
+  const benchmarkVisible = benchmark?.comparison?.reason === null &&
+    benchmark.enabledSymbols.length > 0;
+  const benchmarkLegend = benchmark ? (
+    <div
+      aria-hidden={!benchmarkVisible}
+      aria-label="已显示曲线"
+      className="investment-performance__benchmark-series"
+    >
+      <span className="investment-performance__benchmark-series--assets">
+        我的{assetLabel(benchmark.assetScopeLabel)}
+      </span>
+      {benchmark.enabledSymbols.includes(".SPX.US") ? (
+        <span className="investment-performance__benchmark-series--spx">
+          {marketBenchmarkLabel(".SPX.US")}
+        </span>
+      ) : null}
+      {benchmark.enabledSymbols.includes(".NDX.US") ? (
+        <span className="investment-performance__benchmark-series--ndx">
+          {marketBenchmarkLabel(".NDX.US")}
+        </span>
+      ) : null}
+    </div>
+  ) : null;
   if (
     benchmark !== undefined &&
     benchmark !== null &&
+    benchmark.comparison !== null &&
     benchmark.comparison.reason === null &&
     benchmark.enabledSymbols.length > 0
   ) {
@@ -321,19 +345,7 @@ export function AssetTrendChart({
     return (
       <div className={`asset-trend-comparison asset-trend-comparison--${variant}`}>
         {comparisonHeader}
-        <div aria-label="已显示曲线" className="investment-performance__benchmark-series">
-          <span className="investment-performance__benchmark-series--assets">我的{assetsLabel}</span>
-          {benchmark.enabledSymbols.includes(".SPX.US") ? (
-            <span className="investment-performance__benchmark-series--spx">
-              {marketBenchmarkLabel(".SPX.US")}
-            </span>
-          ) : null}
-          {benchmark.enabledSymbols.includes(".NDX.US") ? (
-            <span className="investment-performance__benchmark-series--ndx">
-              {marketBenchmarkLabel(".NDX.US")}
-            </span>
-          ) : null}
-        </div>
+        {benchmarkLegend}
         <div className="total-trend-chart-wrap">
           <ResponsiveContainer
             width="100%"
@@ -468,6 +480,7 @@ export function AssetTrendChart({
   return (
     <div className={`asset-trend-comparison asset-trend-comparison--${variant}`}>
       {comparisonHeader}
+      {benchmarkLegend}
       <div className="total-trend-chart-wrap">
         <ResponsiveContainer
           width="100%"

@@ -3,9 +3,9 @@
 import { useEffect, useLayoutEffect, useState } from "react";
 
 import {
-  VibeDotIcon,
-  type VibeDotIconName,
-} from "@/ui/vibe/vibe-dot-icon";
+  VibeIcon,
+  type VibeIconName,
+} from "@/ui/vibe/vibe-icon";
 import { VibeTooltip } from "@/ui/vibe/vibe-tooltip";
 
 type ThemeChoice = "light" | "dark" | "system";
@@ -68,24 +68,26 @@ function nextThemeChoice(choice: ThemeChoice): ThemeChoice {
   return THEME_ORDER[(currentIndex + 1) % THEME_ORDER.length];
 }
 
-const THEME_ICONS: Record<Exclude<ThemeChoice, "system">, VibeDotIconName> = {
+const THEME_ICONS: Record<Exclude<ThemeChoice, "system">, VibeIconName> = {
   light: "sun",
   dark: "moon",
 };
 
 function ThemeIcon({ choice }: { choice: ThemeChoice }) {
   if (choice === "system") {
-    return <VibeDotIcon name="computer" size={24} />;
+    return <VibeIcon name="computer" />;
   }
-  return <VibeDotIcon name={THEME_ICONS[choice]} size={24} />;
+  return <VibeIcon name={THEME_ICONS[choice]} />;
 }
 
 export function ThemeSwitcher({
   persist = true,
   showLabel = false,
+  tooltipSide = "bottom",
 }: {
   persist?: boolean;
   showLabel?: boolean;
+  tooltipSide?: "bottom" | "right";
 }) {
   const [choice, setChoice] = useState<ThemeChoice>("system");
 
@@ -112,15 +114,15 @@ export function ThemeSwitcher({
   const tooltipLabel = `当前：${THEME_LABELS[choice]}；点击切换为${THEME_LABELS[nextChoice]}`;
 
   return (
-    <VibeTooltip align="end" label={tooltipLabel}>
+    <VibeTooltip align="end" label={tooltipLabel} side={tooltipSide}>
       <button
         type="button"
         className={showLabel ? "theme-toggle theme-toggle--labeled" : "theme-toggle"}
         aria-label={`当前主题：${THEME_LABELS[choice]}；点击切换为${THEME_LABELS[nextChoice]}`}
         onClick={() => selectTheme(nextChoice)}
       >
-        {showLabel ? <span>主题</span> : null}
         <ThemeIcon choice={choice} />
+        {showLabel ? <span className="workbench-control-label">主题</span> : null}
       </button>
     </VibeTooltip>
   );

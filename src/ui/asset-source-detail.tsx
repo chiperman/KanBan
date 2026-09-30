@@ -2,7 +2,8 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { WorkbenchHeaderUtilitiesSlot } from "@/ui/workbench-shell";
+import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
+import { AssetSourceRefreshButton } from "@/ui/asset-refresh-controls";
 import { SourceInvestmentPerformance } from "@/ui/source-investment-performance";
 import type { SourceInvestmentHistory } from "@/domain/source-investment-history";
 import type { SourceInvestmentRecord } from "@/domain/source-investment-records";
@@ -25,7 +26,7 @@ import {
   AssetSourceCard,
   type AssetSourceView,
 } from "@/ui/longbridge-asset-card";
-import { LongbridgeRealtimeNotice } from "@/ui/longbridge-realtime-notice";
+import { LongbridgeRealtimeNotice, LongbridgeRealtimeStatus } from "@/ui/longbridge-realtime-notice";
 import { useLongbridgeRealtime } from "@/ui/use-longbridge-realtime";
 import type { ProfitColorScheme } from "@/ui/profit-color-scheme";
 import { formatShanghaiDayLabel } from "@/ui/shanghai-date-time";
@@ -33,6 +34,7 @@ import { useWorkbenchDisplayPreferences } from "@/ui/workbench-display-preferenc
 import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
 import { VibeDateField } from "@/ui/vibe/vibe-date-field";
 import { VibeDialog } from "@/ui/vibe/vibe-dialog";
+import { VibeIcon } from "@/ui/vibe/vibe-icon";
 import {
   VibeField,
   VibeSelect,
@@ -465,7 +467,7 @@ export function AssetSourceDetail({
     showSensitiveInfo,
   } = useWorkbenchDisplayPreferences();
   const realtimeSources = useMemo(() => [source], [source]);
-  const { liveSources, state: realtimeState, retry } = useLongbridgeRealtime(realtimeSources);
+  const { active: realtimeActive, liveSources, state: realtimeState, retry } = useLongbridgeRealtime(realtimeSources);
   const [editingRecord, setEditingRecord] = useState<ManualAssetRecord | null | undefined>(
     null,
   );
@@ -497,6 +499,7 @@ export function AssetSourceDetail({
     ).toSorted().at(0),
     [firstDay, history, source.id],
   );
+  const hasCurrentManualRecord = source.manualRecords?.some(({ day }) => day === currentDay);
   const sourceTrend = useMemo(
     () => projectAssetSourceTrend({
       currency,
@@ -536,31 +539,39 @@ export function AssetSourceDetail({
   return (
     <>
       <section className="asset-source-detail__header">
-        <div className="asset-source-detail__heading">
-          <div>
-            <p className="card-label">SOURCE / DETAIL</p>
-            <h1>来源详情</h1>
-          </div>
-          <div className="asset-source-detail__control-rail">
-            <div className="asset-source-detail__actions" data-label="页面操作">
-              <VibeSelect
-                fieldId="asset-source-detail-reporting-currency"
-                label="计价货币"
-                onValueChange={setCurrency}
-                options={REPORTING_CURRENCY_OPTIONS}
-                value={currency}
-                variant="compact"
-              />
-              <VibeButton onClick={() => setInvestmentRecord(undefined)} type="button" variant="outline">
-                手动记录
+        <WorkbenchPageHeader
+          description={realtimeActive ? <LongbridgeRealtimeStatus state={realtimeState} /> : undefined}
+          eyebrow="SOURCE / DETAIL"
+          title="来源详情"
+          backLink={{ href: "/asset-sources", label: "返回资产来源" }}
+          actionsLabel="来源详情快捷操作"
+          actions={<>
+            <VibeSelect
+              fieldId="asset-source-detail-reporting-currency"
+              label="计价货币"
+              onValueChange={setCurrency}
+              options={REPORTING_CURRENCY_OPTIONS}
+            value={currency}
+              variant="compact"
+            />
+            <VibeButton onClick={() => setInvestmentRecord(undefined)} type="button" variant="outline">
+              <VibeIcon name="plus" /><span>手动记录</span>
+            </VibeButton>
+            {manual ? (
+              <VibeButton
+                className="manual-asset-record-button"
+                onClick={() => setEditingRecord(undefined)}
+                type="button"
+                variant="outline"
+              >
+                <VibeIcon name={hasCurrentManualRecord ? "edit" : "plus"} />
+                <span>{hasCurrentManualRecord ? "更新今日数据" : "添加数据"}</span>
               </VibeButton>
-              <VibeLink href="/asset-sources" variant="outline">
-                返回资产来源
-              </VibeLink>
-            </div>
-            <WorkbenchHeaderUtilitiesSlot />
-          </div>
-        </div>
+            ) : source.lifecycle !== "disconnected" ? (
+              <AssetSourceRefreshButton sourceId={source.id} sourceName={name} />
+            ) : null}
+          </>}
+        />
       </section>
 
       <section aria-label="来源分析" className="asset-source-detail__analysis">
@@ -619,6 +630,7 @@ export function AssetSourceDetail({
             onEdit={setInvestmentRecord}
             onDelete={setDeletingInvestmentRecord}
           />}
+          showRefreshControl={false}
           totalAnimationKey={source.kind === "longbridge" ? source.snapshot.syncedAt : undefined}
           assetScopeHref={source.kind.startsWith("evm-watch-")
             ? `/asset-sources/${encodeURIComponent(source.id)}/settings`

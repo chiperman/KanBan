@@ -10,7 +10,7 @@ async function configureWorkspace(page: Page): Promise<void> {
   expect(session.ok()).toBeTruthy();
 }
 
-test("总览裸页面上的次级控件遮住点阵，主刷新保持实心", async ({ page }) => {
+test("总览与来源刷新统一尺寸，次级控件保持不透明", async ({ page }) => {
   await configureWorkspace(page);
   await page.goto("/");
 
@@ -18,14 +18,14 @@ test("总览裸页面上的次级控件遮住点阵，主刷新保持实心", as
   const secondaryControls = actions.locator(
     ".vibe-select__trigger, .vibe-button--outline",
   );
-  await expect(secondaryControls).toHaveCount(1);
+  await expect(secondaryControls).toHaveCount(2);
 
   const backgrounds = await secondaryControls.evaluateAll((controls) =>
     controls.map((control) => getComputedStyle(control).backgroundColor),
   );
   expect(backgrounds).not.toContain("rgba(0, 0, 0, 0)");
 
-  await expect(page.getByTestId("global-sensitive-info-toggle")).not.toHaveCSS(
+  await expect(page.getByTestId("workbench-sidebar")).not.toHaveCSS(
     "background-color",
     "rgba(0, 0, 0, 0)",
   );
@@ -33,6 +33,28 @@ test("总览裸页面上的次级控件遮住点阵，主刷新保持实心", as
   await expect(
     actions.getByRole("button", { name: "立即刷新资产" }),
   ).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+
+  const style = (button: Element) => {
+    const css = getComputedStyle(button);
+    return {
+      width: button.getBoundingClientRect().width,
+      height: button.getBoundingClientRect().height,
+      fontSize: css.fontSize,
+      borderRadius: css.borderRadius,
+      background: css.backgroundColor,
+      iconWidth: button.querySelector("svg")?.getBoundingClientRect().width,
+    };
+  };
+  const globalStyle = await actions.getByRole("button", { name: "立即刷新资产" }).evaluate(style);
+  await page.goto("/asset-sources/source-beta");
+  const header = page.getByTestId("workbench-page-header");
+  const sourceRefresh = page.getByRole("button", { name: "刷新 Beta Crypto" });
+  await expect(sourceRefresh).toHaveCount(1);
+  await expect(header.getByRole("button", { name: "刷新 Beta Crypto" })).toBeVisible();
+  await expect(header.locator(".workbench-page-header__copy").getByRole("link", { name: "返回资产来源" })).toBeVisible();
+  const sourceStyle = await sourceRefresh.evaluate(style);
+  expect(sourceStyle).toEqual(globalStyle);
+  expect(sourceStyle.height).toBeGreaterThanOrEqual(40);
 });
 
 test("来源总额隐藏时使用明确文案，并与查看操作保留间距", async ({ page }) => {

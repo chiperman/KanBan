@@ -54,11 +54,7 @@ export function MarketBenchmarkControls({
   }
 
   let state: ReactNode = null;
-  if (dataState.kind === "loading") {
-    state = (
-      <BenchmarkState title="指数行情加载中" />
-    );
-  } else if (dataState.kind === "unavailable") {
+  if (dataState.kind === "unavailable") {
     state = (
       <BenchmarkState title="未连接长桥证券来源" />
     );
@@ -66,11 +62,11 @@ export function MarketBenchmarkControls({
     state = (
       <BenchmarkState title="指数读取失败" />
     );
-  } else if (enabledSymbols.length === 0) {
+  } else if (dataState.kind === "ready" && enabledSymbols.length === 0) {
     state = (
       <BenchmarkState title="未选择市场指数" />
     );
-  } else if (dataState.comparison.reason !== null) {
+  } else if (dataState.kind === "ready" && dataState.comparison.reason !== null) {
     state = (
       <BenchmarkState title="数据不足">
         {dataState.comparison.reason}
@@ -84,11 +80,17 @@ export function MarketBenchmarkControls({
         <div>
           <strong>市场对比</strong>
         </div>
-        {dataState.kind === "ready" && dataState.comparison.baselineDay !== null ? (
-          <span className="investment-performance__benchmark-baseline">
-            基准起点 {formatDay(dataState.comparison.baselineDay)}
-          </span>
-        ) : null}
+        <span
+          aria-atomic="true"
+          className="investment-performance__benchmark-baseline"
+          role="status"
+        >
+          {dataState.kind === "loading"
+            ? "指数行情加载中"
+            : dataState.kind === "ready" && dataState.comparison.baselineDay !== null
+              ? `基准起点 ${formatDay(dataState.comparison.baselineDay)}`
+              : "\u00a0"}
+        </span>
       </div>
       <div
         aria-label="市场指数"

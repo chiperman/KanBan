@@ -497,7 +497,7 @@ test("手机宽度下刷新入口可键盘操作且满足 outline、状态与点
   });
   expect(appearance.height).toBeGreaterThanOrEqual(40);
   expect(appearance.borderTopWidth).not.toBe("0px");
-  expect(appearance.backgroundColor).toBe("rgba(0, 0, 0, 0)");
+  expect(appearance.backgroundColor).not.toBe("rgba(0, 0, 0, 0)");
 
   await page.keyboard.press("Enter");
   await expect(refresh).toContainText("刷新中…");
@@ -601,6 +601,7 @@ test("全局与来源刷新统一图标、outline 与终态样式", async ({
   pending[0]!.resolve({ successCount: 2, failureCount: 0 });
   await expect(globalRefresh).toBeEnabled();
 
+  await page.mouse.move(0, 0);
   await page.goto("/asset-sources/source-alpha");
   const sourceRefresh = page.getByRole("button", {
     name: "刷新 Alpha Securities",

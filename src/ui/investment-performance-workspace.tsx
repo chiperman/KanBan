@@ -25,7 +25,7 @@ import {
 import { buildTotalValuation, convertCurrencyAmount, type ReportingCurrency } from "@/domain/valuation";
 import { hasManualAssetRecord } from "@/domain/manual-asset-records";
 import { useLongbridgeRealtime } from "@/ui/use-longbridge-realtime";
-import { LongbridgeRealtimeNotice } from "@/ui/longbridge-realtime-notice";
+import { LongbridgeRealtimeNotice, LongbridgeRealtimeStatus } from "@/ui/longbridge-realtime-notice";
 import type {
   AssetExchangeRate,
   AssetSourceSummary,
@@ -445,7 +445,7 @@ export function InvestmentPerformanceWorkspace({
   importedSourceHistoryObservations: ImportedAssetSourceHistoryObservation[];
   trendObservations: DailyAssetTrendObservation[];
 }) {
-  const { liveSources, state: realtimeState, retry } = useLongbridgeRealtime(sources);
+  const { active: realtimeActive, liveSources, state: realtimeState, retry } = useLongbridgeRealtime(sources);
   const currentTotals = useMemo(() => {
     const recorded = liveSources.filter(hasManualAssetRecord);
     const valuation = buildTotalValuation(recorded, "USD", "source");
@@ -671,6 +671,7 @@ export function InvestmentPerformanceWorkspace({
       data-testid="investment-performance-workspace"
     >
       <WorkbenchPageHeader
+        description={realtimeActive ? <LongbridgeRealtimeStatus state={realtimeState} /> : undefined}
         actions={
           <>
           <VibeSelect
@@ -793,11 +794,11 @@ export function InvestmentPerformanceWorkspace({
           ariaLabel={hasEarlyHistory
             ? `我的资产走势：完整总资产与${importedSource?.label}早期实际记录`
             : "完整总资产走势"}
-          benchmark={benchmarkDataState.kind === "ready" ? {
+          benchmark={{
             assetScopeLabel: "组合",
-            comparison: benchmarkDataState.comparison,
+            comparison: benchmarkDataState.kind === "ready" ? benchmarkDataState.comparison : null,
             enabledSymbols: enabledBenchmarkSymbols,
-          } : null}
+          }}
           currency={currency}
           formatAmount={amount}
           formatDay={formatShanghaiDayLabel}

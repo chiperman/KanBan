@@ -2,9 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import {
-  createContext,
   type ReactNode,
-  useContext,
   useEffect,
   useState,
 } from "react";
@@ -16,17 +14,19 @@ import {
   useWorkbenchDisplayPreferences,
 } from "@/ui/workbench-display-preferences";
 import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
+import { VibeIcon } from "@/ui/vibe/vibe-icon";
+import { VibeTooltip } from "@/ui/vibe/vibe-tooltip";
 import {
   type AssetRefreshRegistration,
   useAssetRefresh,
 } from "@/ui/asset-refresh-provider";
 
 const PRIMARY_DESTINATIONS = [
-  { href: "/", label: "总览", icon: "overview" },
-  { href: "/assets", label: "资产与持仓", icon: "holdings" },
-  { href: "/performance", label: "收益分析", icon: "performance" },
-  { href: "/asset-sources", label: "资产来源", icon: "sources" },
-  { href: "/settings", label: "设置与安全", icon: "security" },
+  { href: "/", label: "总览", shortLabel: "总览", icon: "overview" },
+  { href: "/assets", label: "资产与持仓", shortLabel: "持仓", icon: "holdings" },
+  { href: "/performance", label: "收益分析", shortLabel: "收益", icon: "performance" },
+  { href: "/asset-sources", label: "资产来源", shortLabel: "来源", icon: "sources" },
+  { href: "/settings", label: "设置与安全", shortLabel: "设置", icon: "security" },
 ] as const;
 
 type WorkbenchDestination = (typeof PRIMARY_DESTINATIONS)[number];
@@ -47,8 +47,6 @@ const DESKTOP_NAVIGATION_GROUPS = [
 
 type WorkbenchNavigationGroupId =
   (typeof DESKTOP_NAVIGATION_GROUPS)[number]["id"];
-
-const WorkbenchHeaderUtilitiesContext = createContext<ReactNode>(null);
 
 function isCurrentDestination(pathname: string, href: string) {
   return href === "/"
@@ -112,20 +110,20 @@ function WorkbenchNavigationIcon({
 
 function WorkbenchDestinationLinks({
   destinations = PRIMARY_DESTINATIONS,
-  iconOnly = false,
-  showIcon = iconOnly,
+  mobile = false,
+  compact = false,
 }: {
   destinations?: readonly WorkbenchDestination[];
-  iconOnly?: boolean;
-  showIcon?: boolean;
+  mobile?: boolean;
+  compact?: boolean;
 }) {
   const pathname = usePathname();
 
   return (
     <>
-      {destinations.map(({ href, icon, label }) => (
-        <VibeLink
-          aria-label={iconOnly ? label : undefined}
+      {destinations.map(({ href, icon, label, shortLabel }) => {
+        const link = <VibeLink
+          aria-label={label}
           aria-current={
             isCurrentDestination(pathname, href) ? "page" : undefined
           }
@@ -134,10 +132,11 @@ function WorkbenchDestinationLinks({
           key={href}
           variant="text"
         >
-          {showIcon ? <WorkbenchNavigationIcon name={icon} /> : null}
-          {iconOnly ? null : <span>{label}</span>}
-        </VibeLink>
-      ))}
+          <WorkbenchNavigationIcon name={icon} />
+          <span className="workbench-navigation-link__label">{mobile ? shortLabel : label}</span>
+        </VibeLink>;
+        return compact ? <VibeTooltip key={href} label={label} side="right">{link}</VibeTooltip> : link;
+      })}
     </>
   );
 }
@@ -160,7 +159,7 @@ function WorkbenchNavigationGroupChevron() {
   );
 }
 
-function WorkbenchDesktopNavigationGroups() {
+function WorkbenchDesktopNavigationGroups({ compact }: { compact: boolean }) {
   const pathname = usePathname();
   const [expandedGroups, setExpandedGroups] = useState<
     Record<WorkbenchNavigationGroupId, boolean>
@@ -208,10 +207,10 @@ function WorkbenchDesktopNavigationGroups() {
             </VibeButton>
             <div
               className="workbench-navigation-group-destinations"
-              hidden={!isExpanded}
+              hidden={!isExpanded && !compact}
               id={destinationListId}
             >
-              <WorkbenchDestinationLinks destinations={destinations} showIcon />
+              <WorkbenchDestinationLinks destinations={destinations} compact={compact} />
             </div>
           </section>
         );
@@ -226,6 +225,7 @@ function WorkbenchPrivacyToggle() {
 
   return (
     <VibeButton
+      aria-label={showSensitiveInfo ? "隐藏关键信息" : "显示关键信息"}
       aria-pressed={!showSensitiveInfo}
       className="workbench-privacy-toggle"
       data-testid="global-sensitive-info-toggle"
@@ -233,7 +233,8 @@ function WorkbenchPrivacyToggle() {
       type="button"
       variant="outline"
     >
-      {showSensitiveInfo ? "隐藏关键信息" : "显示关键信息"}
+      <VibeIcon name={showSensitiveInfo ? "eye" : "eye-off"} />
+      <span className="workbench-control-label">{showSensitiveInfo ? "隐藏关键信息" : "显示关键信息"}</span>
     </VibeButton>
   );
 }
@@ -250,34 +251,25 @@ function WorkbenchUtilities({
       <div className="workbench-utility-group">
         <span className="workbench-utility-group__label">视图工具</span>
         <div className="workbench-utility-group__controls workbench-utility-primary">
-          <WorkbenchPrivacyToggle />
+          <VibeTooltip label="隐藏或显示关键信息" side="right">
+            <WorkbenchPrivacyToggle />
+          </VibeTooltip>
           {commandMenu ? (
-            <div className="workbench-command">
-              <CommandMenu refreshEnabled={refreshEnabled} />
-            </div>
+            <VibeTooltip label="快捷命令 · ⌘K / Ctrl K" side="right">
+              <div className="workbench-command">
+                <CommandMenu refreshEnabled={refreshEnabled} />
+              </div>
+            </VibeTooltip>
           ) : null}
         </div>
       </div>
       <div className="workbench-utility-group">
         <span className="workbench-utility-group__label">账户工具</span>
         <div className="workbench-utility-group__controls workbench-utility-actions">
-          <ThemeSwitcher showLabel />
-          <LogoutButton showLabel />
+          <ThemeSwitcher showLabel tooltipSide="right" />
+          <LogoutButton showLabel tooltipSide="right" />
         </div>
       </div>
-    </div>
-  );
-}
-
-export function WorkbenchHeaderUtilitiesSlot() {
-  const utilities = useContext(WorkbenchHeaderUtilitiesContext);
-
-  return (
-    <div
-      className="workbench-page-header__utilities"
-      data-workbench-utilities-slot
-    >
-      {utilities}
     </div>
   );
 }
@@ -294,25 +286,20 @@ export function WorkbenchShell({
   refreshEnabled: boolean;
 }) {
   const { register } = useAssetRefresh();
+  const { sidebarCollapsed, toggleSidebar } = useWorkbenchDisplayPreferences();
   useEffect(() => {
     if (refreshRegistration !== undefined) register(refreshRegistration);
   }, [refreshRegistration, register]);
 
   return (
-    <WorkbenchHeaderUtilitiesContext.Provider
-      value={
-        <WorkbenchUtilities
-          commandMenu={commandMenu}
-          refreshEnabled={refreshEnabled}
-        />
-      }
-    >
-      <div className="workbench-shell" data-testid="workbench-shell">
-        <nav
-          aria-label="工作台主导航"
-          className="workbench-navigation workbench-desktop-navigation"
-          data-testid="workbench-desktop-navigation"
-        >
+    <div className="workbench-shell" data-sidebar-collapsed={sidebarCollapsed} data-testid="workbench-shell">
+      <aside
+        aria-label="工作台导航与工具"
+        className="workbench-sidebar"
+        data-testid="workbench-sidebar"
+        id="workbench-sidebar"
+      >
+        <div className="workbench-sidebar__head">
           <VibeLink
             aria-label="返回资产总览"
             className="workbench-navigation-brand"
@@ -323,27 +310,48 @@ export function WorkbenchShell({
               01
             </span>
             <span className="workbench-navigation-brand-copy">
-              <strong lang="en">PERSONAL ASSET</strong>
-              <span lang="en">DASHBOARD</span>
+              <strong>资产看板</strong>
+              <span lang="en">PERSONAL ASSET</span>
             </span>
           </VibeLink>
+          <VibeButton
+            aria-label={sidebarCollapsed ? "展开侧边栏" : "收起侧边栏"}
+            aria-expanded={!sidebarCollapsed}
+            aria-controls="workbench-sidebar"
+            className="workbench-sidebar-toggle"
+            onClick={toggleSidebar}
+            title={sidebarCollapsed ? "展开侧边栏" : "收起侧边栏"}
+            type="button" variant="text"
+          >
+            <VibeIcon name={sidebarCollapsed ? "panel-right" : "panel-left"} />
+          </VibeButton>
+        </div>
+        <nav
+          aria-label="工作台主导航"
+          className="workbench-navigation workbench-desktop-navigation"
+          data-testid="workbench-desktop-navigation"
+        >
           <div className="workbench-navigation-links">
             <WorkbenchDestinationLinks
               destinations={[PRIMARY_DESTINATIONS[0]]}
-              showIcon
+              compact={sidebarCollapsed}
             />
-            <WorkbenchDesktopNavigationGroups />
+            <WorkbenchDesktopNavigationGroups compact={sidebarCollapsed} />
           </div>
         </nav>
-        <div className="workbench-shell-content">{children}</div>
-        <nav
-          aria-label="工作台主导航"
-          className="workbench-navigation workbench-mobile-navigation"
-          data-testid="workbench-mobile-navigation"
-        >
-          <WorkbenchDestinationLinks iconOnly />
-        </nav>
-      </div>
-    </WorkbenchHeaderUtilitiesContext.Provider>
+        <WorkbenchUtilities
+          commandMenu={commandMenu}
+          refreshEnabled={refreshEnabled}
+        />
+      </aside>
+      <div className="workbench-shell-content">{children}</div>
+      <nav
+        aria-label="工作台主导航"
+        className="workbench-navigation workbench-mobile-navigation"
+        data-testid="workbench-mobile-navigation"
+      >
+        <WorkbenchDestinationLinks mobile />
+      </nav>
+    </div>
   );
 }

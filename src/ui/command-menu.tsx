@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 
 import { OWNER_LOCK_EVENT } from "@/shared/session-policy";
 import { useAssetRefresh } from "@/ui/asset-refresh-provider";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeField } from "@/ui/vibe/vibe-field";
+import { VibeIcon } from "@/ui/vibe/vibe-icon";
 
 interface NavigationTarget {
   id: string;
@@ -205,9 +207,11 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
         onClick={show}
         variant="outline"
       >
-        快捷命令 <kbd>⌘K</kbd>
+        <VibeIcon name="search" />
+        <span className="workbench-control-label">快捷命令</span>
+        <kbd>⌘K</kbd>
       </VibeButton>
-      {open ? (
+      {open ? createPortal(
         <div
           className="command-menu-overlay"
           role="dialog"
@@ -268,7 +272,8 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </>
   );

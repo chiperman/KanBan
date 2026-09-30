@@ -4,7 +4,7 @@ import type { FormalSettlementExecution } from "@/server/ports";
 
 import { useMemo } from "react";
 import { useLongbridgeRealtime } from "@/ui/use-longbridge-realtime";
-import { LongbridgeRealtimeNotice } from "@/ui/longbridge-realtime-notice";
+import { LongbridgeRealtimeNotice, LongbridgeRealtimeStatus } from "@/ui/longbridge-realtime-notice";
 import { VibeLiveCounter } from "@/ui/vibe/vibe-live-counter";
 
 import {
@@ -254,7 +254,7 @@ export function DailyOverviewWorkspace({
     showSensitiveInfo,
   } = useWorkbenchDisplayPreferences();
 
-  const { liveSources, state: realtimeState, retry } = useLongbridgeRealtime(sources, !demoMode);
+  const { active: realtimeActive, liveSources, state: realtimeState, retry } = useLongbridgeRealtime(sources, !demoMode);
   const recordedSources = useMemo(
     () => liveSources.filter(hasManualAssetRecord),
     [liveSources],
@@ -468,6 +468,7 @@ export function DailyOverviewWorkspace({
       data-testid="portfolio-overview-workspace"
     >
       <WorkbenchPageHeader
+        description={realtimeActive ? <LongbridgeRealtimeStatus state={realtimeState} /> : undefined}
         actionsLabel="总览快捷操作"
         eyebrow="PORTFOLIO / TODAY"
         title="总览"
@@ -504,19 +505,7 @@ export function DailyOverviewWorkspace({
             </p>
           )}
         </article>
-        <article data-testid="overview-confidence">
-          <p className="card-label">CONFIDENCE / DATA</p>
-          <h2>{current?.complete ? "总额完整" : "数据不完整"}</h2>
-          <p>
-            {currentReason ??
-              `已覆盖 ${recordedSources.length} 个来源`}
-          </p>
-          {!current?.complete ? (
-            <p>
-              未估值 {usdValuation.unvaluedCount} 项 · 过期来源 {usdValuation.expiredCount} 个
-            </p>
-          ) : null}
-        </article>
+
         <article>
           <p className="card-label">
             {intervalFallback ? "INTERVAL / ASSET CHANGE" : "TODAY / ASSET CHANGE"}
@@ -577,6 +566,19 @@ export function DailyOverviewWorkspace({
             </div>
           ) : null}
         </article>
+        <article className="daily-overview__confidence" data-testid="overview-confidence">
+          <p className="card-label">CONFIDENCE / DATA</p>
+          <h2>{current?.complete ? "总额完整" : "数据不完整"}</h2>
+          <p>
+            {currentReason ??
+              `已覆盖 ${recordedSources.length} 个来源`}
+          </p>
+          {!current?.complete ? (
+            <p>
+              未估值 {usdValuation.unvaluedCount} 项 · 过期来源 {usdValuation.expiredCount} 个
+            </p>
+          ) : null}
+        </article>
       </section>
 
       <section className="daily-overview__summary" aria-label="本金与收益摘要">
@@ -611,51 +613,55 @@ export function DailyOverviewWorkspace({
         )}
       </section>
 
-      {demoMode ? null : (
-        <FormalDailySettlementSummary
-          settlements={formalDailySettlements}
-          execution={formalSettlementExecution}
-          currency={currency}
-          showSensitiveInfo={showSensitiveInfo}
-        />
-      )}
+      <div className="daily-overview__analysis">
+        <section
+          className="daily-overview__trend"
+          data-testid="overview-trend"
+        >
+          <header>
+            <div>
+              <p className="card-label">总资产趋势</p>
+              <h2>近 7 日资产走势</h2>
+            </div>
+            <div className="daily-overview__trend-actions">
+              <span>
+                {trend.firstDay
+                  ? `${formatShanghaiDayLabel(trend.firstDay)} 至 ${formatShanghaiDayLabel(currentDay)}`
+                  : "暂无可用观察"}
+              </span>
+              {demoMode ? null : (
+                <VibeLink
+                  className="daily-overview__trend-link"
+                  href="/performance"
+                  variant="text"
+                >
+                  查看长期趋势
+                </VibeLink>
+              )}
+            </div>
+          </header>
+          <AssetTrendChart
+            ariaLabel="近 7 日总资产趋势"
+            chartHeight={176}
+            currency={currency}
+            formatAmount={amount}
+            formatDay={formatShanghaiDayLabel}
+            incompleteCount={trend.incompleteCount}
+            isSensitiveHidden={!showSensitiveInfo}
+            points={trend.points}
+            unavailableCount={trend.unavailableCount}
+          />
+        </section>
 
-      <section
-        className="daily-overview__trend"
-        data-testid="overview-trend"
-      >
-        <header>
-          <p className="card-label">总资产趋势</p>
-          <h2>近 7 日资产走势</h2>
-          <div className="daily-overview__trend-actions">
-            <span>
-              {trend.firstDay
-                ? `${formatShanghaiDayLabel(trend.firstDay)} 至 ${formatShanghaiDayLabel(currentDay)}`
-                : "暂无可用观察"}
-            </span>
-            {demoMode ? null : (
-              <VibeLink
-                className="daily-overview__trend-link"
-                href="/performance"
-                variant="text"
-              >
-                查看长期趋势
-              </VibeLink>
-            )}
-          </div>
-        </header>
-        <AssetTrendChart
-          ariaLabel="近 7 日总资产趋势"
-          chartHeight={176}
-          currency={currency}
-          formatAmount={amount}
-          formatDay={formatShanghaiDayLabel}
-          incompleteCount={trend.incompleteCount}
-          isSensitiveHidden={!showSensitiveInfo}
-          points={trend.points}
-          unavailableCount={trend.unavailableCount}
-        />
-      </section>
+        {demoMode ? null : (
+          <FormalDailySettlementSummary
+            settlements={formalDailySettlements}
+            execution={formalSettlementExecution}
+            currency={currency}
+            showSensitiveInfo={showSensitiveInfo}
+          />
+        )}
+      </div>
 
       <LongbridgeRealtimeNotice state={realtimeState} retry={retry} />
       <section className="daily-overview__sources" data-testid="overview-source-summary">

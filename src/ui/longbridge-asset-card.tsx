@@ -635,6 +635,7 @@ export function AssetSourceCard({
   showAssetTrend = trendContent === undefined,
   totalAnimationKey,
   refreshDisabled = false,
+  showRefreshControl = true,
   source,
   history,
   reportingExchangeRates,
@@ -655,12 +656,13 @@ export function AssetSourceCard({
   showAssetTrend?: boolean;
   totalAnimationKey?: string;
   refreshDisabled?: boolean;
+  showRefreshControl?: boolean;
   source: AssetSourceView;
   history: DailyAssetTrendObservation[];
   reportingExchangeRates: AssetExchangeRate[];
   reportingCurrency: ReportingCurrency;
   trendBenchmark?: {
-    comparison: MarketBenchmarkComparison;
+    comparison: MarketBenchmarkComparison | null;
     enabledSymbols: MarketBenchmarkSymbol[];
   } | null;
   trendDays?: readonly string[];
@@ -683,7 +685,6 @@ export function AssetSourceCard({
   const isManual = source.kind === "manual";
   const hasManualRecord = !isManual || source.hasManualRecord !== false;
   const manualRecords = source.manualRecords ?? [];
-  const currentManualRecord = manualRecords.find(({ day }) => day === currentDay);
   const supportsSmallHoldingFilter =
     !isManual && source.kind !== "longbridge";
   const supportsEvmTokenPreferences = source.kind.startsWith("evm-watch-");
@@ -973,23 +974,7 @@ export function AssetSourceCard({
             >
               {providerCode(source)} / {sourceState.label}
             </VibeStatusTag>
-            {isManual && onManualAssetRecord ? (
-              <VibeButton
-                className="manual-asset-record-button"
-                data-demo-disabled={onReadOnlyAction ? "true" : undefined}
-                onClick={() => {
-                  if (onReadOnlyAction) {
-                    onReadOnlyAction();
-                    return;
-                  }
-                  onManualAssetRecord(source);
-                }}
-                type="button"
-                variant="outline"
-              >
-                {currentManualRecord ? "更新今日数据" : "添加数据"}
-              </VibeButton>
-            ) : !isManual && source.lifecycle !== "disconnected" ? (
+            {showRefreshControl && !isManual && source.lifecycle !== "disconnected" ? (
               <AssetSourceRefreshButton
                 disabled={refreshDisabled}
                 onDisabledClick={onReadOnlyAction}

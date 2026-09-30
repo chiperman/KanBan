@@ -451,6 +451,12 @@ textarea.vibe-field__input {
   }
 }
 
+.vibe-icon {
+  width: var(--vibe-space-5);
+  height: var(--vibe-space-5);
+  flex: 0 0 auto;
+}
+
 .vibe-button {
   display: inline-flex;
   min-height: var(--vibe-control-height);
@@ -591,6 +597,19 @@ textarea.vibe-field__input {
 .vibe-tooltip[data-align="end"]:hover .vibe-tooltip__content,
 .vibe-tooltip[data-align="end"]:focus-within .vibe-tooltip__content {
   transform: translateY(0);
+}
+
+.vibe-tooltip__content--floating {
+  position: fixed;
+  z-index: 120;
+  visibility: visible;
+  opacity: 1;
+  transform: none;
+  white-space: normal;
+}
+
+.vibe-tooltip__content--floating::before {
+  display: none;
 }
 
 .vibe-notice {
@@ -1135,7 +1154,7 @@ body::before {
   .asset-refresh-controls
   .vibe-button.vibe-button--outline {
   border-color: var(--line-2);
-  background: transparent;
+  background: var(--surface);
   color: var(--secondary);
 }
 

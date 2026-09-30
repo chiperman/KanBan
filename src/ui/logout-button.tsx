@@ -2,17 +2,17 @@
 
 import { OWNER_LOCK_EVENT } from "@/shared/session-policy";
 import { VibeButton } from "@/ui/vibe/vibe-button";
-import { VibeDotIcon } from "@/ui/vibe/vibe-dot-icon";
+import { VibeIcon } from "@/ui/vibe/vibe-icon";
 import { VibeTooltip } from "@/ui/vibe/vibe-tooltip";
 
 /** 所有者主动锁定：销毁服务端会话并重新加载到所有者登录入口。 */
-export function LogoutButton({ showLabel = false }: { showLabel?: boolean }) {
+export function LogoutButton({ showLabel = false, tooltipSide = "bottom" }: { showLabel?: boolean; tooltipSide?: "bottom" | "right" }) {
   function lock() {
     window.dispatchEvent(new Event(OWNER_LOCK_EVENT));
   }
 
   return (
-    <VibeTooltip align="end" label="立即锁定敏感内容">
+    <VibeTooltip align="end" label="立即锁定敏感内容" side={tooltipSide}>
       <VibeButton
         type="button"
         className={showLabel ? "header-action-button header-lock-button header-lock-button--labeled" : "header-action-button header-lock-button"}
@@ -20,8 +20,8 @@ export function LogoutButton({ showLabel = false }: { showLabel?: boolean }) {
         onClick={lock}
         variant="outline"
       >
-        {showLabel ? <span>锁定</span> : null}
-        <VibeDotIcon name="lock" size={24} />
+        <VibeIcon name="lock" />
+        {showLabel ? <span className="workbench-control-label">锁定</span> : null}
       </VibeButton>
     </VibeTooltip>
   );

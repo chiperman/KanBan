@@ -127,6 +127,7 @@ export function useLongbridgeRealtime<T extends RealtimeSource>(sources: T[], en
   }, [batch, sources, subscriptionKey]);
 
   return {
+    active: subscriptionKey !== "",
     liveSources,
     state,
     retry: () => {
