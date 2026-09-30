@@ -39,6 +39,7 @@ import {
   supportsLongbridgeCandlesticks,
 } from "@/domain/longbridge-symbols";
 import { assetResponseError, AssetRequestError, hasManagedAssetRetry } from "@/server/asset-sync-diagnostics";
+import { LongbridgeServeMarketData } from "@/server/asset-sources/longbridge-serve-market-data";
 
 export { isLongbridgeUsOptionSymbol } from "@/domain/longbridge-symbols";
 
@@ -1132,7 +1133,11 @@ export function snapshotRetainingMissingQuotes(
  * 直接写回 Keychain，TypeScript、数据库和浏览器均无法读取 Token 正文。
  */
 export class KeychainLongbridgeOAuth implements LongbridgeOAuth {
-  constructor(private readonly sdk: LongbridgeKeychainReadSdk = new LongbridgeKeychainSdk()) {}
+  constructor(
+    private readonly sdk: LongbridgeKeychainReadSdk = new LongbridgeKeychainSdk(),
+    private readonly readSnapshot: (observedAt: string) => Promise<AssetSnapshot> =
+      (observedAt) => keychainSnapshot(this.sdk, observedAt),
+  ) {}
 
   async start(redirectUri: string): Promise<{
     authorizationUrl: string;
@@ -1184,7 +1189,7 @@ export class KeychainLongbridgeOAuth implements LongbridgeOAuth {
     }
     let snapshot: AssetSnapshot;
     try {
-      snapshot = await keychainSnapshot(this.sdk, input.observedAt);
+      snapshot = await this.readSnapshot(input.observedAt);
     } catch (error) {
       throw new Error(
         `长桥授权后读取账户失败：${error instanceof Error ? error.message : "未知错误"}`,
@@ -1240,10 +1245,10 @@ export class KeychainLongbridgeSourceRefresher implements AssetSourceRefresher {
 }
 
 /** 正式日结只读取 Longbridge 官方日 K 的常规盘数据，绝不使用实时/盘后报价。 */
-export class KeychainLongbridgeFormalSettlementCandleReader
+export class ServeLongbridgeFormalSettlementCandleReader
   implements FormalSettlementCandleReader
 {
-  constructor(private readonly sdk: LongbridgeKeychainReadSdk = new LongbridgeKeychainSdk()) {}
+  constructor(private readonly sdk: Pick<LongbridgeServeMarketData, "credentialReference" | "readDailyCandles"> = new LongbridgeServeMarketData()) {}
 
   async readDailyCandles(input: {
     source: import("@/server/ports").AssetSourceSummary;
@@ -1255,9 +1260,7 @@ export class KeychainLongbridgeFormalSettlementCandleReader
     if (input.source.credentialReference !== this.sdk.credentialReference()) {
       throw new Error("长桥来源不是 macOS Keychain 凭证，请重新连接");
     }
-    const candles = await withKeychainAuthenticationRetry(() =>
-      this.sdk.readDailyCandles(input.symbols),
-    );
+    const candles = await this.sdk.readDailyCandles(input.symbols);
     return candles.map((candle) => ({
       symbol: candle.symbol,
       close: candle.close,
@@ -1334,10 +1337,10 @@ function latestFiveTradingDayTrend(
 /**
  * 单标的行情读取与日结读取分离：前者仅按需读取当前持仓，始终使用常规盘与未复权。
  */
-export class KeychainLongbridgeHoldingCandlestickReader
+export class ServeLongbridgeHoldingCandlestickReader
   implements LongbridgeHoldingCandlestickReader
 {
-  constructor(private readonly sdk: LongbridgeKeychainReadSdk = new LongbridgeKeychainSdk()) {}
+  constructor(private readonly sdk: Pick<LongbridgeServeMarketData, "credentialReference" | "readCandlesticks" | "readFiveDayTrend"> = new LongbridgeServeMarketData()) {}
 
   async readCandlesticks(input: {
     source: import("@/server/ports").AssetSourceSummary;
@@ -1353,12 +1356,10 @@ export class KeychainLongbridgeHoldingCandlestickReader
     if (!supportsLongbridgeCandlesticks(input.symbol)) {
       throw new Error("该持仓暂不支持查看 K 线");
     }
-    const candles = await withKeychainAuthenticationRetry(() =>
-      this.sdk.readCandlesticks(
-        input.symbol,
-        input.period,
-        LONG_BRIDGE_CANDLE_COUNTS[input.period],
-      ),
+    const candles = await this.sdk.readCandlesticks(
+      input.symbol,
+      input.period,
+      LONG_BRIDGE_CANDLE_COUNTS[input.period],
     );
     return candles.map((candle) => ({
       time: optionalUnixSecondsIso(candle.timestamp, "candlestick.timestamp")
@@ -1385,9 +1386,7 @@ export class KeychainLongbridgeHoldingCandlestickReader
     if (!supportsLongbridgeCandlesticks(input.symbol)) {
       throw new Error("该持仓暂不支持查看 K 线");
     }
-    const points = await withKeychainAuthenticationRetry(() =>
-      this.sdk.readFiveDayTrend(input.symbol, LONG_BRIDGE_FIVE_DAY_TREND_COUNT),
-    );
+    const points = await this.sdk.readFiveDayTrend(input.symbol, LONG_BRIDGE_FIVE_DAY_TREND_COUNT);
     return latestFiveTradingDayTrend(points.map((point) => ({
       time: optionalUnixSecondsIso(point.timestamp, "fiveDayTrend.timestamp")
         ?? (() => { throw new Error("长桥近五日走势缺少时间"); })(),
@@ -1403,12 +1402,12 @@ const LONGBRIDGE_BENCHMARK_SYMBOLS = new Set<LongbridgeBenchmarkSymbol>([
 
 /**
  * 收益分析指数与账户持仓 K 线隔离：只读固定指数的日 K，
- * 使用现有 Keychain 凭证、常规盘和未复权价格，绝不读取账户资产。
+ * 使用 CLI serve、常规盘和未复权价格，绝不读取账户资产。
  */
-export class KeychainLongbridgeBenchmarkCandlestickReader
+export class ServeLongbridgeBenchmarkCandlestickReader
   implements LongbridgeBenchmarkCandlestickReader
 {
-  constructor(private readonly sdk: LongbridgeKeychainReadSdk = new LongbridgeKeychainSdk()) {}
+  constructor(private readonly sdk: Pick<LongbridgeServeMarketData, "readCandlesticks"> = new LongbridgeServeMarketData()) {}
 
   async readDailyCandlesticks(input: {
     count: number;
@@ -1420,9 +1419,7 @@ export class KeychainLongbridgeBenchmarkCandlestickReader
     if (!Number.isInteger(input.count) || input.count < 1 || input.count > 1000) {
       throw new Error("长桥指数日 K 数量必须介于 1 到 1000。");
     }
-    const candles = await withKeychainAuthenticationRetry(() =>
-      this.sdk.readCandlesticks(input.symbol, "day", input.count),
-    );
+    const candles = await this.sdk.readCandlesticks(input.symbol, "day", input.count);
     return candles.map((candle) => ({
       close: candleValue(candle.close, "close"),
       time: optionalUnixSecondsIso(candle.timestamp, "benchmark.timestamp")

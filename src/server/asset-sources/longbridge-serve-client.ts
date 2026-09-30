@@ -204,8 +204,8 @@ export class LongbridgeServeClient {
   }
 
   private async start(): Promise<void> {
-    if (this.process) return;
     if (this.startPromise) return this.startPromise;
+    if (this.process) return;
     this.startPromise = new Promise((resolve, reject) => {
       let child: ChildProcessWithoutNullStreams;
       try {

@@ -103,6 +103,25 @@ test("JSON-RPC 响应按 id 匹配，支持乱序响应和行情通知分流", a
   await client.close();
 });
 
+test("并发读取都等待 initialize 完成后再发请求", async () => {
+  const process = new FakeServeProcess();
+  const client = makeClient(process);
+  process.onRequest = (request) => {
+    if (request.method !== "initialize") response(process, request, []);
+  };
+  const first = client.call("quote.candlesticks", { symbol: ".SPX.US" });
+  const second = client.call("quote.candlesticks", { symbol: ".NDX.US" });
+  const reads = Promise.all([first, second]);
+  try {
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.deepEqual(process.requests.map((request) => request.method), ["initialize"]);
+  } finally {
+    response(process, process.requests[0], {});
+    await reads;
+    await client.close();
+  }
+});
+
 test("订阅参数去重并清理进程退出后的 pending 请求", async () => {
   const process = new FakeServeProcess();
   process.onRequest = (request) => {

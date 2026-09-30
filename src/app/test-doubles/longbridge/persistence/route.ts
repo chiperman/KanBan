@@ -9,7 +9,7 @@ import {
   FileEncryptedSecretStore,
 } from "@/server/production";
 import { SourceIsolatedAssetSynchronization } from "@/server/asset-synchronization";
-import { KeychainLongbridgeHoldingCandlestickReader } from "@/server/asset-sources/longbridge";
+import { ServeLongbridgeHoldingCandlestickReader } from "@/server/asset-sources/longbridge";
 import { InMemoryAssetFullRefreshState } from "@/server/testing/fakes";
 import type {
   AssetSourceRefresher,
@@ -391,7 +391,7 @@ export async function POST(request: Request) {
     ).refresh("all", "all", keychainSource?.id);
     const keychainCandles = keychainSource === undefined
       ? []
-      : await new KeychainLongbridgeHoldingCandlestickReader({
+      : await new ServeLongbridgeHoldingCandlestickReader({
         credentialReference: () => KEYCHAIN_REFERENCE,
         async readCandlesticks() {
           return [{

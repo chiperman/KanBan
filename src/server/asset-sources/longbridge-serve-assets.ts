@@ -4,9 +4,9 @@ import { promisify } from "node:util";
 import { isLongbridgeUsOptionSymbol } from "@/domain/longbridge-symbols";
 import { longbridgeQuoteTime } from "@/domain/longbridge-realtime";
 import { LongbridgeKeychainSdk, type LongbridgeAccountIdentity, type LongbridgeNativeQuote } from "@/server/asset-sources/longbridge-keychain-sdk";
-import { KeychainLongbridgeSourceRefresher, mapLongbridgeSnapshot, snapshotRetainingMissingQuotes, snapshotWithQuotes } from "@/server/asset-sources/longbridge";
+import { mapLongbridgeSnapshot, snapshotRetainingMissingQuotes, snapshotWithQuotes } from "@/server/asset-sources/longbridge";
 import { LongbridgeServeClient } from "@/server/asset-sources/longbridge-serve-client";
-import type { AssetSourceRefresher, AssetSourceRefreshResult } from "@/server/ports";
+import type { AssetSnapshot, AssetSourceRefresher, AssetSourceRefreshResult } from "@/server/ports";
 
 const runFile = promisify(execFile);
 type Serve = Pick<LongbridgeServeClient, "call" | "close">;
@@ -80,11 +80,10 @@ function quote(value: unknown): LongbridgeNativeQuote {
   };
 }
 
-/** CLI 完整读取优先，SDK 独立回退；不拼接两条通道的半份账户数据。 */
-export class ServeFirstLongbridgeSourceRefresher implements AssetSourceRefresher {
+/** 所有资产读取使用 CLI serve；失败由同步协调器保留上次快照。 */
+export class ServeLongbridgeSourceRefresher implements AssetSourceRefresher {
   constructor(
     private readonly sdk: IdentitySdk = new LongbridgeKeychainSdk(),
-    private readonly fallback: AssetSourceRefresher = new KeychainLongbridgeSourceRefresher(),
     private readonly createClient: () => Serve = () => new LongbridgeServeClient(),
     private readonly readCliIdentity = cliIdentity,
   ) {}
@@ -94,17 +93,18 @@ export class ServeFirstLongbridgeSourceRefresher implements AssetSourceRefresher
       throw new Error("长桥来源不是当前 macOS Keychain 凭证，请重新连接");
     }
     input.signal.throwIfAborted();
-    try {
-      return await this.readServe(input);
-    } catch {
-      input.signal.throwIfAborted();
-      // SDK 成功即成功；两者失败由同步协调器保留上次快照和原有错误分类。
-      return this.fallback.refresh(input);
-    }
+    return this.readServe({ ...input, previousSnapshot: input.source.snapshot });
   }
 
-  private async readServe(input: RefreshInput): Promise<AssetSourceRefreshResult> {
-    // 给 SDK 回退留出时间；超时/取消必须回收本次创建的子进程。
+  async readSnapshot(attemptedAt: string): Promise<AssetSnapshot> {
+    return (await this.readServe({ attemptedAt, signal: new AbortController().signal })).snapshot;
+  }
+
+  private async readServe(input: Pick<RefreshInput, "attemptedAt" | "signal"> & {
+    mode?: RefreshInput["mode"];
+    previousSnapshot?: AssetSnapshot;
+  }): Promise<AssetSourceRefreshResult> {
+    // 限制整次读取时间；超时/取消必须回收本次创建的子进程。
     const signal = AbortSignal.any([input.signal, AbortSignal.timeout(40_000)]);
     const client = this.createClient();
     const close = () => { void client.close(); };
@@ -120,10 +120,11 @@ export class ServeFirstLongbridgeSourceRefresher implements AssetSourceRefresher
       sameAccount(identity, await this.readCliIdentity(signal));
       let snapshot;
       if (input.mode === "prices") {
-        const symbols = input.source.snapshot.holdings.map((holding) => holding.symbol)
+        if (!input.previousSnapshot) throw new Error("长桥价格刷新缺少原快照");
+        const symbols = input.previousSnapshot.holdings.map((holding) => holding.symbol)
           .filter((symbol) => !symbol.startsWith("CASH.") && !isLongbridgeUsOptionSymbol(symbol));
         const quotes = symbols.length ? list(await call("quote.quote", { symbols })).map(quote) : [];
-        snapshot = snapshotWithQuotes(input.source.snapshot, quotes, input.attemptedAt);
+        snapshot = snapshotWithQuotes(input.previousSnapshot, quotes, input.attemptedAt);
       } else {
         // 首个请求等待 initialize 完成，再并发读取其余只读接口。
         const accounts = list(await call("trade.account_balance", { currency: "USD" }));
@@ -143,10 +144,11 @@ export class ServeFirstLongbridgeSourceRefresher implements AssetSourceRefresher
         if (!exchanges.length) throw new Error("长桥 CLI 官方汇率缺失");
         const symbols = [...new Set(stocks.map((item) => text(item.symbol)).filter((symbol) => !isLongbridgeUsOptionSymbol(symbol)))];
         const quotes = symbols.length ? list(await call("quote.quote", { symbols })).map(quote) : [];
-        snapshot = snapshotRetainingMissingQuotes(mapLongbridgeSnapshot({
+        snapshot = mapLongbridgeSnapshot({
           accountPages: [{ list: accounts }], positionPages: [stockPage, fundPage],
           quotes, exchangeRates: exchanges, syncedAt: input.attemptedAt,
-        }), input.source.snapshot);
+        });
+        if (input.previousSnapshot) snapshot = snapshotRetainingMissingQuotes(snapshot, input.previousSnapshot);
       }
       // CLI 在读取期间若发生账户切换，丢弃整次结果。
       sameAccount(identity, await this.readCliIdentity(signal));
