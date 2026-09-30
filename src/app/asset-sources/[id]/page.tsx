@@ -93,6 +93,8 @@ export default async function AssetSourceDetailPage({
           </a>
           <main id="main-content">
             <AssetSourceDetail
+              investmentHistory={"investmentHistory" in detail ? detail.investmentHistory : null}
+              investmentRecords={"investmentRecords" in detail ? detail.investmentRecords : []}
               initialPreset={effectivePreset}
               initialCustomRange={customRange}
               firstDay={detail.firstDay}

@@ -631,6 +631,8 @@ function HoldingDetailRow({
 }
 
 export function AssetSourceCard({
+  trendContent,
+  showAssetTrend = trendContent === undefined,
   totalAnimationKey,
   refreshDisabled = false,
   source,
@@ -649,6 +651,8 @@ export function AssetSourceCard({
   profitColorScheme,
   showSensitiveInfo,
 }: {
+  trendContent?: import("react").ReactNode;
+  showAssetTrend?: boolean;
   totalAnimationKey?: string;
   refreshDisabled?: boolean;
   source: AssetSourceView;
@@ -1015,11 +1019,13 @@ export function AssetSourceCard({
             0 <span className="vibe-metric__unit">{reportingCurrency}</span>
           </p>
         )}
-        <section
+        {trendContent}
+        {showAssetTrend ? <section
           className="asset-trend source-trend"
           data-testid={`asset-source-trend-${source.id}`}
         >
-          <p className="card-label">来源趋势</p>
+          <p className="card-label">资产金额趋势</p>
+          {trendContent ? <p className="trend-note">资产金额变化包含资金进出，不能作为收益率。</p> : null}
           {!showSensitiveInfo ? (
             <AssetTrendChart
               ariaLabel={`${heading.title}来源总额趋势已隐藏`}
@@ -1102,7 +1108,7 @@ export function AssetSourceCard({
           {showSensitiveInfo && sourceTrendNotice ? (
             <p className="trend-note">{sourceTrendNotice}</p>
           ) : null}
-        </section>
+        </section> : null}
         {isManual ? (
           <>
             <VibeStatusTag className="asset-sync-status" tone="muted">
