@@ -47,7 +47,7 @@ async function loginAsOwner(page: Page): Promise<void> {
   ]);
   expect(verification.ok()).toBeTruthy();
   // Authentication responds before the client finishes its dashboard navigation.
-  await expect(page.getByTestId("formal-daily-settlement")).toBeVisible();
+  await expect(page.getByTestId("portfolio-overview-workspace")).toBeVisible();
 }
 
 test.beforeEach(async ({ request }) => {
@@ -226,7 +226,7 @@ for (const [currency, action] of [
   });
 }
 
-test("所有者看板把正式日结与每日趋势观测分开标注", async ({
+test("所有者首页保留每日趋势，不展示正式日结", async ({
   page,
   request,
 }) => {
@@ -240,51 +240,11 @@ test("所有者看板把正式日结与每日趋势观测分开标注", async ({
   expect(seeded.ok()).toBeTruthy();
 
   await loginAsOwner(page);
-  const settlement = page.getByTestId("formal-daily-settlement");
-  await expect(settlement).toContainText("正式日结");
-  await expect(settlement).toContainText("完整");
-  await expect(settlement).toContainText("US 常规盘 · 交易日 2026-08-05");
-  await expect(settlement).toContainText("证券按官方日 K 常规盘收盘记录");
-  await expect(settlement).toContainText("加密资产按同一采集窗口市价记录");
+  await expect(page.getByTestId("formal-daily-settlement")).toHaveCount(0);
   await expect(page.getByTestId("overview-trend").getByRole("heading", { name: "近 7 日资产走势" })).toBeVisible();
 });
 
 for (const width of [1440, 390]) {
-  test(`正式日结空态、历史质量与隐私 ${width}px`, async ({ page, request }) => {
-    await page.setViewportSize({ width, height: 900 });
-    await loginAsOwner(page);
-    const settlement = page.getByTestId("formal-daily-settlement");
-    await expect(settlement).toContainText("暂无记录");
-    await expect(settlement).toContainText("尚无正式日结记录，实时资产和近7日趋势仍可查看");
-    await expect(settlement).not.toContainText("日切后生成");
-    await expect(settlement.getByRole("link", { name: "查看自动日结状态" })).toHaveAttribute("href", "/settings#automatic-daily-settlement");
-    await expectNoOverflow(page);
-    await screenshot(page, `home-empty-${width}`);
-    for (const [quality, label] of [["complete", "完整"], ["incomplete", "不完整"], ["missed", "错过窗口"]] as const) {
-      expect((await request.post("/test-doubles/formal-settlements", { data: { action: "seed-owner-view", quality } })).ok()).toBe(true);
-      await page.reload();
-      await expect(settlement).toContainText(label);
-      await expect(settlement).toContainText("US 常规盘 · 交易日 2026-08-05");
-      if (quality === "missed") {
-        await expect(settlement).toContainText("未采集");
-        await expect(settlement).toContainText("未使用之后的实时数据补写");
-        await expect(settlement.locator(".formal-daily-settlement-amount")).toHaveText("未完整折算");
-      } else {
-        await expect(settlement.locator(".formal-daily-settlement-amount")).toHaveText("313.94 USD");
-        if (quality === "incomplete") await expect(settlement).toContainText("已知金额不代表完整资产总额");
-      }
-      await expectNoOverflow(page);
-      await screenshot(page, `home-${quality}-${width}`);
-      if (quality === "complete") {
-        await page.getByTestId("global-sensitive-info-toggle").click();
-        await expect(settlement.locator(".formal-daily-settlement-amount")).toHaveText("•••••• USD");
-        await expect(settlement).not.toContainText("313.94");
-        await screenshot(page, `home-hidden-${width}`);
-        await page.getByTestId("global-sensitive-info-toggle").click();
-      }
-    }
-  });
-
   test(`自动日结只读状态与安全原因 ${width}px`, async ({ page, request }) => {
     await page.setViewportSize({ width, height: 900 });
     await loginAsOwner(page);
@@ -304,10 +264,6 @@ for (const width of [1440, 390]) {
       } else await expect(panel).toContainText("暂无执行记录");
       await expectNoOverflow(page);
       await screenshot(page, `settings-${scenario}-${width}`);
-      if (scenario === "error" || scenario === "waiting") {
-        await page.goto("/");
-        await expect(page.getByTestId("formal-daily-settlement")).toContainText(scenario === "error" ? "最近一次执行：执行失败" : "最近一次执行：等待行情");
-      }
     }
   });
 }

@@ -1,7 +1,5 @@
 "use client";
 
-import type { FormalSettlementExecution } from "@/server/ports";
-
 import { useMemo } from "react";
 import { useLongbridgeRealtime } from "@/ui/use-longbridge-realtime";
 import { LongbridgeRealtimeNotice, LongbridgeRealtimeStatus } from "@/ui/longbridge-realtime-notice";
@@ -31,13 +29,11 @@ import type {
   AssetSourceSummary,
   DailyAssetSourceSnapshot,
   DailyAssetTrendObservation,
-  FormalDailySettlement,
   InvestmentCashflow,
 } from "@/server/ports";
 import { AssetGlobalRefreshControl } from "@/ui/asset-refresh-controls";
 import { sourceSyncStatus } from "@/ui/asset-source-status";
 import { AssetTrendChart } from "@/ui/asset-trend-chart";
-import { FormalDailySettlementSummary } from "@/ui/formal-daily-settlement-summary";
 import type { ProfitColorScheme } from "@/ui/profit-color-scheme";
 import {
   VibeMetric,
@@ -232,8 +228,6 @@ export function DailyOverviewWorkspace({
   currentDay,
   currentObservedAt,
   demoMode = false,
-  formalDailySettlements,
-  formalSettlementExecution,
   profitColorScheme,
   sources,
   trendObservations,
@@ -242,8 +236,6 @@ export function DailyOverviewWorkspace({
   currentDay: string;
   currentObservedAt: string;
   demoMode?: boolean;
-  formalDailySettlements: FormalDailySettlement[];
-  formalSettlementExecution?: FormalSettlementExecution | null;
   profitColorScheme: ProfitColorScheme;
   sources: OverviewSource[];
   trendObservations: DailyAssetTrendObservation[];
@@ -652,15 +644,6 @@ export function DailyOverviewWorkspace({
             unavailableCount={trend.unavailableCount}
           />
         </section>
-
-        {demoMode ? null : (
-          <FormalDailySettlementSummary
-            settlements={formalDailySettlements}
-            execution={formalSettlementExecution}
-            currency={currency}
-            showSensitiveInfo={showSensitiveInfo}
-          />
-        )}
       </div>
 
       <LongbridgeRealtimeNotice state={realtimeState} retry={retry} />
