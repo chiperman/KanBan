@@ -138,14 +138,14 @@ test("既有自动来源、观察钱包与手工记录经工作台入口保持�
   await loginAsOwner(page);
 
   const binanceSummary = page.getByRole("link", {
-    name: /查看 Binance 只读账户 来源详情/,
+    name: "查看 Binance 只读账户 的资产明细",
   });
   await expect(binanceSummary).toBeVisible();
   await expect(
-    page.getByRole("link", { name: /查看 Ethereum 观察钱包 来源详情/ }),
+    page.getByRole("link", { name: "查看 Ethereum 观察钱包 的资产明细" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("link", { name: /查看 迁移手工储备 来源详情/ }),
+    page.getByRole("link", { name: "查看 迁移手工储备 的资产明细" }),
   ).toBeVisible();
   await binanceSummary.click();
   await expect(page).toHaveURL(/\/asset-sources\/test-binance-source-2$/);
@@ -154,7 +154,7 @@ test("既有自动来源、观察钱包与手工记录经工作台入口保持�
   await expect(page.getByText("已连接（只读）", { exact: true })).toBeVisible();
   await expect(page.getByText("账户读取 · 持仓读取 · 行情读取")).toBeVisible();
   await expect(page.getByTestId("holding-top-list")).toContainText("USDT");
-  await expect(page.getByText("来源趋势", { exact: true })).toBeVisible();
+  await expect(page.getByText("资产金额趋势", { exact: true })).toBeVisible();
   await expect(
     page.getByRole("button", { name: "刷新 Binance 只读账户" }),
   ).toBeVisible();
@@ -178,21 +178,17 @@ test("既有自动来源、观察钱包与手工记录经工作台入口保持�
   await expect(page.getByLabel("迁移手工储备历史记录")).toContainText(
     "12,345.67 USD",
   );
-  await expect(page.getByText("来源趋势", { exact: true })).toBeVisible();
+  await expect(page.getByText("资产金额趋势", { exact: true })).toBeVisible();
   await expect(page.getByText("只读授权摘要", { exact: true })).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: /刷新 迁移手工储备/ }),
   ).toHaveCount(0);
 
   await page.goto("/data-health");
+  await expect(page).toHaveURL(/\/asset-sources#history-coverage$/);
   const diagnostics = page.getByTestId("data-health-diagnostics");
   await expect(diagnostics).toContainText("Ethereum 观察钱包");
-  await expect(
-    diagnostics.getByRole("button", { name: "显示需关注来源（2 个）" }),
-  ).toHaveAttribute("aria-pressed", "true");
-  await diagnostics.getByRole("button", {
-    name: "显示正常来源（5 个）",
-  }).click();
+  await expect(diagnostics.locator('[data-testid^="data-health-source-"]')).toHaveCount(7);
   await expect(diagnostics).toContainText("Binance 只读账户");
   await expect(diagnostics).toContainText("迁移手工储备");
   await expect(
@@ -201,7 +197,7 @@ test("既有自动来源、观察钱包与手工记录经工作台入口保持�
 
   await page.goto("/settings");
   await expect(page.getByRole("heading", { name: "设置与安全" })).toBeVisible();
-  await expect(page.getByText("外部来源凭证、令牌和密钥不会导出、回显或恢复。")).toBeVisible();
+  await expect(page.getByRole("region", { name: "备份与恢复" })).toContainText("不含凭证、令牌和密钥");
 });
 
 test("锁定态及所有工作台认证入口不泄露迁移前存量数据", async ({
@@ -334,35 +330,27 @@ test("工作台在关键宽度下保持一致内容基线、可用宽度和无�
         destination.path === "/asset-sources" &&
         viewport.navigation === "desktop"
       ) {
-        const firstSourceLink = page
-          .locator(".asset-source-directory__link")
-          .first();
+        const firstSourceRow = page.locator(".asset-source-directory__row").first();
+        const firstSourceLink = firstSourceRow.getByRole("link");
+        await expect(firstSourceLink).toHaveCount(1);
+        const sourceRowBox = await firstSourceRow.boundingBox();
         const sourceLinkBox = await firstSourceLink.boundingBox();
         const sourceIdentityBox = await firstSourceLink
           .locator(".asset-source-directory__identity")
           .boundingBox();
-        const sourceMetaBox = await firstSourceLink
+        const sourceMetaBox = await firstSourceRow
           .locator(".asset-source-directory__meta")
           .boundingBox();
+        expect(sourceRowBox).not.toBeNull();
         expect(sourceLinkBox).not.toBeNull();
         expect(sourceIdentityBox).not.toBeNull();
         expect(sourceMetaBox).not.toBeNull();
         expect(sourceIdentityBox!.x - sourceLinkBox!.x).toBeLessThanOrEqual(2);
+        expect(sourceMetaBox!.x).toBeGreaterThanOrEqual(sourceRowBox!.x);
         expect(
-          sourceLinkBox!.x +
-            sourceLinkBox!.width -
-            (sourceMetaBox!.x + sourceMetaBox!.width),
+          sourceMetaBox!.x + sourceMetaBox!.width -
+            (sourceRowBox!.x + sourceRowBox!.width),
         ).toBeLessThanOrEqual(2);
-        const dataHealthLink = page.getByRole("link", {
-          name: "查看数据健康",
-        });
-        const dataHealthLinkBox = await dataHealthLink.boundingBox();
-        expect(dataHealthLinkBox).not.toBeNull();
-        expect(dataHealthLinkBox!.x - sourceLinkBox!.x).toBeLessThanOrEqual(2);
-        await expect(dataHealthLink).toHaveCSS(
-          "justify-content",
-          "flex-start",
-        );
       }
       await expectNoHorizontalOverflow(page);
     }
@@ -432,7 +420,7 @@ test("同级标准操作保持统一的 44px 高度和响应式宽度", async ({
       page.getByRole("button", { name: "配置 TOTP 登录" }),
       page.getByRole("button", { name: "导出业务数据备份" }),
       page.getByRole("button", { name: "预演恢复" }),
-      page.getByRole("button", { name: "保存并验证服务" }),
+      page.getByRole("button", { name: "保存并验证", exact: true }),
     ]);
   }
 });

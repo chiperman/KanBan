@@ -78,19 +78,19 @@ test("已登录看板遵守 Nothing 字体层级、操作语义和点击区域",
   await connectEthereum(page);
   await page.goto("/");
 
-  const overviewBox = await page.getByTestId("total-overview-card").boundingBox();
-  const controlsBox = await page.locator(".dashboard-control-deck").boundingBox();
+  const overviewBox = await page.getByRole("region", { name: "总资产", exact: true }).boundingBox();
+  const controlsBox = await page.getByLabel("总览快捷操作").boundingBox();
   expect(overviewBox).not.toBeNull();
   expect(controlsBox).not.toBeNull();
-  expect(overviewBox!.y).toBeLessThan(controlsBox!.y);
+  expect(controlsBox!.y + controlsBox!.height).toBeLessThanOrEqual(overviewBox!.y);
 
-  const label = page.getByTestId("total-asset-overview").locator(".card-label").first();
+  const label = page.getByTestId("overview-current-total").locator(".card-label");
   await expect(label).toHaveCSS("font-family", /Geist Mono/);
   expect(
     await label.evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
   ).toBeGreaterThanOrEqual(11);
 
-  const standardButton = page.getByTestId("sensitive-info-toggle");
+  const standardButton = page.getByTestId("global-sensitive-info-toggle");
   await expect(standardButton).toHaveCSS("font-family", /Geist Mono/);
   await expect(standardButton).toHaveCSS("font-size", "11px");
   await expect(standardButton).toHaveCSS("border-radius", "6px");
@@ -155,9 +155,9 @@ test("未认证状态无命令菜单，所有者可用 Command-K 与 Ctrl-K 前�
   await expect(menu).toHaveCount(0);
 
   await page.keyboard.press("Control+K");
-  await page.getByRole("searchbox", { name: "搜索命令" }).fill("数据健康");
+  await page.getByRole("searchbox", { name: "搜索命令" }).fill("资产来源");
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL("/data-health");
+  await expect(page).toHaveURL("/asset-sources");
 
   await page.getByRole("button", { name: "打开快捷命令" }).click();
   await page.getByRole("searchbox", { name: "搜索命令" }).fill("总览");
@@ -207,9 +207,9 @@ test("键盘焦点决定关闭和执行目标且保留输入法事件", async ({
   await expect(page).toHaveURL("/settings");
   await expect(trigger).toBeFocused();
   await trigger.click();
-  await menu.getByRole("button", { name: "前往数据健康" }).focus();
+  await menu.getByRole("button", { name: "前往资产来源" }).focus();
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL("/data-health");
+  await expect(page).toHaveURL("/asset-sources");
   await trigger.click();
   await search.dispatchEvent("keydown", { key: "Escape", isComposing: true });
   await expect(menu).toBeVisible();

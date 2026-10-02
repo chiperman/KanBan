@@ -326,10 +326,10 @@ test("已认证所有者在手机可通过底部主导航和 Command-K 到达入
   }
 
   await commandTrigger.click();
-  await page.getByRole("searchbox", { name: "搜索命令" }).fill("数据健康");
+  await page.getByRole("searchbox", { name: "搜索命令" }).fill("资产来源");
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/\/data-health$/);
+  await expect(page).toHaveURL(/\/asset-sources$/);
   await expect(
-    page.getByRole("heading", { name: "数据健康" }),
+    page.getByRole("heading", { name: "资产来源" }),
   ).toBeVisible();
 });

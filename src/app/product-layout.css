@@ -1257,9 +1257,8 @@ html {
 .assets-holdings__source-list > ol > li > article {
   display: grid;
   grid-template-columns:
-    minmax(160px, 0.65fr)
-    minmax(600px, 1.75fr)
-    minmax(190px, 0.65fr);
+    minmax(0, 1fr)
+    auto;
   align-items: center;
   gap: var(--vibe-space-5);
 }
@@ -1290,7 +1289,21 @@ html {
 
 .assets-holdings__source-list > ol > li > article {
   align-items: center;
-  padding: var(--vibe-space-4) 0;
+  padding: var(--vibe-space-2) 0;
+}
+
+.assets-holdings__source-name.vibe-button {
+  width: fit-content;
+  min-width: 0;
+  justify-content: start;
+  padding-inline: 0;
+  text-align: start;
+}
+
+.assets-holdings__source-name::after {
+  content: "↗";
+  color: var(--secondary);
+  font-size: var(--vibe-type-label);
 }
 
 .assets-holdings__source-totals strong {
@@ -1313,17 +1326,19 @@ html {
 }
 
 .assets-holdings__source-state {
-  display: grid;
-  grid-template-columns: minmax(104px, max-content) minmax(0, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   min-width: 0;
   align-items: center;
   gap: var(--vibe-space-2);
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .assets-holdings__source-state > .vibe-status-tag {
   width: fit-content;
   flex: 0 0 auto;
+  max-width: 100%;
+  white-space: normal;
 }
 
 .assets-holdings__source-coverage {
@@ -1459,12 +1474,7 @@ html {
   }
 
   .assets-holdings__source-state {
-    grid-row: 2;
-    grid-column: 1 / -1;
-    grid-template-columns: minmax(0, 1fr);
     align-items: start;
-    padding-top: var(--vibe-space-3);
-    border-top: 1px solid var(--line);
   }
 
   .assets-holdings__source-state > .vibe-status-tag {
@@ -1504,11 +1514,6 @@ html {
   .assets-holdings__source-list > ol > li > article {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: var(--vibe-space-3) var(--vibe-space-4);
-  }
-
-  .assets-holdings__source-state {
-    grid-row: 2;
-    grid-column: 1 / -1;
   }
 
   .assets-holdings__source-value {
@@ -2278,8 +2283,6 @@ a {
 }
 
 .asset-source-directory {
-  margin-top: var(--vibe-space-8);
-  max-width: 880px;
   padding: var(--vibe-space-6);
   border-radius: var(--r-md);
   background: var(--glass);
@@ -2294,8 +2297,16 @@ a {
   border-top: 1px solid var(--line);
 }
 
-.asset-source-directory__list li {
+.asset-source-directory__list > li {
   border-bottom: 1px solid var(--line);
+}
+
+.asset-source-directory__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--vibe-space-2) var(--vibe-space-4);
+  padding-block: var(--vibe-space-2);
 }
 
 .asset-source-directory__link.vibe-button {
@@ -2303,9 +2314,9 @@ a {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  min-height: 72px;
+  min-height: var(--vibe-control-height);
   gap: var(--vibe-space-4);
-  padding: var(--vibe-space-4) 0;
+  padding: var(--vibe-space-2) 0;
   text-align: left;
 }
 
@@ -2332,7 +2343,33 @@ a {
 
 .asset-source-directory__meta {
   flex: 0 0 auto;
-  text-align: right;
+  text-align: end;
+  overflow-wrap: anywhere;
+}
+
+.asset-source-directory__meta [data-tone="issue"] {
+  color: var(--error);
+}
+
+.asset-source-directory__diagnostic {
+  grid-column: 1 / -1;
+  padding-block: var(--vibe-space-3);
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
+  overflow-wrap: anywhere;
+}
+
+.asset-source-directory__diagnostic p {
+  margin: 0 0 var(--vibe-space-2);
+  color: var(--primary);
+}
+
+.asset-source-directory__diagnostic ul {
+  display: grid;
+  gap: var(--vibe-space-1);
+  margin: 0;
+  padding-inline-start: var(--vibe-space-4);
 }
 
 .overview-source-detail-link {
@@ -2686,7 +2723,7 @@ a {
 .data-health-source-section,
 .data-health-history {
   min-width: 0;
-  padding: var(--vibe-space-8);
+  padding: var(--vibe-space-6);
   border-radius: var(--r-md);
   background: var(--glass);
   -webkit-backdrop-filter: blur(12px);
@@ -2738,6 +2775,35 @@ a {
   font-family: var(--f-mono);
   font-size: var(--vibe-type-caption);
   text-align: right;
+}
+
+.data-health-history > .data-health-section-heading {
+  align-items: center;
+  margin-bottom: 0;
+}
+
+.data-health-history__summary,
+.data-health-history__hint {
+  margin: var(--vibe-space-2) 0 0;
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
+}
+
+.data-health-history__hint {
+  margin-block: var(--vibe-space-5);
+}
+
+.assets-holdings__price-evidence {
+  display: grid;
+  gap: var(--vibe-space-1);
+}
+
+.assets-holdings__price-evidence > .vibe-button {
+  justify-self: start;
+  padding-inline: 0;
+  color: var(--secondary);
+  font-size: var(--vibe-type-caption);
 }
 
 .data-health-summary {
@@ -3113,7 +3179,16 @@ a {
   }
 
   .asset-source-directory__meta {
-    text-align: left;
+    text-align: start;
+  }
+
+  .asset-source-directory__row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .asset-source-directory__meta {
+    grid-row: 2;
+    grid-column: 1 / -1;
   }
 
   .asset-source-detail__metadata dl {
@@ -8678,13 +8753,12 @@ body {
 
   .asset-source-directory {
     max-width: none;
-    margin-top: var(--vibe-space-10);
     padding: var(--vibe-space-6);
   }
 
   .asset-source-directory__link.vibe-button {
-    min-height: 88px;
-    padding-block: var(--vibe-space-5);
+    min-height: var(--vibe-control-height);
+    padding-block: var(--vibe-space-2);
   }
 
   .asset-source-directory__identity strong {
@@ -8693,8 +8767,7 @@ body {
 
   .asset-source-directory__meta {
     display: grid;
-    grid-template-columns: repeat(2, auto);
-    gap: var(--vibe-space-5);
+    gap: var(--vibe-space-1);
   }
 
   .page-asset-source-flow main {

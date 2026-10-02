@@ -9,6 +9,11 @@ async function configureDataHealth(page: Page): Promise<void> {
     data: { action: "configure" },
   });
   expect(configured.ok()).toBeTruthy();
+  // 此处验证既有快照显示；将全量刷新锚定在当前时间，避免演示凭证改写错误原因。
+  const anchored = await page.request.post("/test-doubles/refresh", {
+    data: { action: "anchor-full-refresh" },
+  });
+  expect(anchored.ok()).toBeTruthy();
   const session = await page.request.post("/test-doubles/owner-session");
   expect(session.ok()).toBeTruthy();
 }
@@ -82,7 +87,7 @@ test("总览的计价货币与隐私显示会持续到资产、收益分析和�
   ).not.toContainText("••••••");
 });
 
-test("同一来源同步失败在总览、资产、来源列表和数据健康中使用一致口径", async ({
+test("同一来源同步失败在总览、资产和来源管理中保留最后成功数据口径", async ({
   page,
 }) => {
   await configureDataHealth(page);
@@ -98,15 +103,17 @@ test("同一来源同步失败在总览、资产、来源列表和数据健康�
   ).toContainText(RETAINED_SYNC_FAILURE);
 
   await page.goto("/asset-sources");
-  await expect(
-    page.getByRole("link", { name: /Beta Crypto.*同步失败/ }),
-  ).toContainText(RETAINED_SYNC_FAILURE);
+  const sourceLink = page.getByRole("link", { name: /Beta Crypto.*同步失败/ });
+  await expect(sourceLink).toHaveAccessibleName(
+    /Beta Crypto.*同步失败.*显示 2026-03-03 20:00 的最后成功数据/,
+  );
 
   await page.goto("/data-health");
+  await expect(page).toHaveURL(/\/asset-sources#history-coverage$/);
   const beta = page.getByTestId("data-health-source-source-beta");
-  await expect(beta).toContainText(RETAINED_SYNC_FAILURE);
+  await expect(beta).toContainText("同步失败 · 数据过期");
+  await expect(beta).toContainText("2026-03-03 20:00");
+  await beta.getByRole("button", { name: "查看 Beta Crypto 异常" }).click();
   await expect(beta).toContainText("来源暂时不可用");
-  await expect(
-    beta.getByRole("link", { name: "排查同步 Beta Crypto 来源详情" }),
-  ).toBeVisible();
+  await expect(beta.getByRole("link")).toHaveCount(1);
 });

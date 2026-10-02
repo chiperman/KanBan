@@ -55,25 +55,16 @@ test("资产与持仓把来源总额与明细观察分层，不用持仓差额�
   await expect(workspace).not.toContainText("持仓明细不会取代这一列");
 
   const sourceTotals = workspace.getByTestId("assets-source-totals");
-  await expect(sourceTotals.getByText("状态与覆盖", { exact: true })).toBeVisible();
   await expect(sourceTotals.getByText("来源总额", { exact: true })).toBeVisible();
   await expect(sourceTotals).toContainText("Alpha Securities");
   await expect(sourceTotals).toContainText("Beta Crypto");
-  await expect(
-    workspace.getByTestId("assets-source-total-source-alpha"),
-  ).toContainText("总额有效");
+  await expect(workspace.getByTestId("assets-source-total-source-alpha"))
+    .not.toContainText("总额有效");
   await expect(
     sourceTotals.getByRole("link", {
       name: "查看 Alpha Securities 来源详情",
     }),
   ).toBeVisible();
-  const sourceStatusLefts = await sourceTotals
-    .locator(".assets-holdings__source-state > .vibe-status-tag")
-    .evaluateAll((tags) =>
-      tags.map((tag) => tag.getBoundingClientRect().left),
-    );
-  expect(Math.max(...sourceStatusLefts) - Math.min(...sourceStatusLefts)).toBeLessThanOrEqual(1);
-
   const holdings = workspace.getByTestId("assets-holdings-table");
   for (const heading of [
     "资产与来源",
@@ -89,10 +80,22 @@ test("资产与持仓把来源总额与明细观察分层，不用持仓差额�
   await expect(holdings).toContainText("Apple Cross-source");
   await expect(holdings).toContainText("Tether");
   await expect(holdings).toContainText("Mystery Token");
-  await expect(holdings).toContainText("来源可用价格变化");
+  await expect(workspace.getByText(/价格变化采用来源可用行情/)).toHaveCount(1);
+  await expect(holdings.locator("tbody")).not.toContainText("平台原生口径");
   await expect(holdings).toContainText("平台未提供");
   await expect(holdings).toContainText("未估值");
   await expect(workspace).not.toContainText("持仓合计");
+
+  const apple = holdings.getByRole("row").filter({ hasText: "Apple Cross-source" });
+  const evidence = apple.getByRole("button", { name: "查看 Apple Cross-source 行情依据" });
+  await expect(evidence).toHaveAttribute("aria-expanded", "false");
+  await expect(apple.getByText(/Beta 原生行情/)).toHaveCount(0);
+  await evidence.focus();
+  await page.keyboard.press("Enter");
+  await expect(evidence).toHaveAttribute("aria-expanded", "true");
+  await expect(apple.getByText(/Beta 原生行情/)).toContainText("2026-04-01 16:00");
+  await evidence.click();
+  await expect(apple.getByText(/Beta 原生行情/)).toHaveCount(0);
 });
 
 test("来源、类别与估值筛选只收缩观察列表，不混淆上方来源总额", async ({
@@ -394,101 +397,31 @@ for (const path of ["/", "/performance", "/assets", "/asset-sources/source-longb
   });
 }
 
-test("产品覆盖展开保持主行对齐，并将覆盖信息铺满来源整行", async ({
+test("资产摘要保留来源总额，产品覆盖可从来源详情按需查看", async ({
   page,
   request,
 }) => {
   const configured = await request.post(
-    "/test-doubles/valuation?scenario=detail-coverage-partial",
+    "/test-doubles/valuation?scenario=binance-coverage-partial",
   );
   expect(configured.ok()).toBeTruthy();
   await page.setViewportSize({ width: 1920, height: 1080 });
   await loginAsOwner(page);
   await page.goto("/assets");
 
-  const source = page.getByTestId(
-    "assets-source-total-source-okx-detail-partial",
-  );
-  const coverage = source.getByTestId(
-    "assets-source-okx-detail-partial-product-coverage",
-  );
-  const trigger = coverage.locator(".vibe-coverage-summary-trigger");
-  const collapsedLayout = await coverage.evaluate((element) => {
-    const trigger = element.querySelector<HTMLElement>(
-      ".vibe-coverage-summary-trigger",
-    );
-    const coverageStatus = element.previousElementSibling;
-    const state = element.closest<HTMLElement>(".assets-holdings__source-state");
-    if (trigger === null || coverageStatus === null || state === null) {
-      return null;
-    }
+  const source = page.getByTestId("assets-source-total-source-binance-partial");
+  await expect(source).toContainText("17,165.10 USD");
+  await expect(source.getByText("产品覆盖", { exact: true })).toHaveCount(0);
+  await source.getByRole("link").click();
+  await expect(page).toHaveURL(/\/asset-sources\/source-binance-partial$/);
 
-    const triggerBox = trigger.getBoundingClientRect();
-    const coverageStatusBox = coverageStatus.getBoundingClientRect();
-    const stateBox = state.getBoundingClientRect();
-    return {
-      coverageStaysOnOneLine:
-        triggerBox.top < coverageStatusBox.bottom
-        && coverageStatusBox.top < triggerBox.bottom,
-      stateHasSingleLineHeight:
-        Math.abs(stateBox.height - Math.max(triggerBox.height, coverageStatusBox.height)) < 1,
-    };
-  });
-  expect(collapsedLayout).toEqual({
-    coverageStaysOnOneLine: true,
-    stateHasSingleLineHeight: true,
-  });
-
-  await trigger.click();
-  const panel = source.locator(".assets-holdings__source-coverage-panel");
-  await expect(panel).toContainText("Trading Bots");
-  await expect(panel).toContainText("On-chain Earn");
-  const layout = await source.evaluate((element) => {
-    const trigger = element.querySelector<HTMLButtonElement>(
-      ".vibe-coverage-summary-trigger",
-    );
-    const panel = element.querySelector<HTMLElement>(
-      ".assets-holdings__source-coverage-panel",
-    );
-    const article = element.querySelector<HTMLElement>(":scope > article");
-    const state = element.querySelector<HTMLElement>(
-      ".assets-holdings__source-state",
-    );
-    const value = element.querySelector<HTMLElement>(
-      ".assets-holdings__source-value",
-    );
-    if (
-      trigger === null
-      || panel === null
-      || article === null
-      || state === null
-      || value === null
-    ) {
-      return null;
-    }
-
-    const triggerBox = trigger.getBoundingClientRect();
-    const panelBox = panel.getBoundingClientRect();
-    const articleBox = article.getBoundingClientRect();
-    const stateBox = state.getBoundingClientRect();
-    const valueBox = value.getBoundingClientRect();
-    return {
-      panelStartsBelowMainRow: panelBox.top >= Math.max(
-        triggerBox.bottom,
-        valueBox.bottom,
-      ),
-      panelSpansArticle: Math.abs(panelBox.left - articleBox.left) < 1
-        && Math.abs(panelBox.right - articleBox.right) < 1,
-      valueStaysInMainRow: valueBox.top < stateBox.bottom
-        && stateBox.top < valueBox.bottom,
-    };
-  });
-
-  expect(layout).toEqual({
-    panelStartsBelowMainRow: true,
-    panelSpansArticle: true,
-    valueStaysInMainRow: true,
-  });
+  const coverage = page.getByTestId("binance-product-coverage");
+  await expect(coverage).toBeVisible();
+  const panel = coverage.locator(".vibe-coverage-panel");
+  await expect(panel).toBeHidden();
+  await coverage.locator("summary").click();
+  await expect(panel).toContainText("Smart Arbitrage");
+  await expect(page.getByTestId("binance-coverage-status")).toContainText("Trading Bots");
 });
 
 test("资产观察在 390px 可键盘筛选、切换币种且没有横向页面溢出", async ({

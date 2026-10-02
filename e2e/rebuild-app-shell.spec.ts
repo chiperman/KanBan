@@ -57,10 +57,13 @@ test("五目的地应用壳在桌面、手机、键盘和返回路径中保持�
   await expect(page).toHaveURL(/\/performance$/);
 
   await page.goto("/asset-sources");
-  await page.getByRole("link", { name: "查看数据健康" }).click();
-  await expect(page).toHaveURL(/\/data-health$/);
-  await page.goBack();
-  await expect(page).toHaveURL(/\/asset-sources$/);
+  const history = page.getByTestId("data-health-history");
+  await expect(history.getByRole("button", { name: "时间范围" })).toBeHidden();
+  await history.getByRole("button", { name: "查看历史覆盖" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(history.getByRole("button", { name: "时间范围" })).toBeVisible();
+  await history.getByRole("button", { name: "收起历史覆盖" }).click();
+  await expect(history.getByRole("button", { name: "时间范围" })).toBeHidden();
 
   await expect(page.locator("body")).toHaveJSProperty(
     "scrollWidth",

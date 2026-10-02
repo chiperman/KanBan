@@ -57,7 +57,7 @@ test("总览与来源刷新统一尺寸，次级控件保持不透明", async ({
   expect(sourceStyle.height).toBeGreaterThanOrEqual(40);
 });
 
-test("来源总额隐藏时使用明确文案，并与查看操作保留间距", async ({ page }) => {
+test("来源总额隐藏时使用明确文案，并与来源名称保留间距", async ({ page }) => {
   await configureWorkspace(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/assets");
@@ -72,11 +72,11 @@ test("来源总额隐藏时使用明确文案，并与查看操作保留间距",
     const value = element.querySelector(
       ".assets-holdings__source-value > strong",
     );
-    const detail = element.querySelector(".assets-holdings__source-detail");
+    const detail = element.querySelector(".assets-holdings__source-name");
     if (value === null || detail === null) return null;
     const valueBox = value.getBoundingClientRect();
     const detailBox = detail.getBoundingClientRect();
-    return detailBox.left - valueBox.right;
+    return valueBox.left - detailBox.right;
   });
   expect(separation).not.toBeNull();
   expect(separation).toBeGreaterThanOrEqual(8);

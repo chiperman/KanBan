@@ -44,6 +44,8 @@ async function chooseOption(
   await control.click();
   await page.getByRole("option", { name: option }).click();
   await expect(control).toContainText(option);
+  await expect(page.getByRole("listbox")).toBeHidden();
+  await expect(control).toBeFocused();
 }
 
 async function expectNoHorizontalOverflow(page: Page): Promise<void> {
@@ -58,61 +60,42 @@ test.beforeEach(async ({ request }) => {
   await request.post("/test-doubles/reset");
 });
 
-test("数据健康诊断同步、估值与历史缺口，但不提供修复操作", async ({
+test("资产来源统一列出账户、优先显示异常并按需展开诊断", async ({
   page,
-}) => {
+}, testInfo) => {
   await loginWithDataHealthFixture(page);
   await page.goto("/data-health");
 
-  await expect(page.getByRole("heading", { name: "数据健康" })).toBeVisible();
+  await expect(page).toHaveURL(/\/asset-sources#history-coverage$/);
+  await page.goto("/asset-sources");
+  await expect(page.getByRole("heading", { name: "资产来源" })).toBeVisible();
   const diagnostics = page.getByTestId("data-health-diagnostics");
-  await expect(diagnostics).toContainText(
-    "先确认哪些来源影响当前资产视图，再进入来源详情排查。",
-  );
-  await expect(
-    diagnostics.getByLabel("共 5 个来源，3 个正常，2 个需关注"),
-  ).toBeVisible();
-  await expect(
-    diagnostics.locator(".data-health-source--issue h3"),
-  ).toHaveText(["Beta Crypto", "Unknown Wallet"]);
-  await expect(
-    diagnostics.getByRole("button", {
-      name: "显示需关注来源（2 个）",
-    }),
-  ).toHaveAttribute("aria-pressed", "true");
-  await expect(
-    diagnostics.getByTestId("data-health-source-source-alpha"),
-  ).toHaveCount(0);
-
-  await diagnostics.getByRole("button", {
-    name: "显示正常来源（3 个）",
-  }).click();
-  await expect(
-    diagnostics.getByRole("heading", { name: "正常来源" }),
-  ).toBeVisible();
+  const sourceRows = diagnostics.locator('[data-testid^="data-health-source-"]');
+  await expect(sourceRows).toHaveCount(5);
+  await expect(sourceRows.nth(0)).toContainText("Beta Crypto");
+  await expect(sourceRows.nth(1)).toContainText("Unknown Wallet");
 
   const alpha = page.getByTestId("data-health-source-source-alpha");
-  await expect(alpha).toContainText("数据当前");
-  await expect(alpha).toContainText("估值完整");
-  await expect(alpha).toContainText("最后成功");
+  await expect(alpha).toBeVisible();
+  await expect(alpha.getByRole("link")).toHaveCount(1);
   await expect(alpha).toContainText("2026-03-04 20:00");
+  await expect(alpha.getByRole("button", { name: /^查看 .* 异常$/ })).toHaveCount(0);
 
   const aShares = page.getByTestId("data-health-source-source-a-shares");
   await expect(aShares).toContainText("手工记录");
-  await expect(aShares).toContainText("估值完整");
   await expect(aShares).not.toContainText("估值不完整");
-
-  await diagnostics.getByRole("button", {
-    name: "显示需关注来源（2 个）",
-  }).click();
 
   const beta = page.getByTestId("data-health-source-source-beta");
   await expect(beta).toContainText("同步失败");
   await expect(beta).toContainText("数据过期");
+  await page.screenshot({ path: testInfo.outputPath("asset-sources-desktop.png"), fullPage: true });
+  await expect(beta.getByText("上次同步失败：来源暂时不可用", { exact: true })).toBeHidden();
+  await beta.getByRole("button", { name: "查看 Beta Crypto 异常" }).click();
   await expect(beta).toContainText("来源暂时不可用");
   await expect(beta).not.toContainText("0.00 USD");
 
   const unvalued = page.getByTestId("data-health-source-source-unvalued");
+  await unvalued.getByRole("button", { name: "查看 Unknown Wallet 异常" }).click();
   await expect(unvalued).toContainText("未估值");
   await expect(unvalued).toContainText("来源没有可靠价格");
   await expect(unvalued).toContainText("估值不完整");
@@ -126,30 +109,35 @@ test("数据健康诊断同步、估值与历史缺口，但不提供修复操�
   ).toHaveCount(0);
 });
 
-test("数据健康可按范围、来源与完整性筛选历史，并进入来源详情", async ({
+test("来源历史默认收起并只显示异常，可按范围、来源和完整性筛选", async ({
   page,
 }) => {
   await loginWithDataHealthFixture(page);
   await page.goto("/data-health");
 
   const history = page.getByTestId("data-health-history");
+  await expect(history.getByRole("button", { name: "时间范围" })).toBeHidden();
+  await history.getByRole("button", { name: "查看历史覆盖" }).click();
+  await expect(history.getByRole("button", { name: "时间范围" })).toContainText("最近 30 天");
+  await expect(history.getByRole("button", { name: "完整性" })).toContainText("仅不完整");
   await chooseOption(page, "时间范围", "最近 7 天");
   await chooseOption(page, "来源", "Alpha Securities");
   await expect(history).toContainText("2026-03-03");
   await expect(history).toContainText("数据缺口");
   await expect(history).toContainText("没有 Alpha Securities 观测");
 
-  await chooseOption(page, "完整性", "仅不完整");
   await expect(history).toContainText("数据缺口");
   await expect(history).not.toContainText("2026-03-01 · 完整");
+
+  await chooseOption(page, "完整性", "全部状态");
+  await expect(history).toContainText("2026-03-01 · 完整");
+  await chooseOption(page, "完整性", "仅不完整");
 
   await chooseOption(page, "来源", "Unknown Wallet");
   await expect(history).toContainText("未估值");
   await expect(history).toContainText("不完整历史");
 
-  const sourceDetail = page.getByRole("link", {
-    name: "排查同步 Beta Crypto 来源详情",
-  });
+  const sourceDetail = page.getByTestId("data-health-source-source-beta").getByRole("link");
   await sourceDetail.focus();
   await expect(sourceDetail).toBeFocused();
   await page.keyboard.press("Enter");
@@ -197,8 +185,9 @@ test("单来源刷新失败保留最后成功数据，并提供可理解的重�
   const status = page.getByTestId(
     "asset-source-refresh-status-source-beta",
   );
-  await expect(status).toContainText("网络暂时不可用");
-  await expect(refresh).toContainText("重试");
+  await expect(status).toHaveText("刷新失败");
+  await expect(status).toHaveAttribute("title", "网络暂时不可用");
+  await expect(refresh).toBeEnabled();
   await expect(sourceTotal).toHaveText(totalBeforeRefresh);
 
   await refresh.click();
@@ -225,12 +214,12 @@ test("全局刷新成功后自动收起状态提示", async ({ page }) => {
   const refresh = page.getByRole("button", { name: "立即刷新资产" });
   const status = page.getByTestId("asset-refresh-status");
   await refresh.click();
-  await expect(status).toContainText("同步完成");
+  await expect(status).toContainText("刷新完成");
   await expect(status).toHaveClass(/is-visible/);
-  await expect(status).not.toHaveClass(/is-visible/, { timeout: 3_000 });
+  await expect(status).toBeHidden({ timeout: 3_000 });
 });
 
-test("数据健康在手机无横向溢出，锁定态不泄露来源或历史", async ({
+test("来源诊断在手机无横向溢出，锁定态不泄露来源或历史", async ({
   page,
 }) => {
   await page.goto("/data-health");
@@ -243,6 +232,11 @@ test("数据健康在手机无横向溢出，锁定态不泄露来源或历史",
   await loginWithDataHealthFixture(page);
   await page.goto("/data-health");
   await expect(page.getByTestId("data-health-diagnostics")).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+
+  const history = page.getByTestId("data-health-history");
+  await history.getByRole("button", { name: "查看历史覆盖" }).focus();
+  await page.keyboard.press("Enter");
   await expectNoHorizontalOverflow(page);
 
   const range = page.getByRole("button", { name: "时间范围" });

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { shanghaiDay } from "@/domain/daily-asset-snapshots";
 import {
   redirectLoopbackIpToLocalhost,
   type PageSearchParams,
@@ -22,34 +23,38 @@ export default async function AssetSourcesPage({
 
   const services = getServices();
   if ((await services.auth.currentSession()) === null) redirect("/");
-  const [sources, cards] = await Promise.all([
+  const [storedSources, cards, history] = await Promise.all([
     services.assetSources.list(),
     services.assetCards.list(),
+    services.dailyAssetSnapshots.listTrendObservations(),
   ]);
+  const sources = storedSources.map(
+    ({ credentialReference: _credentialReference, ...source }) => source,
+  );
 
   return (
     <SessionGuard>
       <WorkbenchShell refreshEnabled={false}>
         <div className="page page-workbench-destination">
-        <a className="skip-link" href="#main-content">
-          跳到主要内容
-        </a>
+          <a className="skip-link" href="#main-content">
+            跳到主要内容
+          </a>
           <main id="main-content">
             <WorkbenchPageHeader
               actions={
-                <>
-                  <VibeLink href="/data-health" variant="outline">
-                    查看数据健康
-                  </VibeLink>
-                  <VibeLink href="/asset-sources/new" variant="primary">
-                    新增来源
-                  </VibeLink>
-                </>
+                <VibeLink href="/asset-sources/new" variant="primary">
+                  新增来源
+                </VibeLink>
               }
               eyebrow="PORTFOLIO / SOURCES"
               title="资产来源"
             />
-            <AssetSourceDirectory cards={cards} sources={sources} />
+            <AssetSourceDirectory
+              cards={cards}
+              currentDay={shanghaiDay(services.clock.now())}
+              history={history}
+              sources={sources}
+            />
           </main>
         </div>
       </WorkbenchShell>

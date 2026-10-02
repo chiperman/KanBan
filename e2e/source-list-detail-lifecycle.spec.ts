@@ -91,7 +91,7 @@ test("自动来源详情展示持仓、趋势、单来源刷新与脱敏授权�
   await expect(page.getByText("来源身份", { exact: true })).toBeVisible();
   await expect(page.getByText("只读授权摘要", { exact: true })).toBeVisible();
   await expect(page.getByTestId("holding-top-list")).toContainText("USDT");
-  await expect(page.getByText("来源趋势", { exact: true })).toBeVisible();
+  await expect(page.getByText("资产金额趋势", { exact: true })).toBeVisible();
   await expect(
     page.getByRole("button", { name: "刷新 Binance 只读账户" }),
   ).toBeVisible();

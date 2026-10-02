@@ -23,13 +23,11 @@ import {
   assetHoldingDisplayName,
   assetHoldingKey,
   AssetHoldingPositionStatus,
-  AssetProductCoverage,
-  AssetProductCoveragePanel,
 } from "@/ui/asset-product-coverage";
 import { formatAssetUnitPrice } from "@/ui/asset-price-display";
 import { sourceSyncStatus } from "@/ui/asset-source-status";
 import { formatShanghaiDateTime } from "@/ui/shanghai-date-time";
-import { VibeLink } from "@/ui/vibe/vibe-button";
+import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
 import {
   VibeSelect,
   type VibeSelectOption,
@@ -144,24 +142,47 @@ function holdingMarketValue(
     );
 }
 
-function sourceStatus(source: WorkspaceSource): {
+function sourceStatuses(source: WorkspaceSource): {
   label: string;
-  tone: "success" | "warning" | "error";
-} {
+  tone: "warning" | "error";
+}[] {
+  const statuses: ReturnType<typeof sourceStatuses> = [];
+  if (source.kind === "manual" && source.hasManualRecord === false) {
+    return [{ label: "尚未添加首条记录", tone: "warning" }];
+  }
   if (source.lifecycle === "disconnected") {
-    return { label: "已断开 · 保留最后快照", tone: "warning" };
+    statuses.push({ label: "已断开 · 保留最后快照", tone: "warning" });
   }
   const sync = sourceSyncStatus(source);
-  if (sync !== null) return sync;
-  if (source.snapshot.coverage?.status === "unknown") {
-    return { label: "总额可读 · 覆盖待确认", tone: "warning" };
+  if (sync !== null) statuses.push(sync);
+  const coverage = source.snapshot.coverage;
+  if (coverage?.status === "unknown") {
+    statuses.push({ label: "总额可读 · 覆盖待确认", tone: "warning" });
+  } else if (coverage?.status === "partial") {
+    statuses.push({
+      label: coverage.totalIsAuthoritative
+        ? "总额为准 · 明细覆盖不完整"
+        : "总额覆盖不完整",
+      tone: "warning",
+    });
+  } else if (
+    coverage?.products.some(
+      ({ capability, freshness }) =>
+        capability === "aggregate-only" && freshness === "current",
+    )
+  ) {
+    statuses.push({ label: "总额完整 · 部分产品仅汇总", tone: "warning" });
   }
-  if (source.snapshot.coverage?.status === "partial") {
-    return source.snapshot.coverage.totalIsAuthoritative
-      ? { label: "总额为准 · 明细覆盖不完整", tone: "warning" }
-      : { label: "总额覆盖不完整", tone: "warning" };
+  if (coverage?.products.some(({ freshness }) => freshness === "expired")) {
+    statuses.push({ label: "含过期产品数据", tone: "warning" });
   }
-  return { label: "总额有效", tone: "success" };
+  if (coverage && coverage.excludedPositiveAccounts.length > 0) {
+    statuses.push({ label: "存在未纳入账户", tone: "warning" });
+  }
+  if (coverage?.unexplainedValue && coverage.status === "complete") {
+    statuses.push({ label: "存在明细差额", tone: "warning" });
+  }
+  return statuses;
 }
 
 function holdingStatus(holding: AssetHolding): {
@@ -175,7 +196,15 @@ function holdingStatus(holding: AssetHolding): {
     return { label: "行情不可用", tone: "warning" };
   }
   if (holding.quoteEvidence?.freshness === "retained") {
-    return { label: "保留行情", tone: "warning" };
+    return {
+      label: holding.quoteEvidence.delivery === "delayed"
+        ? "保留行情 · 延迟行情"
+        : "保留行情",
+      tone: "warning",
+    };
+  }
+  if (holding.quoteEvidence?.delivery === "delayed") {
+    return { label: "延迟行情", tone: "warning" };
   }
   return { label: "价格可用", tone: "success" };
 }
@@ -201,10 +230,24 @@ function priceEvidence(holding: AssetHolding): string {
     .join(" · ");
 }
 
-function sourceHoldingCount(source: WorkspaceSource): number {
-  return source.kind === "manual"
-    ? 0
-    : activeSourceHoldings(source).length;
+function HoldingPriceEvidence({ holding }: { holding: AssetHolding }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const evidenceId = useId();
+  return (
+    <div className="assets-holdings__price-evidence">
+      <VibeButton
+        aria-controls={evidenceId}
+        aria-expanded={isOpen}
+        aria-label={`查看 ${assetHoldingDisplayName(holding)} 行情依据`}
+        onClick={() => setIsOpen(!isOpen)}
+        type="button"
+        variant="text"
+      >
+        {isOpen ? "收起行情依据" : "行情依据"}
+      </VibeButton>
+      {isOpen ? <small id={evidenceId}>{priceEvidence(holding)}</small> : null}
+    </div>
+  );
 }
 
 function sourceTotal(
@@ -227,13 +270,11 @@ function AssetSourceTotalRow({
   showSensitiveInfo: boolean;
   source: WorkspaceSource;
 }) {
-  const [isCoverageOpen, setIsCoverageOpen] = useState(false);
-  const coveragePanelId = useId();
   const sourceRates = sourceReportingConversionRates(source, reportingRates);
   const total = sourceTotal(source, currency, sourceRates);
-  const status = sourceStatus(source);
-  const coverage = source.snapshot.coverage;
-  const hasCoveragePanel = Boolean(coverage && coverage.products.length > 0);
+  const statuses = sourceStatuses(source);
+  const manualWithoutRecord =
+    source.kind === "manual" && source.hasManualRecord === false;
 
   return (
     <li
@@ -241,33 +282,26 @@ function AssetSourceTotalRow({
     >
       <article>
         <div>
-          <strong>{assetSourceDisplayName(source)}</strong>
-          <span>
-            {source.kind === "manual"
-              ? source.hasManualRecord === false
-                ? "手工资产组 · 暂无记录"
-                : "手工资产组 · 仅总额"
-              : `${sourceHoldingCount(source)} 项持仓观察`}
-          </span>
-        </div>
-        <div className="assets-holdings__source-state">
-          <VibeStatusTag tone={status.tone}>{status.label}</VibeStatusTag>
-          <div className="assets-holdings__source-coverage">
-            {coverage ? (
-              <AssetProductCoverage
-                coverage={coverage}
-                isOpen={isCoverageOpen}
-                onOpenChange={setIsCoverageOpen}
-                panelId={coveragePanelId}
-                renderInlinePanel={false}
-                sourceKind={`assets-${source.id}`}
-                variant="source-row"
-              />
-            ) : null}
-          </div>
+          <VibeLink
+            aria-label={`查看 ${assetSourceDisplayName(source)} 来源详情`}
+            className="assets-holdings__source-name"
+            href={`/asset-sources/${encodeURIComponent(source.id)}`}
+            variant="text"
+          >
+            <strong>{assetSourceDisplayName(source)}</strong>
+          </VibeLink>
+          {statuses.length > 0 ? (
+            <div className="assets-holdings__source-state">
+              {statuses.map((status) => (
+                <VibeStatusTag key={status.label} tone={status.tone}>
+                  {status.label}
+                </VibeStatusTag>
+              ))}
+            </div>
+          ) : null}
         </div>
         <div className="assets-holdings__source-value">
-          {showSensitiveInfo && total !== null ? (
+          {showSensitiveInfo && total !== null && !manualWithoutRecord ? (
             <VibeMetric
               animationKey={source.kind === "longbridge" ? source.snapshot.syncedAt : undefined}
               unit={currency}
@@ -281,25 +315,12 @@ function AssetSourceTotalRow({
                   : "assets-holdings__source-value-hidden"
               }
             >
-              {showSensitiveInfo ? "无法折算" : "金额已隐藏"}
+              {showSensitiveInfo
+                ? manualWithoutRecord ? "尚无记录" : "无法折算"
+                : "金额已隐藏"}
             </strong>
           )}
-          <VibeLink
-            aria-label={`查看 ${assetSourceDisplayName(source)} 来源详情`}
-            className="assets-holdings__source-detail"
-            href={`/asset-sources/${encodeURIComponent(source.id)}`}
-            variant="text"
-          >
-            查看
-          </VibeLink>
         </div>
-        {isCoverageOpen && hasCoveragePanel && coverage ? (
-          <AssetProductCoveragePanel
-            className="assets-holdings__source-coverage-panel"
-            coverage={coverage}
-            id={coveragePanelId}
-          />
-        ) : null}
       </article>
     </li>
   );
@@ -445,7 +466,6 @@ export function AssetsHoldingsWorkspace({
               className="assets-holdings__source-columns"
             >
               <span>来源</span>
-              <span>状态与覆盖</span>
               <span>来源总额</span>
             </div>
             <ol>
@@ -535,6 +555,13 @@ export function AssetsHoldingsWorkspace({
                     currency,
                     sourceRates,
                   );
+                  const showSourceMarketValue =
+                    showSensitiveInfo && holding.sourceMarketValue !== null &&
+                    holding.sourceMarketValue !== undefined && (
+                      holding.sourceMarketValue.currency !== currency ||
+                      marketValue === null ||
+                      money(holding.sourceMarketValue.amount) !== money(marketValue)
+                    );
                   const status = holdingStatus(holding);
                   const platformProfit = displayAmount(
                     holding.platformProfit,
@@ -568,11 +595,13 @@ export function AssetsHoldingsWorkspace({
                               : `${money(marketValue)} ${currency}`
                             : "••••••"}
                         </strong>
-                        <span>
-                          {holding.sourceMarketValue
-                            ? `来源口径 ${money(holding.sourceMarketValue.amount)} ${holding.sourceMarketValue.currency}`
-                            : "来源市值不可用"}
-                        </span>
+                        {showSourceMarketValue && holding.sourceMarketValue ? (
+                          <span>
+                            来源口径 {money(holding.sourceMarketValue.amount)} {holding.sourceMarketValue.currency}
+                          </span>
+                        ) : holding.sourceMarketValue ? null : (
+                          <span>来源市值不可用</span>
+                        )}
                       </td>
                       <td data-label="现价 / 数量">
                         <strong>
@@ -593,7 +622,7 @@ export function AssetsHoldingsWorkspace({
                             ? `${holding.quantity} ${holding.symbol}`
                             : "••••••"}
                         </span>
-                        <small>{priceEvidence(holding)}</small>
+                        <HoldingPriceEvidence holding={holding} />
                       </td>
                       <td data-label="价格变化">
                         <strong>
@@ -603,15 +632,13 @@ export function AssetsHoldingsWorkspace({
                               ? signedPercent(holding.changePercent)
                               : "••••••"}
                         </strong>
-                        <span>来源可用价格变化</span>
                       </td>
                       <td data-label="平台盈亏">
-                        <strong>{platformProfit}</strong>
-                        <span>
-                          {holding.platformProfit === null
+                        <strong>
+                          {showSensitiveInfo && holding.platformProfit === null
                             ? "平台未提供"
-                            : "平台原生口径"}
-                        </span>
+                            : platformProfit}
+                        </strong>
                       </td>
                       <td data-label="数据状态">
                         <VibeStatusTag tone={status.tone}>{status.label}</VibeStatusTag>
@@ -625,7 +652,7 @@ export function AssetsHoldingsWorkspace({
         )}
 
         <VibeNotice tone="info">
-          平台盈亏仅在来源提供时显示。
+          价格变化采用来源可用行情；平台盈亏仅在来源提供时显示，沿用平台原生口径。
         </VibeNotice>
       </section>
     </section>

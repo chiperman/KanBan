@@ -20,9 +20,7 @@ import type {
   AssetSourceSummary,
   DailyAssetTrendObservation,
 } from "@/server/ports";
-import { sourceSyncStatus } from "@/ui/asset-source-status";
-import { formatShanghaiDateTime } from "@/ui/shanghai-date-time";
-import { VibeLink } from "@/ui/vibe/vibe-button";
+import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeSelect } from "@/ui/vibe/vibe-field";
 
 export type DataHealthSource = Omit<
@@ -32,7 +30,6 @@ export type DataHealthSource = Omit<
 
 type TimeRange = Extract<TrendRange, "7d" | "30d" | "all">;
 type SourceFilter = "all" | string;
-type OverviewFilter = "all" | "attention" | "healthy";
 type CompletenessFilter = "all" | "complete" | "incomplete";
 type HistoryState = "complete" | "incomplete" | "gap";
 
@@ -42,17 +39,12 @@ type HistoryEntry = {
   state: HistoryState;
 };
 
-type DiagnosticSource = {
+export type DiagnosticSource = {
   manualWithoutRecord: boolean;
   name: string;
   reasons: string[];
   source: DataHealthSource;
   valuation: ReturnType<typeof valuationSummary>;
-};
-
-type SharedDiagnostic = {
-  reason: string;
-  sources: DiagnosticSource[];
 };
 
 const TIME_RANGE_OPTIONS = [
@@ -150,13 +142,6 @@ function valuationSummary(
   return { label: "估值完整", reasons: [] };
 }
 
-function syncLabels(source: DataHealthSource): string[] {
-  if (source.kind === "manual") {
-    return hasManualAssetRecord(source) ? ["手工记录"] : ["等待首条记录"];
-  }
-  return [sourceSyncStatus(source)?.label ?? "数据当前"];
-}
-
 function observationDetail(
   observation: DailyAssetTrendObservation,
   selectedSource: DataHealthSource | null,
@@ -248,32 +233,19 @@ function sourceDiagnosticReasons(
   ];
 }
 
-function sourceStateTone(source: DataHealthSource): "current" | "issue" {
-  return source.sync.error === null && source.sync.status === "current"
-    ? "current"
-    : "issue";
-}
-
-function sourceDetailAction({
-  manualWithoutRecord,
-  source,
-  valuation,
-}: DiagnosticSource): string {
-  if (manualWithoutRecord) return "添加记录";
-  if (source.sync.error !== null) return "排查同步";
-  if (valuation.label !== "估值完整") return "排查估值";
-  return "查看详情";
-}
-
-function overviewHeading(
-  filter: OverviewFilter,
-  attentionSourceCount: number,
-): string {
-  if (filter === "attention") {
-    return attentionSourceCount > 0 ? "需关注来源" : "来源状态";
-  }
-  if (filter === "healthy") return "正常来源";
-  return "全部来源";
+export function diagnoseSources(sources: DataHealthSource[]): DiagnosticSource[] {
+  return sources.map((source) => {
+    const valuation = valuationSummary(source, sources);
+    return {
+      manualWithoutRecord: source.kind === "manual" && !hasManualAssetRecord(source),
+      name: assetSourceDisplayName(source),
+      reasons: sourceDiagnosticReasons(source, valuation),
+      source,
+      valuation,
+    };
+  }).sort((left, right) =>
+    Number(right.reasons.length > 0) - Number(left.reasons.length > 0),
+  );
 }
 
 export function DataHealthDiagnostics({
@@ -285,344 +257,104 @@ export function DataHealthDiagnostics({
   history: DailyAssetTrendObservation[];
   sources: DataHealthSource[];
 }) {
-  const [range, setRange] = useState<TimeRange>("all");
+  const [expanded, setExpanded] = useState(false);
+  const [range, setRange] = useState<TimeRange>("30d");
   const [sourceId, setSourceId] = useState<SourceFilter>("all");
-  const [completeness, setCompleteness] =
-    useState<CompletenessFilter>("all");
-  const [overviewFilter, setOverviewFilter] =
-    useState<OverviewFilter>("attention");
+  const [completeness, setCompleteness] = useState<CompletenessFilter>("incomplete");
   const selectedSource = sources.find((source) => source.id === sourceId) ?? null;
   const sourceOptions = [
     { value: "all", label: "全部来源" },
-    ...sources.map((source) => ({
-      value: source.id,
-      label: assetSourceDisplayName(source),
-    })),
+    ...sources.map((source) => ({ value: source.id, label: assetSourceDisplayName(source) })),
   ];
   const entries = useMemo(
     () => historyEntries(history, currentDay, range, selectedSource),
     [currentDay, history, range, selectedSource],
   );
   const filteredEntries = entries.filter((entry) =>
-    completeness === "all"
-      ? true
-      : completeness === "complete"
-        ? entry.state === "complete"
-        : entry.state !== "complete",
+    completeness === "all" || (completeness === "complete"
+      ? entry.state === "complete"
+      : entry.state !== "complete"),
   );
-  const incompleteCount = entries.filter(
-    (entry) => entry.state === "incomplete",
-  ).length;
+  const incompleteCount = entries.filter((entry) => entry.state === "incomplete").length;
   const gapCount = entries.filter((entry) => entry.state === "gap").length;
-  const diagnosticSources = useMemo<DiagnosticSource[]>(
-    () =>
-      sources
-        .map((source) => {
-          const valuation = valuationSummary(source, sources);
-          const reasons = sourceDiagnosticReasons(source, valuation);
-          return {
-            manualWithoutRecord:
-              source.kind === "manual" && !hasManualAssetRecord(source),
-            name: assetSourceDisplayName(source),
-            reasons,
-            source,
-            valuation,
-          };
-        })
-        .sort(
-          (left, right) =>
-            Number(right.reasons.length > 0) -
-            Number(left.reasons.length > 0),
-        ),
-    [sources],
-  );
-  const attentionSourceCount = diagnosticSources.filter(
-    ({ reasons }) => reasons.length > 0,
-  ).length;
-  const healthySourceCount = sources.length - attentionSourceCount;
-  const activeOverviewFilter =
-    attentionSourceCount === 0 && overviewFilter === "attention"
-      ? "all"
-      : overviewFilter;
-  const sharedDiagnostics = useMemo<SharedDiagnostic[]>(() => {
-    const sourcesByReason = new Map<string, DiagnosticSource[]>();
-    for (const diagnosticSource of diagnosticSources) {
-      if (diagnosticSource.reasons.length === 0) continue;
-      for (const reason of diagnosticSource.reasons) {
-        const matchedSources = sourcesByReason.get(reason) ?? [];
-        matchedSources.push(diagnosticSource);
-        sourcesByReason.set(reason, matchedSources);
-      }
-    }
-    return Array.from(sourcesByReason, ([reason, matchedSources]) => ({
-      reason,
-      sources: matchedSources,
-    })).filter(({ sources: matchedSources }) => matchedSources.length > 1);
-  }, [diagnosticSources]);
-  const sharedDiagnosticReasons = new Set(
-    sharedDiagnostics.map(({ reason }) => reason),
-  );
-  const visibleDiagnosticSources = diagnosticSources.filter(
-    ({ reasons }) =>
-      activeOverviewFilter === "all" ||
-      (activeOverviewFilter === "attention" && reasons.length > 0) ||
-      (activeOverviewFilter === "healthy" && reasons.length === 0),
-  );
-  const historyCoverageEntries = entries.slice(-30);
+  const rangeLabel = TIME_RANGE_OPTIONS.find((option) => option.value === range)?.label;
 
   return (
-    <div className="data-health-diagnostics" data-testid="data-health-diagnostics">
-
-      <section aria-label="来源诊断" className="data-health-source-section">
-        <div className="data-health-section-heading">
-          <div>
-            <p className="card-label">SOURCE HEALTH / CURRENT STATE</p>
-            <h2>{overviewHeading(activeOverviewFilter, attentionSourceCount)}</h2>
-          </div>
-          <div
-            aria-label={`共 ${sources.length} 个来源，${healthySourceCount} 个正常，${attentionSourceCount} 个需关注`}
-            className="data-health-summary"
-            role="group"
-          >
-            {[
-              {
-                count: sources.length,
-                filter: "all" as const,
-                label: "来源总数",
-                actionLabel: "全部",
-                tone: "muted",
-              },
-              {
-                count: healthySourceCount,
-                filter: "healthy" as const,
-                label: "正常",
-                actionLabel: "正常",
-                tone: "current",
-              },
-              {
-                count: attentionSourceCount,
-                filter: "attention" as const,
-                label: "需关注",
-                actionLabel: "需关注",
-                tone: attentionSourceCount > 0 ? "issue" : "muted",
-              },
-            ].map(({ actionLabel, count, filter, label, tone }) => (
-              <button
-                aria-label={`显示${actionLabel}来源（${count} 个）`}
-                aria-pressed={activeOverviewFilter === filter}
-                className="data-health-summary__item"
-                key={filter}
-                onClick={() => setOverviewFilter(filter)}
-                type="button"
-              >
-                <span>{label}</span>
-                <strong data-tone={tone}>
-                  {count}<small>个</small>
-                </strong>
-              </button>
-            ))}
-          </div>
-        </div>
-        {sources.length === 0 ? (
-          <div className="empty-state">
-            <p className="empty-title">暂无可诊断来源</p>
-          </div>
-        ) : (
-          <>
-            {activeOverviewFilter !== "healthy" && sharedDiagnostics.length > 0 ? (
-              <ul
-                aria-label="共同诊断"
-                className="data-health-shared-diagnostics"
-              >
-                {sharedDiagnostics.map(({ reason, sources: matchedSources }) => {
-                  const hasUnvaluedSource = matchedSources.some(({ valuation }) =>
-                    valuation.label.includes("未估值")
-                  );
-                  return (
-                    <li key={reason}>
-                      <p>影响 {matchedSources.length} 个来源</p>
-                      <strong>{reason}</strong>
-                      <span>
-                        {hasUnvaluedSource
-                          ? "相关未估值资产未计入总览："
-                          : "查看来源："}
-                        {matchedSources.map(({ name, source }) => (
-                          <VibeLink
-                            aria-label={`查看 ${name} 来源详情`}
-                            href={`/asset-sources/${encodeURIComponent(source.id)}`}
-                            key={source.id}
-                            variant="text"
-                          >
-                            {name}
-                          </VibeLink>
-                        ))}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : null}
-            <div aria-hidden="true" className="data-health-source__columns">
-              <span>来源</span>
-              <span>同步状态</span>
-              <span>最近更新</span>
-              <span>估值完整性</span>
-              <span>详情</span>
-            </div>
-            <ol
-              aria-live="polite"
-              className="data-health-source-list"
-            >
-              {visibleDiagnosticSources.map(
-                ({
-                  manualWithoutRecord,
-                  name,
-                  reasons,
-                  source,
-                  valuation,
-                }) => {
-                  const requiresAttention = reasons.length > 0;
-                  const visibleReasons = reasons.filter(
-                    (reason) => !sharedDiagnosticReasons.has(reason),
-                  );
-                  const action = sourceDetailAction({
-                    manualWithoutRecord,
-                    name,
-                    reasons,
-                    source,
-                    valuation,
-                  });
-                  return (
-                    <li
-                      data-testid={`data-health-source-${source.id}`}
-                      key={source.id}
-                    >
-                      <article
-                        className={`data-health-source${requiresAttention ? " data-health-source--issue" : " data-health-source--compact"}`}
-                      >
-                        <div className="data-health-source__identity">
-                          <h3>{name}</h3>
-                          <p>{source.label}</p>
-                        </div>
-                        <div className="data-health-source__fact">
-                          <span>同步状态</span>
-                          <p data-tone={sourceStateTone(source)}>
-                            {syncLabels(source).join(" · ")}
-                          </p>
-                        </div>
-                        <div className="data-health-source__fact">
-                          <span>{source.kind === "manual" ? "最近记录" : "最后成功"}</span>
-                          <p>
-                            {manualWithoutRecord
-                              ? "尚无记录"
-                              : formatShanghaiDateTime(source.sync.lastSuccessfulAt)}
-                          </p>
-                        </div>
-                        <div className="data-health-source__fact">
-                          <span>估值完整性</span>
-                          <p
-                            data-tone={
-                              valuation.label === "估值完整" ? "current" : "issue"
-                            }
-                          >
-                            {valuation.label}
-                          </p>
-                        </div>
-                        <VibeLink
-                          aria-label={`${action} ${name} 来源详情`}
-                          href={`/asset-sources/${encodeURIComponent(source.id)}`}
-                          variant="text"
-                        >
-                          {action}
-                        </VibeLink>
-                        {visibleReasons.length > 0 ? (
-                          <ul
-                            aria-label={`${name} 诊断原因`}
-                            className="data-health-source__reasons"
-                          >
-                            {visibleReasons.map((reason) => <li key={reason}>{reason}</li>)}
-                          </ul>
-                        ) : null}
-                      </article>
-                    </li>
-                  );
-                },
-              )}
-            </ol>
-          </>
-        )}
-      </section>
-
-      <section aria-label="历史观测" className="data-health-history" data-testid="data-health-history">
-        <div className="data-health-section-heading">
-          <div>
-            <p className="card-label">HISTORY / COVERAGE</p>
-            <h2>历史覆盖</h2>
-          </div>
-          <p>
-            {incompleteCount > 0 || gapCount > 0
+    <section
+      aria-label="历史观测"
+      className="data-health-history"
+      data-testid="data-health-history"
+      id="history-coverage"
+    >
+      <div className="data-health-section-heading">
+        <div>
+          <p className="card-label">HISTORY / COVERAGE</p>
+          <h2>历史覆盖</h2>
+          <p className="data-health-history__summary">
+            {rangeLabel} · {incompleteCount > 0 || gapCount > 0
               ? `不完整历史 ${incompleteCount} 天 · 数据缺口 ${gapCount} 天`
-              : "所选范围内观测完整"}
+              : "观测完整"}
           </p>
         </div>
-        <ol
-          aria-label={`所选范围的历史覆盖，共 ${historyCoverageEntries.length} 天`}
-          className="data-health-history__coverage"
+        <VibeButton
+          aria-controls="history-coverage-details"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((current) => !current)}
+          type="button"
+          variant="outline"
         >
-          {historyCoverageEntries.map((entry) => (
-            <li data-state={entry.state} key={entry.day}>
-              <time
-                aria-label={`${entry.day} · ${historyStatusLabel(entry.state)} · ${entry.detail}`}
-                dateTime={entry.day}
-              >
-                {entry.day.slice(5).replace("-", "/")}
-              </time>
-            </li>
-          ))}
-        </ol>
-        <div className="data-health-filters">
-          <VibeSelect
-            fieldId="data-health-range"
-            label="时间范围"
-            onValueChange={(value) => setRange(value as TimeRange)}
-            options={TIME_RANGE_OPTIONS}
-            value={range}
-            variant="wide"
-          />
-          <VibeSelect
-            fieldId="data-health-source"
-            label="来源"
-            onValueChange={setSourceId}
-            options={sourceOptions}
-            value={sourceId}
-            variant="wide"
-          />
-          <VibeSelect
-            fieldId="data-health-completeness"
-            label="完整性"
-            onValueChange={(value) =>
-              setCompleteness(value as CompletenessFilter)
-            }
-            options={COMPLETENESS_OPTIONS}
-            value={completeness}
-            variant="wide"
-          />
-        </div>
-        {filteredEntries.length === 0 ? (
-          <div className="empty-state">
-            <p className="empty-title">所选条件没有匹配观测</p>
+          {expanded ? "收起历史覆盖" : "查看历史覆盖"}
+        </VibeButton>
+      </div>
+      {expanded ? (
+        <div id="history-coverage-details">
+          <p className="data-health-history__hint">
+            数据缺口表示当天没有观测，不代表当前同步失败。
+          </p>
+          <div className="data-health-filters">
+            <VibeSelect
+              fieldId="data-health-range"
+              label="时间范围"
+              onValueChange={(value) => setRange(value as TimeRange)}
+              options={TIME_RANGE_OPTIONS}
+              value={range}
+              variant="wide"
+            />
+            <VibeSelect
+              fieldId="data-health-source"
+              label="来源"
+              onValueChange={setSourceId}
+              options={sourceOptions}
+              value={sourceId}
+              variant="wide"
+            />
+            <VibeSelect
+              fieldId="data-health-completeness"
+              label="完整性"
+              onValueChange={(value) => setCompleteness(value as CompletenessFilter)}
+              options={COMPLETENESS_OPTIONS}
+              value={completeness}
+              variant="wide"
+            />
           </div>
-        ) : (
-          <ol className="data-health-history__list">
-            {filteredEntries.map((entry) => (
-              <li data-state={entry.state} key={entry.day}>
-                <p>{entry.day} · {historyStatusLabel(entry.state)}</p>
-                <span>{entry.detail}</span>
-              </li>
-            ))}
-          </ol>
-        )}
-      </section>
-    </div>
+          {filteredEntries.length === 0 ? (
+            <div className="empty-state">
+              <p className="empty-title">{completeness === "incomplete"
+                ? "所选范围内没有历史缺口或不完整观测"
+                : "所选条件没有匹配观测"}</p>
+            </div>
+          ) : (
+            <ol className="data-health-history__list">
+              {filteredEntries.map((entry) => (
+                <li data-state={entry.state} key={entry.day}>
+                  <p>{entry.day} · {historyStatusLabel(entry.state)}</p>
+                  <span>{entry.detail}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      ) : null}
+    </section>
   );
 }

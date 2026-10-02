@@ -14,7 +14,7 @@ export const settlementReasonLabel: Record<FormalSettlementRunReason, string> = 
   "source-read-failed": "资产来源读取失败，本次未生成日结",
   "candle-read-failed": "官方日 K 读取失败，本次未生成日结",
   "capture-window-missed": "采集窗口内未形成日结，未使用之后的实时数据补写",
-  "incomplete-evidence": "估值或来源证据不完整，请查看数据健康",
+  "incomplete-evidence": "估值或来源证据不完整，请查看资产来源",
   "execution-failed": "本次执行未正常完成，详细错误已隐藏",
   "execution-record-failed": "执行记录未能保存，无法确认本次执行状态",
 };

@@ -5,7 +5,7 @@ const WORKBENCH_DESTINATIONS = [
   { heading: "资产与持仓", path: "/assets" },
   { heading: "收益分析", path: "/performance" },
   { heading: "资产来源", path: "/asset-sources" },
-  { heading: "数据健康", path: "/data-health" },
+  { heading: "资产来源", path: "/data-health" },
   { heading: "设置与安全", path: "/settings" },
 ] as const;
 
@@ -96,13 +96,11 @@ test("全产品核心路径在三种宽度、浅深色与减少动态下保持�
       page.getByRole("link", { name: "查看全部资产与持仓" }),
     ).toHaveAttribute("href", "/assets");
     await expect(
-      page.getByRole("link", {
-        name: "在资产来源中查看单来源状态与恢复操作",
-      }),
+      page.locator("main").getByRole("link", { name: "资产来源", exact: true }),
     ).toHaveAttribute("href", "/asset-sources");
 
     const navigation = page.getByTestId(
-      profile.viewport.width === 390
+      profile.viewport.width < 1200
         ? "workbench-mobile-navigation"
         : "workbench-desktop-navigation",
     );
