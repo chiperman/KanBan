@@ -1,13 +1,13 @@
 # 06 — 按来源和日期限制历史读取并消除逐行子查询
 
-Status: ready-for-agent
+Status: resolved
 Type: task
 Priority: 中
 Phase: 本迭代处理
 Evidence: 确定存在查询放大；实际交互时延需测量
 Review date: 2026-09-10
 
-> 本文件仅发布实施规格；本次未授权修改业务代码。执行 Ticket 前须取得所有者的实施确认，并重新核对当前工作区。
+> 2026-10-02 归档核对：本父级主题已由 [执行 08](../../project-health-hardening-delivery/issues/08-bound-single-day-observation-write.md)、[执行 09](../../project-health-hardening-delivery/issues/09-bound-source-detail-reads.md)、[执行 10](../../project-health-hardening-delivery/issues/10-batch-formal-settlement-history.md) 完成，交付状态及验收边界以执行 Ticket 为准。下文保留 2026-09-10 审查背景和原验收清单，不再作为第二份待实施任务。
 
 ## Problem Statement
 
@@ -71,3 +71,5 @@ Review date: 2026-09-10
 ## 评论
 
 - 2026-09-10：由系统性代码审查整理为独立 Ticket；仅发布规格，尚未实施。
+
+- 2026-10-02：核对现有实现及已归档执行 Ticket，关闭重复父级待办；历史证据不等于本轮全仓回归或真实账户验收。

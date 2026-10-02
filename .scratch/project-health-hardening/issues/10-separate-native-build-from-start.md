@@ -1,13 +1,13 @@
 # 10 — 分离原生扩展构建与运行时启动
 
-Status: ready-for-agent
+Status: resolved
 Type: task
 Priority: 中
 Phase: 后续重构
 Evidence: 确定存在启动耦合；实际额外时长待测
 Review date: 2026-09-10
 
-> 本文件仅发布实施规格；本次未授权修改业务代码。执行 Ticket 前须取得所有者的实施确认，并重新核对当前工作区。
+> 2026-10-02 归档核对：本父级主题已由 [执行 13](../../project-health-hardening-delivery/issues/13-separate-native-build-and-start.md) 完成，交付状态及验收边界以执行 Ticket 为准。下文保留 2026-09-10 审查背景和原验收清单，不再作为第二份待实施任务。
 
 ## Problem Statement
 
@@ -70,3 +70,5 @@ predev、prebuild、prestart 都执行原生 release 构建、复制与签名步
 ## 评论
 
 - 2026-09-10：由系统性代码审查整理为独立 Ticket；仅发布规格，尚未实施。
+
+- 2026-10-02：核对现有实现及已归档执行 Ticket，关闭重复父级待办；历史证据不等于本轮全仓回归或真实账户验收。

@@ -1,6 +1,6 @@
 # 09 — 按职责拆分生产组合与持久化模块
 
-Status: ready-for-agent
+Status: resolved
 Type: task
 Priority: 中
 Phase: 后续重构
@@ -8,7 +8,7 @@ Evidence: 职责集中已确认；无已证实静态运行时循环依赖
 Review date: 2026-09-10
 Blocked by: 03, 04, 06
 
-> 本文件仅发布实施规格；本次未授权修改业务代码。执行 Ticket 前须取得所有者的实施确认，并重新核对当前工作区。
+> 2026-10-02 归档核对：本父级主题已由 [执行 14](../../project-health-hardening-delivery/issues/14-extract-persistence-and-migration.md)、[执行 15](../../project-health-hardening-delivery/issues/15-extract-credentials-and-connections.md)、[执行 16](../../project-health-hardening-delivery/issues/16-compose-extracted-production-services.md) 完成，交付状态及验收边界以执行 Ticket 为准。下文保留 2026-09-10 审查背景和原验收清单，不再作为第二份待实施任务。
 
 ## Problem Statement
 
@@ -70,3 +70,5 @@ Blocked by: 03, 04, 06
 ## 评论
 
 - 2026-09-10：由系统性代码审查整理为独立 Ticket；仅发布规格，尚未实施。
+
+- 2026-10-02：核对现有实现及已归档执行 Ticket，关闭重复父级待办；历史证据不等于本轮全仓回归或真实账户验收。

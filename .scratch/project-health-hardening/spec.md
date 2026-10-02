@@ -1,10 +1,10 @@
 # 个人资产看板：项目健康度与分阶段优化规格
 
-Status: ready-for-agent
+Status: resolved
 Review date: 2026-09-10
 Scope: 既有项目的可靠性、安全、性能与工程可维护性
 
-> 本次只发布规格和独立 Ticket，不修改业务代码、不提交、不推送。ready-for-agent 表示规格已整理，不代表所有者已经确认实施；执行任何代码变更前仍需取得其确认。
+> 2026-10-02 归档核对：11 个父级主题已拆为 [16 个执行 Ticket](../project-health-hardening-delivery/spec.md)，并于 2026-09-19 完成其范围内交付。本文保留原审查快照，不再作为待执行计划；当前状态见 [项目基线](../../docs/current-baseline.md)。历史全仓回归失败记录仍保留，不将归档等同于全仓全绿。
 
 ## Problem Statement
 
