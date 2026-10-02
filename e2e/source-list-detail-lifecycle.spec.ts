@@ -181,7 +181,7 @@ test("来源详情可以切换 USD、CNY 与 HKD 计价货币", async ({
   await expect(history.getByRole("listitem")).toHaveText(originalHistory);
   await history.getByRole("button", { name: "编辑", exact: true }).click();
   await expect(record.getByLabel("资产总额")).toHaveValue("72000");
-  await expect(record.getByRole("button", { name: "币种", exact: true })).toHaveText("CNY");
+  await expect(record.getByRole("button", { name: /^币种 / })).toHaveText("CNY");
   await record.getByRole("button", { name: "取消", exact: true }).click();
 });
 
@@ -255,7 +255,7 @@ test("来源详情内的单来源刷新和手工记录编辑保持各自边界",
   await page.getByRole("link", { name: /私募基金.*手工资产记录/ }).click();
   await page.getByRole("button", { name: "添加数据" }).click();
   const record = page.getByRole("dialog", { name: "记录 私募基金 数据" });
-  await expect(record.getByRole("button", { name: "币种", exact: true })).toHaveText("CNY");
+  await expect(record.getByRole("button", { name: /^币种 / })).toHaveText("CNY");
   await record.getByLabel("资产总额").fill("120000");
   await record.getByRole("button", { name: "保存数据" }).click();
   await expect(page.getByLabel("私募基金历史记录")).toContainText("120,000.00 CNY");

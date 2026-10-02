@@ -54,3 +54,42 @@ test("演示模式的服务端首屏仍展示虚构金额", async ({ page }) => 
   await expect(total).toContainText("USD");
   await expect(total).not.toContainText("••••••");
 });
+
+test("日期 Escape 只关闭日历并恢复焦点，保留外层表单草稿", async ({ page }) => {
+  await configureWorkspace(page);
+  await page.goto("/asset-sources/source-beta");
+  const trigger = page.getByRole("button", { name: "手动记录", exact: true });
+  await trigger.click();
+  const dialog = page.getByRole("dialog", { name: "手动记录Beta Crypto", exact: true });
+  const amount = dialog.getByRole("textbox", { name: "期初本金", exact: true });
+  await amount.fill("12345");
+  const date = dialog.getByRole("button", { name: /^记录日期 / });
+  const selectedDate = await date.innerText();
+  await expect(date).toHaveAccessibleName(`记录日期 ${selectedDate}`);
+
+  for (const focusCalendar of [false, true]) {
+    await date.click();
+    const calendar = page.getByRole("dialog", { name: "选择记录日期", exact: true });
+    await expect(calendar).toBeVisible();
+    if (focusCalendar) await calendar.locator("button[aria-pressed=true]").focus();
+    await page.keyboard.press("Escape");
+    await expect(calendar).toBeHidden();
+    await expect(dialog).toBeVisible();
+    await expect(amount).toHaveValue("12345");
+    await expect(date).toBeFocused();
+  }
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(trigger).toBeFocused();
+});
+
+test("下拉控件的可访问名称随当前选项更新", async ({ page }) => {
+  await configureWorkspace(page);
+  await page.goto("/assets");
+  const currency = page.getByRole("button", { name: /^计价货币 / });
+  await expect(currency).toHaveAccessibleName("计价货币 USD");
+  await currency.click();
+  await page.getByRole("option", { name: "CNY", exact: true }).click();
+  await expect(currency).toHaveAccessibleName("计价货币 CNY");
+  await expect(currency).toBeFocused();
+});

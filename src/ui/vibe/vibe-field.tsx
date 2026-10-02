@@ -62,6 +62,7 @@ export function VibeSelect<Value extends string>({
   const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
   const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
   const labelId = `${fieldId}-label`;
+  const valueId = `${fieldId}-value`;
   const listboxId = `${fieldId}-options`;
   const selected = options.find((option) => option.value === value) ?? options[0];
   const rootClassName = [
@@ -235,7 +236,7 @@ export function VibeSelect<Value extends string>({
         aria-controls={listboxId}
         aria-expanded={open}
         aria-haspopup="listbox"
-        aria-labelledby={labelId}
+        aria-labelledby={`${labelId} ${valueId}`}
         className="vibe-select__trigger"
         disabled={disabled}
         id={fieldId}
@@ -250,7 +251,7 @@ export function VibeSelect<Value extends string>({
           }
         }}
       >
-        <span>{selected?.label ?? "请选择"}</span>
+        <span id={valueId}>{selected?.label ?? "请选择"}</span>
         <span className="vibe-select__chevron" aria-hidden="true" />
       </button>
       {optionList}

@@ -59,7 +59,7 @@ test("USD 历史账本在总览和收益分析按当前汇率切换 CNY、HKD", 
       ["HKD", "781.25 HKD", "+5,334.53 HKD"],
       ["USD", "100.00 USD", "+682.82 USD"],
     ]) {
-      await page.getByRole("button", { name: "计价货币", exact: true }).click();
+      await page.getByRole("button", { name: /^计价货币 / }).click();
       await page.getByRole("option", { name: currency, exact: true }).click();
       await expect(page.getByTestId(netId)).toContainText(net);
       await expect(page.getByTestId(profitId)).toContainText(profit);

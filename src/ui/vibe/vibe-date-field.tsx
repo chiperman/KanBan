@@ -117,15 +117,22 @@ export function VibeDateField({
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      const calendars = document.querySelectorAll(".vibe-date-field__calendar");
+      if (calendars.item(calendars.length - 1) !== calendarRef.current) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setOpen(false);
+      triggerRef.current?.focus();
     };
     document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
+    // 日历是表单中的上层弹层，先于外层 dialog 消费 Escape。
+    document.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("resize", updatePosition);
     window.addEventListener("scroll", updatePosition, true);
     return () => {
       document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("resize", updatePosition);
       window.removeEventListener("scroll", updatePosition, true);
     };
@@ -205,7 +212,7 @@ export function VibeDateField({
         aria-controls={`${fieldId}-calendar`}
         aria-expanded={open}
         aria-haspopup="dialog"
-        aria-labelledby={`${fieldId}-label`}
+        aria-labelledby={`${fieldId}-label ${fieldId}-value`}
         ref={triggerRef}
         className="vibe-date-field__trigger"
         disabled={disabled}
@@ -216,7 +223,7 @@ export function VibeDateField({
         }}
         type="button"
       >
-        <span>{displayDay(value)}</span>
+        <span id={`${fieldId}-value`}>{displayDay(value)}</span>
         <span className="vibe-date-field__calendar-icon" aria-hidden="true" />
       </button>
       {calendar}

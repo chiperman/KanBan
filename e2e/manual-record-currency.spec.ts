@@ -44,7 +44,7 @@ for (const scenario of cases) {
     await openManualSource(page, scenario.history);
     await page.getByRole("button", { name: "添加数据", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "记录 币种验收资产 数据" });
-    await expect(dialog.getByRole("button", { name: "币种", exact: true })).toHaveText(scenario.expected);
+    await expect(dialog.getByRole("button", { name: /^币种 / })).toHaveText(scenario.expected);
     await dialog.getByLabel("资产总额").fill("4321");
     await dialog.getByRole("button", { name: "保存数据" }).click();
     await expect(dialog).toBeHidden();
@@ -62,7 +62,7 @@ test("编辑已有记录保留该记录币种，且新增时可手动覆盖默�
   const original = history.getByRole("listitem").filter({ hasText: "2025-12-30" });
   await original.getByRole("button", { name: "编辑", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "记录 币种验收资产 数据" });
-  await expect(dialog.getByRole("button", { name: "币种", exact: true })).toHaveText("CNY");
+  await expect(dialog.getByRole("button", { name: /^币种 / })).toHaveText("CNY");
   await dialog.getByLabel("资产总额").fill("5555");
   await dialog.getByRole("button", { name: "保存数据" }).click();
   await expect(dialog).toBeHidden();
@@ -71,7 +71,7 @@ test("编辑已有记录保留该记录币种，且新增时可手动覆盖默�
   await expect(history.getByRole("listitem")).toHaveCount(3);
 
   await page.getByRole("button", { name: "添加数据", exact: true }).click();
-  const currency = dialog.getByRole("button", { name: "币种", exact: true });
+  const currency = dialog.getByRole("button", { name: /^币种 / });
   await expect(currency).toHaveText("USD");
   await currency.click();
   await page.getByRole("option", { name: "HKD", exact: true }).click();
