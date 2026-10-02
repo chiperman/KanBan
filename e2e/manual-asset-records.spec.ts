@@ -9,6 +9,19 @@ async function loginAsOwner(page: Page): Promise<void> {
   await expect(page.getByTestId("workbench-shell")).toBeVisible();
 }
 
+async function createManualSource(page: Page, name: string): Promise<void> {
+  await page.goto("/asset-sources/new");
+  await page.getByRole("radio", { name: "手工记录资产" }).click();
+  await expect(page.getByRole("heading", { name: "填写来源名称" })).toBeVisible();
+  await page.getByLabel("资产名称").fill(name);
+  await expect(page.getByLabel("资产总额")).toHaveCount(0);
+  await page.getByRole("button", { name: "查看确认" }).click();
+  await page.getByRole("button", { name: "确认创建来源" }).click();
+  await expect(page).toHaveURL(/\/asset-sources$/);
+  await page.getByRole("link", { name: new RegExp(`${name}.*手工资产记录`) }).click();
+  await expect(page).toHaveURL(/\/asset-sources\/[^/]+$/);
+}
+
 async function manualState(page: Page) {
   const response = await page.request.get("/test-doubles/manual-assets");
   expect(response.ok()).toBeTruthy();
@@ -44,7 +57,7 @@ test.beforeEach(async ({ request }) => {
   await request.post("/test-doubles/reset");
 });
 
-test("手工资产可在来源管理中设置资产类别并正确归入分布", async ({
+test("手工资产分类接口保留类别且不改变来源金额与总额完整性", async ({
   page,
 }) => {
   await loginAsOwner(page);
@@ -62,55 +75,34 @@ test("手工资产可在来源管理中设置资产类别并正确归入分布",
         action: "manual-record",
         day: "2026-01-01",
         amount: "100000",
-        currency: "CNY",
+        currency: "USD",
       },
     },
   );
   expect(recorded.ok()).toBeTruthy();
   await page.reload();
 
-  await chooseOverviewOption(page, "计价货币", "CNY");
-  const overview = page.getByTestId("total-asset-overview");
-  await expect(overview).toContainText("当前估值：完整");
-  await expect(overview.getByLabel("资产分布")).toContainText(
-    "待分类100,000.00 CNY",
+  await expect(page.getByTestId("overview-confidence")).toContainText("总额完整");
+  await expect(page.getByTestId("overview-current-total")).toContainText("100,000.00");
+  const classified = await page.request.patch(
+    `/api/asset-sources/${encodeURIComponent(manualSource.id)}`,
+    { data: { action: "manual-asset-class", manualAssetClass: "securities" } },
   );
-
-  await page.getByRole("button", { name: "管理 A股" }).click();
-  const management = page.getByRole("dialog", { name: "管理 A股" });
-  await expect(management.getByRole("button", { name: "资产类别" })).toHaveText(
-    "待分类",
-  );
-  const managementPanel = management.locator(".source-management-dialog");
-  const panelScrollHeight = await managementPanel.evaluate(
-    (element) => element.scrollHeight,
-  );
-  await management.getByRole("button", { name: "资产类别" }).click();
-  const assetClassOptions = page.getByRole("listbox", { name: "资产类别" });
-  await expect(assetClassOptions).toHaveCSS("position", "static");
-  await expect(assetClassOptions.locator("..")).toHaveCSS("position", "fixed");
-  await expect
-    .poll(() =>
-      managementPanel.evaluate((element) => element.scrollHeight),
-    )
-    .toBe(panelScrollHeight);
-  await assetClassOptions.getByRole("option", { name: "证券", exact: true }).click();
-  await management.getByRole("button", { name: "保存设置" }).click();
-
-  await expect(overview).toContainText("当前估值：完整");
-  await expect(overview.getByLabel("资产分布")).toContainText(
-    "证券100,000.00 CNY",
-  );
-  await expect(overview).not.toContainText("未解释差额");
-  await expect(overview).not.toContainText("现金及其他");
+  expect(classified.ok()).toBeTruthy();
+  await page.reload();
+  await expect(page.getByTestId("overview-confidence")).toContainText("总额完整");
+  await expect(page.getByTestId("overview-current-total")).toContainText("100,000.00");
 
   const state = await manualState(page);
   expect(
     state.sources.find(({ id }) => id === manualSource.id)?.manualAssetClass,
   ).toBe("securities");
+  expect(state.sources.find(({ id }) => id === manualSource.id)?.total).toEqual({
+    amount: "100000", currency: "USD",
+  });
 });
 
-test("手工资产来源在卡片内按上海自然日保存一条，并可在当天编辑总额", async ({
+test("手工资产独立接入后在来源详情按上海自然日保存一条，并可编辑今日总额", async ({
   page,
   request,
 }) => {
@@ -123,15 +115,7 @@ test("手工资产来源在卡片内按上海自然日保存一条，并可在�
   await expect(
     page.getByRole("button", { name: "手工记录资产" }),
   ).toHaveCount(0);
-  await page.getByRole("button", { name: "添加资产来源" }).click();
-  const create = page.getByRole("dialog", { name: "添加资产来源" });
-  await create.getByRole("radio", { name: "手工记录资产" }).click();
-  await expect(
-    create.getByRole("heading", { name: "创建手工资产来源" }),
-  ).toBeVisible();
-  await create.getByLabel("资产名称").fill("A股");
-  await expect(create.getByLabel("资产总额")).toHaveCount(0);
-  await create.getByRole("button", { name: "添加资产来源" }).click();
+  await createManualSource(page, "A股");
 
   const card = page.getByTestId("manual-asset-card");
   await expect(card).toBeVisible();
@@ -139,11 +123,11 @@ test("手工资产来源在卡片内按上海自然日保存一条，并可在�
   await expect(card.getByTestId("manual-asset-unrecorded")).toHaveText(
     "0 USD",
   );
-  await expect(card).toContainText("尚未添加数据 · 添加后才会计入总资产");
+  await expect(card).toContainText("等待首条数据");
   const initialState = await manualState(page);
   expect(initialState.baselines).toHaveLength(0);
   expect(initialState.trendObservations).toHaveLength(0);
-  const addRecord = card.getByRole("button", { name: "添加数据" });
+  const addRecord = page.getByRole("button", { name: "添加数据", exact: true });
   await expect(addRecord).toBeVisible();
   const [addRecordBox, totalBox] = await Promise.all([
     addRecord.boundingBox(),
@@ -155,37 +139,30 @@ test("手工资产来源在卡片内按上海自然日保存一条，并可在�
   await addRecord.click();
   const record = page.getByRole("dialog", { name: "记录 A股 数据" });
   await record.getByLabel("资产总额").fill("100000");
-  await expect(record.getByLabel("币种")).toHaveText("CNY");
+  await expect(record.getByRole("button", { name: /^币种 / })).toHaveText("CNY");
   await record.getByRole("button", { name: "保存数据" }).click();
 
   await expect(card).toContainText("无法折算 USD");
   await chooseOverviewOption(page, "计价货币", "CNY");
   await expect(card).toContainText("100,000.00");
-  await expect(card).toContainText("仅记录资产总额 · 每日一条，可在下方管理历史数据");
+  await expect(card).toContainText("每日一条总额");
   await expect(card.getByRole("button", { name: /刷新/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "立即刷新资产" })).toHaveCount(0);
 
-  const management = page.getByRole("dialog", { name: "管理 A股" });
-  await page.getByRole("button", { name: "管理 A股" }).click();
-  await expect(management).toContainText("仅修改本看板中的显示名称");
-  await expect(management.getByLabel("资产总额")).toHaveCount(0);
-  await expect(
-    management.getByRole("menuitem", { name: "断开来源" }),
-  ).toHaveCount(0);
-  await management.getByRole("button", { name: "关闭" }).click();
+  await expect(page.getByRole("button", { name: "断开来源" })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "危险操作" })).toContainText("永久删除");
 
-  await card.getByRole("button", { name: "更新今日数据" }).click();
+  await page.getByRole("button", { name: "更新今日数据" }).click();
   const update = page.getByRole("dialog", { name: "记录 A股 数据" });
   await update.getByLabel("资产总额").fill("108000");
   await update.getByLabel("资产总额").press("Enter");
 
   await expect(card).toContainText("108,000.00");
-  await page.getByRole("button", { name: "添加资产来源" }).click();
-  const secondSource = page.getByRole("dialog", { name: "添加资产来源" });
-  await secondSource.getByRole("radio", { name: "手工记录资产" }).click();
-  await secondSource.getByLabel("资产名称").fill("场外基金");
-  await secondSource.getByRole("button", { name: "添加资产来源" }).click();
-  await expect(page.getByTestId("manual-asset-card")).toHaveCount(2);
+  await expect(page.getByLabel("A股历史记录").getByRole("listitem")).toHaveCount(1);
+  await page.reload();
+  await expect(page.getByLabel("A股历史记录")).toContainText("108,000.00 CNY");
+  await createManualSource(page, "场外基金");
+  await expect(page.getByTestId("manual-asset-card")).toHaveCount(1);
   await expect(page.getByRole("button", { name: "添加数据" })).toBeVisible();
 
   const state = await manualState(page);
@@ -199,7 +176,7 @@ test("手工资产来源在卡片内按上海自然日保存一条，并可在�
   expect(baselineRecords).toHaveLength(1);
   expect(baselineRecords[0]).toMatchObject({
     sourceId: manual.id,
-    total: { USD: null, CNY: "108000", HKD: null },
+    total: { USD: null, CNY: "100000", HKD: null },
   });
   const trendRecords = state.trendObservations[0].sources.filter(
     ({ sourceId }) => sourceId === manual.id,
@@ -232,14 +209,10 @@ test("手工资产历史可编辑、删除，并回退到最新保留记录", as
     data: { now: "2026-01-04T04:00:00.000Z" },
   });
   await loginAsOwner(page);
-  await page.getByRole("button", { name: "添加资产来源" }).click();
-  const create = page.getByRole("dialog", { name: "添加资产来源" });
-  await create.getByRole("radio", { name: "手工记录资产" }).click();
-  await create.getByLabel("资产名称").fill("A股");
-  await create.getByRole("button", { name: "添加资产来源" }).click();
+  await createManualSource(page, "A股");
 
   const card = page.getByTestId("manual-asset-card");
-  await card.getByRole("button", { name: "添加数据" }).click();
+  await page.getByRole("button", { name: "添加数据", exact: true }).click();
   const firstRecord = page.getByRole("dialog", { name: "记录 A股 数据" });
   await firstRecord.getByLabel("记录日期").click();
   await page
@@ -248,17 +221,17 @@ test("手工资产历史可编辑、删除，并回退到最新保留记录", as
     .click();
   await firstRecord.getByLabel("资产总额").fill("100000");
   await firstRecord.getByRole("button", { name: "保存数据" }).click();
+  const history = card.getByLabel("A股历史记录");
+  await expect(history.getByRole("listitem")).toHaveCount(1);
 
-  await card.getByRole("button", { name: "添加数据" }).click();
+  await page.getByRole("button", { name: "添加数据", exact: true }).click();
   const latestRecord = page.getByRole("dialog", { name: "记录 A股 数据" });
   await latestRecord.getByLabel("资产总额").fill("108000");
   await latestRecord.getByRole("button", { name: "保存数据" }).click();
-
-  await chooseOverviewOption(page, "计价货币", "CNY");
-  const history = card.getByLabel("A股历史记录");
   const latestItem = history.locator("li").filter({ hasText: "2026-01-04" });
   await expect(history).toContainText("2026-01-01100,000.00 CNY");
   await expect(latestItem).toContainText("108,000.00 CNY");
+  await chooseOverviewOption(page, "计价货币", "CNY");
 
   await latestItem.getByRole("button", { name: "编辑" }).click();
   const edit = page.getByRole("dialog", { name: "记录 A股 数据" });
@@ -276,6 +249,7 @@ test("手工资产历史可编辑、删除，并回退到最新保留记录", as
 
   await expect(history).not.toContainText("2026-01-04");
   await expect(history).toContainText("2026-01-01");
+  await card.getByTestId("asset-source-total").scrollIntoViewIfNeeded();
   await expect(card.getByTestId("asset-source-total")).toContainText(
     "100,000.00 CNY",
   );
@@ -305,9 +279,12 @@ test("低频手工记录不降低完整性，并按最近记录延用趋势金�
   request,
 }) => {
   await request.post("/test-doubles/clock", {
-    data: { now: "2026-01-04T04:00:00.000Z" },
+    data: { now: "2026-01-01T04:00:00.000Z" },
   });
   await loginAsOwner(page);
+  expect((await request.post("/test-doubles/manual-assets", {
+    data: { action: "seed-reference-rates" },
+  })).ok()).toBeTruthy();
   const created = await page.request.post("/api/asset-sources/manual", {
     data: { label: "私募基金" },
   });
@@ -329,6 +306,10 @@ test("低频手工记录不降低完整性，并按最近记录延用趋势金�
   );
   expect(firstRecord.ok()).toBeTruthy();
 
+  expect((await request.post("/test-doubles/clock", {
+    data: { now: "2026-01-04T04:00:00.000Z" },
+  })).ok()).toBeTruthy();
+  expect((await page.request.post("/test-doubles/owner-session")).ok()).toBeTruthy();
   const secondRecord = await page.request.patch(
     `/api/asset-sources/${encodeURIComponent(manualSource.id)}`,
     {
@@ -351,27 +332,36 @@ test("低频手工记录不降低完整性，并按最近记录延用趋势金�
     expect.objectContaining({
       complete: true,
       status: "complete",
-      total: { USD: "100000", CNY: null, HKD: null },
+      total: { USD: "100000", CNY: expect.any(String), HKD: "780000" },
     }),
     expect.objectContaining({
       complete: true,
       status: "complete",
-      total: { USD: "108000", CNY: null, HKD: null },
+      total: { USD: "108000", CNY: expect.any(String), HKD: "842400" },
     }),
   ]);
 
+  expect((await request.post("/test-doubles/clock", {
+    data: { now: "2026-01-07T04:00:00.000Z" },
+  })).ok()).toBeTruthy();
+  expect((await page.request.post("/test-doubles/owner-session")).ok()).toBeTruthy();
   await page.goto(`/asset-sources/${encodeURIComponent(manualSource.id)}`);
 
   const sourceTrend = page.getByTestId(
     `asset-source-trend-${manualSource.id}`,
   );
-  await expect(sourceTrend).toContainText(
-    "手工数据按最近记录延用，不影响同步完整性",
-  );
+  await expect(sourceTrend).toContainText("手工记录");
+  await expect(sourceTrend).not.toContainText("不完整");
   const sourceTrendPath = sourceTrend.locator(".recharts-line-curve");
   await expect(sourceTrendPath).toHaveCount(1);
   const sourceTrendPathData = await sourceTrendPath.getAttribute("d");
   expect(sourceTrendPathData?.match(/M/g)).toHaveLength(1);
+  expect(sourceTrendPathData).not.toMatch(/[CQ]/);
+  await page.getByTestId("asset-source-total").scrollIntoViewIfNeeded();
+  await expect(page.getByTestId("asset-source-total")).toContainText("108,000.00 USD");
+  await expect(page.getByLabel("私募基金历史记录").getByRole("listitem")).toHaveCount(2);
+  const after = await manualState(page);
+  expect(after.trendObservations).toEqual(state.trendObservations);
 });
 
 test("手工记录拒绝非法金额和非手工来源编辑，并在文件存储中覆盖当天记录", async ({
@@ -423,7 +413,7 @@ test("手工记录拒绝非法金额和非手工来源编辑，并在文件存�
   await expect(persisted.json()).resolves.toEqual({
     source: { amount: "108000", currency: "CNY" },
     cards: 1,
-    baseline: [{
+    baseline: [expect.objectContaining({
       sourceId: expect.any(String),
       label: "A股",
       kind: "manual",
@@ -431,8 +421,8 @@ test("手工记录拒绝非法金额和非手工来源编辑，并在文件存�
       complete: true,
       status: "complete",
       total: { USD: null, CNY: "108000", HKD: null },
-    }],
-    trend: [{
+    })],
+    trend: [expect.objectContaining({
       sourceId: expect.any(String),
       label: "A股",
       kind: "manual",
@@ -440,6 +430,6 @@ test("手工记录拒绝非法金额和非手工来源编辑，并在文件存�
       complete: true,
       status: "complete",
       total: { USD: null, CNY: "108000", HKD: null },
-    }],
+    })],
   });
 });

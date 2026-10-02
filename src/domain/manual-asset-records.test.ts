@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { ManualAssetRecord } from "@/server/ports";
+import type { AssetSourceSummary, ManualAssetRecord } from "@/server/ports";
 
 import { defaultManualAssetRecordCurrency } from "./manual-asset-records";
+import { buildTotalValuation } from "./valuation";
 
 function record(day: string, currency: ManualAssetRecord["currency"]): ManualAssetRecord {
   return {
@@ -59,4 +60,27 @@ test("选择默认币种不修改原记录或排列顺序", () => {
   const before = structuredClone(records);
   assert.equal(defaultManualAssetRecordCurrency(records), "HKD");
   assert.deepEqual(records, before);
+});
+
+test("待分类手工来源改为证券只调整分布，不改变原币种总额或估值完整性", () => {
+  const observedAt = "2026-01-01T00:00:00.000Z";
+  const source: AssetSourceSummary = {
+    id: "manual", kind: "manual", label: "手工来源", accountId: "manual:fixture",
+    permissions: [], credentialReference: null, hasManualRecord: true,
+    snapshot: {
+      total: { amount: "100000", currency: "CNY" }, holdings: [],
+      exchangeRates: [], syncedAt: observedAt,
+    },
+    sync: { status: "current", lastSuccessfulAt: observedAt, lastAttemptAt: observedAt, error: null },
+  };
+  const unclassified = buildTotalValuation([source], "CNY", "class");
+  const classified = buildTotalValuation([
+    { ...source, manualAssetClass: "securities" },
+  ], "CNY", "class");
+
+  assert.equal(unclassified.incomplete, false);
+  assert.equal(classified.amount, unclassified.amount);
+  assert.deepEqual(unclassified.groups, [{ key: "unclassified", label: "待分类", amount: "100000.00" }]);
+  assert.deepEqual(classified.groups, [{ key: "securities", label: "证券", amount: "100000.00" }]);
+  assert.deepEqual({ ...classified, groups: [] }, { ...unclassified, groups: [] });
 });

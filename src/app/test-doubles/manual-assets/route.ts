@@ -79,6 +79,15 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as {
     action?: unknown;
   } | null;
+  if (body?.action === "seed-reference-rates") {
+    const services = getTestServices();
+    const source = longbridgeRateSource(services.clock.now().toISOString());
+    await services.assetSources.replaceAll([
+      ...(await services.assetSources.list()).filter((item) => item.id !== source.id),
+      source,
+    ]);
+    return Response.json({ sourceId: source.id });
+  }
   if (body?.action === "file-persistence") {
     const root = await mkdtemp(path.join(tmpdir(), "pad-manual-assets-"));
     try {
