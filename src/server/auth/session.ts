@@ -23,6 +23,7 @@ interface FailureWindow {
 
 type SessionSlot = {
   sessions: Map<string, OwnerSession>;
+  invalidationListeners?: Map<string, Set<() => void>>;
   recoveryTotpFailures: FailureWindow | null;
 };
 
@@ -55,7 +56,7 @@ export function lookupSession(token: string, now: Date): OwnerSession | null {
     now.getTime() - session.lastActivityAt.getTime() >=
     SESSION_IDLE_TIMEOUT_MS
   ) {
-    slot().sessions.delete(token);
+    destroySession(token);
     return null;
   }
   return session;
@@ -69,7 +70,28 @@ export function touchSession(token: string, now: Date): boolean {
 }
 
 export function destroySession(token: string): void {
-  slot().sessions.delete(token);
+  const current = slot();
+  current.sessions.delete(token);
+  const listeners = current.invalidationListeners?.get(token);
+  current.invalidationListeners?.delete(token);
+  for (const listener of listeners ?? []) listener();
+}
+
+/** Long-lived responses must stop as soon as their session is revoked. */
+export function onSessionInvalidated(token: string, listener: () => void): () => void {
+  const current = slot();
+  if (!current.sessions.has(token)) {
+    listener();
+    return () => undefined;
+  }
+  const all = current.invalidationListeners ??= new Map();
+  const listeners = all.get(token) ?? new Set();
+  listeners.add(listener);
+  all.set(token, listeners);
+  return () => {
+    listeners.delete(listener);
+    if (listeners.size === 0) all.delete(token);
+  };
 }
 
 function canAttemptWithinWindow(
@@ -122,6 +144,6 @@ export function completeRecoveryTotpAttempt(
 /** 测试重置时清空全部会话，保证每条浏览器测试从锁定状态开始。 */
 export function clearAllSessions(): void {
   clearChallenges();
-  slot().sessions.clear();
+  for (const token of slot().sessions.keys()) destroySession(token);
   slot().recoveryTotpFailures = null;
 }
