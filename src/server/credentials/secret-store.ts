@@ -1,6 +1,9 @@
 import { createCipheriv, createDecipheriv, randomBytes, randomUUID, } from "node:crypto";
+import { chmodSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 
-import { atomicWritePrivateFile, readPrivateFile } from "@/server/local-data-permissions";
+import { atomicWritePrivateFile, ensurePrivateDirectory, readPrivateFile } from "@/server/local-data-permissions";
 import { isMissingFile } from "@/server/persistence/file-errors";
 import type { SecretStore } from "@/server/ports";
 
@@ -8,6 +11,21 @@ import type { SecretStore } from "@/server/ports";
 interface StoredSecret {
   sealed: string;
   state: "pending" | "committed";
+  pendingOwnerPid?: number;
+}
+
+const { DatabaseSync } = process.getBuiltinModule("node:sqlite");
+
+function processIsAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ESRCH") return false;
+    // Lack of permission, PID reuse, or an unknown probe result must never
+    // authorize deleting another process's unfinished credential transaction.
+    return true;
+  }
 }
 
 export interface TransactionalSecretStore extends SecretStore {
@@ -73,13 +91,44 @@ export class FileEncryptedSecretStore implements SecretStore {
     await atomicWritePrivateFile(this.filePath, JSON.stringify(values));
   }
 
-  private mutate<T>(operation: (values: Record<string, StoredSecret>) => T): Promise<T> {
-    const run = this.queue.then(async () => {
+  /** SQLite only supplies an OS-backed mutex; it never contains credentials.
+   * A crashed owner releases the lock automatically. Retry asynchronously so a
+   * second instance cannot block the event loop of the instance holding it. */
+  private async withFileLock<T>(operation: () => Promise<T>): Promise<T> {
+    await ensurePrivateDirectory(path.dirname(this.filePath));
+    const lockPath = `${this.filePath}.lock.sqlite`;
+    // Never open/close an extra descriptor for an existing mutex database:
+    // POSIX can drop this process's SQLite advisory locks on that close.
+    try { writeFileSync(lockPath, "", { flag: "wx", mode: 0o600 }); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
+    chmodSync(lockPath, 0o600);
+    const database = new DatabaseSync(lockPath);
+    try {
+      database.exec("PRAGMA busy_timeout = 0");
+      const deadline = Date.now() + 10_000;
+      while (true) {
+        try {
+          database.exec("BEGIN IMMEDIATE");
+          break;
+        } catch (error) {
+          const code = (error as { errcode?: number }).errcode;
+          if (code === undefined || ![5, 6].includes(code & 0xff) || Date.now() >= deadline) throw error;
+          await delay(10);
+        }
+      }
+      try { return await operation(); }
+      finally { database.exec("ROLLBACK"); }
+    } finally { database.close(); }
+  }
+
+  private mutate<T>(operation: (values: Record<string, StoredSecret>) => T | Promise<T>): Promise<T> {
+    const run = this.queue.then(() => this.withFileLock(async () => {
       const values = await this.load();
-      const result = operation(values);
-      await this.write(values);
+      const previous = JSON.stringify(values);
+      const result = await operation(values);
+      if (JSON.stringify(values) !== previous) await this.write(values);
       return result;
-    });
+    }));
     this.queue = run.then(() => undefined, () => undefined);
     return run;
   }
@@ -87,7 +136,7 @@ export class FileEncryptedSecretStore implements SecretStore {
   stage(value: string): Promise<string> {
     return this.mutate((values) => {
       const reference = randomUUID();
-      values[reference] = { sealed: this.seal(value), state: "pending" };
+      values[reference] = { sealed: this.seal(value), state: "pending", pendingOwnerPid: process.pid };
       return reference;
     });
   }
@@ -97,6 +146,7 @@ export class FileEncryptedSecretStore implements SecretStore {
       const value = values[reference];
       if (!value) throw new Error("待提交凭证不存在");
       value.state = "committed";
+      delete value.pendingOwnerPid;
     });
   }
 
@@ -128,11 +178,16 @@ export class FileEncryptedSecretStore implements SecretStore {
     });
   }
 
-  recover(validReferences: Set<string>): Promise<void> {
-    return this.mutate((values) => {
+  recover(validReferences: Set<string> | (() => Promise<Set<string>>)): Promise<void> {
+    return this.mutate(async (values) => {
+      const references = typeof validReferences === "function" ? await validReferences() : validReferences;
       for (const [reference, value] of Object.entries(values)) {
         if (value.state !== "pending") continue;
-        if (validReferences.has(reference)) value.state = "committed";
+        if (value.pendingOwnerPid !== undefined && processIsAlive(value.pendingOwnerPid)) continue;
+        if (references.has(reference)) {
+          value.state = "committed";
+          delete value.pendingOwnerPid;
+        }
         else delete values[reference];
       }
     });

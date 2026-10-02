@@ -41,17 +41,15 @@ export function createProductionServices(
   const secrets = new FileEncryptedSecretStore(
     path.join(dataDir, "secrets.json"),
   );
-  const secretRecovery = database.listSources().then(async (sources) => {
-    await secrets.recover(
-      new Set(
-        sources.flatMap((source) =>
-          source.credentialReference === null
-            ? []
-            : [source.credentialReference],
-        ),
+  const secretRecovery = secrets.recover(async () =>
+    new Set(
+      (await database.listSources()).flatMap((source) =>
+        source.credentialReference === null
+          ? []
+          : [source.credentialReference],
       ),
-    );
-  });
+    ),
+  );
   void secretRecovery.catch(() => undefined);
   const assetSources = new DatabaseAssetSources(database);
   const manualAssetRecords = new DatabaseManualAssetRecords(database, clock);

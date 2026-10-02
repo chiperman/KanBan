@@ -271,10 +271,21 @@ export async function POST(request: Request) {
 
     const recoveryPath = path.join(root, "recovery", "secrets.json");
     const recoveryStore = new FileEncryptedSecretStore(recoveryPath);
+    const simulateLegacyPending = async () => {
+      const values = JSON.parse(await readFile(recoveryPath, "utf8"));
+      for (const value of Object.values(values) as { pendingOwnerPid?: number }[]) {
+        delete value.pendingOwnerPid;
+      }
+      await writeFile(recoveryPath, JSON.stringify(values), { mode: 0o600 });
+    };
+    // Legacy crash fixtures have no live process owner. Active staged writes
+    // are intentionally preserved by recovery and covered by subprocess tests.
     await recoveryStore.stage("orphan");
+    await simulateLegacyPending();
     await recoveryStore.recover(new Set());
     const orphanRaw = await readFile(recoveryPath, "utf8");
     const referenced = await recoveryStore.stage("referenced");
+    await simulateLegacyPending();
     await recoveryStore.recover(new Set([referenced]));
 
     const rotationDir = path.join(root, "rotation");
