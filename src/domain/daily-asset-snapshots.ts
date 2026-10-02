@@ -250,26 +250,23 @@ export function mergeDailyTrendObservation(
   next: DailyAssetTrendObservation,
   preservePreviousOnFailedRefresh: boolean,
 ): DailyAssetTrendObservation {
-  const bySourceId = new Map(
+  const previousBySourceId = new Map(
     previous.sources.map((source) => [source.sourceId, source]),
   );
-  for (const source of next.sources) {
-    const previousSource = bySourceId.get(source.sourceId);
-    bySourceId.set(
-      source.sourceId,
-      preservePreviousOnFailedRefresh && previousSource !== undefined
-        ? {
-            ...source,
-            capturedAt: previousSource.capturedAt,
-            total: previousSource.total,
-            assetClassTotals: previousSource.assetClassTotals,
-          }
-        : previousSource?.complete && !source.complete
-          ? previousSource
-        : source,
-    );
-  }
-  const sources = [...bySourceId.values()];
+  // 全量批次声明当前参与观测的来源集合；手工增量另由记录接口合并。
+  const sources = next.sources.map((source) => {
+    const previousSource = previousBySourceId.get(source.sourceId);
+    return preservePreviousOnFailedRefresh && previousSource !== undefined
+      ? {
+          ...source,
+          capturedAt: previousSource.capturedAt,
+          total: previousSource.total,
+          assetClassTotals: previousSource.assetClassTotals,
+        }
+      : previousSource?.complete && !source.complete
+        ? previousSource
+        : source;
+  });
   const sum = (currency: "USD" | "CNY" | "HKD") => {
     const values = sources.flatMap((source) => source.total[currency] ?? []);
     return values.length > 0 ? decimalAdd(...values) : null;

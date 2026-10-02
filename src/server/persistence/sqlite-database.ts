@@ -526,6 +526,9 @@ export class SqliteDashboardDatabase
         snapshot.total.HKD ?? null,
         JSON.stringify(snapshot.exchangeRates ?? []),
       );
+    this.database
+      .prepare("DELETE FROM daily_asset_source_trend_observations WHERE day = ?")
+      .run(snapshot.day);
     const statement = this.database.prepare(`
       INSERT INTO daily_asset_source_trend_observations (
         day, source_id, label, kind, captured_at, complete, status, total_usd, total_cny,
