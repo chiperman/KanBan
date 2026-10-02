@@ -17,6 +17,7 @@ import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
 import { VibeIcon } from "@/ui/vibe/vibe-icon";
 import { VibeTooltip } from "@/ui/vibe/vibe-tooltip";
 import {
+  AssetRefreshAvailabilityProvider,
   type AssetRefreshRegistration,
   useAssetRefresh,
 } from "@/ui/asset-refresh-provider";
@@ -344,7 +345,11 @@ export function WorkbenchShell({
           refreshEnabled={refreshEnabled}
         />
       </aside>
-      <div className="workbench-shell-content">{children}</div>
+      <div className="workbench-shell-content">
+        <AssetRefreshAvailabilityProvider sources={refreshRegistration?.sources}>
+          {children}
+        </AssetRefreshAvailabilityProvider>
+      </div>
       <nav
         aria-label="工作台主导航"
         className="workbench-navigation workbench-mobile-navigation"

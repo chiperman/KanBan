@@ -13,6 +13,15 @@ export interface RefreshableAssetSource {
   credentialReference?: string | null;
 }
 
+export function isRefreshableAssetSource(source: RefreshableAssetSource): boolean {
+  return source.kind !== "manual" &&
+    source.lifecycle !== "disconnected" &&
+    (source.credentialAvailable === true ||
+      (source.credentialAvailable === undefined &&
+        source.credentialReference !== null &&
+        source.credentialReference !== undefined));
+}
+
 export interface AssetRefreshPlanInput {
   now: Date;
   attemptedAt: string | null;
@@ -120,14 +129,7 @@ export class AssetRefreshCoordinator {
   constructor(private readonly options: AssetRefreshCoordinatorOptions) {}
 
   get canRefresh(): boolean {
-    return [...this.sources.values()].some((source) =>
-      source.kind !== "manual" &&
-      source.lifecycle !== "disconnected" &&
-      (source.credentialAvailable === true ||
-        (source.credentialAvailable === undefined &&
-          source.credentialReference !== null &&
-          source.credentialReference !== undefined)),
-    );
+    return [...this.sources.values()].some(isRefreshableAssetSource);
   }
 
   globalStatus(): AssetRefreshStatus {

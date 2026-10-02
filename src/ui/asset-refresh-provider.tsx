@@ -16,6 +16,7 @@ import type { AssetRefreshIntent, AssetRefreshReport } from "@/server/ports";
 import { OWNER_LOCK_EVENT } from "@/shared/session-policy";
 import {
   AssetRefreshCoordinator,
+  isRefreshableAssetSource,
   type AssetRefreshRegistration as CoordinatorRegistration,
   type AssetRefreshStatus,
   type RefreshableAssetSource,
@@ -177,6 +178,27 @@ export function useAssetRefresh(): AssetRefreshValue {
   const value = useContext(AssetRefreshContext);
   if (value === null) throw new Error("AssetRefreshProvider 尚未挂载");
   return value;
+}
+
+/** 首屏直接使用服务端来源列表决定入口是否显示，运行状态仍由共享协调器维护。 */
+export function AssetRefreshAvailabilityProvider({
+  children,
+  sources,
+}: {
+  children: ReactNode;
+  sources?: RefreshableAssetSource[];
+}) {
+  const refresh = useAssetRefresh();
+  const value = useMemo(() => sources === undefined ? refresh : ({
+    ...refresh,
+    canRefresh: sources.some(isRefreshableAssetSource),
+  }), [refresh, sources]);
+
+  return (
+    <AssetRefreshContext.Provider value={value}>
+      {children}
+    </AssetRefreshContext.Provider>
+  );
 }
 
 export function AssetRefreshReset() {

@@ -66,6 +66,30 @@ test.beforeEach(async ({ request }) => {
   });
 });
 
+test("三个核心页面首屏即显示刷新资产按钮，刷新页面不延迟插入", async ({
+  browser,
+  page,
+}) => {
+  await loginAsOwner(page);
+  const noScriptContext = await browser.newContext({
+    baseURL: test.info().project.use.baseURL,
+    javaScriptEnabled: false,
+    storageState: await page.context().storageState(),
+  });
+  try {
+    const noScriptPage = await noScriptContext.newPage();
+    for (const pathname of ["/", "/assets", "/performance"]) {
+      await noScriptPage.goto(pathname);
+      const refresh = noScriptPage.getByRole("button", { name: "立即刷新资产" });
+      await expect(refresh).toBeVisible();
+      await noScriptPage.reload();
+      await expect(refresh).toBeVisible();
+    }
+  } finally {
+    await noScriptContext.close();
+  }
+});
+
 test("三个核心页面按钮和命令菜单统一提交 manual-global", async ({
   page,
   request,
@@ -94,6 +118,7 @@ test("三个核心页面按钮和命令菜单统一提交 manual-global", async 
       mode: "all",
       intent: { reason: "manual-global" },
     });
+    await expect(page.getByTestId("asset-refresh-status")).toHaveText("刷新完成");
 
     await page.getByRole("button", { name: "打开快捷命令" }).click();
     await page.getByRole("button", { name: "立即刷新资产" }).last().click();
