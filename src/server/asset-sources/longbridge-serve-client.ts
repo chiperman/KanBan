@@ -134,6 +134,7 @@ export class LongbridgeServeClient {
     timer: ReturnType<typeof setTimeout>;
   }>();
   private readonly listeners = new Set<QuoteListener>();
+  private readonly disconnectListeners = new Set<(error: unknown) => void>();
   private startPromise: Promise<void> | null = null;
   private readonly command: string;
   private readonly requestTimeoutMs: number;
@@ -154,11 +155,17 @@ export class LongbridgeServeClient {
     return () => this.listeners.delete(listener);
   }
 
+  onDisconnect(listener: (error: unknown) => void): () => void {
+    this.disconnectListeners.add(listener);
+    return () => this.disconnectListeners.delete(listener);
+  }
+
   async call(method: string, params: Record<string, unknown> = {}): Promise<unknown> {
     if (WRITE_METHODS.has(method)) {
       throw new Error("长桥 serve 只读客户端禁止调用：" + method);
     }
     await this.start();
+    if (!this.process) throw new Error("长桥 serve 进程已关闭");
     const id = this.nextId++;
     const request = JSON.stringify({ jsonrpc: "2.0", id, method, params });
     return new Promise((resolve, reject) => {
@@ -206,7 +213,14 @@ export class LongbridgeServeClient {
   private async start(): Promise<void> {
     if (this.startPromise) return this.startPromise;
     if (this.process) return;
-    this.startPromise = new Promise((resolve, reject) => {
+    const starting = this.initialize();
+    this.startPromise = starting;
+    try { await starting; }
+    finally { if (this.startPromise === starting) this.startPromise = null; }
+  }
+
+  private initialize(): Promise<void> {
+    return new Promise((resolve, reject) => {
       let child: ChildProcessWithoutNullStreams;
       try {
         child = this.spawnProcess(this.command);
@@ -217,35 +231,36 @@ export class LongbridgeServeClient {
       this.process = child;
       const reader = createInterface({ input: child.stdout });
       this.lineReader = reader;
-      reader.on("line", (line) => this.handleLine(line));
-      child.once("error", (error) => {
-        this.failPending(error);
-        if (this.process === child) this.process = null;
-        if (this.startPromise) {
-          this.startPromise = null;
-          reject(error);
-        }
+      reader.on("line", (line) => {
+        if (this.process === child) this.handleLine(line);
       });
-      child.once("exit", (code, signal) => {
-        const error = new Error("长桥 serve 进程退出（" + (signal ?? code ?? "unknown") + "）");
+      const disconnected = (error: unknown) => {
+        // Old child events may arrive after an intentional close/restart.
+        if (this.process !== child) return;
+        this.process = null;
+        reader.close();
+        if (this.lineReader === reader) this.lineReader = null;
         this.failPending(error);
-        if (this.process === child) this.process = null;
-        this.lineReader?.close();
-        this.lineReader = null;
+        reject(error);
+        if (!child.killed) child.kill();
+        for (const listener of this.disconnectListeners) listener(error);
+      };
+      child.once("error", disconnected);
+      child.stdin.on("error", disconnected);
+      child.once("exit", (code, signal) => {
+        disconnected(new Error("长桥 serve 进程退出（" + (signal ?? code ?? "unknown") + "）"));
       });
       void this.callInternal("initialize", {}).then(
         () => {
-          this.startPromise = null;
-          resolve();
+          if (this.process === child) resolve();
+          else reject(new Error("长桥 serve 进程已关闭"));
         },
         (error) => {
-          this.startPromise = null;
-          void this.close();
+          disconnected(error);
           reject(error);
         },
       );
     });
-    return this.startPromise;
   }
 
   private callInternal(method: string, params: Record<string, unknown>): Promise<unknown> {
@@ -316,9 +331,61 @@ export class LongbridgeServeQuoteHub {
   private readonly referenceAttempts = new Map<string, { period: string; at: number }>();
   private readonly referenceQueue = new Set<string>();
   private refreshingReferences = false;
+  private referenceTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconnectAttempt = 0;
+  private generation = 0;
 
   constructor(private readonly client = new LongbridgeServeClient()) {
     this.client.onQuote((quote) => this.receive(quote, true));
+    this.client.onDisconnect((error) => this.connectionFailed(error));
+  }
+
+  private activeSymbols(): Set<string> {
+    return new Set([...this.subscribers.values()].flatMap(subscriber => [...subscriber.symbols]));
+  }
+
+  private broadcast(status: LongbridgeServeStatus): void {
+    for (const subscriber of this.subscribers.values()) subscriber.statusListener?.(status);
+  }
+
+  private connectionFailed(error: unknown): void {
+    if (this.subscribers.size === 0 || this.reconnectTimer !== null) return;
+    this.generation++;
+    this.subscribePromise = null;
+    this.subscribedSymbols.clear();
+    if (this.referenceTimer !== null) clearTimeout(this.referenceTimer);
+    this.referenceTimer = null;
+    this.refreshingReferences = false;
+    this.referenceQueue.clear();
+    this.referenceAttempts.clear();
+    void this.client.close();
+    const code = classifyLongbridgeServeError(error).code;
+    this.broadcast({ state: "error", code });
+    // Missing CLI / expired authorization need an explicit user retry.
+    if (code !== "unavailable") return;
+    const delay = Math.min(1_000 * 2 ** this.reconnectAttempt++, 30_000);
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      if (this.subscribers.size > 0) void this.sync();
+    }, delay);
+    this.reconnectTimer.unref();
+  }
+
+  private stop(): void {
+    this.generation++;
+    this.subscribePromise = null;
+    if (this.reconnectTimer !== null) clearTimeout(this.reconnectTimer);
+    if (this.referenceTimer !== null) clearTimeout(this.referenceTimer);
+    this.reconnectTimer = null;
+    this.referenceTimer = null;
+    this.reconnectAttempt = 0;
+    this.refreshingReferences = false;
+    this.subscribedSymbols.clear();
+    this.referenceQueue.clear();
+    this.referenceAttempts.clear();
+    this.latest.clear();
+    void this.client.close();
   }
 
   private receive(quote: LongbridgeServeQuote, pushed = false): void {
@@ -346,26 +413,34 @@ export class LongbridgeServeQuoteHub {
         this.referenceQueue.add(quote.symbol);
         if (!this.refreshingReferences) {
           this.refreshingReferences = true;
-          setTimeout(() => void this.refreshReferences(), 100);
+          this.referenceTimer = setTimeout(() => {
+            this.referenceTimer = null;
+            void this.refreshReferences();
+          }, 100);
         }
       }
     }
   }
 
   private async refreshReferences(): Promise<void> {
+    const generation = this.generation;
     try {
       // Batch and serialize session changes across symbols; never query on every tick.
-      while (this.referenceQueue.size > 0) {
-        const symbols = [...this.referenceQueue];
+      while (this.referenceQueue.size > 0 && generation === this.generation) {
+        const active = this.activeSymbols();
+        const symbols = [...this.referenceQueue].filter(symbol => active.has(symbol));
         this.referenceQueue.clear();
+        if (symbols.length === 0) break;
         try {
           if (this.subscribePromise) await this.subscribePromise;
-          for (const quote of await this.client.quotes(symbols)) this.receive(quote);
+          if (generation !== this.generation) break;
+          const quotes = await this.client.quotes(symbols);
+          if (generation === this.generation) for (const quote of quotes) this.receive(quote);
         } catch {
           // Keep streaming prices; missing references remain unknown until a later tick retries.
         }
       }
-    } finally { this.refreshingReferences = false; }
+    } finally { if (generation === this.generation) this.refreshingReferences = false; }
   }
 
   subscribe(
@@ -387,38 +462,38 @@ export class LongbridgeServeQuoteHub {
       if (quote) listener(quote);
     }
     statusListener?.({ state: "connecting" });
-    void this.sync([...normalizedSymbols]).catch((error) => {
-      const status: LongbridgeServeStatus = {
-        state: "error",
-        code: classifyLongbridgeServeError(error).code,
-      };
-      for (const subscriber of this.subscribers.values()) {
-        subscriber.statusListener?.(status);
-      }
-    });
+    if (this.reconnectTimer === null) void this.sync();
     return {
-      close: () => this.subscribers.delete(id),
+      close: () => {
+        if (!this.subscribers.delete(id)) return;
+        if (this.subscribers.size === 0) this.stop();
+      },
     };
   }
 
-  private async sync(symbols: string[]): Promise<void> {
-    for (const symbol of symbols) this.subscribedSymbols.add(symbol);
+  private async sync(): Promise<void> {
     if (this.subscribePromise) return this.subscribePromise;
-    this.subscribePromise = (async () => {
-      while (this.subscribedSymbols.size > 0) {
-        const pending = [...this.subscribedSymbols];
+    const generation = this.generation;
+    this.broadcast({ state: "connecting" });
+    const syncing = (async () => {
+      while (this.subscribers.size > 0 && generation === this.generation) {
+        const pending = [...this.activeSymbols()].filter(symbol => !this.subscribedSymbols.has(symbol));
+        if (pending.length === 0) break;
         const quotes = await this.client.subscribe(pending);
+        if (generation !== this.generation) return;
+        for (const symbol of pending) this.subscribedSymbols.add(symbol);
         for (const quote of quotes) this.receive(quote);
-        for (const subscriber of this.subscribers.values()) {
-          subscriber.statusListener?.({ state: "ready" });
-        }
-        const stillPending = pending.some((symbol) => !this.subscribedSymbols.has(symbol));
-        if (!stillPending && pending.length === this.subscribedSymbols.size) break;
       }
-    })().finally(() => {
-      this.subscribePromise = null;
+      if (generation !== this.generation || this.subscribers.size === 0) return;
+      this.reconnectAttempt = 0;
+      this.broadcast({ state: "ready" });
+    })().catch((error) => {
+      if (generation === this.generation) this.connectionFailed(error);
+    }).finally(() => {
+      if (this.subscribePromise === syncing) this.subscribePromise = null;
     });
-    return this.subscribePromise;
+    this.subscribePromise = syncing;
+    return syncing;
   }
 }
 

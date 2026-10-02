@@ -224,3 +224,66 @@ test("时段切换合并补读昨收，慢快照不能覆盖新tick，切页复�
     next.close();
   } finally { subscription.close(); await client.close(); }
 });
+
+test("订阅进程退出后通知断线，退避重连并只恢复当前订阅", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const processes: FakeServeProcess[] = [];
+  const client = new LongbridgeServeClient({ spawnProcess: () => {
+    const child = new FakeServeProcess();
+    child.onRequest = request => response(child, request, request.method === "initialize" ? {} : []);
+    processes.push(child);
+    return child as never;
+  } });
+  const hub = new LongbridgeServeQuoteHub(client);
+  const statuses: string[] = [];
+  const received: LongbridgeServeQuote[] = [];
+  const removed = hub.subscribe(["OLD.US"], () => {});
+  const retained = hub.subscribe(["AAPL.US"], quote => received.push(quote), status => statuses.push(status.state));
+  try {
+    await new Promise<void>(resolve => setImmediate(resolve));
+    assert.equal(statuses.at(-1), "ready");
+    removed.close();
+    processes[0].emit("exit", 1, null);
+    assert.equal(statuses.at(-1), "error");
+    assert.equal(processes.length, 1);
+    t.mock.timers.tick(1_000);
+    await new Promise<void>(resolve => setImmediate(resolve));
+    assert.equal(processes.length, 2);
+    assert.deepEqual(processes[1].requests.find(request => request.method === "quote.subscribe")?.params, { symbols: ["AAPL.US"] });
+    assert.equal(statuses.at(-1), "ready");
+    // A late event from the old child cannot tear down the replacement.
+    processes[0].emit("error", new Error("old child error"));
+    processes[1].stdout.write(JSON.stringify({ method: "quote.updated", params: {
+      symbol: "AAPL.US", last_done: "200", prev_close: "190", timestamp: "2026-10-02T00:00:00Z",
+    } }) + "\n");
+    assert.equal(received.at(-1)?.last_done, "200");
+    assert.equal(statuses.at(-1), "ready");
+    processes[1].emit("exit", 1, null);
+    retained.close();
+    t.mock.timers.tick(30_000);
+    await new Promise<void>(resolve => setImmediate(resolve));
+    assert.equal(processes.length, 2, "取消全部订阅后不得后台重连");
+  } finally { removed.close(); retained.close(); await client.close(); }
+});
+
+test("最后一个订阅取消会关闭子进程且新订阅可重新启动", async () => {
+  const processes: FakeServeProcess[] = [];
+  const client = new LongbridgeServeClient({ spawnProcess: () => {
+    const child = new FakeServeProcess();
+    child.onRequest = request => response(child, request, request.method === "initialize" ? {} : []);
+    processes.push(child);
+    return child as never;
+  } });
+  const hub = new LongbridgeServeQuoteHub(client);
+  const first = hub.subscribe(["AAPL.US"], () => {});
+  let next: { close(): void } | undefined;
+  try {
+    await new Promise<void>(resolve => setImmediate(resolve));
+    first.close();
+    assert.equal(processes[0].killed, true);
+    next = hub.subscribe(["MSFT.US"], () => {});
+    await new Promise<void>(resolve => setImmediate(resolve));
+    assert.equal(processes.length, 2);
+    assert.deepEqual(processes[1].requests.find(request => request.method === "quote.subscribe")?.params, { symbols: ["MSFT.US"] });
+  } finally { first.close(); next?.close(); await client.close(); }
+});
