@@ -57,7 +57,9 @@ export function WorkbenchDisplayPreferencesProvider({
 }) {
   const persistenceEnabled = persist && !isDemoModeLocation();
   const [currency, setCurrentCurrency] = useState<ReportingCurrency>("USD");
-  const [showSensitiveInfo, setShowSensitiveInfo] = useState(true);
+  // SSR 与首次 hydration 都先隐藏真实金额，避免读取会话偏好前短暂泄露。
+  // 演示模式的独立 provider 不持久化，仅展示虚构数据。
+  const [showSensitiveInfo, setShowSensitiveInfo] = useState(!persist);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
