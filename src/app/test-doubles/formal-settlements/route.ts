@@ -385,6 +385,10 @@ export async function POST(request: Request) {
           }
         : sourceCapture,
       candleReader,
+      undefined,
+      { async readTradingDays() {
+        return { tradingDays: ["2026-08-04", "2026-08-05"], halfTradingDays: [] };
+      } },
     );
     const firstRun = await runner.run();
     if (

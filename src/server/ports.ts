@@ -325,6 +325,19 @@ export interface FormalSettlementCandleReader {
   }): Promise<FormalSettlementDailyCandle[]>;
 }
 
+export interface MarketTradingDays {
+  tradingDays: string[];
+  halfTradingDays: string[];
+}
+
+export interface FormalSettlementTradingCalendar {
+  readTradingDays(input: {
+    market: SecuritiesMarket;
+    start: string;
+    end: string;
+  }): Promise<MarketTradingDays>;
+}
+
 /** 长桥持仓图表的产品展示周期。five-day 是近五个交易日的 5 分钟走势。 */
 export type LongbridgeHoldingCandlePeriod =
   | "five-day"
@@ -389,7 +402,7 @@ export interface FormalDailySettlementRunner {
 }
 
 export type FormalSettlementRunReason =
-  | "no-sources" | "before-window" | "official-close-pending"
+  | "no-sources" | "before-window" | "market-closed" | "calendar-read-failed" | "official-close-pending"
   | "source-read-failed" | "candle-read-failed" | "capture-window-missed"
   | "incomplete-evidence" | "execution-failed" | "execution-record-failed";
 export interface FormalSettlementRunResult {

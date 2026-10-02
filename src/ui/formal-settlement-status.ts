@@ -10,6 +10,8 @@ export const settlementOutcomeLabel: Record<FormalSettlementRunResult["outcome"]
 export const settlementReasonLabel: Record<FormalSettlementRunReason, string> = {
   "no-sources": "没有可参与日结的资产来源",
   "before-window": "尚未到采集窗口",
+  "market-closed": "本轮持有证券市场均休市，不生成日结",
+  "calendar-read-failed": "交易日历读取失败，请稍后重试；本次未生成日结",
   "official-close-pending": "官方收盘行情尚未齐备，本次未生成日结",
   "source-read-failed": "资产来源读取失败，本次未生成日结",
   "candle-read-failed": "官方日 K 读取失败，本次未生成日结",

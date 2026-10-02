@@ -14,6 +14,13 @@ import type {
   FormalSettlementSourceCapture,
 } from "@/server/ports";
 
+function calendarFixture(days: Record<string, { tradingDays: string[]; halfTradingDays: string[] }>) {
+  return { async readTradingDays({ market }: { market: string }) {
+    if (!days[market]) throw new Error("calendar unavailable");
+    return days[market];
+  } };
+}
+
 const CAPTURED_AT = "2026-08-05T16:06:00.000Z";
 
 function source(input: {
@@ -243,10 +250,120 @@ for (const failure of [false, true]) {
     const runner = new MarketCloseFormalDailySettlement(new FixedSources([security]), { now: () => new Date("2026-08-05T20:05:00Z") }, settlements,
       new FixedCapture(new Map([[security.id, securitySnapshot]])), {
         async readDailyCandles() { if (failure) throw new Error("API_SECRET_private"); return []; },
-      });
+      }, undefined, calendarFixture({ US: { tradingDays: ["2026-08-05"], halfTradingDays: [] } }));
     assert.deepEqual(await runner.run(), failure
       ? { outcome: "error", reason: "candle-read-failed" }
       : { outcome: "waiting", reason: "official-close-pending" });
     assert.deepEqual(settlements.values, []);
   });
 }
+
+function calendarRun(input: {
+  now: string;
+  symbols?: string[];
+  capturedSymbols?: string[];
+  days: Record<string, { tradingDays: string[]; halfTradingDays: string[] }>;
+  candleDays?: Record<string, string>;
+}) {
+  const buildValue = (symbols: string[]) => buildSnapshotFromPositions({
+    positions: symbols.map(symbol => ({
+      symbol, name: symbol, quantity: "1", currency: "USD", assetClass: "securities" as const,
+      currentPrice: { amount: "100", currency: "USD" }, priceSource: "fixture", pricedAt: input.now,
+      costPrice: null, platformProfit: null, changePercent: null,
+    })),
+    sourceCurrency: "USD", exchangeRates: [{
+      baseCurrency: "USD", quoteCurrency: "HKD", rate: "7.8", source: "Longbridge", observedAt: input.now,
+    }, {
+      baseCurrency: "USD", quoteCurrency: "CNY", rate: "7.2", source: "Longbridge", observedAt: input.now,
+    }], syncedAt: input.now,
+  });
+  const value = buildValue(input.symbols ?? ["NVDA.US"]);
+  const capturedValue = input.capturedSymbols ? buildValue(input.capturedSymbols) : value;
+  const security = source({ id: "calendar-security", label: "fixture", kind: "longbridge", snapshot: value });
+  const settlements = new RecordedSettlements();
+  let captures = 0;
+  const runner = new MarketCloseFormalDailySettlement(new FixedSources([security]), {
+    now: () => new Date(input.now),
+  }, settlements, { async capture() { captures++; return capturedValue; } }, {
+    async readDailyCandles({ symbols }) {
+      return symbols.map(symbol => ({ symbol, close: "100", tradeSession: "intraday" as const,
+        timestamp: `${input.candleDays?.[symbol] ?? input.now.slice(0, 10)}T14:00:00.000Z` }));
+    },
+  }, undefined, calendarFixture(input.days));
+  return { runner, settlements, captures: () => captures };
+}
+
+test("半日市在实际提前收盘后采集，不等待美东16点", async () => {
+  const f = calendarRun({ now: "2026-11-27T18:05:00.000Z", days: {
+    US: { tradingDays: ["2026-11-25"], halfTradingDays: ["2026-11-27"] },
+  } });
+  assert.deepEqual(await f.runner.run(), { outcome: "recorded", settlementStatus: "complete" });
+  assert.equal(f.settlements.values[0]?.anchor.scheduledCloseAt, "2026-11-27T18:00:00.000Z");
+});
+
+for (const now of ["2026-11-26T23:05:00.000Z", "2026-11-28T23:05:00.000Z"]) {
+  test("休市和周末不写不存在交易日的漏采记录：" + now, async () => {
+    const f = calendarRun({ now, days: { US: { tradingDays: ["2026-11-25"], halfTradingDays: ["2026-11-27"] } } });
+    assert.deepEqual(await f.runner.run(), { outcome: "not-due", reason: "market-closed" });
+    assert.equal(f.settlements.values.length, 0);
+    assert.equal(f.captures(), 0);
+  });
+}
+
+test("美股休市而港股开市，以港股收盘为锚并保留美股上个交易日", async () => {
+  const f = calendarRun({ now: "2026-11-26T08:15:00.000Z", symbols: ["NVDA.US", "700.HK"], days: {
+    US: { tradingDays: ["2026-11-25"], halfTradingDays: ["2026-11-27"] },
+    HK: { tradingDays: ["2026-11-25", "2026-11-26"], halfTradingDays: [] },
+  }, candleDays: { "NVDA.US": "2026-11-25", "700.HK": "2026-11-26" } });
+  assert.deepEqual(await f.runner.run(), { outcome: "recorded", settlementStatus: "complete" });
+  assert.equal(f.settlements.values[0]?.anchor.key, "securities-close:HK:2026-11-26");
+  assert.deepEqual(f.settlements.values[0]?.holdings.map(holding => holding.marketTradingDay), ["2026-11-25", "2026-11-26"]);
+});
+
+test("所有市场都开市时等待最后一个市场收盘，不提前采集亚洲收盘", async () => {
+  const f = calendarRun({ now: "2026-11-25T08:15:00.000Z", symbols: ["NVDA.US", "700.HK"], days: {
+    US: { tradingDays: ["2026-11-25"], halfTradingDays: [] },
+    HK: { tradingDays: ["2026-11-25"], halfTradingDays: [] },
+  } });
+  assert.deepEqual(await f.runner.run(), { outcome: "not-due", reason: "before-window" });
+  assert.equal(f.captures(), 0);
+});
+
+test("日历失败不猜测交易日，也不写漏采记录", async () => {
+  const f = calendarRun({ now: "2026-11-27T18:05:00.000Z", days: {} });
+  assert.deepEqual(await f.runner.run(), { outcome: "error", reason: "calendar-read-failed" });
+  assert.equal(f.settlements.values.length, 0);
+  assert.equal(f.captures(), 0);
+});
+
+test("采集发现新增港股市场时补齐日历并确认其官方收盘", async () => {
+  const f = calendarRun({ now: "2026-11-25T21:05:00.000Z", symbols: ["NVDA.US"],
+    capturedSymbols: ["NVDA.US", "700.HK"], days: {
+      US: { tradingDays: ["2026-11-25"], halfTradingDays: [] },
+      HK: { tradingDays: ["2026-11-25"], halfTradingDays: [] },
+    } });
+  assert.deepEqual(await f.runner.run(), { outcome: "recorded", settlementStatus: "complete" });
+  assert.deepEqual(f.settlements.values[0]?.holdings.map(holding => holding.marketTradingDay), ["2026-11-25", "2026-11-25"]);
+});
+
+test("港股收盘采集发现新增美股时等待美股实际收盘窗口", async () => {
+  const f = calendarRun({ now: "2026-11-25T08:15:00.000Z", symbols: ["700.HK"],
+    capturedSymbols: ["700.HK", "NVDA.US"], days: {
+      US: { tradingDays: ["2026-11-25"], halfTradingDays: [] },
+      HK: { tradingDays: ["2026-11-25"], halfTradingDays: [] },
+    } });
+  assert.deepEqual(await f.runner.run(), { outcome: "not-due", reason: "before-window" });
+  assert.equal(f.settlements.values.length, 0);
+});
+
+test("新发现证券市场后重新核验窗口上界，不用之后的数据补写收盘", async () => {
+  const f = calendarRun({ now: "2026-11-26T16:06:00.000Z", symbols: [],
+    capturedSymbols: ["NVDA.US", "700.HK"], days: {
+      US: { tradingDays: ["2026-11-25"], halfTradingDays: [] },
+      HK: { tradingDays: ["2026-11-25", "2026-11-26"], halfTradingDays: [] },
+    }, candleDays: { "NVDA.US": "2026-11-25", "700.HK": "2026-11-26" } });
+  assert.deepEqual(await f.runner.run(), { outcome: "recorded", settlementStatus: "missed", reason: "capture-window-missed" });
+  assert.equal(f.settlements.values[0]?.anchor.key, "securities-close:HK:2026-11-26");
+  assert.deepEqual(f.settlements.values[0]?.holdings, []);
+  assert.equal(f.settlements.values[0]?.capturedAt, null);
+});

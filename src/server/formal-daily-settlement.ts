@@ -22,33 +22,41 @@ import type {
   FormalSettlementHolding,
   FormalSettlementSource,
   FormalSettlementSourceCapture,
+  FormalSettlementTradingCalendar,
+  MarketTradingDays,
   SecretStore,
   SecuritiesMarket,
 } from "@/server/ports";
 import { isMacOSKeychainCredentialReference } from "@/server/asset-sources/longbridge-keychain-sdk";
+import { LongbridgeTradingCalendar } from "@/server/asset-sources/longbridge-trading-calendar";
 
 const FORMAL_SETTLEMENT_CAPTURE_WINDOW_MS = 2 * 60 * 60_000;
 
 const MARKET_DETAILS: Record<
   SecuritiesMarket,
-  { timeZone: string; closeHour: number; closeMinute: number; priority: number }
+  { timeZone: string; closeHour: number; closeMinute: number; halfCloseHour?: number; priority: number }
 > = {
   US: {
     timeZone: "America/New_York",
     closeHour: 16,
     closeMinute: 0,
+    halfCloseHour: 13,
     priority: 5,
   },
   SG: {
     timeZone: "Asia/Singapore",
     closeHour: 17,
-    closeMinute: 0,
+    // SGX closing price is fixed at the end of its six-minute closing routine.
+    closeMinute: 6,
+    halfCloseHour: 12,
     priority: 4,
   },
   HK: {
     timeZone: "Asia/Hong_Kong",
     closeHour: 16,
-    closeMinute: 0,
+    // Wait through HKEX's closing auction (random close by :10).
+    closeMinute: 10,
+    halfCloseHour: 12,
     priority: 3,
   },
   SH: {
@@ -117,13 +125,6 @@ function localDay(value: Date, timeZone: string): string {
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-function previousDay(day: string): string {
-  const [year, month, date] = day.split("-").map(Number);
-  const value = new Date(Date.UTC(year, month - 1, date));
-  value.setUTCDate(value.getUTCDate() - 1);
-  return value.toISOString().slice(0, 10);
-}
-
 function offsetAt(value: Date, timeZone: string): number {
   const parts = localDateParts(value, timeZone);
   return Date.UTC(
@@ -187,30 +188,46 @@ function hasUnsupportedSecurities(sources: AssetSourceSummary[]): boolean {
   );
 }
 
-function anchorForSecurities(
+function marketClose(day: string, market: SecuritiesMarket, calendar: MarketTradingDays): Date {
+  const details = MARKET_DETAILS[market];
+  const halfDay = calendar.halfTradingDays.includes(day);
+  if (halfDay && details.halfCloseHour === undefined) {
+    throw new Error("无法确认该市场半日市收盘时间");
+  }
+  return zonedDateTime(day, details.timeZone, halfDay ? details.halfCloseHour! : details.closeHour, details.closeMinute);
+}
+
+async function anchorForSecurities(
   now: Date,
   securities: SecurityCandidate[],
-): FormalSettlementAnchor {
-  const market = [...new Set(securities.map((security) => security.market))]
+  reader: FormalSettlementTradingCalendar,
+): Promise<{ anchor: FormalSettlementAnchor | null; calendars: Map<SecuritiesMarket, MarketTradingDays> }> {
+  const markets = [...new Set(securities.map((security) => security.market))]
     .toSorted((left, right) =>
       MARKET_DETAILS[right].priority - MARKET_DETAILS[left].priority ||
       left.localeCompare(right),
-    )[0]!;
-  const details = MARKET_DETAILS[market];
-  const tradingDay = localDay(now, details.timeZone);
-  const scheduledCloseAt = zonedDateTime(
-    tradingDay,
-    details.timeZone,
-    details.closeHour,
-    details.closeMinute,
-  ).toISOString();
-  return {
+    );
+  // One cycle uses the date in the latest-closing held market, even while Asia
+  // has crossed midnight. On that market's holiday, another held market can anchor it.
+  const tradingDay = localDay(now, MARKET_DETAILS[markets[0]!].timeZone);
+  const start = new Date(Date.parse(tradingDay) - 28 * 86_400_000).toISOString().slice(0, 10);
+  const calendars = new Map(await Promise.all(markets.map(async market => [
+    market, await reader.readTradingDays({ market, start, end: tradingDay }),
+  ] as const)));
+  const candidates = markets.flatMap(market => {
+    const calendar = calendars.get(market)!;
+    if (!calendar.tradingDays.includes(tradingDay) && !calendar.halfTradingDays.includes(tradingDay)) return [];
+    return [{ market, scheduledCloseAt: marketClose(tradingDay, market, calendar).toISOString() }];
+  }).sort((left, right) => right.scheduledCloseAt.localeCompare(left.scheduledCloseAt));
+  if (!candidates.length) return { anchor: null, calendars };
+  const { market, scheduledCloseAt } = candidates[0];
+  return { calendars, anchor: {
     key: `securities-close:${market}:${tradingDay}`,
     kind: "securities-close",
     market,
     tradingDay,
     scheduledCloseAt,
-  };
+  } };
 }
 
 function cryptoCutoffAnchor(now: Date): FormalSettlementAnchor {
@@ -224,18 +241,11 @@ function cryptoCutoffAnchor(now: Date): FormalSettlementAnchor {
   };
 }
 
-function expectedTradingDay(now: Date, market: SecuritiesMarket): string {
-  const details = MARKET_DETAILS[market];
-  const currentDay = localDay(now, details.timeZone);
-  const todayClose = zonedDateTime(
-    currentDay,
-    details.timeZone,
-    details.closeHour,
-    details.closeMinute,
-  );
-  return now.getTime() >= todayClose.getTime()
-    ? currentDay
-    : previousDay(currentDay);
+function expectedTradingDay(anchor: FormalSettlementAnchor, market: SecuritiesMarket, calendar: MarketTradingDays | undefined): string | null {
+  if (!calendar) return null;
+  return [...new Set([...calendar.tradingDays, ...calendar.halfTradingDays])]
+    .filter(day => marketClose(day, market, calendar).getTime() <= Date.parse(anchor.scheduledCloseAt))
+    .sort().at(-1) ?? null;
 }
 
 function sourceTotals(
@@ -464,6 +474,7 @@ export class MarketCloseFormalDailySettlement
     private readonly sourceCapture: FormalSettlementSourceCapture,
     private readonly candleReader: FormalSettlementCandleReader,
     private readonly captureWindowMs = FORMAL_SETTLEMENT_CAPTURE_WINDOW_MS,
+    private readonly calendar: FormalSettlementTradingCalendar = new LongbridgeTradingCalendar(),
   ) {}
 
   async run(): Promise<FormalSettlementRunResult> {
@@ -476,9 +487,20 @@ export class MarketCloseFormalDailySettlement
     );
     if (sources.length === 0) return { outcome: "not-due", reason: "no-sources" };
     const securities = securityCandidates(sources);
-    const anchor = securities.length > 0
-      ? anchorForSecurities(now, securities)
-      : cryptoCutoffAnchor(now);
+    let anchor: FormalSettlementAnchor;
+    let calendars = new Map<SecuritiesMarket, MarketTradingDays>();
+    if (securities.length > 0) {
+      try {
+        const schedule = await anchorForSecurities(now, securities, this.calendar);
+        if (schedule.anchor === null) return { outcome: "not-due", reason: "market-closed" };
+        anchor = schedule.anchor;
+        calendars = schedule.calendars;
+      } catch {
+        return { outcome: "error", reason: "calendar-read-failed" };
+      }
+    } else {
+      anchor = cryptoCutoffAnchor(now);
+    }
     const existing = (await this.settlements.list()).find(
       (settlement) => settlement.anchor.key === anchor.key,
     );
@@ -551,6 +573,35 @@ export class MarketCloseFormalDailySettlement
           : [sourceWithSnapshot(capture.source, capture.snapshot)],
       ),
     );
+    // A fresh capture can include a market absent from the persisted snapshot.
+    // Confirm that market's calendar and close before accepting its daily candle.
+    if (capturedSecurities.some(security => !calendars.has(security.market))) {
+      try {
+        const schedule = await anchorForSecurities(now, [...securities, ...capturedSecurities], this.calendar);
+        if (schedule.anchor === null) return { outcome: "not-due", reason: "market-closed" };
+        anchor = schedule.anchor;
+        calendars = schedule.calendars;
+      } catch {
+        return { outcome: "error", reason: "calendar-read-failed" };
+      }
+      if (now.getTime() < Date.parse(anchor.scheduledCloseAt)) {
+        return { outcome: "not-due", reason: "before-window" };
+      }
+      const recorded = (await this.settlements.list()).find(value => value.anchor.key === anchor.key);
+      if (recorded) return { outcome: "already-recorded", settlementStatus: recorded.status };
+      if (now.getTime() > Date.parse(anchor.scheduledCloseAt) + this.captureWindowMs) {
+        return this.recordIfAbsent({
+          anchor,
+          capturedAt: null,
+          status: "missed",
+          diagnostic: "采集窗口内未形成正式日结，未使用之后的实时数据补写",
+          total: { USD: null, CNY: null, HKD: null },
+          exchangeRates: [],
+          sources: [],
+          holdings: [],
+        });
+      }
+    }
     const closeErrors: string[] = [];
     let candleReadFailed = false;
     const confirmedCloses = new Map<string, ConfirmedClose>();
@@ -573,17 +624,17 @@ export class MarketCloseFormalDailySettlement
           const candleBySymbol = new Map(candles.map((candle) => [candle.symbol, candle]));
           for (const security of values) {
             const candle = candleBySymbol.get(security.holding.symbol);
-            const expectedDay = expectedTradingDay(now, security.market);
+            const expectedDay = expectedTradingDay(anchor, security.market, calendars.get(security.market));
             const tradingDay = candle === undefined
               ? null
               : localDay(new Date(candle.timestamp), MARKET_DETAILS[security.market].timeZone);
             if (
-              candle === undefined ||
+              expectedDay === null || candle === undefined ||
               candle.tradeSession !== "intraday" ||
               tradingDay !== expectedDay
             ) {
               closeErrors.push(
-                `${security.holding.symbol} 尚无 ${expectedDay} 的官方日 K 常规盘收盘`,
+                `${security.holding.symbol} 尚无 ${expectedDay ?? "交易日历确认日期"} 的官方日 K 常规盘收盘`,
               );
               continue;
             }
