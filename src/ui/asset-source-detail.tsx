@@ -621,7 +621,7 @@ export function AssetSourceDetail({
             sourceName={name}
             records={investmentRecords}
             observations={manual ? [] : history}
-            snapshot={manual ? undefined : liveSources[0].snapshot}
+            source={manual ? undefined : liveSources[0]}
             manualRecords={source.manualRecords ?? []}
             currentDay={currentDay}
             preset={preset}

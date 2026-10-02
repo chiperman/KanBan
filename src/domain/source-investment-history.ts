@@ -1,7 +1,8 @@
 import { decimalAdd, decimalCompare, decimalDivide, decimalMultiply, decimalSubtract } from "@/domain/decimal";
 import { shanghaiDay } from "@/domain/daily-asset-snapshots";
+import { buildTotalValuation, type ValuationSource } from "@/domain/valuation";
 import type { SourceInvestmentRecord } from "@/domain/source-investment-records";
-import type { AssetSnapshot, DailyAssetTrendObservation, InvestmentCashflowCurrency, ManualAssetRecord } from "@/server/ports";
+import type { DailyAssetTrendObservation, InvestmentCashflowCurrency, ManualAssetRecord } from "@/server/ports";
 
 export interface SourceInvestmentHistory {
   sourceId: string;
@@ -96,7 +97,7 @@ export function analyzeSourceInvestmentAccount(input: {
   manualRecords: ManualAssetRecord[];
   observations: DailyAssetTrendObservation[];
   currentDay: string;
-  snapshot?: AssetSnapshot;
+  source?: ValuationSource;
 }) {
   const history = input.history?.sourceId === input.sourceId ? input.history : null;
   const records = input.records.filter(record => record.sourceId === input.sourceId && record.day <= input.currentDay);
@@ -110,10 +111,13 @@ export function analyzeSourceInvestmentAccount(input: {
     const source = observation.sources.find(source => source.sourceId === input.sourceId);
     if (source) values.set(observation.day, source.complete && (source.status ?? "complete") === "complete" ? source.total[currency] ?? null : null);
   }
-  if (input.snapshot && input.snapshot.total.currency === currency) {
-    const day = shanghaiDay(input.snapshot.syncedAt);
+  if (input.source?.id === input.sourceId && input.source.snapshot.total.currency === currency) {
+    const day = shanghaiDay(input.source.snapshot.syncedAt);
     // A live value is an endpoint for today, never a backfill of earlier dates.
-    if (day === input.currentDay) values.set(day, input.snapshot.total.amount);
+    if (day === input.currentDay) {
+      const valuation = buildTotalValuation([input.source], currency, "source");
+      values.set(day, valuation.incomplete ? null : valuation.amount);
+    }
   }
   for (const record of input.manualRecords) if (record.sourceId === input.sourceId) {
     values.set(record.day, record.currency === currency ? record.amount : null);

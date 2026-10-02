@@ -4,21 +4,22 @@ import { useMemo, useState, type ReactNode } from "react";
 import { decimalMultiply, decimalToFixed } from "@/domain/decimal";
 import { rangeDays, type InvestmentPerformanceCustomRange, type InvestmentPerformanceIntervalPreset } from "@/domain/investment-performance-trend";
 import { analyzeSourceInvestmentAccount, type SourceInvestmentHistory } from "@/domain/source-investment-history";
+import type { ValuationSource } from "@/domain/valuation";
 import type { SourceInvestmentRecord } from "@/domain/source-investment-records";
-import type { AssetSnapshot, DailyAssetTrendObservation, ManualAssetRecord } from "@/server/ports";
+import type { DailyAssetTrendObservation, ManualAssetRecord } from "@/server/ports";
 import { AssetTrendChart } from "@/ui/asset-trend-chart";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeMetric } from "@/ui/vibe/vibe-data-instrument";
 
 const money = (value: string) => new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value));
 
-export function SourceInvestmentPerformance({ history, sourceId, sourceName, records, observations, snapshot, manualRecords, currentDay, preset, customRange, showSensitiveInfo, rangeControls, onEdit, onDelete }: {
+export function SourceInvestmentPerformance({ history, sourceId, sourceName, records, observations, source, manualRecords, currentDay, preset, customRange, showSensitiveInfo, rangeControls, onEdit, onDelete }: {
   history: SourceInvestmentHistory | null;
   sourceId: string;
   sourceName: string;
   records: SourceInvestmentRecord[];
   observations: DailyAssetTrendObservation[];
-  snapshot?: AssetSnapshot;
+  source?: ValuationSource;
   manualRecords: ManualAssetRecord[];
   currentDay: string;
   preset: InvestmentPerformanceIntervalPreset;
@@ -29,7 +30,7 @@ export function SourceInvestmentPerformance({ history, sourceId, sourceName, rec
   onDelete(record: SourceInvestmentRecord): void;
 }) {
   const [curve, setCurve] = useState<"return" | "profit">("return");
-  const analysis = useMemo(() => analyzeSourceInvestmentAccount({history, sourceId, records, observations, snapshot, manualRecords, currentDay}), [history, sourceId, records, observations, snapshot, manualRecords, currentDay]);
+  const analysis = useMemo(() => analyzeSourceInvestmentAccount({history, sourceId, records, observations, source, manualRecords, currentDay}), [history, sourceId, records, observations, source, manualRecords, currentDay]);
   const days = rangeDays(preset, currentDay, analysis.opening?.day, customRange);
   const byDay = new Map(analysis.points.map(point => [point.day, point]));
   const firstObservation = analysis.points[0]?.day;
