@@ -81,6 +81,7 @@ test("生产运行不暴露测试替身", async ({ playwright }) => {
   });
 
   expect((await prodRequest.get("/test-doubles/context")).status()).toBe(404);
+  expect((await prodRequest.get("/test-doubles/asset-cards")).status()).toBe(404);
   expect((await prodRequest.post("/test-doubles/reset")).status()).toBe(404);
   expect(
     (

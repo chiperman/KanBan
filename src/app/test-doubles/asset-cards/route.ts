@@ -3,6 +3,13 @@ import { getTestServices, isTestEnv } from "@/server/composition";
 
 export const dynamic = "force-dynamic";
 
+export async function GET() {
+  if (!isTestEnv()) {
+    return Response.json({ error: "not found" }, { status: 404 });
+  }
+  return Response.json({ assetCards: await getTestServices().assetCards.list() });
+}
+
 export async function POST(request: Request) {
   if (!isTestEnv()) {
     return Response.json({ error: "not found" }, { status: 404 });
