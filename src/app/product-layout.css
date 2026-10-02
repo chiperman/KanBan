@@ -9145,7 +9145,7 @@ body {
 }
 
 .workbench-utility-group__label {
-  color: var(--muted);
+  color: var(--secondary);
   font-family: var(--f-mono);
   font-size: var(--vibe-type-label);
   letter-spacing: 0.08em;
