@@ -1,11 +1,12 @@
 import type {
   AssetCardDatabase,
+  AssetFullRefreshStateDatabase,
   AssetSnapshotDatabase,
   AssetSourceDatabase,
-  DashboardDatabase,
+  FormalDailySettlementDatabase,
+  FormalSettlementExecutionDatabase,
   ManualAssetRecordDatabase,
 } from "@/server/persistence/contracts";
-import { SqliteDashboardDatabase } from "@/server/persistence/sqlite-database";
 import type { AssetCardStore, AssetFullRefreshState, AssetSources, AssetSourceSummary, Card, Clock, CreateManualAssetSourceInput, DailyAssetSnapshot, DailyAssetSnapshots, DailyAssetTrendObservation, FormalDailySettlement, FormalDailySettlements, FormalSettlementExecution, FormalSettlementExecutions, ManualAssetRecord, ManualAssetRecordInput, ManualAssetRecords } from "@/server/ports";
 
 export class DatabaseAssetCardStore implements AssetCardStore {
@@ -76,7 +77,7 @@ export class DatabaseDailyAssetSnapshots implements DailyAssetSnapshots {
 }
 
 export class DatabaseAssetFullRefreshState implements AssetFullRefreshState {
-  constructor(private readonly database: SqliteDashboardDatabase) {}
+  constructor(private readonly database: AssetFullRefreshStateDatabase) {}
 
   read() { return this.database.readAssetFullRefreshState(); }
   initialize(attemptedAt: string) {
@@ -100,7 +101,7 @@ export class DatabaseAssetFullRefreshState implements AssetFullRefreshState {
 }
 
 export class DatabaseFormalSettlementExecutions implements FormalSettlementExecutions {
-  constructor(private readonly database: SqliteDashboardDatabase) {}
+  constructor(private readonly database: FormalSettlementExecutionDatabase) {}
   latest() { return this.database.latestFormalSettlementExecution(); }
   record(execution: FormalSettlementExecution) {
     return this.database.recordFormalSettlementExecution(execution);
@@ -108,7 +109,7 @@ export class DatabaseFormalSettlementExecutions implements FormalSettlementExecu
 }
 
 export class DatabaseFormalDailySettlements implements FormalDailySettlements {
-  constructor(private readonly database: SqliteDashboardDatabase) {}
+  constructor(private readonly database: FormalDailySettlementDatabase) {}
 
   list() {
     return this.database.listFormalDailySettlements();

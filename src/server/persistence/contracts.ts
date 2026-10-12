@@ -1,4 +1,5 @@
 import type { SourceAuthorizationResult, SourceConnectionKind } from "@/server/persistence/source-record";
+import type { AssetFullRefreshState, FormalDailySettlements, FormalSettlementExecutions } from "@/server/ports";
 import type { AssetSourceSummary, BinanceAuthorizationResult, BitAuthorizationResult, BitgetAuthorizationResult, Card, CreateManualAssetSourceInput, DailyAssetSnapshot, DailyAssetTrendObservation, EvmWatchAuthorizationResult, ImportedAssetSourceHistoryObservation, LongbridgeAuthorizationResult, ManualAssetClass, ManualAssetRecord, ManualAssetRecordInput, OkxAuthorizationResult } from "@/server/ports";
 
 export interface DashboardState {
@@ -117,6 +118,28 @@ export interface AssetSourceConnectionDatabase {
     credentialReference: string,
     capturedAt: string,
   ): Promise<void>;
+}
+
+/** 刷新周期适配器所需的最小数据库接口。 */
+export interface AssetFullRefreshStateDatabase {
+  readAssetFullRefreshState: AssetFullRefreshState["read"];
+  initializeAssetFullRefresh: AssetFullRefreshState["initialize"];
+  claimAssetFullRefresh: AssetFullRefreshState["claim"];
+  startAssetFullRefresh: AssetFullRefreshState["start"];
+  finishAssetFullRefresh: AssetFullRefreshState["finish"];
+  clearAssetFullRefresh: AssetFullRefreshState["clear"];
+}
+
+/** 正式日结适配器所需的最小数据库接口。 */
+export interface FormalDailySettlementDatabase {
+  listFormalDailySettlements: FormalDailySettlements["list"];
+  recordFormalDailySettlementIfAbsent: FormalDailySettlements["recordIfAbsent"];
+}
+
+/** 正式日结执行记录适配器所需的最小数据库接口。 */
+export interface FormalSettlementExecutionDatabase {
+  latestFormalSettlementExecution: FormalSettlementExecutions["latest"];
+  recordFormalSettlementExecution: FormalSettlementExecutions["record"];
 }
 
 /** 兼容旧组合根的完整数据库接口；新适配器应依赖上面的最小接口。 */
