@@ -10,6 +10,7 @@ import { SqliteAssetSourceStore } from "./sqlite-asset-source-store";
 import { SqliteInvestmentCashflowStore } from "./sqlite-investment-cashflow-store";
 import { SqliteFormalSettlementExecutionStore } from "./sqlite-formal-settlement-execution-store";
 import { SqliteBusinessDataStore } from "./sqlite-business-data-store";
+import { SqliteRefreshStateStore } from "./sqlite-refresh-state-store";
 
 import { type BusinessDataState } from "@/server/business-data-backup";
 import type { InvestmentCashflowStore } from "@/server/investment-cashflows";
@@ -37,6 +38,7 @@ export class SqliteDashboardDatabase
   private investmentCashflows!: SqliteInvestmentCashflowStore;
   private formalSettlementExecutions!: SqliteFormalSettlementExecutionStore;
   private businessData!: SqliteBusinessDataStore;
+  private refreshState!: SqliteRefreshStateStore;
 
   constructor(
     private readonly databasePath: string,
@@ -52,6 +54,7 @@ export class SqliteDashboardDatabase
       this.sources = new SqliteAssetSourceStore(this.database, this.readModel, this.observations);
       this.investmentCashflows = new SqliteInvestmentCashflowStore(this.database);
       this.formalSettlementExecutions = new SqliteFormalSettlementExecutionStore(this.database);
+      this.refreshState = new SqliteRefreshStateStore(this.database);
       this.businessData = new SqliteBusinessDataStore(
         this.database,
         this.sources,
@@ -115,40 +118,22 @@ export class SqliteDashboardDatabase
   }
 
   private metadata(key: string): string | null {
-    const row = this.database
-      .prepare("SELECT value FROM schema_metadata WHERE key = ?")
-      .get(key) as SqliteRow | undefined;
-    return typeof row?.value === "string" ? row.value : null;
+    return this.refreshState.metadata(key);
   }
 
   async readAssetFullRefreshState(): Promise<{
     attemptedAt: string | null;
     inProgressAt: string | null;
   }> {
-    return {
-      attemptedAt: this.metadata("asset_full_refresh_attempted_at"),
-      inProgressAt: this.metadata("asset_full_refresh_in_progress_at"),
-    };
+    return this.refreshState.read();
   }
 
   async startAssetFullRefresh(attemptedAt: string): Promise<void> {
-    this.transaction(() => {
-      const write = this.database.prepare(
-        "INSERT OR REPLACE INTO schema_metadata (key, value) VALUES (?, ?)",
-      );
-      write.run("asset_full_refresh_attempted_at", attemptedAt);
-      write.run("asset_full_refresh_in_progress_at", attemptedAt);
-    });
+    this.transaction(() => this.refreshState.start(attemptedAt));
   }
 
   async initializeAssetFullRefresh(attemptedAt: string): Promise<boolean> {
-    return this.transaction(() =>
-      this.database
-        .prepare(
-          "INSERT OR IGNORE INTO schema_metadata (key, value) VALUES (?, ?)",
-        )
-        .run("asset_full_refresh_attempted_at", attemptedAt).changes > 0,
-    );
+    return this.transaction(() => this.refreshState.initialize(attemptedAt));
   }
 
   async claimAssetFullRefresh(input: {
@@ -157,68 +142,15 @@ export class SqliteDashboardDatabase
     staleAfterMs: number;
     force: boolean;
   }): Promise<"claimed" | "not-due" | "in-progress"> {
-    return this.transaction(() => {
-      const previousAttemptedAt = this.metadata(
-        "asset_full_refresh_attempted_at",
-      );
-      const inProgressAt = this.metadata(
-        "asset_full_refresh_in_progress_at",
-      );
-      const now = Date.parse(input.attemptedAt);
-      const inProgress = inProgressAt === null ? Number.NaN : Date.parse(inProgressAt);
-      const inProgressIsCurrent =
-        Number.isFinite(inProgress) &&
-        Number.isFinite(now) &&
-        now - inProgress < input.staleAfterMs;
-      if (inProgressAt !== null && inProgressIsCurrent) {
-        return "in-progress";
-      }
-
-      const previous = previousAttemptedAt === null
-        ? Number.NaN
-        : Date.parse(previousAttemptedAt);
-      if (
-        !input.force &&
-        Number.isFinite(previous) &&
-        Number.isFinite(now) &&
-        now - previous < input.intervalMs
-      ) {
-        return "not-due";
-      }
-
-      const write = this.database.prepare(
-        "INSERT OR REPLACE INTO schema_metadata (key, value) VALUES (?, ?)",
-      );
-      write.run("asset_full_refresh_attempted_at", input.attemptedAt);
-      write.run("asset_full_refresh_in_progress_at", input.attemptedAt);
-      return "claimed";
-    });
+    return this.transaction(() => this.refreshState.claim(input));
   }
 
   async finishAssetFullRefresh(attemptedAt?: string): Promise<void> {
-    this.transaction(() => {
-      if (attemptedAt === undefined) {
-        this.database
-          .prepare("DELETE FROM schema_metadata WHERE key = ?")
-          .run("asset_full_refresh_in_progress_at");
-        return;
-      }
-      this.database
-        .prepare("DELETE FROM schema_metadata WHERE key = ? AND value = ?")
-        .run("asset_full_refresh_in_progress_at", attemptedAt);
-    });
+    this.transaction(() => this.refreshState.finish(attemptedAt));
   }
 
   async clearAssetFullRefresh(): Promise<void> {
-    this.transaction(() => {
-      const remove = this.database.prepare(
-        "DELETE FROM schema_metadata WHERE key IN (?, ?)",
-      );
-      remove.run(
-        "asset_full_refresh_attempted_at",
-        "asset_full_refresh_in_progress_at",
-      );
-    });
+    this.transaction(() => this.refreshState.clear());
   }
 
   private assertIntegrity(): void {
