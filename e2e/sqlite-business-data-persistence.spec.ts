@@ -671,6 +671,7 @@ test("损坏数据库或 JSON 迁移失败时拒绝启动并保留原数据", as
     corruptDatabasePreserved: true,
     invalidJsonRejected: true,
     invalidJsonPreserved: true,
+    invalidJsonRequiresMigration: true,
     recoverableErrors: true,
   });
 });

@@ -23,7 +23,7 @@ if (action === "--apply") {
   await backup(sql, backupPath);
   await chmod(backupPath, 0o600);
   const directory = path.dirname(databaseFile);
-  const database = new SqliteDashboardDatabase(databaseFile, path.join(directory, "dashboard.json"), path.join(directory, "cards.json"));
+  const database = new SqliteDashboardDatabase(databaseFile);
   result = await database.importSourceInvestmentHistory(history);
   assert.deepEqual(sql.prepare("SELECT * FROM investment_cashflows ORDER BY id").all(), ledgerBefore, "组合及长桥资金账本必须不变");
   assert.deepEqual(sql.prepare("SELECT * FROM manual_asset_records ORDER BY source_id, day").all(), manualBefore, "已有手工记录必须不变");

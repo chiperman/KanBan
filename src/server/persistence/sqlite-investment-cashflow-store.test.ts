@@ -26,11 +26,7 @@ function cashflow(id: string, amount: string): InvestmentCashflow {
 
 test("资金账本写入、更新、删除委托到独立模块并保持排序与换算证据", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "kanban-cashflow-store-"));
-  const database = new SqliteDashboardDatabase(
-    path.join(root, "data.sqlite"),
-    path.join(root, "absent.json"),
-    path.join(root, "absent-cards.json"),
-  );
+  const database = new SqliteDashboardDatabase(path.join(root, "data.sqlite"));
   const sql = (database as unknown as { database: DatabaseSync }).database;
   try {
     await database.createInvestmentCashflow(cashflow("initial", "100"));
@@ -60,11 +56,7 @@ test("资金账本写入、更新、删除委托到独立模块并保持排序�
 
 test("资金账本更新失败时事务回滚，既有金额与换算证据保持不变", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "kanban-cashflow-rollback-"));
-  const database = new SqliteDashboardDatabase(
-    path.join(root, "data.sqlite"),
-    path.join(root, "absent.json"),
-    path.join(root, "absent-cards.json"),
-  );
+  const database = new SqliteDashboardDatabase(path.join(root, "data.sqlite"));
   const sql = (database as unknown as { database: DatabaseSync }).database;
   try {
     const original = cashflow("initial", "100");

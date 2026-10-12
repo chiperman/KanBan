@@ -54,9 +54,7 @@ test("SQLite reopen and credential-free restore preserve retained layout facts",
   const root = await mkdtemp(path.join(tmpdir(), "kanban-layout-contract-"));
   const databases: SqliteDashboardDatabase[] = [];
   const open = () => {
-    const database = new SqliteDashboardDatabase(
-      path.join(root, "dashboard.sqlite"), path.join(root, "dashboard.json"), path.join(root, "cards.json"),
-    );
+    const database = new SqliteDashboardDatabase(path.join(root, "dashboard.sqlite"));
     databases.push(database);
     return database;
   };

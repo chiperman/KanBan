@@ -15,14 +15,12 @@ async function fixture(t: TestContext) {
   t.after(() => rm(root, { recursive: true, force: true }));
   return [
     path.join(root, "data.sqlite"),
-    path.join(root, "absent.json"),
-    path.join(root, "absent-cards.json"),
   ] as const;
 }
 
 test("SQLite 组合根配置连接并让读写模块共享同一事务", async (t) => {
   const paths = await fixture(t);
-  const { database, transactions, manualSources, readModel, cards } = openSqliteDashboard(...paths);
+  const { database, transactions, manualSources, readModel, cards } = openSqliteDashboard(paths[0]);
   try {
     assert.equal(database.prepare("PRAGMA busy_timeout").get()?.timeout, 5000);
     assert.equal(database.prepare("PRAGMA foreign_keys").get()?.foreign_keys, 1);
@@ -44,7 +42,7 @@ test("SQLite 组合根配置连接并让读写模块共享同一事务", async (
     database.close();
   }
 
-  const reopened = new SqliteDashboardDatabase(...paths);
+  const reopened = new SqliteDashboardDatabase(paths[0]);
   const connection = (reopened as unknown as { database: DatabaseSync }).database;
   try {
     assert.equal((await reopened.listSources())[0].label, "保留来源");
@@ -67,7 +65,7 @@ test("SQLite 适配器初始化失败关闭组合根连接并保留启动错误"
     close.call(this);
   });
 
-  assert.throws(() => new SqliteDashboardDatabase(...paths), (error: unknown) => {
+  assert.throws(() => new SqliteDashboardDatabase(paths[0]), (error: unknown) => {
     assert.ok(error instanceof Error);
     assert.match(error.message, /SQLite 业务数据初始化失败/);
     assert.ok(error.message.includes(paths[0]));
@@ -97,7 +95,7 @@ test("SQLite 组合根完整性检查失败时关闭连接，清理异常不掩�
     close.call(this);
     throw new Error("fixture cleanup failure");
   });
-  assert.throws(() => openSqliteDashboard(...paths), (error: unknown) => {
+  assert.throws(() => openSqliteDashboard(paths[0]), (error: unknown) => {
     assert.ok(error instanceof Error);
     assert.equal(error.cause, failure);
     assert.match(error.message, /fixture startup integrity failure/);
@@ -107,7 +105,7 @@ test("SQLite 组合根完整性检查失败时关闭连接，清理异常不掩�
   assert.equal(closed.length, 1);
   assert.equal(closed[0].isOpen, false);
   t.mock.restoreAll();
-  const reopened = openSqliteDashboard(...paths);
+  const reopened = openSqliteDashboard(paths[0]);
   try {
     assert.deepEqual(reopened.readModel.listSourcesSync(), []);
   } finally {

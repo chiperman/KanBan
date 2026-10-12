@@ -9,7 +9,7 @@ import {
 import { buildSnapshotFromPositions } from "@/domain/valuation";
 import { getTestServices, isTestEnv } from "@/server/composition";
 import type { AssetSourceSummary, Card } from "@/server/ports";
-import { FileDashboardDatabase } from "@/server/production";
+import { SqliteDashboardDatabase } from "@/server/production";
 
 export const dynamic = "force-dynamic";
 
@@ -95,9 +95,8 @@ export async function POST(request: Request) {
   if (body?.action === "production-persistence") {
     const root = await mkdtemp(path.join(tmpdir(), "pad-daily-snapshot-"));
     try {
-      const dashboardPath = path.join(root, "dashboard.json");
-      const legacyCardsPath = path.join(root, "cards.json");
-      const database = new FileDashboardDatabase(dashboardPath, legacyCardsPath);
+      const dashboardPath = path.join(root, "dashboard.sqlite");
+      const database = new SqliteDashboardDatabase(dashboardPath);
       const snapshot = buildDailyAssetSnapshot(
         await services.assetSources.list(),
         services.clock.now().toISOString(),
@@ -128,7 +127,7 @@ export async function POST(request: Request) {
         },
         true,
       );
-      const reloaded = new FileDashboardDatabase(dashboardPath, legacyCardsPath);
+      const reloaded = new SqliteDashboardDatabase(dashboardPath);
       const [baseline] = await reloaded.listDailyAssetSnapshots();
       const [trend] = await reloaded.listDailyAssetTrendObservations();
       return Response.json({
@@ -147,9 +146,8 @@ export async function POST(request: Request) {
   if (body?.action === "production-incomplete-baseline-repair") {
     const root = await mkdtemp(path.join(tmpdir(), "pad-daily-snapshot-"));
     try {
-      const dashboardPath = path.join(root, "dashboard.json");
-      const legacyCardsPath = path.join(root, "cards.json");
-      const database = new FileDashboardDatabase(dashboardPath, legacyCardsPath);
+      const dashboardPath = path.join(root, "dashboard.sqlite");
+      const database = new SqliteDashboardDatabase(dashboardPath);
       const snapshot = buildDailyAssetSnapshot(
         await services.assetSources.list(),
         services.clock.now().toISOString(),
@@ -183,7 +181,7 @@ export async function POST(request: Request) {
         },
         true,
       );
-      const reloaded = new FileDashboardDatabase(dashboardPath, legacyCardsPath);
+      const reloaded = new SqliteDashboardDatabase(dashboardPath);
       const [baseline] = await reloaded.listDailyAssetSnapshots();
       return Response.json({
         count: (await reloaded.listDailyAssetSnapshots()).length,

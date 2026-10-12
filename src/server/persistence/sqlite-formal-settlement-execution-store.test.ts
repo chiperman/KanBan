@@ -27,11 +27,7 @@ async function fixture(
   run: (database: SqliteDashboardDatabase, sql: DatabaseSync) => Promise<void>,
 ): Promise<void> {
   const root = await mkdtemp(path.join(tmpdir(), "kanban-settlement-execution-"));
-  const database = new SqliteDashboardDatabase(
-    path.join(root, "data.sqlite"),
-    path.join(root, "absent.json"),
-    path.join(root, "absent-cards.json"),
-  );
+  const database = new SqliteDashboardDatabase(path.join(root, "data.sqlite"));
   const sql = (database as unknown as { database: DatabaseSync }).database;
   try {
     await run(database, sql);

@@ -10,7 +10,7 @@ import type { FormalDailySettlement } from "./ports";
 for (const days of [30, 365, 3650]) {
   test("正式日结批量读取保持全部证据，规模 " + days, async () => {
     const root = await mkdtemp(path.join(tmpdir(), "kanban-settlement-query-"));
-    const database = new SqliteDashboardDatabase(path.join(root, "db.sqlite"), path.join(root, "absent.json"), path.join(root, "cards.json"));
+    const database = new SqliteDashboardDatabase(path.join(root, "db.sqlite"));
     const sql = (database as unknown as { database: DatabaseSync }).database;
     try {
       assert.deepEqual(await database.listFormalDailySettlements(), []);

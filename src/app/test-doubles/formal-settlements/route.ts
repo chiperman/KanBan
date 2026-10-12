@@ -325,11 +325,7 @@ export async function POST(request: Request) {
   }
   const root = await mkdtemp(path.join(tmpdir(), "pad-formal-settlement-"));
   try {
-    const database = new SqliteDashboardDatabase(
-      path.join(root, "dashboard.sqlite"),
-      path.join(root, "dashboard.json"),
-      path.join(root, "cards.json"),
-    );
+    const database = new SqliteDashboardDatabase(path.join(root, "dashboard.sqlite"));
     const isPublicScenario = body.action.startsWith("run-with-public-evm-source");
     const sources = [
       ...(isPublicScenario

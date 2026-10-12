@@ -10,7 +10,7 @@ import { projectAssetSourceTrend } from "../domain/investment-performance-trend"
 for (const days of [30, 365, 3650]) {
   test("详情仅读取所选来源和区间，规模 " + days, async () => {
     const root = await mkdtemp(path.join(tmpdir(), "kanban-detail-query-"));
-    const database = new SqliteDashboardDatabase(path.join(root, "db.sqlite"), path.join(root, "absent.json"), path.join(root, "cards.json"));
+    const database = new SqliteDashboardDatabase(path.join(root, "db.sqlite"));
     const sql = (database as unknown as { database: DatabaseSync }).database;
     try {
       for (let i = 0; i < 3; i++) await database.createManualAssetSource({ label: "来源" + i }, "2015-01-01T00:00:00.000Z");

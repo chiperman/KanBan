@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("FileDashboardDatabase 首次连接长桥来源保持持久化接口结果", async ({ request }) => {
+test("SQLite 首次连接长桥来源保持持久化接口结果", async ({ request }) => {
   const response = await request.post(
     "/test-doubles/longbridge/persistence",
   );

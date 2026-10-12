@@ -12,7 +12,7 @@ hook.deregister();
 test("顶层异常脱敏并持久化，重建存储后仍可读取最近执行", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "kanban-execution-"));
   try {
-    const database = () => new SqliteDashboardDatabase(path.join(root, "dashboard.sqlite"), path.join(root, "dashboard.json"), path.join(root, "cards.json"));
+    const database = () => new SqliteDashboardDatabase(path.join(root, "dashboard.sqlite"));
     const executions = new DatabaseFormalSettlementExecutions(database());
     const clock = { now: () => new Date("2026-09-18T00:05:00.000Z") };
     const runner = new ObservedFormalSettlementRunner({ run: async () => { throw new Error("token=PRIVATE_PROVIDER_SECRET"); } }, executions, clock);
@@ -29,7 +29,7 @@ test("顶层异常脱敏并持久化，重建存储后仍可读取最近执行",
 test("较早开始的慢执行最后完成，不覆盖较新执行的持久化结果", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "kanban-execution-race-"));
   try {
-    const store = () => new DatabaseFormalSettlementExecutions(new SqliteDashboardDatabase(path.join(root, "dashboard.sqlite"), path.join(root, "dashboard.json"), path.join(root, "cards.json")));
+    const store = () => new DatabaseFormalSettlementExecutions(new SqliteDashboardDatabase(path.join(root, "dashboard.sqlite")));
     let release!: () => void;
     const gate = new Promise<void>((resolve) => { release = resolve; });
     const old = new ObservedFormalSettlementRunner({ run: async () => { await gate; return { outcome: "error", reason: "source-read-failed" }; } }, store(), { now: () => new Date("2026-09-18T00:00:00.000Z") });

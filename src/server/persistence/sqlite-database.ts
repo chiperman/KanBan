@@ -19,11 +19,13 @@ export class SqliteDashboardDatabase
 
   constructor(
     databasePath: string,
-    legacyDashboardPath: string,
-    legacyCardsPath: string,
   ) {
-    this.stores = openSqliteDashboard(databasePath, legacyDashboardPath, legacyCardsPath);
+    this.stores = openSqliteDashboard(databasePath);
     this.database = this.stores.database;
+  }
+
+  close(): void {
+    this.database.close();
   }
 
   async readAssetFullRefreshState(): Promise<{

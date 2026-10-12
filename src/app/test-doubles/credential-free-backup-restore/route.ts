@@ -176,11 +176,7 @@ export async function POST(request: Request) {
 
   const root = await mkdtemp(path.join(tmpdir(), "pad-backup-restore-"));
   try {
-    const database = new SqliteDashboardDatabase(
-      path.join(root, "dashboard.sqlite"),
-      path.join(root, "dashboard.json"),
-      path.join(root, "cards.json"),
-    );
+    const database = new SqliteDashboardDatabase(path.join(root, "dashboard.sqlite"));
     const backups = new CredentialFreeBusinessDataBackup(
       database,
       path.join(root, "backups"),

@@ -19,7 +19,7 @@ test("投资记录 API 身份与来源隔离、跨站拒绝、保存编辑删除
   const oldEnv = process.env.APP_ENV;
   process.env.APP_ENV = "test";
   const root = await mkdtemp(path.join(tmpdir(), "kanban-record-route-"));
-  const db = new SqliteDashboardDatabase(path.join(root, "route.sqlite"), path.join(root, "absent.json"), path.join(root, "absent-cards.json"));
+  const db = new SqliteDashboardDatabase(path.join(root, "route.sqlite"));
   try {
     const now = "2026-09-29T12:00:00Z";
     await db.createManualAssetSource({ label: "一" }, now);

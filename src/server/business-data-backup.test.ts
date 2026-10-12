@@ -149,8 +149,7 @@ async function readBusinessState(database: DashboardDatabase): Promise<BusinessD
 async function sqliteFixture() {
   const directory = await mkdtemp(path.join(tmpdir(), "kanban-backup-sqlite-"));
   const databasePath = path.join(directory, "business.sqlite");
-  const database = new SqliteDashboardDatabase(databasePath,
-    path.join(directory, "absent-dashboard.json"), path.join(directory, "absent-cards.json"));
+  const database = new SqliteDashboardDatabase(databasePath);
   const sql = new DatabaseSync(databasePath);
   const time = "2026-08-03T12:00:00.000Z";
   await database.createManualAssetSource({ label: "测试多日原始记录" }, time);

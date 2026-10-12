@@ -4,10 +4,7 @@ import path from "node:path";
 
 import { getTestServices, isTestEnv } from "@/server/composition";
 import type { AssetSourceSummary } from "@/server/ports";
-import {
-  FileDashboardDatabase,
-  SqliteDashboardDatabase,
-} from "@/server/production";
+import { SqliteDashboardDatabase } from "@/server/production";
 
 export const dynamic = "force-dynamic";
 
@@ -91,11 +88,8 @@ export async function POST(request: Request) {
   if (body?.action === "file-persistence") {
     const root = await mkdtemp(path.join(tmpdir(), "pad-manual-assets-"));
     try {
-      const dashboardPath = path.join(root, "dashboard.json");
-      const database = new FileDashboardDatabase(
-        dashboardPath,
-        path.join(root, "cards.json"),
-      );
+      const dashboardPath = path.join(root, "dashboard.sqlite");
+      const database = new SqliteDashboardDatabase(dashboardPath);
       const capturedAt = "2026-01-01T01:00:00.000Z";
       await database.createManualAssetSource(
         { label: "A股" },
@@ -107,10 +101,7 @@ export async function POST(request: Request) {
         { day: "2026-01-01", amount: "108000", currency: "CNY" },
         "2026-01-01T08:00:00.000Z",
       );
-      const reloaded = new FileDashboardDatabase(
-        dashboardPath,
-        path.join(root, "cards.json"),
-      );
+      const reloaded = new SqliteDashboardDatabase(dashboardPath);
       const [baseline] = await reloaded.listDailyAssetSnapshots();
       const [trend] = await reloaded.listDailyAssetTrendObservations();
       return Response.json({
@@ -128,11 +119,7 @@ export async function POST(request: Request) {
   if (body?.action === "sqlite-same-day-cny-observation") {
     const root = await mkdtemp(path.join(tmpdir(), "pad-manual-assets-sqlite-"));
     try {
-      const database = new SqliteDashboardDatabase(
-        path.join(root, "dashboard.sqlite"),
-        path.join(root, "dashboard.json"),
-        path.join(root, "cards.json"),
-      );
+      const database = new SqliteDashboardDatabase(path.join(root, "dashboard.sqlite"));
       const firstCapturedAt = "2026-03-04T12:00:00.000Z";
       await database.replaceSources([longbridgeRateSource(firstCapturedAt)]);
       await database.createManualAssetSource({ label: "A股" }, firstCapturedAt);

@@ -5,10 +5,11 @@ import path from "node:path";
 import { getTestServices, isTestEnv } from "@/server/composition";
 import {
   DatabaseAssetSourceConnections,
-  FileDashboardDatabase,
+  SqliteDashboardDatabase,
   FileEncryptedSecretStore,
 } from "@/server/production";
 import { SourceIsolatedAssetSynchronization } from "@/server/asset-synchronization";
+import { migrateJsonToSqlite } from "@/server/persistence/json-to-sqlite-migration";
 import { ServeLongbridgeHoldingCandlestickReader } from "@/server/asset-sources/longbridge";
 import { InMemoryAssetFullRefreshState } from "@/server/testing/fakes";
 import type {
@@ -45,6 +46,7 @@ export async function POST(request: Request) {
   if (new URL(request.url).searchParams.get("legacy") === "option") {
     try {
       const dashboardPath = path.join(root, "dashboard.json");
+      const databasePath = path.join(root, "dashboard.sqlite");
       await writeFile(dashboardPath, JSON.stringify({
         cards: [{
           id: "legacy-option-card",
@@ -103,10 +105,12 @@ export async function POST(request: Request) {
           },
         }],
       }));
-      const database = new FileDashboardDatabase(
+      await migrateJsonToSqlite({
+        databasePath,
         dashboardPath,
-        path.join(root, "legacy-cards.json"),
-      );
+        cardsPath: path.join(root, "legacy-cards.json"),
+      });
+      const database = new SqliteDashboardDatabase(databasePath);
       const services = getTestServices();
       await services.assetCards.replaceAll(await database.listAssetCards());
       await services.assetSources.replaceAll(await database.listSources());
@@ -118,6 +122,7 @@ export async function POST(request: Request) {
   if (new URL(request.url).searchParams.get("legacy") === "1") {
     try {
       const dashboardPath = path.join(root, "dashboard.json");
+      const databasePath = path.join(root, "dashboard.sqlite");
       await writeFile(dashboardPath, JSON.stringify({
         cards: [{
           id: "legacy-card",
@@ -159,10 +164,12 @@ export async function POST(request: Request) {
           },
         }],
       }));
-      const database = new FileDashboardDatabase(
+      await migrateJsonToSqlite({
+        databasePath,
         dashboardPath,
-        path.join(root, "legacy-cards.json"),
-      );
+        cardsPath: path.join(root, "legacy-cards.json"),
+      });
+      const database = new SqliteDashboardDatabase(databasePath);
       const services = getTestServices();
       await services.assetCards.replaceAll(await database.listAssetCards());
       await services.assetSources.replaceAll(await database.listSources());
@@ -174,6 +181,7 @@ export async function POST(request: Request) {
   if (new URL(request.url).searchParams.get("legacy") === "history") {
     try {
       const dashboardPath = path.join(root, "dashboard.json");
+      const databasePath = path.join(root, "dashboard.sqlite");
       await writeFile(dashboardPath, JSON.stringify({
         cards: [],
         assetSources: [],
@@ -193,10 +201,12 @@ export async function POST(request: Request) {
           }],
         }],
       }));
-      const database = new FileDashboardDatabase(
+      await migrateJsonToSqlite({
+        databasePath,
         dashboardPath,
-        path.join(root, "legacy-cards.json"),
-      );
+        cardsPath: path.join(root, "legacy-cards.json"),
+      });
+      const database = new SqliteDashboardDatabase(databasePath);
       const [observation] = await database.listDailyAssetTrendObservations();
       return Response.json({
         observation,
@@ -210,12 +220,10 @@ export async function POST(request: Request) {
   process.env.PAD_SECRET_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64");
   try {
     const successDir = path.join(root, "success");
-    const dashboardPath = path.join(successDir, "dashboard.json");
+    await mkdir(successDir, { recursive: true });
+    const dashboardPath = path.join(successDir, "dashboard.sqlite");
     const secretPath = path.join(successDir, "secrets.json");
-    const database = new FileDashboardDatabase(
-      dashboardPath,
-      path.join(successDir, "legacy-cards.json"),
-    );
+    const database = new SqliteDashboardDatabase(dashboardPath);
     const secrets = new FileEncryptedSecretStore(secretPath);
     await new DatabaseAssetSourceConnections(
       database,
@@ -226,7 +234,7 @@ export async function POST(request: Request) {
     ).connectLongbridge(RESULT);
     const sources = await database.listSources();
     const reference = sources[0]?.credentialReference ?? "";
-    const dashboardRaw = await readFile(dashboardPath, "utf8");
+    const dashboardRaw = (await readFile(dashboardPath)).toString("latin1");
     const secretRaw = await readFile(secretPath, "utf8");
     const committedSecretReadable =
       (await secrets.get(reference)) === PROBE_SECRET;
@@ -234,7 +242,7 @@ export async function POST(request: Request) {
     const rotatedSecretRaw = await readFile(secretPath, "utf8");
 
     const failureDir = path.join(root, "failure");
-    const blockedDashboardPath = path.join(failureDir, "dashboard.json");
+    const blockedDashboardPath = path.join(failureDir, "dashboard.sqlite");
     await mkdir(blockedDashboardPath, { recursive: true });
     const failedSecrets = new FileEncryptedSecretStore(
       path.join(failureDir, "secrets.json"),
@@ -242,10 +250,7 @@ export async function POST(request: Request) {
     let failed = false;
     try {
       await new DatabaseAssetSourceConnections(
-        new FileDashboardDatabase(
-          blockedDashboardPath,
-          path.join(failureDir, "legacy-cards.json"),
-        ),
+        new SqliteDashboardDatabase(blockedDashboardPath),
         failedSecrets,
         Promise.resolve(),
         undefined,
@@ -289,9 +294,9 @@ export async function POST(request: Request) {
     await recoveryStore.recover(new Set([referenced]));
 
     const rotationDir = path.join(root, "rotation");
-    const rotationDashboard = new FileDashboardDatabase(
-      path.join(rotationDir, "dashboard.json"),
-      path.join(rotationDir, "legacy-cards.json"),
+    await mkdir(rotationDir, { recursive: true });
+    const rotationDashboard = new SqliteDashboardDatabase(
+      path.join(rotationDir, "dashboard.sqlite"),
     );
     const rotationSecrets = new FileEncryptedSecretStore(
       path.join(rotationDir, "secrets.json"),
@@ -348,9 +353,9 @@ export async function POST(request: Request) {
     const rotatedSource = (await rotationDashboard.listSources())[0];
 
     const keychainDir = path.join(root, "keychain");
-    const keychainDatabase = new FileDashboardDatabase(
-      path.join(keychainDir, "dashboard.json"),
-      path.join(keychainDir, "legacy-cards.json"),
+    await mkdir(keychainDir, { recursive: true });
+    const keychainDatabase = new SqliteDashboardDatabase(
+      path.join(keychainDir, "dashboard.sqlite"),
     );
     const keychainSecrets = new FileEncryptedSecretStore(
       path.join(keychainDir, "secrets.json"),
@@ -364,10 +369,9 @@ export async function POST(request: Request) {
     );
     await keychainConnections.connectLongbridge(KEYCHAIN_RESULT);
     const [keychainSource] = await keychainDatabase.listSources();
-    const keychainDashboardRaw = await readFile(
-      path.join(keychainDir, "dashboard.json"),
-      "utf8",
-    );
+    const keychainDashboardRaw = (await readFile(
+      path.join(keychainDir, "dashboard.sqlite"),
+    )).toString("latin1");
     const keychainSecretsRaw = await readFile(
       path.join(keychainDir, "secrets.json"),
       "utf8",
@@ -422,9 +426,9 @@ export async function POST(request: Request) {
       });
 
     const reauthorizationDir = path.join(root, "keychain-reauthorization");
-    const reauthorizationDatabase = new FileDashboardDatabase(
-      path.join(reauthorizationDir, "dashboard.json"),
-      path.join(reauthorizationDir, "legacy-cards.json"),
+    await mkdir(reauthorizationDir, { recursive: true });
+    const reauthorizationDatabase = new SqliteDashboardDatabase(
+      path.join(reauthorizationDir, "dashboard.sqlite"),
     );
     const reauthorizationSecrets = new FileEncryptedSecretStore(
       path.join(reauthorizationDir, "secrets.json"),

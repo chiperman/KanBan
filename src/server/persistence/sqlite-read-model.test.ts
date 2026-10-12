@@ -11,11 +11,7 @@ import { SqliteSourceReadStore } from "./sqlite-source-read-store";
 
 test("SQLite 只读职责模块保持来源、观测、资金查询口径", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "kanban-read-model-"));
-  const database = new SqliteDashboardDatabase(
-    path.join(root, "data.sqlite"),
-    path.join(root, "absent.json"),
-    path.join(root, "absent-cards.json"),
-  );
+  const database = new SqliteDashboardDatabase(path.join(root, "data.sqlite"));
   const sql = (database as unknown as { database: DatabaseSync }).database;
   const capturedAt = "2026-10-01T01:00:00.000Z";
   try {

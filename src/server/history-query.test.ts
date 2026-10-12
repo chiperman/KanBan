@@ -18,7 +18,7 @@ function observation(day: string): DailyAssetTrendObservation {
 for (const days of [30, 365, 3650]) {
   test("单日写入保持历史，规模 " + days, async () => {
     const root = await mkdtemp(path.join(tmpdir(), "kanban-history-query-"));
-    const database = new SqliteDashboardDatabase(path.join(root, "db.sqlite"), path.join(root, "absent.json"), path.join(root, "cards.json"));
+    const database = new SqliteDashboardDatabase(path.join(root, "db.sqlite"));
     const sql = (database as unknown as { database: DatabaseSync }).database;
     try {
       // Seed through the production business entry, exclusively in a temporary database.

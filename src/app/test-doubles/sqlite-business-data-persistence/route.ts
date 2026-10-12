@@ -20,6 +20,7 @@ import {
   SqliteDashboardDatabase,
   createProductionServices,
 } from "@/server/production";
+import { migrateJsonToSqlite } from "@/server/persistence/json-to-sqlite-migration";
 import { InvestmentCashflowLedger } from "@/server/investment-cashflows";
 import type {
   AssetSnapshot,
@@ -550,13 +551,7 @@ export async function POST(request: Request) {
     if (action === "legacy-refresh-upgrade") {
       await mkdir(dataDirectory, { recursive: true });
       const databasePath = path.join(dataDirectory, "dashboard.sqlite");
-      const legacyDashboardPath = path.join(dataDirectory, "dashboard.json");
-      const legacyCardsPath = path.join(dataDirectory, "cards.json");
-      const original = new SqliteDashboardDatabase(
-        databasePath,
-        legacyDashboardPath,
-        legacyCardsPath,
-      );
+      const original = new SqliteDashboardDatabase(databasePath);
       const source = (input: {
         id: string;
         kind: "binance" | "longbridge";
@@ -720,11 +715,7 @@ export async function POST(request: Request) {
       };
 
       const before = inspect();
-      const migrated = new SqliteDashboardDatabase(
-        databasePath,
-        legacyDashboardPath,
-        legacyCardsPath,
-      );
+      const migrated = new SqliteDashboardDatabase(databasePath);
       const after = inspect();
       const refreshState = new DatabaseAssetFullRefreshState(migrated);
       const stateBeforeRefresh = await refreshState.read();
@@ -777,23 +768,13 @@ export async function POST(request: Request) {
     if (action === "full-refresh-state") {
       await mkdir(dataDirectory, { recursive: true });
       const databasePath = path.join(dataDirectory, "dashboard.sqlite");
-      const legacyDashboardPath = path.join(dataDirectory, "dashboard.json");
-      const legacyCardsPath = path.join(dataDirectory, "cards.json");
-      const database = new SqliteDashboardDatabase(
-        databasePath,
-        legacyDashboardPath,
-        legacyCardsPath,
-      );
+      const database = new SqliteDashboardDatabase(databasePath);
       const state = new DatabaseAssetFullRefreshState(database);
       const before = await state.read();
       await state.start("2026-08-20T04:00:00.000Z");
       const during = await state.read();
       const restarted = new DatabaseAssetFullRefreshState(
-        new SqliteDashboardDatabase(
-          databasePath,
-          legacyDashboardPath,
-          legacyCardsPath,
-        ),
+        new SqliteDashboardDatabase(databasePath),
       );
       const afterRestart = await restarted.read();
       await restarted.finish();
@@ -804,21 +785,11 @@ export async function POST(request: Request) {
     if (action === "full-refresh-claim-race") {
       await mkdir(dataDirectory, { recursive: true });
       const databasePath = path.join(dataDirectory, "dashboard.sqlite");
-      const legacyDashboardPath = path.join(dataDirectory, "dashboard.json");
-      const legacyCardsPath = path.join(dataDirectory, "cards.json");
       const firstState = new DatabaseAssetFullRefreshState(
-        new SqliteDashboardDatabase(
-          databasePath,
-          legacyDashboardPath,
-          legacyCardsPath,
-        ),
+        new SqliteDashboardDatabase(databasePath),
       );
       const secondState = new DatabaseAssetFullRefreshState(
-        new SqliteDashboardDatabase(
-          databasePath,
-          legacyDashboardPath,
-          legacyCardsPath,
-        ),
+        new SqliteDashboardDatabase(databasePath),
       );
       const claim = {
         attemptedAt: "2026-08-20T04:00:00.000Z",
@@ -839,11 +810,7 @@ export async function POST(request: Request) {
 
     if (action === "first-connection-refresh-state") {
       await mkdir(dataDirectory, { recursive: true });
-      const database = new SqliteDashboardDatabase(
-        path.join(dataDirectory, "dashboard.sqlite"),
-        path.join(dataDirectory, "dashboard.json"),
-        path.join(dataDirectory, "cards.json"),
-      );
+      const database = new SqliteDashboardDatabase(path.join(dataDirectory, "dashboard.sqlite"));
       const state = new DatabaseAssetFullRefreshState(database);
       const connections = new DatabaseAssetSourceConnections(
         database,
@@ -871,11 +838,7 @@ export async function POST(request: Request) {
         failFirstCommit: boolean,
       ) => {
         await mkdir(directory, { recursive: true });
-        const database = new SqliteDashboardDatabase(
-          path.join(directory, "dashboard.sqlite"),
-          path.join(directory, "dashboard.json"),
-          path.join(directory, "cards.json"),
-        );
+        const database = new SqliteDashboardDatabase(path.join(directory, "dashboard.sqlite"));
         const state = new DatabaseAssetFullRefreshState(database);
         let clockCall = 0;
         const connections = new DatabaseAssetSourceConnections(
@@ -943,11 +906,7 @@ export async function POST(request: Request) {
       const services = createProductionServices(dataDirectory);
       await services.secrets.get("startup-ready");
       const state = new DatabaseAssetFullRefreshState(
-        new SqliteDashboardDatabase(
-          path.join(dataDirectory, "dashboard.sqlite"),
-          path.join(dataDirectory, "dashboard.json"),
-          path.join(dataDirectory, "cards.json"),
-        ),
+        new SqliteDashboardDatabase(path.join(dataDirectory, "dashboard.sqlite")),
       );
       await services.assetSourceConnections.connectBinance(
         authorization("refresh-cycle", "refresh-cycle-secret"),
@@ -975,11 +934,7 @@ export async function POST(request: Request) {
     if (action === "manual-source-record-persistence") {
       await mkdir(dataDirectory, { recursive: true });
       const databasePath = path.join(dataDirectory, "dashboard.sqlite");
-      const database = new SqliteDashboardDatabase(
-        databasePath,
-        path.join(dataDirectory, "dashboard.json"),
-        path.join(dataDirectory, "cards.json"),
-      );
+      const database = new SqliteDashboardDatabase(databasePath);
       await database.createManualAssetSource(
         { label: "A股" },
         "2026-08-03T01:00:00.000Z",
@@ -996,11 +951,7 @@ export async function POST(request: Request) {
         { label: "场外基金" },
         "2026-08-03T09:00:00.000Z",
       );
-      const reloaded = new SqliteDashboardDatabase(
-        databasePath,
-        path.join(dataDirectory, "dashboard.json"),
-        path.join(dataDirectory, "cards.json"),
-      );
+      const reloaded = new SqliteDashboardDatabase(databasePath);
       const sources = await reloaded.listSources();
       const baselines = await reloaded.listDailyAssetSnapshots();
       const trend = await reloaded.listDailyAssetTrendObservations();
@@ -1029,13 +980,7 @@ export async function POST(request: Request) {
     if (action === "schema-v8-manual-source-migration") {
       await mkdir(dataDirectory, { recursive: true });
       const databasePath = path.join(dataDirectory, "dashboard.sqlite");
-      const legacyDashboardPath = path.join(dataDirectory, "dashboard.json");
-      const legacyCardsPath = path.join(dataDirectory, "cards.json");
-      const first = new SqliteDashboardDatabase(
-        databasePath,
-        legacyDashboardPath,
-        legacyCardsPath,
-      );
+      const first = new SqliteDashboardDatabase(databasePath);
       await first.connectBinance(
         authorization("schema-v8", "not-persisted-here"),
         "opaque-v8-reference",
@@ -1050,11 +995,7 @@ export async function POST(request: Request) {
       `);
       downgrade.close();
 
-      const migrated = new SqliteDashboardDatabase(
-        databasePath,
-        legacyDashboardPath,
-        legacyCardsPath,
-      );
+      const migrated = new SqliteDashboardDatabase(databasePath);
       await migrated.createManualAssetSource(
         { label: "A股" },
         "2026-08-03T02:00:00.000Z",
@@ -1093,13 +1034,7 @@ export async function POST(request: Request) {
     if (action === "schema-v12-investment-cashflow-migration") {
       await mkdir(dataDirectory, { recursive: true });
       const databasePath = path.join(dataDirectory, "dashboard.sqlite");
-      const legacyDashboardPath = path.join(dataDirectory, "dashboard.json");
-      const legacyCardsPath = path.join(dataDirectory, "cards.json");
-      const first = new SqliteDashboardDatabase(
-        databasePath,
-        legacyDashboardPath,
-        legacyCardsPath,
-      );
+      const first = new SqliteDashboardDatabase(databasePath);
       const source = longbridgeReferenceSource();
       await first.replaceSources([source]);
       const snapshot = {
@@ -1125,11 +1060,7 @@ export async function POST(request: Request) {
       `);
       downgrade.close();
 
-      const migrated = new SqliteDashboardDatabase(
-        databasePath,
-        legacyDashboardPath,
-        legacyCardsPath,
-      );
+      const migrated = new SqliteDashboardDatabase(databasePath);
       const ledger = new InvestmentCashflowLedger(
         migrated,
         { list: () => migrated.listSources() },
@@ -1180,13 +1111,7 @@ export async function POST(request: Request) {
     if (action === "schema-v14-asset-class-trend-migration") {
       await mkdir(dataDirectory, { recursive: true });
       const databasePath = path.join(dataDirectory, "dashboard.sqlite");
-      const legacyDashboardPath = path.join(dataDirectory, "dashboard.json");
-      const legacyCardsPath = path.join(dataDirectory, "cards.json");
-      const first = new SqliteDashboardDatabase(
-        databasePath,
-        legacyDashboardPath,
-        legacyCardsPath,
-      );
+      const first = new SqliteDashboardDatabase(databasePath);
       const oldObservation = dailyTrendObservation(
         "100",
         "720",
@@ -1210,11 +1135,7 @@ export async function POST(request: Request) {
       `);
       downgrade.close();
 
-      const migrated = new SqliteDashboardDatabase(
-        databasePath,
-        legacyDashboardPath,
-        legacyCardsPath,
-      );
+      const migrated = new SqliteDashboardDatabase(databasePath);
       const [oldTrend] = await migrated.listDailyAssetTrendObservations();
       const classified = {
         ...classifiedDailyTrendObservation(
@@ -1228,11 +1149,7 @@ export async function POST(request: Request) {
       await migrated.createDailyAssetSnapshotIfAbsent(classified);
       await migrated.recordDailyAssetObservation(classified, true);
 
-      const restarted = new SqliteDashboardDatabase(
-        databasePath,
-        legacyDashboardPath,
-        legacyCardsPath,
-      );
+      const restarted = new SqliteDashboardDatabase(databasePath);
       const trends = await restarted.listDailyAssetTrendObservations();
       const inspection = new DatabaseSync(databasePath, { readOnly: true });
       const schemaVersion = inspection
@@ -1260,13 +1177,7 @@ export async function POST(request: Request) {
     if (action === "schema-v15-source-category-trend-backfill") {
       await mkdir(dataDirectory, { recursive: true });
       const databasePath = path.join(dataDirectory, "dashboard.sqlite");
-      const legacyDashboardPath = path.join(dataDirectory, "dashboard.json");
-      const legacyCardsPath = path.join(dataDirectory, "cards.json");
-      const first = new SqliteDashboardDatabase(
-        databasePath,
-        legacyDashboardPath,
-        legacyCardsPath,
-      );
+      const first = new SqliteDashboardDatabase(databasePath);
       const capturedAt = "2026-08-20T04:00:00.000Z";
       const source = (
         id: string,
@@ -1339,11 +1250,7 @@ export async function POST(request: Request) {
       `);
       downgrade.close();
 
-      const migrated = new SqliteDashboardDatabase(
-        databasePath,
-        legacyDashboardPath,
-        legacyCardsPath,
-      );
+      const migrated = new SqliteDashboardDatabase(databasePath);
       const [baseline] = await migrated.listDailyAssetSnapshots();
       const [trend] = await migrated.listDailyAssetTrendObservations();
       const inspection = new DatabaseSync(databasePath, { readOnly: true });
@@ -1367,11 +1274,7 @@ export async function POST(request: Request) {
     }
     if (action === "schema-v2-migration") {
       await mkdir(dataDirectory, { recursive: true });
-      new SqliteDashboardDatabase(
-        path.join(dataDirectory, "dashboard.sqlite"),
-        path.join(dataDirectory, "dashboard.json"),
-        path.join(dataDirectory, "cards.json"),
-      );
+      new SqliteDashboardDatabase(path.join(dataDirectory, "dashboard.sqlite"));
       const databasePath = path.join(dataDirectory, "dashboard.sqlite");
       const downgrade = new DatabaseSync(databasePath);
       downgrade.exec(`
@@ -1385,11 +1288,7 @@ export async function POST(request: Request) {
       `);
       downgrade.close();
 
-      const migrated = new SqliteDashboardDatabase(
-        databasePath,
-        path.join(dataDirectory, "dashboard.json"),
-        path.join(dataDirectory, "cards.json"),
-      );
+      const migrated = new SqliteDashboardDatabase(databasePath);
       const result = authorization("schema-v2", "not-persisted-here");
       result.snapshot.coverage = {
         status: "partial",
@@ -1428,13 +1327,7 @@ export async function POST(request: Request) {
     if (action === "schema-v4-trend-observation-migration") {
       await mkdir(dataDirectory, { recursive: true });
       const databasePath = path.join(dataDirectory, "dashboard.sqlite");
-      const legacyDashboardPath = path.join(dataDirectory, "dashboard.json");
-      const legacyCardsPath = path.join(dataDirectory, "cards.json");
-      const first = new SqliteDashboardDatabase(
-        databasePath,
-        legacyDashboardPath,
-        legacyCardsPath,
-      );
+      const first = new SqliteDashboardDatabase(databasePath);
       const initial = dailyTrendObservation(
         "10",
         "72",
@@ -1455,11 +1348,7 @@ export async function POST(request: Request) {
       `);
       downgrade.close();
 
-      const migrated = new SqliteDashboardDatabase(
-        databasePath,
-        legacyDashboardPath,
-        legacyCardsPath,
-      );
+      const migrated = new SqliteDashboardDatabase(databasePath);
       const [migratedTrend] = await migrated.listDailyAssetTrendObservations();
       await migrated.recordDailyAssetObservation(
         dailyTrendObservation(
@@ -1482,11 +1371,7 @@ export async function POST(request: Request) {
         false,
       );
 
-      const restarted = new SqliteDashboardDatabase(
-        databasePath,
-        legacyDashboardPath,
-        legacyCardsPath,
-      );
+      const restarted = new SqliteDashboardDatabase(databasePath);
       const [trendAfterFailureAndRestart] =
         await restarted.listDailyAssetTrendObservations();
       const inspection = new DatabaseSync(databasePath, { readOnly: true });
@@ -1519,11 +1404,7 @@ export async function POST(request: Request) {
     if (action === "complete-trend-survives-incomplete-refresh") {
       await mkdir(dataDirectory, { recursive: true });
       const databasePath = path.join(dataDirectory, "dashboard.sqlite");
-      const database = new SqliteDashboardDatabase(
-        databasePath,
-        path.join(dataDirectory, "dashboard.json"),
-        path.join(dataDirectory, "cards.json"),
-      );
+      const database = new SqliteDashboardDatabase(databasePath);
       const complete = dailyTrendObservation(
         "100",
         "720",
@@ -1544,11 +1425,7 @@ export async function POST(request: Request) {
       incomplete.sources[0].total.HKD = "624";
       await database.recordDailyAssetObservation(incomplete, true);
 
-      const restarted = new SqliteDashboardDatabase(
-        databasePath,
-        path.join(dataDirectory, "dashboard.json"),
-        path.join(dataDirectory, "cards.json"),
-      );
+      const restarted = new SqliteDashboardDatabase(databasePath);
       const [trend] = await restarted.listDailyAssetTrendObservations();
       return Response.json({
         capturedAt: trend.capturedAt,
@@ -1666,11 +1543,7 @@ export async function POST(request: Request) {
     if (action === "longbridge-option-read-upgrade") {
       await mkdir(dataDirectory, { recursive: true });
       const databasePath = path.join(dataDirectory, "dashboard.sqlite");
-      const database = new SqliteDashboardDatabase(
-        databasePath,
-        path.join(dataDirectory, "dashboard.json"),
-        path.join(dataDirectory, "cards.json"),
-      );
+      const database = new SqliteDashboardDatabase(databasePath);
       await database.replaceSources([legacyLongbridgeOptionSource()]);
 
       const inspection = new DatabaseSync(databasePath, { readOnly: true });
@@ -1679,11 +1552,7 @@ export async function POST(request: Request) {
         .get() as { holdings_json: string };
       inspection.close();
 
-      const restarted = new SqliteDashboardDatabase(
-        databasePath,
-        path.join(dataDirectory, "dashboard.json"),
-        path.join(dataDirectory, "cards.json"),
-      );
+      const restarted = new SqliteDashboardDatabase(databasePath);
       const [source] = await restarted.listSources();
       return Response.json({
         rawStatus: JSON.parse(raw.holdings_json)[0].valuation.status,
@@ -1695,13 +1564,7 @@ export async function POST(request: Request) {
     if (action === "schema-v6-hkd-fx-migration") {
       await mkdir(dataDirectory, { recursive: true });
       const databasePath = path.join(dataDirectory, "dashboard.sqlite");
-      const legacyDashboardPath = path.join(dataDirectory, "dashboard.json");
-      const legacyCardsPath = path.join(dataDirectory, "cards.json");
-      new SqliteDashboardDatabase(
-        databasePath,
-        legacyDashboardPath,
-        legacyCardsPath,
-      );
+      new SqliteDashboardDatabase(databasePath);
       const downgrade = new DatabaseSync(databasePath);
       downgrade.exec(`
         ALTER TABLE daily_asset_snapshots DROP COLUMN exchange_rates_json;
@@ -1718,11 +1581,7 @@ export async function POST(request: Request) {
       `);
       downgrade.close();
 
-      const database = new SqliteDashboardDatabase(
-        databasePath,
-        legacyDashboardPath,
-        legacyCardsPath,
-      );
+      const database = new SqliteDashboardDatabase(databasePath);
       const baseline = {
         ...dailySnapshot("source-one", "10", "72"),
         total: { USD: "10", CNY: "72", HKD: "78" },
@@ -1769,11 +1628,7 @@ export async function POST(request: Request) {
         }],
       };
       await database.recordDailyAssetObservation(trend, true);
-      const reloaded = new SqliteDashboardDatabase(
-        databasePath,
-        legacyDashboardPath,
-        legacyCardsPath,
-      );
+      const reloaded = new SqliteDashboardDatabase(databasePath);
       const inspection = new DatabaseSync(databasePath, { readOnly: true });
       const hkdColumns = [
         "daily_asset_snapshots",
@@ -1819,6 +1674,11 @@ export async function POST(request: Request) {
 
     if (action === "json-import" || action === "repeat-import") {
       const legacyContents = await writeLegacyDashboard(dataDirectory);
+      await migrateJsonToSqlite({
+        databasePath: path.join(dataDirectory, "dashboard.sqlite"),
+        dashboardPath: path.join(dataDirectory, "dashboard.json"),
+        cardsPath: path.join(dataDirectory, "cards.json"),
+      });
       const first = createProductionServices(dataDirectory);
       await first.secrets.get("startup-ready");
       if (action === "repeat-import") {
@@ -1897,6 +1757,8 @@ export async function POST(request: Request) {
         invalidJsonRejected: invalidJsonError.length > 0,
         invalidJsonPreserved:
           (await readFile(invalidJsonPath, "utf8")) === invalidJsonContents,
+        invalidJsonRequiresMigration:
+          invalidJsonError.includes("migrate:json-to-sqlite"),
         recoverableErrors:
           corruptError.includes("已停止启动") &&
           invalidJsonError.includes("已停止启动"),
@@ -1926,11 +1788,7 @@ export async function POST(request: Request) {
 
     if (action === "credential-commit-rollback") {
       await mkdir(dataDirectory, { recursive: true });
-      const database = new SqliteDashboardDatabase(
-        path.join(dataDirectory, "dashboard.sqlite"),
-        path.join(dataDirectory, "dashboard.json"),
-        path.join(dataDirectory, "cards.json"),
-      );
+      const database = new SqliteDashboardDatabase(path.join(dataDirectory, "dashboard.sqlite"));
       let pendingSecret = true;
       const failingSecrets = {
         async stage() {
@@ -1978,19 +1836,9 @@ export async function POST(request: Request) {
       const credentials = ["concurrent-secret-one", "concurrent-secret-two"];
       await mkdir(dataDirectory, { recursive: true });
       const databasePath = path.join(dataDirectory, "dashboard.sqlite");
-      const legacyDashboardPath = path.join(dataDirectory, "dashboard.json");
-      const legacyCardsPath = path.join(dataDirectory, "cards.json");
       const databases = [
-        new SqliteDashboardDatabase(
-          databasePath,
-          legacyDashboardPath,
-          legacyCardsPath,
-        ),
-        new SqliteDashboardDatabase(
-          databasePath,
-          legacyDashboardPath,
-          legacyCardsPath,
-        ),
+        new SqliteDashboardDatabase(databasePath),
+        new SqliteDashboardDatabase(databasePath),
       ];
       const arrive = twoPartyBarrier();
       const connections = databases.map(

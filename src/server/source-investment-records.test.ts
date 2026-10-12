@@ -15,7 +15,7 @@ const record = (id: string, day: string, kind: "opening" | "deposit" | "withdraw
 
 test("来源投资记录四类、金额日期约束、幂等、隔离、刷新保留与备份恢复", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "kanban-source-records-"));
-  const make = (name: string) => new SqliteDashboardDatabase(path.join(root, name + ".sqlite"), path.join(root, "absent.json"), path.join(root, "absent-cards.json"));
+  const make = (name: string) => new SqliteDashboardDatabase(path.join(root, name + ".sqlite"));
   const db = make("original"), restored = make("restored");
   try {
     await db.createManualAssetSource({ label: "A股" }, at);

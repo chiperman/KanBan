@@ -11,7 +11,7 @@ import type { AssetSourceSummary } from "./ports";
 
 async function fixture(t: TestContext) {
   const root = await mkdtemp(path.join(tmpdir(), "kanban-daily-trend-"));
-  const database = new SqliteDashboardDatabase(path.join(root, "data.sqlite"), path.join(root, "absent.json"), path.join(root, "absent-cards.json"));
+  const database = new SqliteDashboardDatabase(path.join(root, "data.sqlite"));
   t.after(async () => {
     (database as unknown as { database: DatabaseSync }).database.close();
     await rm(root, { recursive: true, force: true });

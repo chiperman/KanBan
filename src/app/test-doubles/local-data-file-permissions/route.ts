@@ -14,7 +14,7 @@ import { promisify } from "node:util";
 
 import { isTestEnv } from "@/server/composition";
 import {
-  FileDashboardDatabase,
+  SqliteDashboardDatabase,
   FileEncryptedSecretStore,
   FileOwnerCredentialStore,
   FileOwnerRecoveryCredentialStore,
@@ -227,15 +227,12 @@ export async function POST(request: Request) {
     }
 
     hardenLocalDataPermissions(dataDirectory);
-    const dashboardPath = path.join(dataDirectory, "dashboard.json");
+    const dashboardPath = path.join(dataDirectory, "dashboard.sqlite");
     const secretsPath = path.join(dataDirectory, "secrets.json");
     const ownerCredentialPath = path.join(dataDirectory, "owner-credential.json");
     const ownerRecoveryPath = path.join(dataDirectory, "owner-recovery.json");
 
-    await new FileDashboardDatabase(
-      dashboardPath,
-      path.join(dataDirectory, "cards.json"),
-    ).replaceAssetCards([]);
+    await new SqliteDashboardDatabase(dashboardPath).replaceAssetCards([]);
     await new FileEncryptedSecretStore(secretsPath).put("probe-secret");
     await new FileOwnerCredentialStore(ownerCredentialPath).save({
       id: "owner-credential",

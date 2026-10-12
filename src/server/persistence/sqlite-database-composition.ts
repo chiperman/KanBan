@@ -27,8 +27,6 @@ const { DatabaseSync } = sqlite;
 /** 装配共享连接上的 SQLite 模块；启动成功后移交连接，失败时负责关闭。 */
 export function openSqliteDashboard(
   databasePath: string,
-  legacyDashboardPath: string,
-  legacyCardsPath: string,
 ) {
   let database: SqliteConnection | undefined;
   try {
@@ -60,9 +58,6 @@ export function openSqliteDashboard(
       database,
       (operation) => transactions.run(operation),
       metadata,
-      businessData,
-      legacyDashboardPath,
-      legacyCardsPath,
     );
 
     chmodSync(databasePath, 0o600);
@@ -99,7 +94,7 @@ export function openSqliteDashboard(
     }
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(
-      `SQLite 业务数据初始化失败，已停止启动；请保留 ${databasePath} 和旧 JSON 后恢复: ${detail}`,
+      `SQLite 业务数据初始化失败，已停止启动；请保留 ${databasePath} 后恢复: ${detail}`,
       { cause: error },
     );
   }

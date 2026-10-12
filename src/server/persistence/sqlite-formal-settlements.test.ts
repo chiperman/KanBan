@@ -12,11 +12,7 @@ const capturedAt = "2026-10-01T16:05:00.000Z";
 
 async function fixture(t: TestContext) {
   const root = await mkdtemp(path.join(tmpdir(), "kanban-formal-settlement-store-"));
-  const database = new SqliteDashboardDatabase(
-    path.join(root, "data.sqlite"),
-    path.join(root, "absent.json"),
-    path.join(root, "absent-cards.json"),
-  );
+  const database = new SqliteDashboardDatabase(path.join(root, "data.sqlite"));
   const sql = (database as unknown as { database: DatabaseSync }).database;
   t.after(async () => {
     sql.close();

@@ -11,7 +11,7 @@ import { parseSourceInvestmentHistory } from "../domain/source-investment-histor
 
 test("来源历史事务导入、身份隔离、幂等与备份恢复", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "kanban-source-import-"));
-  const make = (name: string) => new SqliteDashboardDatabase(path.join(root, name + ".sqlite"), path.join(root, "absent.json"), path.join(root, "absent-cards.json"));
+  const make = (name: string) => new SqliteDashboardDatabase(path.join(root, name + ".sqlite"));
   const database = make("original"); const restored = make("restored");
   try {
     await database.createManualAssetSource({ label: "A股" }, "2026-01-01T00:00:00Z");
@@ -63,7 +63,7 @@ test("来源历史事务导入、身份隔离、幂等与备份恢复", async ()
 
 test("长桥有知有行历史允许导入及备份恢复，零期初与首次投入各计一次", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "kanban-longbridge-import-"));
-  const make = (name: string) => new SqliteDashboardDatabase(path.join(root, name + ".sqlite"), path.join(root, "absent.json"), path.join(root, "absent-cards.json"));
+  const make = (name: string) => new SqliteDashboardDatabase(path.join(root, name + ".sqlite"));
   const database = make("original"), restored = make("restored");
   try {
     await database.connectLongbridge({

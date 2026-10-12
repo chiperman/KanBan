@@ -8,6 +8,7 @@
     "longbridge:keychain:repair": "node scripts/longbridge-keychain.mjs repair",
     "daily-settlement:run": "node --experimental-transform-types --import ./scripts/register-ts-alias.mjs ./scripts/run-formal-daily-settlement.ts",
     "daily-settlement:launchd": "node ./scripts/formal-daily-settlement-launchd.mjs",
+    "migrate:json-to-sqlite": "node --experimental-transform-types --import ./scripts/register-ts-alias.mjs ./scripts/migrate-json-to-sqlite.ts",
     "predev": "pnpm native:longbridge:check",
     "prebuild": "pnpm native:longbridge:build",
     "prestart": "pnpm native:longbridge:check",

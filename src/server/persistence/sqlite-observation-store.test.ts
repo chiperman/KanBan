@@ -9,11 +9,7 @@ import { SqliteDashboardDatabase } from "./sqlite-database";
 
 test("观测子项写入失败同时回滚当日基准与趋势替换", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "kanban-observation-transaction-"));
-  const database = new SqliteDashboardDatabase(
-    path.join(root, "data.sqlite"),
-    path.join(root, "absent.json"),
-    path.join(root, "absent-cards.json"),
-  );
+  const database = new SqliteDashboardDatabase(path.join(root, "data.sqlite"));
   const sql = (database as unknown as { database: DatabaseSync }).database;
   const prepare = sql.prepare.bind(sql);
   try {

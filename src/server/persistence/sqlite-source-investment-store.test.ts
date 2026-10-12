@@ -8,11 +8,7 @@ import { SqliteDashboardDatabase } from "./sqlite-database";
 
 test("来源投资记录与历史写入失败回滚原数据，重试仍保持来源隔离", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "kanban-investment-transaction-"));
-  const database = new SqliteDashboardDatabase(
-    path.join(root, "data.sqlite"),
-    path.join(root, "absent.json"),
-    path.join(root, "absent-cards.json"),
-  );
+  const database = new SqliteDashboardDatabase(path.join(root, "data.sqlite"));
   const sql = (database as unknown as { database: DatabaseSync }).database;
   const prepare = sql.prepare.bind(sql);
   const capturedAt = "2026-10-01T01:00:00.000Z";

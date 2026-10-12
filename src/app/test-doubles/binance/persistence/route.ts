@@ -6,7 +6,7 @@ import { mapBinanceSnapshot } from "@/server/asset-sources/binance";
 import { isTestEnv } from "@/server/composition";
 import {
   DatabaseAssetSourceConnections,
-  FileDashboardDatabase,
+  SqliteDashboardDatabase,
   FileEncryptedSecretStore,
 } from "@/server/production";
 import {
@@ -27,12 +27,9 @@ export async function POST() {
   const previousKey = process.env.PAD_SECRET_ENCRYPTION_KEY;
   process.env.PAD_SECRET_ENCRYPTION_KEY = Buffer.alloc(32, 10).toString("base64");
   try {
-    const dashboardPath = path.join(root, "dashboard.json");
+    const dashboardPath = path.join(root, "dashboard.sqlite");
     const secretsPath = path.join(root, "secrets.json");
-    const database = new FileDashboardDatabase(
-      dashboardPath,
-      path.join(root, "legacy-cards.json"),
-    );
+    const database = new SqliteDashboardDatabase(dashboardPath);
     const secrets = new FileEncryptedSecretStore(secretsPath);
     const fixture = binanceFixture();
     const credentials = JSON.stringify({ apiKey: API_KEY, apiSecret: API_SECRET });
@@ -53,7 +50,7 @@ export async function POST() {
       }),
     });
     const source = (await database.listSources())[0];
-    const dashboardRaw = await readFile(dashboardPath, "utf8");
+    const dashboardRaw = (await readFile(dashboardPath)).toString("latin1");
     const secretRaw = await readFile(secretsPath, "utf8");
     return Response.json({
       sourceKind: source.kind,
