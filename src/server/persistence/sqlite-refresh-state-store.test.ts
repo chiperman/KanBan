@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { DatabaseSync } from "node:sqlite";
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { SqliteDashboardDatabase } from "./sqlite-database";
 
@@ -122,16 +122,24 @@ test("业务迁移完成标记由元数据模块写入且只导入一次", async
     assetCards: [{ id: "legacy-card", kind: "asset", title: "旧卡片", body: "正文", span: 2 }],
     assetSources: [],
   };
-  const { writeFile } = await import("node:fs/promises");
   await writeFile(dashboardPath, JSON.stringify(dashboard));
   let database = new SqliteDashboardDatabase(databasePath, dashboardPath, cardsPath);
   const sql = (database as unknown as { database: DatabaseSync }).database;
   try {
     assert.equal(sql.prepare("SELECT value FROM schema_metadata WHERE key = 'json_import_complete'").get()?.value, "1");
+    assert.equal(await readFile(dashboardPath + ".migration-backup", "utf8"), JSON.stringify(dashboard));
     assert.equal((await database.listAssetCards()).length, 1);
     sql.close();
     database = new SqliteDashboardDatabase(databasePath, dashboardPath, cardsPath);
     assert.equal((await database.listAssetCards()).length, 1);
+    const reopened = new DatabaseSync(databasePath);
+    reopened.prepare("DELETE FROM schema_metadata WHERE key = 'json_import_complete'").run();
+    reopened.close();
+    await writeFile(dashboardPath, JSON.stringify({ ...dashboard, assetCards: [] }));
+    assert.throws(
+      () => new SqliteDashboardDatabase(databasePath, dashboardPath, cardsPath),
+      /迁移备份与旧 Dashboard 不一致/,
+    );
   } finally {
     try { (database as unknown as { database: DatabaseSync }).database.close(); } catch {}
     await rm(root, { recursive: true, force: true });

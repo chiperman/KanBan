@@ -1,7 +1,6 @@
 import { parseSourceInvestmentHistory, type SourceInvestmentHistory } from "@/domain/source-investment-history";
 import { InvalidSourceInvestmentRecordError, parseSourceInvestmentRecordInput, type SourceInvestmentRecord, type SourceInvestmentRecordInput } from "@/domain/source-investment-records";
-import { chmodSync, copyFileSync, existsSync, readFileSync, } from "node:fs";
-import { DashboardSchema } from "./sqlite-schema";
+import { chmodSync, existsSync } from "node:fs";
 import { SqliteDashboardReadModel } from "./sqlite-read-model";
 import { SqliteFormalSettlementStore } from "./sqlite-formal-settlements";
 import { SqliteObservationStore } from "./sqlite-observation-store";
@@ -17,11 +16,11 @@ import { SqliteManualAssetRecordStore } from "./sqlite-manual-asset-record-store
 import { SqliteAssetSourceConnectionStore } from "./sqlite-asset-source-connection-store";
 import { SqliteAssetSourceDataStore } from "./sqlite-asset-source-data-store";
 import { SqliteAssetSourceReplacementStore } from "./sqlite-asset-source-replacement-store";
+import { SqliteDatabaseInitializationStore } from "./sqlite-database-initialization-store";
 
 import { type BusinessDataState } from "@/server/business-data-backup";
 import type { InvestmentCashflowStore } from "@/server/investment-cashflows";
 import type { DashboardDatabase, SqliteRow } from "@/server/persistence/contracts";
-import { parseLegacyDashboardStateSync } from "@/server/persistence/migrations";
 import type { SourceAuthorizationResult, SourceConnectionKind } from "@/server/persistence/source-record";
 import type { AssetSourceSummary, BinanceAuthorizationResult, BitAuthorizationResult, BitgetAuthorizationResult, Card, CreateManualAssetSourceInput, DailyAssetSnapshot, DailyAssetTrendObservation, EvmWatchAuthorizationResult, FormalDailySettlement, FormalSettlementExecution, ImportedAssetSourceHistoryObservation, InvestmentCashflow, LongbridgeAuthorizationResult, ManualAssetClass, ManualAssetRecord, ManualAssetRecordInput, OkxAuthorizationResult } from "@/server/ports";
 
@@ -51,6 +50,7 @@ export class SqliteDashboardDatabase
   private sourceConnections!: SqliteAssetSourceConnectionStore;
   private sourceData!: SqliteAssetSourceDataStore;
   private sourceReplacement!: SqliteAssetSourceReplacementStore;
+  private initialization!: SqliteDatabaseInitializationStore;
 
   constructor(
     private readonly databasePath: string,
@@ -99,13 +99,20 @@ export class SqliteDashboardDatabase
         this.manualRecords,
         this.sourceData,
       );
+      this.initialization = new SqliteDatabaseInitializationStore(
+        this.database,
+        (operation) => this.transaction(operation),
+        this.metadataStore,
+        this.businessData,
+        this.legacyDashboardPath,
+        this.legacyCardsPath,
+      );
       chmodSync(databasePath, 0o600);
       this.database.exec("PRAGMA busy_timeout = 5000");
       this.database.exec("PRAGMA foreign_keys = ON");
       this.database.exec("PRAGMA journal_mode = WAL");
       this.database.exec("PRAGMA synchronous = FULL");
-      new DashboardSchema(this.database, (operation) => this.transaction(operation), (key) => this.metadata(key)).createSchema();
-      this.initializeLegacyData();
+      this.initialization.initialize();
       this.assertIntegrity();
       this.hardenDatabaseFiles();
     } catch (error) {
@@ -120,37 +127,6 @@ export class SqliteDashboardDatabase
         { cause: error },
       );
     }
-  }
-
-  private initializeLegacyData(): void {
-    if (this.metadata("json_import_complete") === "1") return;
-    const state = parseLegacyDashboardStateSync(
-      this.legacyDashboardPath,
-      this.legacyCardsPath,
-    );
-    this.transaction(() => {
-      this.businessData.replace(state);
-      this.backupLegacyDashboard();
-      this.metadataStore.set("json_import_complete", "1");
-    });
-  }
-
-  private backupLegacyDashboard(): void {
-    if (!existsSync(this.legacyDashboardPath)) return;
-    const backupPath = `${this.legacyDashboardPath}.migration-backup`;
-    const source = readFileSync(this.legacyDashboardPath);
-    if (existsSync(backupPath)) {
-      if (!source.equals(readFileSync(backupPath))) {
-        throw new Error(`迁移备份与旧 Dashboard 不一致: ${backupPath}`);
-      }
-    } else {
-      copyFileSync(this.legacyDashboardPath, backupPath);
-    }
-    chmodSync(backupPath, 0o600);
-  }
-
-  private metadata(key: string): string | null {
-    return this.metadataStore.get(key);
   }
 
   async readAssetFullRefreshState(): Promise<{
