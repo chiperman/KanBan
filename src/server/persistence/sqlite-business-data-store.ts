@@ -2,13 +2,13 @@ import type { DatabaseSync } from "node:sqlite";
 import type { BusinessDataState } from "@/server/backup/document-codec";
 import type { DashboardState, SqliteRow } from "@/server/persistence/contracts";
 import { migrateDailyObservation } from "@/server/persistence/migrations";
-import type { SqliteAssetSourceStore } from "./sqlite-asset-source-store";
 import type { SqliteFormalSettlementStore } from "./sqlite-formal-settlements";
 import type { SqliteInvestmentCashflowStore } from "./sqlite-investment-cashflow-store";
 import type { SqliteObservationStore } from "./sqlite-observation-store";
 import type { SqliteSourceInvestmentStore } from "./sqlite-source-investment-store";
 import type { SqliteAssetCardStore } from "./sqlite-asset-card-store";
 import type { SqliteManualAssetRecordStore } from "./sqlite-manual-asset-record-store";
+import type { SqliteAssetSourceDataStore } from "./sqlite-asset-source-data-store";
 
 /**
  * 完整业务状态的 SQLite 写入模块；调用方负责事务、完整性校验与提交/回滚。
@@ -17,13 +17,13 @@ import type { SqliteManualAssetRecordStore } from "./sqlite-manual-asset-record-
 export class SqliteBusinessDataStore {
   constructor(
     private readonly database: DatabaseSync,
-    private readonly sources: SqliteAssetSourceStore,
     private readonly observations: SqliteObservationStore,
     private readonly cashflows: SqliteInvestmentCashflowStore,
     private readonly sourceInvestments: SqliteSourceInvestmentStore,
     private readonly formalSettlements: SqliteFormalSettlementStore,
     private readonly cards: SqliteAssetCardStore,
     private readonly manualRecords: SqliteManualAssetRecordStore,
+    private readonly sourceData: SqliteAssetSourceDataStore,
   ) {}
 
   replace(state: DashboardState | BusinessDataState): void {
@@ -41,7 +41,7 @@ export class SqliteBusinessDataStore {
     `);
 
     state.assetSources.forEach((source, position) =>
-      this.sources.insert(source, position),
+      this.sourceData.insert(source, position),
     );
     this.cards.replace(state.assetCards);
     state.dailyAssetSnapshots.forEach((snapshot) =>

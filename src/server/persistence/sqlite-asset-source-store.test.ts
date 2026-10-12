@@ -145,6 +145,20 @@ test("重连来源写入失败时连接状态、凭证和快照整批回滚", as
   });
 });
 
+test("来源资料与快照写入失败时连接结果整批回滚", async () => {
+  await fixture(async (database, sql) => {
+    const before = await state(database);
+    sql.exec(`CREATE TRIGGER reject_source_snapshot
+      BEFORE INSERT ON asset_source_snapshots
+      BEGIN SELECT RAISE(ABORT, 'fixture source snapshot failure'); END;`);
+    await assert.rejects(
+      database.connectBinance(authorization, "fixture-old", capturedAt),
+      /fixture source snapshot failure/,
+    );
+    assert.deepEqual(await state(database), before);
+  });
+});
+
 test("卡片布局替换失败时整批回滚，隐藏状态只更新对应来源", async () => {
   await fixture(async (database, sql) => {
     await database.connectBinance(authorization, "fixture-old", capturedAt);

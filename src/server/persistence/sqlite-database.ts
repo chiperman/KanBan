@@ -15,6 +15,7 @@ import { SqliteAssetCardStore } from "./sqlite-asset-card-store";
 import { SqliteMetadataStore } from "./sqlite-metadata-store";
 import { SqliteManualAssetRecordStore } from "./sqlite-manual-asset-record-store";
 import { SqliteAssetSourceConnectionStore } from "./sqlite-asset-source-connection-store";
+import { SqliteAssetSourceDataStore } from "./sqlite-asset-source-data-store";
 
 import { type BusinessDataState } from "@/server/business-data-backup";
 import type { InvestmentCashflowStore } from "@/server/investment-cashflows";
@@ -47,6 +48,7 @@ export class SqliteDashboardDatabase
   private metadataStore!: SqliteMetadataStore;
   private manualRecords!: SqliteManualAssetRecordStore;
   private sourceConnections!: SqliteAssetSourceConnectionStore;
+  private sourceData!: SqliteAssetSourceDataStore;
 
   constructor(
     private readonly databasePath: string,
@@ -58,6 +60,7 @@ export class SqliteDashboardDatabase
       this.cards = new SqliteAssetCardStore(this.database);
       this.metadataStore = new SqliteMetadataStore(this.database);
       this.manualRecords = new SqliteManualAssetRecordStore(this.database);
+      this.sourceData = new SqliteAssetSourceDataStore(this.database);
       this.readModel = new SqliteDashboardReadModel(this.database);
       this.formalSettlements = new SqliteFormalSettlementStore(this.database);
       this.observations = new SqliteObservationStore(this.database, this.readModel);
@@ -68,10 +71,11 @@ export class SqliteDashboardDatabase
         this.observations,
         this.cards,
         this.manualRecords,
+        this.sourceData,
       );
       this.sourceConnections = new SqliteAssetSourceConnectionStore(
         this.database,
-        this.sources,
+        this.sourceData,
         this.readModel,
         this.observations,
         this.cards,
@@ -81,13 +85,13 @@ export class SqliteDashboardDatabase
       this.refreshState = new SqliteRefreshStateStore(this.metadataStore);
       this.businessData = new SqliteBusinessDataStore(
         this.database,
-        this.sources,
         this.observations,
         this.investmentCashflows,
         this.sourceInvestments,
         this.formalSettlements,
         this.cards,
         this.manualRecords,
+        this.sourceData,
       );
       chmodSync(databasePath, 0o600);
       this.database.exec("PRAGMA busy_timeout = 5000");
@@ -266,12 +270,12 @@ export class SqliteDashboardDatabase
         DELETE FROM asset_source_sync_states;
         DELETE FROM asset_sources;
       `);
-      sources.forEach((source, position) => this.sources.insert(source, position));
+      sources.forEach((source, position) => this.sourceData.insert(source, position));
     });
   }
 
   async updateSource(source: AssetSourceSummary): Promise<void> {
-    this.transaction(() => this.sources.update(source));
+    this.transaction(() => this.sourceData.update(source));
   }
 
   async listDailyAssetSnapshots(): Promise<DailyAssetSnapshot[]> {
@@ -386,14 +390,14 @@ export class SqliteDashboardDatabase
     sourceId: string,
     displayName: string | null,
   ): Promise<void> {
-    this.transaction(() => this.sources.setDisplayName(sourceId, displayName));
+    this.transaction(() => this.sourceData.setDisplayName(sourceId, displayName));
   }
 
   async setAssetSourceManualClass(
     sourceId: string,
     assetClass: ManualAssetClass | null,
   ): Promise<void> {
-    this.transaction(() => this.sources.setManualClass(sourceId, assetClass));
+    this.transaction(() => this.sourceData.setManualClass(sourceId, assetClass));
   }
 
   async setAssetSourceEvmTokenPreferences(
@@ -401,7 +405,7 @@ export class SqliteDashboardDatabase
     ignoredAssetKeys: string[],
     includedAssetKeys: string[],
   ): Promise<void> {
-    this.transaction(() => this.sources.setEvmTokenPreferences(sourceId, ignoredAssetKeys, includedAssetKeys));
+    this.transaction(() => this.sourceData.setEvmTokenPreferences(sourceId, ignoredAssetKeys, includedAssetKeys));
   }
 
   async createManualAssetSource(

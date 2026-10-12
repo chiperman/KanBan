@@ -4,7 +4,7 @@ import type { SqliteRow } from "./contracts";
 import type { SourceAuthorizationResult, SourceConnectionKind } from "./source-record";
 import { buildConnectedSource, connectedSourceKind } from "./source-record";
 import type { SqliteAssetCardStore } from "./sqlite-asset-card-store";
-import type { SqliteAssetSourceStore } from "./sqlite-asset-source-store";
+import type { SqliteAssetSourceDataStore } from "./sqlite-asset-source-data-store";
 import type { SqliteDashboardReadModel } from "./sqlite-read-model";
 import type { SqliteObservationStore } from "./sqlite-observation-store";
 import type { AssetSourceSummary } from "@/server/ports";
@@ -13,7 +13,7 @@ import type { AssetSourceSummary } from "@/server/ports";
 export class SqliteAssetSourceConnectionStore {
   constructor(
     private readonly database: DatabaseSync,
-    private readonly sources: SqliteAssetSourceStore,
+    private readonly data: SqliteAssetSourceDataStore,
     private readonly readModel: SqliteDashboardReadModel,
     private readonly observations: SqliteObservationStore,
     private readonly cards: SqliteAssetCardStore,
@@ -36,7 +36,7 @@ export class SqliteAssetSourceConnectionStore {
     const sourcePosition = (
       this.database.prepare("SELECT COUNT(*) AS count FROM asset_sources").get() as SqliteRow
     ).count as number;
-    this.sources.insert(connected.source, sourcePosition);
+    this.data.insert(connected.source, sourcePosition);
     this.cards.append(connected.card);
     const observation = buildDailyAssetSnapshot(
       this.readModel.listSourcesSync(),
@@ -80,7 +80,7 @@ export class SqliteAssetSourceConnectionStore {
         error: null,
       },
     };
-    this.sources.update(updated);
+    this.data.update(updated);
     return source.credentialReference;
   }
 
