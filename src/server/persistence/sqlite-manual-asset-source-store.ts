@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { shanghaiDay } from "@/domain/daily-asset-snapshots";
 import { assertManualAssetRecordNotFuture } from "@/domain/manual-asset-records";
-import type { SqliteRow } from "./contracts";
 import { applyLatestManualAssetRecord, latestManualAssetRecord } from "./observations";
 import type { SqliteDashboardReadModel } from "./sqlite-read-model";
 import type { SqliteObservationStore } from "./sqlite-observation-store";
@@ -11,8 +10,8 @@ import type { SqliteAssetCardStore } from "./sqlite-asset-card-store";
 import type { SqliteManualAssetRecordStore } from "./sqlite-manual-asset-record-store";
 import type { SqliteAssetSourceDataStore } from "./sqlite-asset-source-data-store";
 
-/** 来源身份与快照写入模块；关联卡片由独立模块写入，跨表事务由拥有者统一控制。 */
-export class SqliteAssetSourceStore {
+/** 手工来源与记录派生写入模块；跨表事务由调用方统一控制。 */
+export class SqliteManualAssetSourceStore {
   constructor(
     private readonly database: DatabaseSync,
     private readonly readModel: SqliteDashboardReadModel,
@@ -114,5 +113,4 @@ export class SqliteAssetSourceStore {
       });
     }
   }
-
 }

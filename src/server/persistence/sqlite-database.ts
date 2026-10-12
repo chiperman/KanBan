@@ -6,7 +6,7 @@ import { SqliteDashboardReadModel } from "./sqlite-read-model";
 import { SqliteFormalSettlementStore } from "./sqlite-formal-settlements";
 import { SqliteObservationStore } from "./sqlite-observation-store";
 import { SqliteSourceInvestmentStore } from "./sqlite-source-investment-store";
-import { SqliteAssetSourceStore } from "./sqlite-asset-source-store";
+import { SqliteManualAssetSourceStore } from "./sqlite-manual-asset-source-store";
 import { SqliteInvestmentCashflowStore } from "./sqlite-investment-cashflow-store";
 import { SqliteFormalSettlementExecutionStore } from "./sqlite-formal-settlement-execution-store";
 import { SqliteBusinessDataStore } from "./sqlite-business-data-store";
@@ -39,7 +39,7 @@ export class SqliteDashboardDatabase
   private formalSettlements!: SqliteFormalSettlementStore;
   private observations!: SqliteObservationStore;
   private sourceInvestments!: SqliteSourceInvestmentStore;
-  private sources!: SqliteAssetSourceStore;
+  private manualSources!: SqliteManualAssetSourceStore;
   private investmentCashflows!: SqliteInvestmentCashflowStore;
   private formalSettlementExecutions!: SqliteFormalSettlementExecutionStore;
   private businessData!: SqliteBusinessDataStore;
@@ -65,7 +65,7 @@ export class SqliteDashboardDatabase
       this.formalSettlements = new SqliteFormalSettlementStore(this.database);
       this.observations = new SqliteObservationStore(this.database, this.readModel);
       this.sourceInvestments = new SqliteSourceInvestmentStore(this.database, this.readModel);
-      this.sources = new SqliteAssetSourceStore(
+      this.manualSources = new SqliteManualAssetSourceStore(
         this.database,
         this.readModel,
         this.observations,
@@ -412,7 +412,7 @@ export class SqliteDashboardDatabase
     input: CreateManualAssetSourceInput,
     capturedAt: string,
   ): Promise<void> {
-    this.transaction(() => this.sources.createManual(input, capturedAt));
+    this.transaction(() => this.manualSources.createManual(input, capturedAt));
   }
 
   async recordManualAssetSource(
@@ -420,7 +420,7 @@ export class SqliteDashboardDatabase
     input: ManualAssetRecordInput,
     capturedAt: string,
   ): Promise<void> {
-    this.transaction(() => this.sources.recordManual(sourceId, input, capturedAt));
+    this.transaction(() => this.manualSources.recordManual(sourceId, input, capturedAt));
   }
 
   async deleteManualAssetSourceRecord(
@@ -428,7 +428,7 @@ export class SqliteDashboardDatabase
     day: string,
     capturedAt: string,
   ): Promise<void> {
-    this.transaction(() => this.sources.deleteManualRecord(sourceId, day, capturedAt));
+    this.transaction(() => this.manualSources.deleteManualRecord(sourceId, day, capturedAt));
   }
 
   async disconnectAssetSource(sourceId: string): Promise<string | null> {

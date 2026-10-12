@@ -159,6 +159,20 @@ test("来源资料与快照写入失败时连接结果整批回滚", async () =>
   });
 });
 
+test("手工来源卡片写入失败时来源与快照整批回滚", async () => {
+  await fixture(async (database, sql) => {
+    const before = await state(database);
+    sql.exec(`CREATE TRIGGER reject_manual_source_card
+      BEFORE INSERT ON asset_cards
+      BEGIN SELECT RAISE(ABORT, 'fixture manual source card failure'); END;`);
+    await assert.rejects(
+      database.createManualAssetSource({ label: "手工资产" }, capturedAt),
+      /fixture manual source card failure/,
+    );
+    assert.deepEqual(await state(database), before);
+  });
+});
+
 test("卡片布局替换失败时整批回滚，隐藏状态只更新对应来源", async () => {
   await fixture(async (database, sql) => {
     await database.connectBinance(authorization, "fixture-old", capturedAt);
