@@ -3,19 +3,16 @@ import { parseSourceInvestmentHistory, type SourceInvestmentHistory } from "@/do
 import { InvalidSourceInvestmentRecordError, parseSourceInvestmentRecordInput, type SourceInvestmentRecord, type SourceInvestmentRecordInput } from "@/domain/source-investment-records";
 import { chmodSync, copyFileSync, existsSync, readFileSync, } from "node:fs";
 import { DashboardSchema } from "./sqlite-schema";
+import { SqliteDashboardReadModel } from "./sqlite-read-model";
 
 import { buildDailyAssetSnapshot, mergeDailyTrendObservation, shanghaiDay } from "@/domain/daily-asset-snapshots";
 import { decimalAdd } from "@/domain/decimal";
-import {
-  normalizeIgnoredAssetKeys,
-  withEffectiveEvmSnapshotCoverage,
-} from "@/domain/evm-token-preferences";
 import { assertManualAssetRecordNotFuture, } from "@/domain/manual-asset-records";
 import { normalizeAssetSyncState } from "@/server/asset-sync-diagnostics";
 import { type BusinessDataState } from "@/server/business-data-backup";
 import type { InvestmentCashflowStore } from "@/server/investment-cashflows";
 import type { DashboardDatabase, DashboardState, SqliteRow } from "@/server/persistence/contracts";
-import { migrateAssetSource, migrateDailyObservation, parseLegacyDashboardStateSync } from "@/server/persistence/migrations";
+import { migrateDailyObservation, parseLegacyDashboardStateSync } from "@/server/persistence/migrations";
 import { applyLatestManualAssetRecord, latestManualAssetRecord, manualDailySource } from "@/server/persistence/observations";
 import type { SourceAuthorizationResult, SourceConnectionKind } from "@/server/persistence/source-record";
 import { buildConnectedSource, connectedSourceKind } from "@/server/persistence/source-record";
@@ -32,6 +29,7 @@ export class SqliteDashboardDatabase
   implements DashboardDatabase, InvestmentCashflowStore
 {
   private database!: InstanceType<typeof DatabaseSync>;
+  private readModel!: SqliteDashboardReadModel;
 
   constructor(
     private readonly databasePath: string,
@@ -40,6 +38,7 @@ export class SqliteDashboardDatabase
   ) {
     try {
       this.database = new DatabaseSync(databasePath);
+      this.readModel = new SqliteDashboardReadModel(this.database);
       chmodSync(databasePath, 0o600);
       this.database.exec("PRAGMA busy_timeout = 5000");
       this.database.exec("PRAGMA foreign_keys = ON");
@@ -641,7 +640,7 @@ export class SqliteDashboardDatabase
   ): void {
     const isCurrentDay = record.day === shanghaiDay(capturedAt);
     const currentObservation = isCurrentDay
-      ? buildDailyAssetSnapshot(this.listSourcesSync(), capturedAt)
+      ? buildDailyAssetSnapshot(this.readModel.listSourcesSync(), capturedAt)
       : null;
     const manualSource = currentObservation?.sources.find(
       (item) => item.sourceId === source.id,
@@ -770,262 +769,12 @@ export class SqliteDashboardDatabase
     });
   }
 
-  private listSourcesSync(detailSourceId?: string): AssetSourceSummary[] {
-    const rows = this.database
-      .prepare("SELECT * FROM asset_sources ORDER BY position")
-      .all() as SqliteRow[];
-    // Retain global rates/registration metadata without decoding unrelated holdings.
-    const snapshots = this.database.prepare(detailSourceId === undefined
-      ? "SELECT * FROM asset_source_snapshots"
-      : "SELECT source_id, total_amount, total_currency, synced_at, exchange_rates_json, CASE WHEN source_id = ? THEN holdings_json ELSE '[]' END AS holdings_json, CASE WHEN source_id = ? THEN unrecognized_evm_tokens_json ELSE '[]' END AS unrecognized_evm_tokens_json, CASE WHEN source_id = ? THEN coverage_json ELSE NULL END AS coverage_json FROM asset_source_snapshots")
-      .all(...(detailSourceId === undefined ? [] : [detailSourceId, detailSourceId, detailSourceId])) as SqliteRow[];
-    const snapshotMap = new Map(snapshots.map((row) => [row.source_id, row]));
-    const syncMap = new Map((this.database.prepare("SELECT * FROM asset_source_sync_states").all() as SqliteRow[]).map((row) => [row.source_id, row]));
-    return rows.map((row) => {
-      const snapshot = snapshotMap.get(row.id)!;
-      const sync = syncMap.get(row.id)!;
-      const unrecognizedEvmTokens = JSON.parse(
-        (snapshot.unrecognized_evm_tokens_json as string | null) ?? "[]",
-      );
-      return withEffectiveEvmSnapshotCoverage(migrateAssetSource({
-        id: row.id as string,
-        kind: row.kind as string,
-        label: row.label as string,
-        ...(typeof row.display_name === "string"
-          ? { displayName: row.display_name }
-          : {}),
-        accountId: row.account_id as string,
-        permissions: JSON.parse(row.permissions_json as string),
-        credentialReference:
-          typeof row.credential_reference === "string"
-            ? row.credential_reference
-            : null,
-        ignoredAssetKeys: normalizeIgnoredAssetKeys(
-          JSON.parse(
-            (row.ignored_asset_keys_json as string | null) ?? "[]",
-          ),
-        ),
-        includedAssetKeys: normalizeIgnoredAssetKeys(
-          JSON.parse(
-            (row.included_asset_keys_json as string | null) ?? "[]",
-          ),
-        ),
-        ...(row.kind === "manual"
-          ? {
-              hasManualRecord: row.has_manual_record !== 0,
-              ...(typeof row.manual_asset_class === "string"
-                ? {
-                    manualAssetClass:
-                      row.manual_asset_class as ManualAssetClass,
-                  }
-                : {}),
-            }
-          : {}),
-        snapshot: {
-          total: {
-            amount: snapshot.total_amount as string,
-            currency: snapshot.total_currency as string,
-          },
-          holdings: JSON.parse(snapshot.holdings_json as string),
-          ...(unrecognizedEvmTokens.length === 0
-            ? {}
-            : { unrecognizedEvmTokens }),
-          exchangeRates: JSON.parse(snapshot.exchange_rates_json as string),
-          ...(snapshot.coverage_json === null
-            ? {}
-            : {
-                coverage: JSON.parse(snapshot.coverage_json as string),
-              }),
-          syncedAt: snapshot.synced_at as string,
-        },
-        sync: normalizeAssetSyncState({
-          status: sync.status as "current" | "expired",
-          lastSuccessfulAt: sync.last_successful_at as string,
-          lastAttemptAt: sync.last_attempt_at as string,
-          error: sync.error as string | null,
-          ...(sync.failed_mode === null
-            ? {}
-            : { failedMode: sync.failed_mode as "all" | "prices" | "holdings" }),
-          ...(sync.diagnostic_json === null
-            ? {}
-            : { diagnostic: JSON.parse(sync.diagnostic_json as string) }),
-          ...(sync.recent_attempts_json === "[]" ? {} : {
-            recentAttempts: JSON.parse((sync.recent_attempts_json as string | null) ?? "[]"),
-          }),
-        }),
-        ...(row.lifecycle === null
-          ? {}
-          : { lifecycle: row.lifecycle as "connected" | "disconnected" }),
-      }));
-    });
-  }
-
-  private listManualAssetRecordsSync(sourceId?: string): ManualAssetRecord[] {
-    const rows = this.database
-      .prepare(`
-        SELECT source_id, day, amount, currency, recorded_at
-        FROM manual_asset_records
-        ${sourceId === undefined ? "" : "WHERE source_id = ?"}
-        ORDER BY source_id, day DESC
-      `)
-      .all(...(sourceId === undefined ? [] : [sourceId])) as SqliteRow[];
-    return rows.map((row) => ({
-      sourceId: row.source_id as string,
-      day: row.day as string,
-      amount: row.amount as string,
-      currency: row.currency as ManualAssetRecord["currency"],
-      recordedAt: row.recorded_at as string,
-    }));
-  }
-
-  private listInvestmentCashflowsSync(): InvestmentCashflow[] {
-    const rows = this.database
-      .prepare(`
-        SELECT * FROM investment_cashflows
-        ORDER BY occurred_at DESC, created_at DESC, id DESC
-      `)
-      .all() as SqliteRow[];
-    return rows.map((row) => ({
-      id: row.id as string,
-      kind: row.kind as InvestmentCashflow["kind"],
-      occurredAt: row.occurred_at as string,
-      amount: row.amount as string,
-      currency: row.currency as InvestmentCashflow["currency"],
-      note: row.note as string | null,
-      amounts: {
-        USD: row.amount_usd as string | null,
-        CNY: row.amount_cny as string | null,
-        HKD: row.amount_hkd as string | null,
-      },
-      exchangeRates: JSON.parse(row.exchange_rates_json as string),
-      createdAt: row.created_at as string,
-      updatedAt: row.updated_at as string,
-    }));
-  }
-
-  private listDailyAssetSnapshotsSync(): DailyAssetSnapshot[] {
-    return this.listDailyObservationsSync(
-      "daily_asset_snapshots",
-      "daily_asset_source_snapshots",
-    );
-  }
-
-  private listDailyAssetTrendObservationsSync(): DailyAssetTrendObservation[] {
-    return this.listDailyObservationsSync(
-      "daily_asset_trend_observations",
-      "daily_asset_source_trend_observations",
-    );
-  }
-
-  private listImportedSourceHistoryObservationsSync():
-    ImportedAssetSourceHistoryObservation[] {
-    const rows = this.database
-      .prepare(`
-        SELECT * FROM imported_asset_source_history_observations
-        ORDER BY day, source_id
-      `)
-      .all() as SqliteRow[];
-    return rows.map((row) => ({
-      day: row.day as string,
-      sourceId: row.source_id as string,
-      label: row.label as string,
-      kind: row.kind as string,
-      capturedAt: row.captured_at as string,
-      complete: row.complete === 1,
-      status: row.status as ImportedAssetSourceHistoryObservation["status"],
-      total: {
-        USD: row.total_usd as string | null,
-        CNY: row.total_cny as string | null,
-        HKD: row.total_hkd as string | null,
-      },
-    }));
-  }
-
-  private listDailyObservationsSync(
-    snapshotTable: "daily_asset_snapshots" | "daily_asset_trend_observations",
-    sourceTable:
-      | "daily_asset_source_snapshots"
-      | "daily_asset_source_trend_observations",
-    day?: string,
-    query?: { sourceId: string; from?: string; to?: string },
-  ): DailyAssetSnapshot[] {
-    const conditions: string[] = [];
-    const args: string[] = [];
-    if (day !== undefined) { conditions.push("day = ?"); args.push(day); }
-    if (query?.from) { conditions.push("day >= ?"); args.push(query.from); }
-    if (query?.to) { conditions.push("day <= ?"); args.push(query.to); }
-    const where = conditions.length ? " WHERE " + conditions.join(" AND ") : "";
-    const rows = this.database.prepare("SELECT * FROM " + snapshotTable + where + " ORDER BY day").all(...args) as SqliteRow[];
-    const sourceWhere = query ? (where ? where + " AND " : " WHERE ") + "source_id = ?" : where;
-    const children = this.database.prepare("SELECT * FROM " + sourceTable + sourceWhere + " ORDER BY day, source_id")
-      .all(...args, ...(query ? [query.sourceId] : [])) as SqliteRow[];
-    const byDay = new Map<string, SqliteRow[]>();
-    for (const child of children) {
-      const items = byDay.get(child.day as string) ?? [];
-      items.push(child); byDay.set(child.day as string, items);
-    }
-    return rows.map((row) => migrateDailyObservation({
-      day: row.day as string,
-      capturedAt: row.captured_at as string,
-      complete: row.complete === 1,
-      status: row.status as "complete" | "incomplete" | "expired",
-      total: {
-        USD: row.total_usd as string | null,
-        CNY: row.total_cny as string | null,
-        HKD: row.total_hkd as string | null,
-      },
-      exchangeRates: JSON.parse(
-        (row.exchange_rates_json as string | null) ?? "[]",
-      ),
-      sources: (byDay.get(row.day as string) ?? []).map((source) => ({
-        sourceId: source.source_id as string,
-        label: source.label as string,
-        kind: source.kind as string,
-        capturedAt: source.captured_at as string,
-        complete: source.complete === 1,
-        status: source.status as "complete" | "incomplete" | "expired",
-        total: {
-          USD: source.total_usd as string | null,
-          CNY: source.total_cny as string | null,
-          HKD: source.total_hkd as string | null,
-        },
-        ...(source.asset_class_totals_json === null
-          ? {}
-          : {
-              assetClassTotals: JSON.parse(
-                source.asset_class_totals_json as string,
-              ),
-            }),
-      })),
-    }));
-  }
-
   async readSourceDetail(query: { sourceId: string; from?: string; to?: string }) {
-    const first = this.database.prepare("SELECT MIN(day) AS day FROM daily_asset_source_trend_observations WHERE source_id = ?").get(query.sourceId) as SqliteRow;
-    const row = this.database.prepare("SELECT payload_json FROM asset_source_investment_histories WHERE source_id = ?").get(query.sourceId) as { payload_json: string } | undefined;
-    const investmentHistory = row ? parseSourceInvestmentHistory(JSON.parse(row.payload_json)) : null;
-    return {
-      sources: this.listSourcesSync(query.sourceId),
-      manualRecords: this.listManualAssetRecordsSync(query.sourceId),
-      history: this.listDailyObservationsSync("daily_asset_trend_observations", "daily_asset_source_trend_observations", undefined, query),
-      firstDay: [typeof first.day === "string" ? first.day : undefined, investmentHistory?.openingInvestment.day, this.listSourceInvestmentRecordsSync(query.sourceId)[0]?.day].filter((day): day is string => day !== undefined).sort()[0],
-      investmentHistory,
-      investmentRecords: this.listSourceInvestmentRecordsSync(query.sourceId),
-    };
-  }
-
-  private listSourceInvestmentRecordsSync(sourceId?: string): SourceInvestmentRecord[] {
-    const rows = this.database.prepare("SELECT id, source_id, day, kind, amount, currency, recorded_at FROM source_investment_records " +
-      (sourceId === undefined ? "" : "WHERE source_id = ? ") + "ORDER BY source_id, day, id")
-      .all(...(sourceId === undefined ? [] : [sourceId])) as SqliteRow[];
-    return rows.map(row => ({ id: row.id as string, sourceId: row.source_id as string,
-      day: row.day as string, kind: row.kind as SourceInvestmentRecord["kind"],
-      amount: row.amount as string, currency: row.currency as SourceInvestmentRecord["currency"],
-      recordedAt: row.recorded_at as string }));
+    return this.readModel.readSourceDetail(query);
   }
 
   async listSourceInvestmentRecords(sourceId?: string): Promise<SourceInvestmentRecord[]> {
-    return this.listSourceInvestmentRecordsSync(sourceId);
+    return this.readModel.listSourceInvestmentRecordsSync(sourceId);
   }
 
   private insertSourceInvestmentRecord(record: SourceInvestmentRecord): void {
@@ -1037,7 +786,7 @@ export class SqliteDashboardDatabase
     const record = parseSourceInvestmentRecordInput(input, capturedAt);
     this.transaction(() => {
       if (!this.database.prepare("SELECT id FROM asset_sources WHERE id = ?").get(sourceId)) throw new InvalidSourceInvestmentRecordError("资产来源不存在");
-      const existing = this.listSourceInvestmentRecordsSync(sourceId);
+      const existing = this.readModel.listSourceInvestmentRecordsSync(sourceId);
       const other = this.database.prepare("SELECT source_id FROM source_investment_records WHERE id = ?").get(record.id) as { source_id: string } | undefined;
       if (other && other.source_id !== sourceId) throw new InvalidSourceInvestmentRecordError("记录 ID 属于其他来源");
       const unchanged = existing.find(row => row.id === record.id);
@@ -1070,8 +819,7 @@ export class SqliteDashboardDatabase
   }
 
   async listSourceInvestmentHistories(): Promise<SourceInvestmentHistory[]> {
-    return (this.database.prepare("SELECT payload_json FROM asset_source_investment_histories ORDER BY source_id").all() as { payload_json: string }[])
-      .map(row => parseSourceInvestmentHistory(JSON.parse(row.payload_json)));
+    return this.readModel.listSourceInvestmentHistories();
   }
 
   private writeSourceInvestmentHistory(history: SourceInvestmentHistory): void {
@@ -1084,7 +832,7 @@ export class SqliteDashboardDatabase
     return this.transaction(() => {
       const source = this.database.prepare("SELECT kind, label FROM asset_sources WHERE id = ?").get(history.sourceId) as { kind: string; label: string } | undefined;
       if (!source || (source.kind !== "manual" && source.kind !== "longbridge") || source.label !== history.sourceLabel) throw new Error("导入目标来源身份不匹配");
-      const local = this.listSourceInvestmentRecordsSync(history.sourceId);
+      const local = this.readModel.listSourceInvestmentRecordsSync(history.sourceId);
       if (local.some(record => record.kind === "opening" || record.currency !== history.currency || record.day < history.openingInvestment.day)) throw new Error("导入历史与已有手工记录期初、币种或日期冲突");
       const row = this.database.prepare("SELECT payload_json FROM asset_source_investment_histories WHERE source_id = ?").get(history.sourceId) as { payload_json: string } | undefined;
       if (row) {
@@ -1126,7 +874,7 @@ export class SqliteDashboardDatabase
   }
 
   async listSources(): Promise<AssetSourceSummary[]> {
-    return this.listSourcesSync();
+    return this.readModel.listSourcesSync();
   }
 
   async replaceSources(sources: AssetSourceSummary[]): Promise<void> {
@@ -1174,25 +922,25 @@ export class SqliteDashboardDatabase
   }
 
   async listDailyAssetSnapshots(): Promise<DailyAssetSnapshot[]> {
-    return this.listDailyAssetSnapshotsSync();
+    return this.readModel.listDailyAssetSnapshotsSync();
   }
 
   async listDailyAssetTrendObservations(): Promise<DailyAssetTrendObservation[]> {
-    return this.listDailyAssetTrendObservationsSync();
+    return this.readModel.listDailyAssetTrendObservationsSync();
   }
 
   async listImportedSourceHistoryObservations(): Promise<
     ImportedAssetSourceHistoryObservation[]
   > {
-    return this.listImportedSourceHistoryObservationsSync();
+    return this.readModel.listImportedSourceHistoryObservationsSync();
   }
 
   async listManualAssetRecords(): Promise<ManualAssetRecord[]> {
-    return this.listManualAssetRecordsSync();
+    return this.readModel.listManualAssetRecordsSync();
   }
 
   async listInvestmentCashflows(): Promise<InvestmentCashflow[]> {
-    return this.listInvestmentCashflowsSync();
+    return this.readModel.listInvestmentCashflowsSync();
   }
 
   async createInvestmentCashflow(
@@ -1486,7 +1234,7 @@ export class SqliteDashboardDatabase
         .prepare("SELECT day FROM daily_asset_trend_observations WHERE day = ?")
         .get(snapshot.day) !== undefined;
       const existing = hasTrend
-        ? this.listDailyObservationsSync(
+        ? this.readModel.listDailyObservationsSync(
             "daily_asset_trend_observations", "daily_asset_source_trend_observations", snapshot.day,
           )[0]
         : undefined;
@@ -1622,7 +1370,7 @@ export class SqliteDashboardDatabase
   ): Promise<void> {
     this.transaction(() => {
       assertManualAssetRecordNotFuture(input.day, shanghaiDay(capturedAt));
-      const source = this.listSourcesSync().find(
+      const source = this.readModel.listSourcesSync().find(
         (item) => item.id === sourceId,
       );
       if (!source) throw new Error("资产来源不存在");
@@ -1640,12 +1388,12 @@ export class SqliteDashboardDatabase
             recorded_at = excluded.recorded_at
         `)
         .run(sourceId, input.day, input.amount, input.currency, capturedAt);
-      const record = this.listManualAssetRecordsSync().find(
+      const record = this.readModel.listManualAssetRecordsSync().find(
         (item) => item.sourceId === sourceId && item.day === input.day,
       );
       if (!record) throw new Error("手工资产记录保存失败");
       const latest = latestManualAssetRecord(
-        this.listManualAssetRecordsSync().filter(
+        this.readModel.listManualAssetRecordsSync().filter(
           (item) => item.sourceId === sourceId,
         ),
       );
@@ -1661,7 +1409,7 @@ export class SqliteDashboardDatabase
     capturedAt: string,
   ): Promise<void> {
     this.transaction(() => {
-      const source = this.listSourcesSync().find(
+      const source = this.readModel.listSourcesSync().find(
         (item) => item.id === sourceId,
       );
       if (!source) throw new Error("资产来源不存在");
@@ -1675,7 +1423,7 @@ export class SqliteDashboardDatabase
         .run(sourceId, day);
       if (result.changes === 0) throw new Error("指定日期没有手工资产记录");
       const latest = latestManualAssetRecord(
-        this.listManualAssetRecordsSync().filter(
+        this.readModel.listManualAssetRecordsSync().filter(
           (item) => item.sourceId === sourceId,
         ),
       );
@@ -1797,7 +1545,7 @@ export class SqliteDashboardDatabase
     capturedAt: string,
   ): Promise<string | null> {
     return this.transaction(() => {
-      const source = this.listSourcesSync().find(({ id }) => id === sourceId);
+      const source = this.readModel.listSourcesSync().find(({ id }) => id === sourceId);
       const kind = connectedSourceKind(sourceKind, result);
       if (!source || source.kind !== kind) {
         throw new Error("资产来源不存在或类型不匹配");
@@ -1896,7 +1644,7 @@ export class SqliteDashboardDatabase
       this.insertSource(connected.source, sourcePosition);
       this.insertCard(connected.card, cardPosition);
       const observation = buildDailyAssetSnapshot(
-        this.listSourcesSync(),
+        this.readModel.listSourcesSync(),
         capturedAt,
       );
       if (isFirstAutomaticSource && observation.complete) {
