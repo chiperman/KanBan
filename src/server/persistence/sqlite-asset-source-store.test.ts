@@ -116,6 +116,35 @@ test("断开保留快照，重连核对账户并保留来源身份、卡片与�
   });
 });
 
+test("重连来源写入失败时连接状态、凭证和快照整批回滚", async () => {
+  await fixture(async (database, sql) => {
+    await database.connectBinance(authorization, "fixture-old", capturedAt);
+    const source = (await database.listSources())[0];
+    const before = await state(database);
+    sql.exec(`CREATE TRIGGER reject_source_reconnect
+      BEFORE UPDATE ON asset_sources
+      WHEN NEW.lifecycle = 'connected'
+      BEGIN SELECT RAISE(ABORT, 'fixture reconnect failure'); END;`);
+    await assert.rejects(
+      database.reconnectAssetSource(
+        source.id,
+        "binance",
+        {
+          ...authorization,
+          snapshot: {
+            ...authorization.snapshot,
+            total: { amount: "200", currency: "USD" },
+          },
+        },
+        "fixture-new",
+        capturedAt,
+      ),
+      /fixture reconnect failure/,
+    );
+    assert.deepEqual(await state(database), before);
+  });
+});
+
 test("卡片布局替换失败时整批回滚，隐藏状态只更新对应来源", async () => {
   await fixture(async (database, sql) => {
     await database.connectBinance(authorization, "fixture-old", capturedAt);

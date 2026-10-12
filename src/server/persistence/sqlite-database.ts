@@ -14,6 +14,7 @@ import { SqliteRefreshStateStore } from "./sqlite-refresh-state-store";
 import { SqliteAssetCardStore } from "./sqlite-asset-card-store";
 import { SqliteMetadataStore } from "./sqlite-metadata-store";
 import { SqliteManualAssetRecordStore } from "./sqlite-manual-asset-record-store";
+import { SqliteAssetSourceConnectionStore } from "./sqlite-asset-source-connection-store";
 
 import { type BusinessDataState } from "@/server/business-data-backup";
 import type { InvestmentCashflowStore } from "@/server/investment-cashflows";
@@ -45,6 +46,7 @@ export class SqliteDashboardDatabase
   private cards!: SqliteAssetCardStore;
   private metadataStore!: SqliteMetadataStore;
   private manualRecords!: SqliteManualAssetRecordStore;
+  private sourceConnections!: SqliteAssetSourceConnectionStore;
 
   constructor(
     private readonly databasePath: string,
@@ -66,6 +68,13 @@ export class SqliteDashboardDatabase
         this.observations,
         this.cards,
         this.manualRecords,
+      );
+      this.sourceConnections = new SqliteAssetSourceConnectionStore(
+        this.database,
+        this.sources,
+        this.readModel,
+        this.observations,
+        this.cards,
       );
       this.investmentCashflows = new SqliteInvestmentCashflowStore(this.database);
       this.formalSettlementExecutions = new SqliteFormalSettlementExecutionStore(this.database);
@@ -419,11 +428,11 @@ export class SqliteDashboardDatabase
   }
 
   async disconnectAssetSource(sourceId: string): Promise<string | null> {
-    return this.transaction(() => this.sources.disconnect(sourceId));
+    return this.transaction(() => this.sourceConnections.disconnect(sourceId));
   }
 
   async deleteAssetSourceData(sourceId: string): Promise<string | null> {
-    return this.transaction(() => this.sources.delete(sourceId));
+    return this.transaction(() => this.sourceConnections.delete(sourceId));
   }
 
   async connectLongbridge(
@@ -449,7 +458,7 @@ export class SqliteDashboardDatabase
     credentialReference: string,
     capturedAt: string,
   ): Promise<string | null> {
-    return this.transaction(() => this.sources.reconnect(sourceId, sourceKind, result, credentialReference, capturedAt));
+    return this.transaction(() => this.sourceConnections.reconnect(sourceId, sourceKind, result, credentialReference));
   }
 
   async connectOkx(
@@ -490,6 +499,6 @@ export class SqliteDashboardDatabase
     credentialReference: string,
     capturedAt: string,
   ): void {
-    this.transaction(() => this.sources.connect(sourceKind, result, credentialReference, capturedAt));
+    this.transaction(() => this.sourceConnections.connect(sourceKind, result, credentialReference, capturedAt));
   }
 }
