@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { parseSourceInvestmentHistory, type SourceInvestmentHistory } from "@/domain/source-investment-history";
 import { InvalidSourceInvestmentRecordError, parseSourceInvestmentRecordInput, type SourceInvestmentRecord, type SourceInvestmentRecordInput } from "@/domain/source-investment-records";
 import { chmodSync, copyFileSync, existsSync, readFileSync, } from "node:fs";
@@ -7,17 +6,13 @@ import { SqliteDashboardReadModel } from "./sqlite-read-model";
 import { SqliteFormalSettlementStore } from "./sqlite-formal-settlements";
 import { SqliteObservationStore } from "./sqlite-observation-store";
 import { SqliteSourceInvestmentStore } from "./sqlite-source-investment-store";
+import { SqliteAssetSourceStore } from "./sqlite-asset-source-store";
 
-import { buildDailyAssetSnapshot, shanghaiDay } from "@/domain/daily-asset-snapshots";
-import { assertManualAssetRecordNotFuture, } from "@/domain/manual-asset-records";
-import { normalizeAssetSyncState } from "@/server/asset-sync-diagnostics";
 import { type BusinessDataState } from "@/server/business-data-backup";
 import type { InvestmentCashflowStore } from "@/server/investment-cashflows";
 import type { DashboardDatabase, DashboardState, SqliteRow } from "@/server/persistence/contracts";
 import { migrateDailyObservation, parseLegacyDashboardStateSync } from "@/server/persistence/migrations";
-import { applyLatestManualAssetRecord, latestManualAssetRecord } from "@/server/persistence/observations";
 import type { SourceAuthorizationResult, SourceConnectionKind } from "@/server/persistence/source-record";
-import { buildConnectedSource, connectedSourceKind } from "@/server/persistence/source-record";
 import type { AssetSourceSummary, BinanceAuthorizationResult, BitAuthorizationResult, BitgetAuthorizationResult, Card, CreateManualAssetSourceInput, DailyAssetSnapshot, DailyAssetTrendObservation, EvmWatchAuthorizationResult, FormalDailySettlement, FormalSettlementExecution, ImportedAssetSourceHistoryObservation, InvestmentCashflow, LongbridgeAuthorizationResult, ManualAssetClass, ManualAssetRecord, ManualAssetRecordInput, OkxAuthorizationResult } from "@/server/ports";
 
 const sqlite = process.getBuiltinModule("node:sqlite");
@@ -35,6 +30,7 @@ export class SqliteDashboardDatabase
   private formalSettlements!: SqliteFormalSettlementStore;
   private observations!: SqliteObservationStore;
   private sourceInvestments!: SqliteSourceInvestmentStore;
+  private sources!: SqliteAssetSourceStore;
 
   constructor(
     private readonly databasePath: string,
@@ -47,6 +43,7 @@ export class SqliteDashboardDatabase
       this.formalSettlements = new SqliteFormalSettlementStore(this.database);
       this.observations = new SqliteObservationStore(this.database, this.readModel);
       this.sourceInvestments = new SqliteSourceInvestmentStore(this.database, this.readModel);
+      this.sources = new SqliteAssetSourceStore(this.database, this.readModel, this.observations);
       chmodSync(databasePath, 0o600);
       this.database.exec("PRAGMA busy_timeout = 5000");
       this.database.exec("PRAGMA foreign_keys = ON");
@@ -267,9 +264,9 @@ export class SqliteDashboardDatabase
       DELETE FROM asset_sources;
     `);
     state.assetSources.forEach((source, position) =>
-      this.insertSource(source, position),
+      this.sources.insert(source, position),
     );
-    state.assetCards.forEach((card, position) => this.insertCard(card, position));
+    state.assetCards.forEach((card, position) => this.sources.insertCard(card, position));
     state.dailyAssetSnapshots.forEach((snapshot) =>
       this.observations.insertBaseline(migrateDailyObservation(snapshot)),
     );
@@ -310,103 +307,6 @@ export class SqliteDashboardDatabase
     }
   }
 
-  private insertSource(source: AssetSourceSummary, position: number): void {
-    this.database
-      .prepare(`
-        INSERT INTO asset_sources (
-          id, position, kind, label, display_name, account_id, permissions_json,
-          credential_reference, ignored_asset_keys_json, included_asset_keys_json,
-          has_manual_record, manual_asset_class, lifecycle
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `)
-      .run(
-        source.id,
-        position,
-        source.kind,
-        source.label,
-        source.displayName ?? null,
-        source.accountId,
-        JSON.stringify(source.permissions),
-        source.credentialReference,
-        JSON.stringify(source.ignoredAssetKeys ?? []),
-        JSON.stringify(source.includedAssetKeys ?? []),
-        source.kind === "manual" && source.hasManualRecord === false ? 0 : 1,
-        source.kind === "manual" ? source.manualAssetClass ?? null : null,
-        source.lifecycle ?? null,
-      );
-    this.upsertSourceDetails(source);
-  }
-
-  private upsertSourceDetails(source: AssetSourceSummary): void {
-    const sync = normalizeAssetSyncState(source.sync);
-    this.database
-      .prepare(`
-        UPDATE asset_sources
-        SET has_manual_record = ?
-        WHERE id = ?
-      `)
-      .run(
-        source.kind === "manual" && source.hasManualRecord === false ? 0 : 1,
-        source.id,
-      );
-    this.database
-      .prepare(`
-        INSERT OR REPLACE INTO asset_source_snapshots (
-          source_id, total_amount, total_currency, holdings_json,
-          unrecognized_evm_tokens_json, exchange_rates_json, coverage_json, synced_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `)
-      .run(
-        source.id,
-        source.snapshot.total.amount,
-        source.snapshot.total.currency,
-        JSON.stringify(source.snapshot.holdings),
-        JSON.stringify(source.snapshot.unrecognizedEvmTokens ?? []),
-        JSON.stringify(source.snapshot.exchangeRates),
-        source.snapshot.coverage === undefined
-          ? null
-          : JSON.stringify(source.snapshot.coverage),
-        source.snapshot.syncedAt,
-      );
-    this.database
-      .prepare(`
-        INSERT OR REPLACE INTO asset_source_sync_states (
-          source_id, status, last_successful_at, last_attempt_at, error, failed_mode,
-          diagnostic_json, recent_attempts_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `)
-      .run(
-        source.id,
-        source.sync.status,
-        source.sync.lastSuccessfulAt,
-        source.sync.lastAttemptAt,
-        source.sync.error,
-        source.sync.failedMode ?? null,
-        sync.diagnostic === undefined || sync.diagnostic === null
-          ? null : JSON.stringify(sync.diagnostic),
-        JSON.stringify(sync.recentAttempts ?? []),
-      );
-  }
-
-  private insertCard(card: Card, position: number): void {
-    this.database
-      .prepare(`
-        INSERT INTO asset_cards (
-          id, position, title, body, source_id, hidden, span, starts_new_row
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `)
-      .run(
-        card.id,
-        position,
-        card.title,
-        card.body,
-        card.sourceId ?? null,
-        card.hidden === undefined ? null : Number(card.hidden),
-        card.span,
-        card.startsNewRow === undefined ? null : Number(card.startsNewRow),
-      );
-  }
-
   private insertInvestmentCashflow(cashflow: InvestmentCashflow): void {
     this.database
       .prepare(`
@@ -430,18 +330,6 @@ export class SqliteDashboardDatabase
         cashflow.createdAt,
         cashflow.updatedAt,
       );
-  }
-
-  private compactPositions(table: "asset_sources" | "asset_cards"): void {
-    const rows = this.database
-      .prepare(`SELECT id, position FROM ${table} ORDER BY position`)
-      .all() as SqliteRow[];
-    const update = this.database.prepare(
-      `UPDATE ${table} SET position = ? WHERE id = ?`,
-    );
-    rows.forEach((row, position) => {
-      if (row.position !== position) update.run(position, row.id as string);
-    });
   }
 
   async readSourceDetail(query: { sourceId: string; from?: string; to?: string }) {
@@ -492,7 +380,7 @@ export class SqliteDashboardDatabase
   async replaceAssetCards(cards: Card[]): Promise<void> {
     this.transaction(() => {
       this.database.exec("DELETE FROM asset_cards");
-      cards.forEach((card, position) => this.insertCard(card, position));
+      cards.forEach((card, position) => this.sources.insertCard(card, position));
     });
   }
 
@@ -508,40 +396,12 @@ export class SqliteDashboardDatabase
         DELETE FROM asset_source_sync_states;
         DELETE FROM asset_sources;
       `);
-      sources.forEach((source, position) => this.insertSource(source, position));
+      sources.forEach((source, position) => this.sources.insert(source, position));
     });
   }
 
   async updateSource(source: AssetSourceSummary): Promise<void> {
-    this.transaction(() => {
-      const existing = this.database
-        .prepare("SELECT id FROM asset_sources WHERE id = ?")
-        .get(source.id);
-      if (existing === undefined) return;
-      this.database
-        .prepare(`
-          UPDATE asset_sources
-          SET kind = ?, label = ?, display_name = ?, account_id = ?,
-              permissions_json = ?, credential_reference = ?,
-              ignored_asset_keys_json = ?, included_asset_keys_json = ?,
-              manual_asset_class = ?, lifecycle = ?
-          WHERE id = ?
-        `)
-        .run(
-          source.kind,
-          source.label,
-          source.displayName ?? null,
-          source.accountId,
-          JSON.stringify(source.permissions),
-          source.credentialReference,
-          JSON.stringify(source.ignoredAssetKeys ?? []),
-          JSON.stringify(source.includedAssetKeys ?? []),
-          source.kind === "manual" ? source.manualAssetClass ?? null : null,
-          source.lifecycle ?? null,
-          source.id,
-        );
-      this.upsertSourceDetails(source);
-    });
+    this.transaction(() => this.sources.update(source));
   }
 
   async listDailyAssetSnapshots(): Promise<DailyAssetSnapshot[]> {
@@ -680,51 +540,21 @@ export class SqliteDashboardDatabase
   }
 
   async setAssetCardHidden(sourceId: string, hidden: boolean): Promise<void> {
-    this.transaction(() => {
-      if (
-        this.database
-          .prepare("SELECT id FROM asset_sources WHERE id = ?")
-          .get(sourceId) === undefined
-      ) {
-        throw new Error("资产来源不存在");
-      }
-      const result = this.database
-        .prepare("UPDATE asset_cards SET hidden = ? WHERE source_id = ?")
-        .run(Number(hidden), sourceId);
-      if (result.changes === 0) throw new Error("资产卡片不存在");
-    });
+    this.transaction(() => this.sources.setCardHidden(sourceId, hidden));
   }
 
   async setAssetSourceDisplayName(
     sourceId: string,
     displayName: string | null,
   ): Promise<void> {
-    this.transaction(() => {
-      const result = this.database
-        .prepare("UPDATE asset_sources SET display_name = ? WHERE id = ?")
-        .run(displayName, sourceId);
-      if (result.changes === 0) throw new Error("资产来源不存在");
-    });
+    this.transaction(() => this.sources.setDisplayName(sourceId, displayName));
   }
 
   async setAssetSourceManualClass(
     sourceId: string,
     assetClass: ManualAssetClass | null,
   ): Promise<void> {
-    this.transaction(() => {
-      const source = this.database
-        .prepare("SELECT kind FROM asset_sources WHERE id = ?")
-        .get(sourceId) as { kind: string } | undefined;
-      if (!source) throw new Error("资产来源不存在");
-      if (source.kind !== "manual") {
-        throw new Error("只有手工资产来源可以设置资产类别");
-      }
-      this.database
-        .prepare(
-          "UPDATE asset_sources SET manual_asset_class = ? WHERE id = ?",
-        )
-        .run(assetClass, sourceId);
-    });
+    this.transaction(() => this.sources.setManualClass(sourceId, assetClass));
   }
 
   async setAssetSourceEvmTokenPreferences(
@@ -732,68 +562,14 @@ export class SqliteDashboardDatabase
     ignoredAssetKeys: string[],
     includedAssetKeys: string[],
   ): Promise<void> {
-    this.transaction(() => {
-      const result = this.database
-        .prepare(
-          `UPDATE asset_sources
-           SET ignored_asset_keys_json = ?, included_asset_keys_json = ?
-           WHERE id = ?`,
-        )
-        .run(
-          JSON.stringify(ignoredAssetKeys),
-          JSON.stringify(includedAssetKeys),
-          sourceId,
-        );
-      if (result.changes === 0) throw new Error("资产来源不存在");
-    });
+    this.transaction(() => this.sources.setEvmTokenPreferences(sourceId, ignoredAssetKeys, includedAssetKeys));
   }
 
   async createManualAssetSource(
     input: CreateManualAssetSourceInput,
     capturedAt: string,
   ): Promise<void> {
-    this.transaction(() => {
-      const sourceId = randomUUID();
-      const source: AssetSourceSummary = {
-        id: sourceId,
-        kind: "manual",
-        label: input.label,
-        hasManualRecord: false,
-        accountId: `manual:${sourceId}`,
-        permissions: [],
-        credentialReference: null,
-        snapshot: {
-          total: { amount: "0", currency: "CNY" },
-          holdings: [],
-          exchangeRates: [],
-          syncedAt: capturedAt,
-        },
-        sync: {
-          status: "current",
-          lastSuccessfulAt: capturedAt,
-          lastAttemptAt: capturedAt,
-          error: null,
-        },
-      };
-      const sourcePosition = (
-        this.database.prepare("SELECT COUNT(*) AS count FROM asset_sources").get() as SqliteRow
-      ).count as number;
-      const cardPosition = (
-        this.database.prepare("SELECT COUNT(*) AS count FROM asset_cards").get() as SqliteRow
-      ).count as number;
-      this.insertSource(source, sourcePosition);
-      this.insertCard(
-        {
-          id: randomUUID(),
-          kind: "asset",
-          title: "手工资产记录",
-          body: "每日记录资产总额",
-          sourceId,
-          span: 1,
-        },
-        cardPosition,
-      );
-    });
+    this.transaction(() => this.sources.createManual(input, capturedAt));
   }
 
   async recordManualAssetSource(
@@ -801,39 +577,7 @@ export class SqliteDashboardDatabase
     input: ManualAssetRecordInput,
     capturedAt: string,
   ): Promise<void> {
-    this.transaction(() => {
-      assertManualAssetRecordNotFuture(input.day, shanghaiDay(capturedAt));
-      const source = this.readModel.listSourcesSync().find(
-        (item) => item.id === sourceId,
-      );
-      if (!source) throw new Error("资产来源不存在");
-      if (source.kind !== "manual") {
-        throw new Error("只有手工资产记录可以编辑今日总额");
-      }
-      this.database
-        .prepare(`
-          INSERT INTO manual_asset_records (
-            source_id, day, amount, currency, recorded_at
-          ) VALUES (?, ?, ?, ?, ?)
-          ON CONFLICT(source_id, day) DO UPDATE SET
-            amount = excluded.amount,
-            currency = excluded.currency,
-            recorded_at = excluded.recorded_at
-        `)
-        .run(sourceId, input.day, input.amount, input.currency, capturedAt);
-      const record = this.readModel.listManualAssetRecordsSync().find(
-        (item) => item.sourceId === sourceId && item.day === input.day,
-      );
-      if (!record) throw new Error("手工资产记录保存失败");
-      const latest = latestManualAssetRecord(
-        this.readModel.listManualAssetRecordsSync().filter(
-          (item) => item.sourceId === sourceId,
-        ),
-      );
-      const updated = applyLatestManualAssetRecord(source, latest, capturedAt);
-      this.upsertSourceDetails(updated);
-      this.observations.recordManual(updated, record, capturedAt);
-    });
+    this.transaction(() => this.sources.recordManual(sourceId, input, capturedAt));
   }
 
   async deleteManualAssetSourceRecord(
@@ -841,117 +585,15 @@ export class SqliteDashboardDatabase
     day: string,
     capturedAt: string,
   ): Promise<void> {
-    this.transaction(() => {
-      const source = this.readModel.listSourcesSync().find(
-        (item) => item.id === sourceId,
-      );
-      if (!source) throw new Error("资产来源不存在");
-      if (source.kind !== "manual") {
-        throw new Error("只有手工资产记录可以删除");
-      }
-      const result = this.database
-        .prepare(
-          "DELETE FROM manual_asset_records WHERE source_id = ? AND day = ?",
-        )
-        .run(sourceId, day);
-      if (result.changes === 0) throw new Error("指定日期没有手工资产记录");
-      const latest = latestManualAssetRecord(
-        this.readModel.listManualAssetRecordsSync().filter(
-          (item) => item.sourceId === sourceId,
-        ),
-      );
-      this.upsertSourceDetails(
-        applyLatestManualAssetRecord(source, latest, capturedAt),
-      );
-      for (const [snapshot, sourceTable] of [
-        ["daily_asset_snapshots", "daily_asset_source_snapshots"],
-        ["daily_asset_trend_observations", "daily_asset_source_trend_observations"],
-      ] as const) {
-        this.database
-          .prepare(`DELETE FROM ${sourceTable} WHERE day = ? AND source_id = ?`)
-          .run(day, sourceId);
-        this.observations.recalculate(day, {
-          snapshot,
-          source: sourceTable,
-        });
-      }
-    });
+    this.transaction(() => this.sources.deleteManualRecord(sourceId, day, capturedAt));
   }
 
   async disconnectAssetSource(sourceId: string): Promise<string | null> {
-    return this.transaction(() => {
-      const source = this.database
-        .prepare(
-          "SELECT kind, credential_reference FROM asset_sources WHERE id = ?",
-        )
-        .get(sourceId) as SqliteRow | undefined;
-      if (source === undefined) throw new Error("资产来源不存在");
-      if (source.kind === "manual") {
-        throw new Error("手工资产记录不支持断开");
-      }
-      this.database
-        .prepare("UPDATE asset_sources SET lifecycle = 'disconnected' WHERE id = ?")
-        .run(sourceId);
-      return typeof source.credential_reference === "string"
-        ? source.credential_reference
-        : null;
-    });
+    return this.transaction(() => this.sources.disconnect(sourceId));
   }
 
   async deleteAssetSourceData(sourceId: string): Promise<string | null> {
-    return this.transaction(() => {
-      const source = this.database
-        .prepare(
-          "SELECT credential_reference FROM asset_sources WHERE id = ?",
-        )
-        .get(sourceId) as SqliteRow | undefined;
-      if (source === undefined) throw new Error("资产来源不存在");
-      const baselineDays = this.database
-        .prepare(
-          "SELECT day FROM daily_asset_source_snapshots WHERE source_id = ?",
-        )
-        .all(sourceId) as SqliteRow[];
-      const trendDays = this.database
-        .prepare(
-          "SELECT day FROM daily_asset_source_trend_observations WHERE source_id = ?",
-        )
-        .all(sourceId) as SqliteRow[];
-      this.database
-        .prepare(`
-          DELETE FROM formal_daily_settlements
-          WHERE anchor_key IN (
-            SELECT anchor_key
-            FROM formal_daily_settlement_sources
-            WHERE source_id = ?
-          )
-        `)
-        .run(sourceId);
-      this.database
-        .prepare("DELETE FROM asset_cards WHERE source_id = ?")
-        .run(sourceId);
-      this.database
-        .prepare("DELETE FROM daily_asset_source_snapshots WHERE source_id = ?")
-        .run(sourceId);
-      this.database
-        .prepare("DELETE FROM daily_asset_source_trend_observations WHERE source_id = ?")
-        .run(sourceId);
-      this.database
-        .prepare("DELETE FROM imported_asset_source_history_observations WHERE source_id = ?")
-        .run(sourceId);
-      this.database.prepare("DELETE FROM asset_sources WHERE id = ?").run(sourceId);
-      this.compactPositions("asset_sources");
-      this.compactPositions("asset_cards");
-      for (const { day } of baselineDays) {
-        this.observations.recalculate(day as string, {
-          snapshot: "daily_asset_snapshots",
-          source: "daily_asset_source_snapshots",
-        });
-      }
-      for (const { day } of trendDays) this.observations.recalculateTrend(day as string);
-      return typeof source.credential_reference === "string"
-        ? source.credential_reference
-        : null;
-    });
+    return this.transaction(() => this.sources.delete(sourceId));
   }
 
   async connectLongbridge(
@@ -977,48 +619,7 @@ export class SqliteDashboardDatabase
     credentialReference: string,
     capturedAt: string,
   ): Promise<string | null> {
-    return this.transaction(() => {
-      const source = this.readModel.listSourcesSync().find(({ id }) => id === sourceId);
-      const kind = connectedSourceKind(sourceKind, result);
-      if (!source || source.kind !== kind) {
-        throw new Error("资产来源不存在或类型不匹配");
-      }
-      if (source.accountId !== result.account.id) {
-        throw new Error("新授权对应的账户与原来源不一致");
-      }
-      const updated: AssetSourceSummary = {
-        ...source,
-        label: result.account.label,
-        accountId: result.account.id,
-        permissions: result.permissions,
-        credentialReference,
-        snapshot: result.snapshot,
-        lifecycle: "connected",
-        sync: {
-          status: "current",
-          lastSuccessfulAt: result.snapshot.syncedAt,
-          lastAttemptAt: result.snapshot.syncedAt,
-          error: null,
-        },
-      };
-      this.database
-        .prepare(`
-          UPDATE asset_sources
-          SET label = ?, account_id = ?, permissions_json = ?,
-              credential_reference = ?, lifecycle = ?
-          WHERE id = ?
-        `)
-        .run(
-          updated.label,
-          updated.accountId,
-          JSON.stringify(updated.permissions),
-          updated.credentialReference,
-          "connected",
-          updated.id,
-      );
-      this.upsertSourceDetails(updated);
-      return source.credentialReference;
-    });
+    return this.transaction(() => this.sources.reconnect(sourceId, sourceKind, result, credentialReference, capturedAt));
   }
 
   async connectOkx(
@@ -1059,34 +660,6 @@ export class SqliteDashboardDatabase
     credentialReference: string,
     capturedAt: string,
   ): void {
-    this.transaction(() => {
-      const isFirstAutomaticSource = this.database
-        .prepare("SELECT 1 FROM asset_sources WHERE kind <> 'manual' LIMIT 1")
-        .get() === undefined;
-      const connected = buildConnectedSource(
-        sourceKind,
-        result,
-        credentialReference,
-      );
-      const sourcePosition = (
-        this.database.prepare("SELECT COUNT(*) AS count FROM asset_sources").get() as SqliteRow
-      ).count as number;
-      const cardPosition = (
-        this.database.prepare("SELECT COUNT(*) AS count FROM asset_cards").get() as SqliteRow
-      ).count as number;
-      this.insertSource(connected.source, sourcePosition);
-      this.insertCard(connected.card, cardPosition);
-      const observation = buildDailyAssetSnapshot(
-        this.readModel.listSourcesSync(),
-        capturedAt,
-      );
-      if (isFirstAutomaticSource && observation.complete) {
-        const hasBaseline = this.database
-          .prepare("SELECT day FROM daily_asset_snapshots WHERE day = ?")
-          .get(observation.day) !== undefined;
-        if (!hasBaseline) this.observations.insertBaseline(observation);
-        this.observations.upsertTrend(observation);
-      }
-    });
+    this.transaction(() => this.sources.connect(sourceKind, result, credentialReference, capturedAt));
   }
 }
