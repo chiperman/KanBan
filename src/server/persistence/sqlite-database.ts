@@ -16,6 +16,7 @@ import { SqliteMetadataStore } from "./sqlite-metadata-store";
 import { SqliteManualAssetRecordStore } from "./sqlite-manual-asset-record-store";
 import { SqliteAssetSourceConnectionStore } from "./sqlite-asset-source-connection-store";
 import { SqliteAssetSourceDataStore } from "./sqlite-asset-source-data-store";
+import { SqliteAssetSourceReplacementStore } from "./sqlite-asset-source-replacement-store";
 
 import { type BusinessDataState } from "@/server/business-data-backup";
 import type { InvestmentCashflowStore } from "@/server/investment-cashflows";
@@ -49,6 +50,7 @@ export class SqliteDashboardDatabase
   private manualRecords!: SqliteManualAssetRecordStore;
   private sourceConnections!: SqliteAssetSourceConnectionStore;
   private sourceData!: SqliteAssetSourceDataStore;
+  private sourceReplacement!: SqliteAssetSourceReplacementStore;
 
   constructor(
     private readonly databasePath: string,
@@ -61,6 +63,10 @@ export class SqliteDashboardDatabase
       this.metadataStore = new SqliteMetadataStore(this.database);
       this.manualRecords = new SqliteManualAssetRecordStore(this.database);
       this.sourceData = new SqliteAssetSourceDataStore(this.database);
+      this.sourceReplacement = new SqliteAssetSourceReplacementStore(
+        this.database,
+        this.sourceData,
+      );
       this.readModel = new SqliteDashboardReadModel(this.database);
       this.formalSettlements = new SqliteFormalSettlementStore(this.database);
       this.observations = new SqliteObservationStore(this.database, this.readModel);
@@ -263,15 +269,7 @@ export class SqliteDashboardDatabase
   }
 
   async replaceSources(sources: AssetSourceSummary[]): Promise<void> {
-    this.transaction(() => {
-      this.database.exec(`
-        DELETE FROM formal_daily_settlements;
-        DELETE FROM asset_source_snapshots;
-        DELETE FROM asset_source_sync_states;
-        DELETE FROM asset_sources;
-      `);
-      sources.forEach((source, position) => this.sourceData.insert(source, position));
-    });
+    this.transaction(() => this.sourceReplacement.replace(sources));
   }
 
   async updateSource(source: AssetSourceSummary): Promise<void> {

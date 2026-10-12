@@ -173,6 +173,35 @@ test("手工来源卡片写入失败时来源与快照整批回滚", async () =>
   });
 });
 
+test("批量替换来源写入失败时保留原来源与快照", async () => {
+  await fixture(async (database, sql) => {
+    await database.connectBinance(authorization, "fixture-old", capturedAt);
+    const before = await state(database);
+    const replacement = {
+      ...authorization,
+      account: { ...authorization.account, id: "replacement-account" },
+      snapshot: {
+        ...authorization.snapshot,
+        total: { amount: "200", currency: "USD" },
+      },
+    };
+    const source = (await database.listSources())[0];
+    sql.exec(`CREATE TRIGGER reject_source_replacement
+      BEFORE INSERT ON asset_source_snapshots
+      BEGIN SELECT RAISE(ABORT, 'fixture source replacement failure'); END;`);
+    await assert.rejects(
+      database.replaceSources([{
+        ...source,
+        accountId: replacement.account.id,
+        label: replacement.account.label,
+        snapshot: replacement.snapshot,
+      }]),
+      /fixture source replacement failure/,
+    );
+    assert.deepEqual(await state(database), before);
+  });
+});
+
 test("卡片布局替换失败时整批回滚，隐藏状态只更新对应来源", async () => {
   await fixture(async (database, sql) => {
     await database.connectBinance(authorization, "fixture-old", capturedAt);
