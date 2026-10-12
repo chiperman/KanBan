@@ -1,6 +1,6 @@
 import { parseSourceInvestmentHistory, type SourceInvestmentHistory } from "@/domain/source-investment-history";
 import { InvalidSourceInvestmentRecordError, parseSourceInvestmentRecordInput, type SourceInvestmentRecord, type SourceInvestmentRecordInput } from "@/domain/source-investment-records";
-import { chmodSync, existsSync } from "node:fs";
+import { chmodSync } from "node:fs";
 import { SqliteDashboardReadModel } from "./sqlite-read-model";
 import { SqliteFormalSettlementStore } from "./sqlite-formal-settlements";
 import { SqliteObservationStore } from "./sqlite-observation-store";
@@ -17,10 +17,11 @@ import { SqliteAssetSourceConnectionStore } from "./sqlite-asset-source-connecti
 import { SqliteAssetSourceDataStore } from "./sqlite-asset-source-data-store";
 import { SqliteAssetSourceReplacementStore } from "./sqlite-asset-source-replacement-store";
 import { SqliteDatabaseInitializationStore } from "./sqlite-database-initialization-store";
+import { SqliteTransactionStore } from "./sqlite-transaction-store";
 
 import { type BusinessDataState } from "@/server/business-data-backup";
 import type { InvestmentCashflowStore } from "@/server/investment-cashflows";
-import type { DashboardDatabase, SqliteRow } from "@/server/persistence/contracts";
+import type { DashboardDatabase } from "@/server/persistence/contracts";
 import type { SourceAuthorizationResult, SourceConnectionKind } from "@/server/persistence/source-record";
 import type { AssetSourceSummary, BinanceAuthorizationResult, BitAuthorizationResult, BitgetAuthorizationResult, Card, CreateManualAssetSourceInput, DailyAssetSnapshot, DailyAssetTrendObservation, EvmWatchAuthorizationResult, FormalDailySettlement, FormalSettlementExecution, ImportedAssetSourceHistoryObservation, InvestmentCashflow, LongbridgeAuthorizationResult, ManualAssetClass, ManualAssetRecord, ManualAssetRecordInput, OkxAuthorizationResult } from "@/server/ports";
 
@@ -51,6 +52,7 @@ export class SqliteDashboardDatabase
   private sourceData!: SqliteAssetSourceDataStore;
   private sourceReplacement!: SqliteAssetSourceReplacementStore;
   private initialization!: SqliteDatabaseInitializationStore;
+  private transactions!: SqliteTransactionStore;
 
   constructor(
     private readonly databasePath: string,
@@ -59,6 +61,7 @@ export class SqliteDashboardDatabase
   ) {
     try {
       this.database = new DatabaseSync(databasePath);
+      this.transactions = new SqliteTransactionStore(this.database, databasePath);
       this.cards = new SqliteAssetCardStore(this.database);
       this.metadataStore = new SqliteMetadataStore(this.database);
       this.manualRecords = new SqliteManualAssetRecordStore(this.database);
@@ -101,7 +104,7 @@ export class SqliteDashboardDatabase
       );
       this.initialization = new SqliteDatabaseInitializationStore(
         this.database,
-        (operation) => this.transaction(operation),
+        (operation) => this.transactions.run(operation),
         this.metadataStore,
         this.businessData,
         this.legacyDashboardPath,
@@ -113,8 +116,8 @@ export class SqliteDashboardDatabase
       this.database.exec("PRAGMA journal_mode = WAL");
       this.database.exec("PRAGMA synchronous = FULL");
       this.initialization.initialize();
-      this.assertIntegrity();
-      this.hardenDatabaseFiles();
+      this.transactions.assertIntegrity();
+      this.transactions.hardenFiles();
     } catch (error) {
       try {
         this.database?.close();
@@ -161,48 +164,8 @@ export class SqliteDashboardDatabase
     this.transaction(() => this.refreshState.clear());
   }
 
-  private assertIntegrity(): void {
-    const result = this.database.prepare("PRAGMA quick_check").get() as
-      | SqliteRow
-      | undefined;
-    if (result === undefined || !Object.values(result).includes("ok")) {
-      throw new Error("SQLite 完整性检查失败");
-    }
-    const foreignKeyViolation = this.database
-      .prepare("PRAGMA foreign_key_check")
-      .get();
-    if (foreignKeyViolation !== undefined) {
-      throw new Error("SQLite 外键完整性检查失败");
-    }
-  }
-
-  private hardenDatabaseFiles(): void {
-    for (const filePath of [
-      this.databasePath,
-      `${this.databasePath}-wal`,
-      `${this.databasePath}-shm`,
-    ]) {
-      if (existsSync(/* turbopackIgnore: true */ filePath)) {
-        chmodSync(/* turbopackIgnore: true */ filePath, 0o600);
-      }
-    }
-  }
-
   private transaction<T>(operation: () => T): T {
-    this.database.exec("BEGIN IMMEDIATE");
-    try {
-      const result = operation();
-      this.database.exec("COMMIT");
-      this.hardenDatabaseFiles();
-      return result;
-    } catch (error) {
-      try {
-        this.database.exec("ROLLBACK");
-      } catch {
-        // 优先抛出导致事务失败的原始错误。
-      }
-      throw error;
-    }
+    return this.transactions.run(operation);
   }
 
   async readSourceDetail(query: { sourceId: string; from?: string; to?: string }) {
@@ -320,7 +283,7 @@ export class SqliteDashboardDatabase
     this.database.exec("BEGIN IMMEDIATE");
     try {
       this.businessData.replace(state);
-      this.assertIntegrity();
+      this.transactions.assertIntegrity();
       this.database.exec("ROLLBACK");
     } catch (error) {
       try {
@@ -335,7 +298,7 @@ export class SqliteDashboardDatabase
   async replaceBusinessData(state: BusinessDataState): Promise<void> {
     this.transaction(() => {
       this.businessData.replace(state);
-      this.assertIntegrity();
+      this.transactions.assertIntegrity();
     });
   }
 
