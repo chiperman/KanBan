@@ -131,7 +131,7 @@ export function RecoverySetup({ configured }: RecoverySetupProps) {
           }
           description={
             <>
-              添加密钥后输入验证码确认；密钥仅本次显示。
+              添加密钥并输入验证码确认；密钥仅本次显示。
             </>
           }
           eyebrow="LOCAL RECOVERY / TOTP"
@@ -209,7 +209,7 @@ export function RecoverySetup({ configured }: RecoverySetupProps) {
           }
           description={
             <>
-              将生成新密钥。请确认无录屏、投屏或旁观者。
+              将生成新密钥，请注意防窥。
             </>
           }
           eyebrow="LOCAL RECOVERY / TOTP"

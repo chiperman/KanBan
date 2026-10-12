@@ -224,7 +224,7 @@ export function BusinessDataBackupSettings() {
           }
           description={
             <>
-              将替换当前业务数据。{preview.warning} 自动来源需重新授权。
+              将覆盖当前业务数据。自动来源需重新授权。
               {preview.omittedHistory ? "本备份缺少的历史域将替换为空：" + preview.omittedHistory.manualAssetRecords + " 条手工记录、" + preview.omittedHistory.formalDailySettlements + " 条正式日结。确认恢复即确认丢弃这些记录。" : null}
             </>
           }

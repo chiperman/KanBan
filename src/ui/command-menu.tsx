@@ -252,7 +252,7 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
             </div>
             <div className="command-menu-results" aria-live="polite">
               {filtered.length === 0 ? (
-                <p className="command-menu-empty">没有匹配的命令</p>
+                <p className="command-menu-empty">无匹配命令</p>
               ) : (
                 filtered.map((command, index) => (
                   <VibeButton

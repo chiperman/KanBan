@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { useLongbridgeRealtime } from "@/ui/use-longbridge-realtime";
-import { LongbridgeRealtimeNotice, LongbridgeRealtimeStatus } from "@/ui/longbridge-realtime-notice";
+import { LongbridgeRealtimeNotice } from "@/ui/longbridge-realtime-notice";
 import { VibeLiveCounter } from "@/ui/vibe/vibe-live-counter";
 
 import {
@@ -246,7 +246,7 @@ export function DailyOverviewWorkspace({
     showSensitiveInfo,
   } = useWorkbenchDisplayPreferences();
 
-  const { active: realtimeActive, liveSources, state: realtimeState, retry } = useLongbridgeRealtime(sources, !demoMode);
+  const { liveSources, state: realtimeState, retry } = useLongbridgeRealtime(sources, !demoMode);
   const recordedSources = useMemo(
     () => liveSources.filter(hasManualAssetRecord),
     [liveSources],
@@ -460,7 +460,6 @@ export function DailyOverviewWorkspace({
       data-testid="portfolio-overview-workspace"
     >
       <WorkbenchPageHeader
-        description={realtimeActive ? <LongbridgeRealtimeStatus state={realtimeState} /> : undefined}
         actionsLabel="总览快捷操作"
         eyebrow="PORTFOLIO / TODAY"
         title="总览"
@@ -716,7 +715,7 @@ export function DailyOverviewWorkspace({
                         </>
                       ) : comparison.state === "scope-change" ? (
                         <>
-                          <span>资产范围变化</span>
+                          <span>新增纳入</span>
                           <small>昨日未纳入</small>
                         </>
                       ) : (
@@ -730,7 +729,7 @@ export function DailyOverviewWorkspace({
                         href={`/asset-sources/${encodeURIComponent(source.id)}`}
                         variant="text"
                       >
-                        查看资产明细
+                        明细
                         <SourceDetailArrowIcon />
                       </VibeLink>
                     )}
@@ -742,14 +741,7 @@ export function DailyOverviewWorkspace({
         )}
       </section>
 
-      {!demoMode && refreshEnabled ? (
-        <div className="daily-overview__refresh">
-          <VibeLink href="/asset-sources" variant="text">资产来源</VibeLink>
-          <span>
-            单来源操作请前往资产来源。
-          </span>
-        </div>
-      ) : null}
+
     </div>
   );
 }

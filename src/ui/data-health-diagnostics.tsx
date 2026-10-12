@@ -340,8 +340,8 @@ export function DataHealthDiagnostics({
           {filteredEntries.length === 0 ? (
             <div className="empty-state">
               <p className="empty-title">{completeness === "incomplete"
-                ? "所选范围内没有历史缺口或不完整观测"
-                : "所选条件没有匹配观测"}</p>
+                ? "无数据缺口或不完整记录"
+                : "无匹配记录"}</p>
             </div>
           ) : (
             <ol className="data-health-history__list">

@@ -225,7 +225,7 @@ export function EvmTokenPreferenceSettings({
 
       {sources.length === 0 ? (
         <p className="evm-token-settings__empty">
-          尚未添加 EVM 观察钱包。
+          未添加观察钱包
         </p>
       ) : null}
 
@@ -448,7 +448,7 @@ export function EvmTokenPreferenceSettings({
       ignoredCount === 0 &&
       includedCount === 0 ? (
         <p className="evm-token-settings__empty">
-          当前没有可管理资产。
+          暂无可管理资产
         </p>
       ) : null}
 
@@ -483,7 +483,7 @@ export function EvmTokenPreferenceSettings({
               </VibeButton>
             </>
           }
-          description="不再计入总资产，不影响链上资产。"
+          description="不计入总额，不影响链上资产。"
           onClose={() => setNativeAssetToIgnore(null)}
           title={`确认忽略 ${nativeAssetToIgnore.asset.symbol ?? "原生币"}`}
           titleId="ignore-native-asset-dialog-title"

@@ -21,7 +21,7 @@ export function AutomaticDailySettlementSettings({ execution, scheduler }: {
         </> : null}
       </dl>
       <p className="formal-daily-settlement-note">仅检查本机 launchd 任务，外部调度状态未知。已加载或过去执行成功不代表当前采集正常；暂无记录不代表未启用。</p>
-      <p className="formal-daily-settlement-note">正式日结独立于实时刷新：证券使用官方常规盘收盘价，加密资产使用采集窗口市价。执行记录不纳入业务备份。</p>
+      <p className="formal-daily-settlement-note">独立于实时刷新：证券按官方收盘价，加密资产按采集窗口市价。执行日志不纳入备份。</p>
     </section>
   );
 }

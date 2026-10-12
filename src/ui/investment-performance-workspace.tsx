@@ -735,7 +735,7 @@ export function InvestmentPerformanceWorkspace({
               {formatShanghaiDayLabel(chartStartDay)} 至 {formatShanghaiDayLabel(chartEndDay)}
             </VibeStatusTag>
           ) : (
-            <VibeStatusTag tone="warning">尚无资产记录</VibeStatusTag>
+            <VibeStatusTag tone="warning">无记录</VibeStatusTag>
           )}
         </header>
         <div className="investment-performance__range" aria-label="分析区间" role="group">
@@ -769,7 +769,7 @@ export function InvestmentPerformanceWorkspace({
         </div>
         {hasEarlyHistory ? (
           <VibeNotice tone="info">
-            虚线为{importedSource?.label}早期记录；结论只使用完整总资产。
+            虚线为{importedSource?.label}早期记录；结论仅基于完整总资产。
           </VibeNotice>
         ) : (
           <VibeNotice tone="info">
@@ -778,7 +778,7 @@ export function InvestmentPerformanceWorkspace({
         )}
         {hasEarlyHistory && sourceHistoryTrend && sourceHistoryTrend.missingCount > 0 ? (
           <VibeNotice tone="info">
-            早期记录缺少 {sourceHistoryTrend.missingCount} 天。
+            早期记录缺 {sourceHistoryTrend.missingCount} 天。
           </VibeNotice>
         ) : null}
         {benchmarkVisible ? (
@@ -821,7 +821,7 @@ export function InvestmentPerformanceWorkspace({
               {formatShanghaiDayLabel(portfolioTrend.startDay)} 至 {formatShanghaiDayLabel(portfolioTrend.endDay)}
             </VibeStatusTag>
           ) : (
-            <VibeStatusTag tone="warning">尚无完整端点</VibeStatusTag>
+            <VibeStatusTag tone="warning">缺完整端点</VibeStatusTag>
           )}
         </header>
         <div className="investment-performance__interval-grid">
@@ -853,7 +853,7 @@ export function InvestmentPerformanceWorkspace({
             />
           </article>
           <article>
-            <p>资金发生日加权比例</p>
+            <p>资金加权收益率</p>
             {showSensitiveInfo === false ? (
               <span className="investment-performance__private">••••••</span>
             ) : analysis.interval.investmentProfitRatio === null ? (
@@ -881,7 +881,7 @@ export function InvestmentPerformanceWorkspace({
         </header>
         {cashflows.length === 0 ? (
           <div className="empty-state">
-            <p className="empty-title">尚未记录投入本金</p>
+            <p className="empty-title">无资金记录</p>
           </div>
         ) : (
           <ol className="investment-performance__cashflow-list">
@@ -912,14 +912,14 @@ export function InvestmentPerformanceWorkspace({
                       <span>
                         {showSensitiveInfo
                           ? convertedAmount === null
-                            ? `${currency} 换算不可用`
+                            ? `缺 ${currency} 汇率`
                             : `${currency} 计价 ${cashflowSign(cashflow.kind)}${amount(convertedAmount)}`
                           : "换算与汇率已隐藏"}
                       </span>
                       <span>
                         {showSensitiveInfo
                           ? conversionEvidence === undefined
-                            ? "无可用的长桥参考汇率证据"
+                            ? "缺参考汇率证据"
                             : `${conversionEvidence.source} · ${conversionEvidence.observedAt}`
                           : "汇率证据已隐藏"}
                       </span>

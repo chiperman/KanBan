@@ -59,7 +59,7 @@ const EVM_WATCH_WALLET = {
     },
   ] satisfies AssetSourceFieldDescription[],
   startLabel: "验证公开地址",
-  fieldHelp: "只读公开地址；不接收私钥、助记词或签名。",
+  fieldHelp: "仅查公开地址，无需私钥或签名。",
 };
 
 const MANUAL_ASSET_SOURCE = {
@@ -459,14 +459,14 @@ export function AssetSourceFlow({
       <ol aria-label="来源接入步骤" className="asset-source-flow__steps">
         {!isReauthorizing ? (
           <li data-current={step === "choose" ? "true" : undefined}>
-            {stepLabel("choose", step, "1 选择来源")}
+            {stepLabel("choose", step, "1 选来源")}
           </li>
         ) : null}
         <li data-current={step === "configure" ? "true" : undefined}>
-          {stepLabel("configure", step, isReauthorizing ? "1 重新填写材料" : "2 填写授权")}
+          {stepLabel("configure", step, isReauthorizing ? "1 填授权" : "2 填授权")}
         </li>
         <li data-current={step === "preview" ? "true" : undefined}>
-          {stepLabel("preview", step, isReauthorizing ? "2 校验与确认" : "3 校验与确认")}
+          {stepLabel("preview", step, isReauthorizing ? "2 确认" : "3 确认")}
         </li>
       </ol>
 
@@ -498,7 +498,7 @@ export function AssetSourceFlow({
             ))}
           </fieldset>
           <VibeButton onClick={backToDirectory} type="button" variant="text">
-            取消并返回资产来源
+            取消返回
           </VibeButton>
         </section>
       ) : null}
@@ -606,11 +606,11 @@ export function AssetSourceFlow({
           <div className="asset-source-flow__actions">
             {!isReauthorizing ? (
               <VibeButton disabled={pending} onClick={backToChoice} type="button" variant="text">
-                返回选择来源
+                上一步
               </VibeButton>
             ) : (
               <VibeButton disabled={pending} onClick={backToDirectory} type="button" variant="text">
-                取消并返回资产来源
+                取消返回
               </VibeButton>
             )}
             <VibeButton

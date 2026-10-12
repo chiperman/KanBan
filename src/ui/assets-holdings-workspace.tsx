@@ -529,7 +529,7 @@ export function AssetsHoldingsWorkspace({
 
         {filteredObservations.length === 0 ? (
           <div className="empty-state" data-testid="assets-holdings-empty">
-            <p className="empty-title">当前筛选没有持仓观察</p>
+            <p className="empty-title">无匹配持仓</p>
           </div>
         ) : (
           <div className="assets-holdings__table-wrap">
@@ -597,10 +597,10 @@ export function AssetsHoldingsWorkspace({
                         </strong>
                         {showSourceMarketValue && holding.sourceMarketValue ? (
                           <span>
-                            来源口径 {money(holding.sourceMarketValue.amount)} {holding.sourceMarketValue.currency}
+                            原币 {money(holding.sourceMarketValue.amount)} {holding.sourceMarketValue.currency}
                           </span>
                         ) : holding.sourceMarketValue ? null : (
-                          <span>来源市值不可用</span>
+                          <span>原市值缺失</span>
                         )}
                       </td>
                       <td data-label="现价 / 数量">
@@ -652,7 +652,7 @@ export function AssetsHoldingsWorkspace({
         )}
 
         <VibeNotice tone="info">
-          价格变化采用来源可用行情；平台盈亏仅在来源提供时显示，沿用平台原生口径。
+          价格变化采用来源可用行情；平台盈亏沿用平台原生口径。
         </VibeNotice>
       </section>
     </section>

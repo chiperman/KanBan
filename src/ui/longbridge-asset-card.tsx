@@ -1280,7 +1280,7 @@ export function AssetSourceCard({
                 data-testid="asset-holdings-search-empty"
                 role="status"
               >
-                未找到匹配持仓
+                无匹配持仓
               </p>
             ) : (
               <div className="asset-table-wrap">
@@ -1300,10 +1300,10 @@ export function AssetSourceCard({
                           <th>数量</th>
                           <th>现价</th>
                           <th>持仓市值</th>
-                          <th>平均成本价</th>
+                          <th>成本价</th>
                           {showPlatformProfit ? <th>平台盈亏（来源提供）</th> : null}
                           <th>浮动盈亏</th>
-                          <th>持仓盈亏率</th>
+                          <th>盈亏率</th>
                         </>
                       )}
                     </tr>

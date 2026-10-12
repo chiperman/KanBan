@@ -18,12 +18,12 @@ const OPTIONS: Array<{
   {
     value: "red-up",
     label: "红涨绿跌",
-    description: "盈利显示红色，亏损显示绿色。",
+    description: "涨红跌绿（国内常用）",
   },
   {
     value: "green-up",
     label: "绿涨红跌",
-    description: "盈利显示绿色，亏损显示红色。",
+    description: "涨绿跌红（国际常用）",
   },
 ];
 

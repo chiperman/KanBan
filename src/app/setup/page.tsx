@@ -27,7 +27,7 @@ export default async function SetupPage({
           <p className="card-label">OWNER PROVISION / CLOSED</p>
           <h1 className="setup-title">已预置</h1>
           <p className="setup-copy">
-            预置入口已关闭。
+            入口已关闭
           </p>
           <VibeLink className="provision-primary" href="/" variant="primary">
             返回所有者登录
@@ -47,7 +47,7 @@ export default async function SetupPage({
         <p className="card-label">OWNER PROVISION / 00</p>
         <h1 className="setup-title">预置唯一所有者的 Passkey</h1>
         <p className="setup-copy">
-          仅可预置一次。
+          仅可预置一次
         </p>
         <SetupPasskey />
       </main>

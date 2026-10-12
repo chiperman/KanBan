@@ -42,7 +42,7 @@ export function SourceInvestmentRecordDialog({sourceId,sourceName,currentDay,cur
     <VibeDateField fieldId="investment-record-day" label="记录日期" max={currentDay} value={day} onValueChange={setDay} />
     <VibeField fieldId="investment-record-amount" label={kinds.find(option=>option.value===kind)!.label} inputMode="decimal" value={amount} onChange={e=>setAmount(e.target.value)} />
     {fixedCurrency ? <p className="trend-note">记账币种：{fixedCurrency}</p> : <VibeSelectField fieldId="investment-record-currency" label="币种" value={currency} onValueChange={value=>setCurrency(value as typeof currency)} options={[{value:"USD",label:"USD"},{value:"CNY",label:"CNY"},{value:"HKD",label:"HKD"}]} />}
-    <p className="trend-note">{kind==="opening" ? "填写记账起点已经投入的本金，不是当天资产金额；从零开始记账请填 0，再逐笔记录投入。" : kind==="valuation" ? "记录指定日期的账户总资产。自动刷新会保留此记录；同日已有有知有行金额时，计算采用有知有行。" : "仅填写本账户实际投入或取出的资金，不包含买卖、分红或利息；同一笔资金只记一次。"}</p>
+    <p className="trend-note">{kind==="opening" ? "起点的历史投入本金（非当前资产），从零开始请填 0。" : kind==="valuation" ? "记录指定日期的账户总资产。自动刷新会保留此记录；同日已有有知有行金额时，计算采用有知有行。" : "仅记录实际转入/转出本金，不含买卖、分红及利息。"}</p>
     {error ? <VibeNotice tone="error" role="alert">{error}</VibeNotice>:null}
   </VibeDialog>;
 }
@@ -52,6 +52,6 @@ export function SourceInvestmentRecordDeleteDialog({sourceName,record,onClose}:{
   async function remove(){setPending(true);setError("");try{await request(record.sourceId,"DELETE",{action:"investment-record",recordId:record.id});router.refresh();onClose();}catch(e){setError(e instanceof Error?e.message:"删除失败");}finally{setPending(false);}}
   return <VibeDialog aria-label="删除手动记账记录" title="删除这条记录？" titleId="investment-record-delete-title" eyebrow="ACCOUNT / DELETE" description={`${sourceName} · ${record.day} · ${kinds.find(option=>option.value===record.kind)!.label} · ${record.amount} ${record.currency}`} onClose={()=>{if(!pending)onClose();}}
     actions={<><VibeButton type="button" variant="text" disabled={pending} onClick={onClose}>取消</VibeButton><VibeButton type="button" variant="primary" disabled={pending} onClick={()=>void remove()}>确认删除</VibeButton></>}>
-    <p>删除后重新计算本账户的收益。</p>{error?<VibeNotice tone="error" role="alert">{error}</VibeNotice>:null}
+    <p>删除后将重算账户收益。</p>{error?<VibeNotice tone="error" role="alert">{error}</VibeNotice>:null}
   </VibeDialog>;
 }

@@ -68,7 +68,7 @@ export function SourceInvestmentPerformance({ history, sourceId, sourceName, rec
       <span>{curve === "return" ? "累计资金加权收益率 · %" : `累计收益 · ${analysis.currency ?? "账户原币"}`}</span>
       <span>{curve === "return" ? "Modified Dietz · 不年化" : "资产金额 − 累计净投入"}</span>
     </div>
-    {showSensitiveInfo && analysis.missingReason ? <div className="source-performance__empty" role="status"><h4>补全记录后查看收益</h4><p>{analysis.missingReason}</p><p>通过页面上方的「手动记录」补充。</p></div> : <AssetTrendChart
+    {showSensitiveInfo && analysis.missingReason ? <div className="source-performance__empty" role="status"><h4>补全记录查看收益</h4><p>{analysis.missingReason}</p><p>可在上方「手动记录」添加。</p></div> : <AssetTrendChart
       ariaLabel={`${sourceName}${curve === "return" ? "收益率曲线" : "累计收益曲线"}`}
       currency={curve === "return" ? "%" : analysis.currency ?? "USD"}
       formatAmount={curve === "return" ? value => decimalToFixed(value, 2) : money}

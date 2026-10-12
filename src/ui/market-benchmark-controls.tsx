@@ -56,7 +56,7 @@ export function MarketBenchmarkControls({
   let state: ReactNode = null;
   if (dataState.kind === "unavailable") {
     state = (
-      <BenchmarkState title="未连接长桥证券来源" />
+      <BenchmarkState title="未连接长桥" />
     );
   } else if (dataState.kind === "failed") {
     state = (
@@ -64,7 +64,7 @@ export function MarketBenchmarkControls({
     );
   } else if (dataState.kind === "ready" && enabledSymbols.length === 0) {
     state = (
-      <BenchmarkState title="未选择市场指数" />
+      <BenchmarkState title="未选指数" />
     );
   } else if (dataState.kind === "ready" && dataState.comparison.reason !== null) {
     state = (
@@ -86,7 +86,7 @@ export function MarketBenchmarkControls({
           role="status"
         >
           {dataState.kind === "loading"
-            ? "指数行情加载中"
+            ? "行情加载中"
             : dataState.kind === "ready" && dataState.comparison.baselineDay !== null
               ? `基准起点 ${formatDay(dataState.comparison.baselineDay)}`
               : "\u00a0"}
