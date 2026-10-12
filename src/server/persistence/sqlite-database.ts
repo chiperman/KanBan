@@ -5,19 +5,19 @@ import { chmodSync, copyFileSync, existsSync, readFileSync, } from "node:fs";
 import { DashboardSchema } from "./sqlite-schema";
 import { SqliteDashboardReadModel } from "./sqlite-read-model";
 import { SqliteFormalSettlementStore } from "./sqlite-formal-settlements";
+import { SqliteObservationStore } from "./sqlite-observation-store";
 
-import { buildDailyAssetSnapshot, mergeDailyTrendObservation, shanghaiDay } from "@/domain/daily-asset-snapshots";
-import { decimalAdd } from "@/domain/decimal";
+import { buildDailyAssetSnapshot, shanghaiDay } from "@/domain/daily-asset-snapshots";
 import { assertManualAssetRecordNotFuture, } from "@/domain/manual-asset-records";
 import { normalizeAssetSyncState } from "@/server/asset-sync-diagnostics";
 import { type BusinessDataState } from "@/server/business-data-backup";
 import type { InvestmentCashflowStore } from "@/server/investment-cashflows";
 import type { DashboardDatabase, DashboardState, SqliteRow } from "@/server/persistence/contracts";
 import { migrateDailyObservation, parseLegacyDashboardStateSync } from "@/server/persistence/migrations";
-import { applyLatestManualAssetRecord, latestManualAssetRecord, manualDailySource } from "@/server/persistence/observations";
+import { applyLatestManualAssetRecord, latestManualAssetRecord } from "@/server/persistence/observations";
 import type { SourceAuthorizationResult, SourceConnectionKind } from "@/server/persistence/source-record";
 import { buildConnectedSource, connectedSourceKind } from "@/server/persistence/source-record";
-import type { AssetSourceSummary, BinanceAuthorizationResult, BitAuthorizationResult, BitgetAuthorizationResult, Card, CreateManualAssetSourceInput, DailyAssetSnapshot, DailyAssetSourceSnapshot, DailyAssetTrendObservation, EvmWatchAuthorizationResult, FormalDailySettlement, FormalSettlementExecution, ImportedAssetSourceHistoryObservation, InvestmentCashflow, LongbridgeAuthorizationResult, ManualAssetClass, ManualAssetRecord, ManualAssetRecordInput, OkxAuthorizationResult } from "@/server/ports";
+import type { AssetSourceSummary, BinanceAuthorizationResult, BitAuthorizationResult, BitgetAuthorizationResult, Card, CreateManualAssetSourceInput, DailyAssetSnapshot, DailyAssetTrendObservation, EvmWatchAuthorizationResult, FormalDailySettlement, FormalSettlementExecution, ImportedAssetSourceHistoryObservation, InvestmentCashflow, LongbridgeAuthorizationResult, ManualAssetClass, ManualAssetRecord, ManualAssetRecordInput, OkxAuthorizationResult } from "@/server/ports";
 
 const sqlite = process.getBuiltinModule("node:sqlite");
 if (sqlite === undefined) {
@@ -32,6 +32,7 @@ export class SqliteDashboardDatabase
   private database!: InstanceType<typeof DatabaseSync>;
   private readModel!: SqliteDashboardReadModel;
   private formalSettlements!: SqliteFormalSettlementStore;
+  private observations!: SqliteObservationStore;
 
   constructor(
     private readonly databasePath: string,
@@ -42,6 +43,7 @@ export class SqliteDashboardDatabase
       this.database = new DatabaseSync(databasePath);
       this.readModel = new SqliteDashboardReadModel(this.database);
       this.formalSettlements = new SqliteFormalSettlementStore(this.database);
+      this.observations = new SqliteObservationStore(this.database, this.readModel);
       chmodSync(databasePath, 0o600);
       this.database.exec("PRAGMA busy_timeout = 5000");
       this.database.exec("PRAGMA foreign_keys = ON");
@@ -266,16 +268,16 @@ export class SqliteDashboardDatabase
     );
     state.assetCards.forEach((card, position) => this.insertCard(card, position));
     state.dailyAssetSnapshots.forEach((snapshot) =>
-      this.insertDailyBaseline(migrateDailyObservation(snapshot)),
+      this.observations.insertBaseline(migrateDailyObservation(snapshot)),
     );
     state.dailyAssetTrendObservations.forEach((observation) =>
-      this.upsertDailyTrendObservation(migrateDailyObservation(observation)),
+      this.observations.upsertTrend(migrateDailyObservation(observation)),
     );
     const importedHistory = "importedAssetSourceHistoryObservations" in state
       ? state.importedAssetSourceHistoryObservations
       : [];
     importedHistory.forEach((observation) =>
-      this.insertImportedSourceHistoryObservation(observation),
+      this.observations.insertImportedHistory(observation),
     );
     const cashflows = "investmentCashflows" in state
       ? (state as { investmentCashflows: InvestmentCashflow[] })
@@ -425,339 +427,6 @@ export class SqliteDashboardDatabase
         cashflow.createdAt,
         cashflow.updatedAt,
       );
-  }
-
-  private insertDailyBaseline(snapshot: DailyAssetSnapshot): boolean {
-    const inserted = this.database
-      .prepare(`
-        INSERT OR IGNORE INTO daily_asset_snapshots (
-          day, captured_at, complete, status, total_usd, total_cny, total_hkd,
-          exchange_rates_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `)
-      .run(
-        snapshot.day,
-        snapshot.capturedAt,
-        Number(snapshot.complete),
-        snapshot.status ?? (snapshot.complete ? "complete" : "incomplete"),
-        snapshot.total.USD,
-        snapshot.total.CNY,
-        snapshot.total.HKD ?? null,
-        JSON.stringify(snapshot.exchangeRates ?? []),
-      ).changes > 0;
-    if (!inserted) return false;
-    this.insertDailyBaselineSources(snapshot);
-    return true;
-  }
-
-  private insertDailyBaselineSources(snapshot: DailyAssetSnapshot): void {
-    const statement = this.database.prepare(`
-      INSERT OR IGNORE INTO daily_asset_source_snapshots (
-        day, source_id, label, kind, captured_at, complete, status, total_usd, total_cny,
-        total_hkd, asset_class_totals_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    for (const source of snapshot.sources) {
-      statement.run(
-        snapshot.day,
-        source.sourceId,
-        source.label,
-        source.kind,
-        source.capturedAt,
-        Number(source.complete),
-        source.status ?? (source.complete ? "complete" : "incomplete"),
-        source.total.USD,
-        source.total.CNY,
-        source.total.HKD ?? null,
-        source.assetClassTotals === undefined
-          ? null
-          : JSON.stringify(source.assetClassTotals),
-      );
-    }
-  }
-
-  private replaceExpiredDailyBaseline(snapshot: DailyAssetSnapshot): void {
-    this.database
-      .prepare(`
-        UPDATE daily_asset_snapshots
-        SET captured_at = ?, complete = ?, status = ?, total_usd = ?, total_cny = ?,
-          total_hkd = ?, exchange_rates_json = ?
-        WHERE day = ?
-      `)
-      .run(
-        snapshot.capturedAt,
-        Number(snapshot.complete),
-        snapshot.status ?? (snapshot.complete ? "complete" : "incomplete"),
-        snapshot.total.USD,
-        snapshot.total.CNY,
-        snapshot.total.HKD ?? null,
-        JSON.stringify(snapshot.exchangeRates ?? []),
-        snapshot.day,
-      );
-    this.database
-      .prepare("DELETE FROM daily_asset_source_snapshots WHERE day = ?")
-      .run(snapshot.day);
-    this.insertDailyBaselineSources(snapshot);
-  }
-
-  private upsertDailyTrendObservation(
-    snapshot: DailyAssetTrendObservation,
-  ): void {
-    this.database
-      .prepare(`
-        INSERT INTO daily_asset_trend_observations (
-          day, captured_at, complete, status, total_usd, total_cny, total_hkd,
-          exchange_rates_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(day) DO UPDATE SET
-          captured_at = excluded.captured_at,
-          complete = excluded.complete,
-          status = excluded.status,
-          total_usd = excluded.total_usd,
-          total_cny = excluded.total_cny,
-          total_hkd = excluded.total_hkd,
-          exchange_rates_json = excluded.exchange_rates_json
-      `)
-      .run(
-        snapshot.day,
-        snapshot.capturedAt,
-        Number(snapshot.complete),
-        snapshot.status ?? (snapshot.complete ? "complete" : "incomplete"),
-        snapshot.total.USD,
-        snapshot.total.CNY,
-        snapshot.total.HKD ?? null,
-        JSON.stringify(snapshot.exchangeRates ?? []),
-      );
-    this.database
-      .prepare("DELETE FROM daily_asset_source_trend_observations WHERE day = ?")
-      .run(snapshot.day);
-    const statement = this.database.prepare(`
-      INSERT INTO daily_asset_source_trend_observations (
-        day, source_id, label, kind, captured_at, complete, status, total_usd, total_cny,
-        total_hkd, asset_class_totals_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(day, source_id) DO UPDATE SET
-        label = excluded.label,
-        kind = excluded.kind,
-        captured_at = excluded.captured_at,
-        complete = excluded.complete,
-        status = excluded.status,
-        total_usd = excluded.total_usd,
-        total_cny = excluded.total_cny,
-        total_hkd = excluded.total_hkd,
-        asset_class_totals_json = excluded.asset_class_totals_json
-    `);
-    for (const source of snapshot.sources) {
-      statement.run(
-        snapshot.day,
-        source.sourceId,
-        source.label,
-        source.kind,
-        source.capturedAt,
-        Number(source.complete),
-        source.status ?? (source.complete ? "complete" : "incomplete"),
-        source.total.USD,
-        source.total.CNY,
-        source.total.HKD ?? null,
-        source.assetClassTotals === undefined
-          ? null
-          : JSON.stringify(source.assetClassTotals),
-      );
-    }
-    this.recalculateDailyTrendObservation(snapshot.day);
-  }
-
-  private upsertDailySourceObservation(
-    table:
-      | "daily_asset_source_snapshots"
-      | "daily_asset_source_trend_observations",
-    day: string,
-    source: DailyAssetSourceSnapshot,
-  ): void {
-    this.database
-      .prepare(`
-        INSERT INTO ${table} (
-          day, source_id, label, kind, captured_at, complete, status, total_usd, total_cny,
-          total_hkd, asset_class_totals_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(day, source_id) DO UPDATE SET
-          label = excluded.label,
-          kind = excluded.kind,
-          captured_at = excluded.captured_at,
-          complete = excluded.complete,
-          status = excluded.status,
-          total_usd = excluded.total_usd,
-          total_cny = excluded.total_cny,
-          total_hkd = excluded.total_hkd,
-          asset_class_totals_json = excluded.asset_class_totals_json
-      `)
-      .run(
-        day,
-        source.sourceId,
-        source.label,
-        source.kind,
-        source.capturedAt,
-        Number(source.complete),
-        source.status ?? (source.complete ? "complete" : "incomplete"),
-        source.total.USD,
-        source.total.CNY,
-        source.total.HKD ?? null,
-        source.assetClassTotals === undefined
-          ? null
-          : JSON.stringify(source.assetClassTotals),
-      );
-  }
-
-  private insertImportedSourceHistoryObservation(
-    observation: ImportedAssetSourceHistoryObservation,
-  ): void {
-    this.database
-      .prepare(`
-        INSERT INTO imported_asset_source_history_observations (
-          source_id, day, label, kind, captured_at, complete, status,
-          total_usd, total_cny, total_hkd
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `)
-      .run(
-        observation.sourceId,
-        observation.day,
-        observation.label,
-        observation.kind,
-        observation.capturedAt,
-        Number(observation.complete),
-        observation.status ?? (observation.complete ? "complete" : "incomplete"),
-        observation.total.USD,
-        observation.total.CNY,
-        observation.total.HKD ?? null,
-      );
-  }
-
-  /**
-   * 手工记录是按上海自然日覆盖写入：同一来源当天只有一条，编辑会替换该来源的日值，
-   * 而不会覆盖同日外部来源的观测。
-   */
-  private recordManualDailyObservation(
-    source: AssetSourceSummary,
-    record: ManualAssetRecord,
-    capturedAt: string,
-  ): void {
-    const isCurrentDay = record.day === shanghaiDay(capturedAt);
-    const currentObservation = isCurrentDay
-      ? buildDailyAssetSnapshot(this.readModel.listSourcesSync(), capturedAt)
-      : null;
-    const manualSource = currentObservation?.sources.find(
-      (item) => item.sourceId === source.id,
-    ) ?? manualDailySource(source, record);
-
-    const hasBaseline = this.database
-      .prepare("SELECT day FROM daily_asset_snapshots WHERE day = ?")
-      .get(record.day) !== undefined;
-    if (!hasBaseline && currentObservation !== null) {
-      this.insertDailyBaseline(currentObservation);
-    }
-
-    const hasTrend = this.database
-      .prepare("SELECT day FROM daily_asset_trend_observations WHERE day = ?")
-      .get(record.day) !== undefined;
-    if (!hasTrend && currentObservation !== null) {
-      this.upsertDailyTrendObservation(currentObservation);
-    } else if (!hasTrend) {
-      this.database
-        .prepare(`
-          INSERT INTO daily_asset_trend_observations (
-            day, captured_at, complete, status, total_usd, total_cny, total_hkd,
-            exchange_rates_json
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `)
-        .run(
-          record.day,
-          manualSource.capturedAt,
-          Number(manualSource.complete),
-          manualSource.status ?? "incomplete",
-          manualSource.total.USD,
-          manualSource.total.CNY,
-          manualSource.total.HKD ?? null,
-          "[]",
-        );
-      this.upsertDailySourceObservation(
-        "daily_asset_source_trend_observations",
-        record.day,
-        manualSource,
-      );
-    } else {
-      this.upsertDailySourceObservation(
-        "daily_asset_source_trend_observations",
-        record.day,
-        manualSource,
-      );
-      this.recalculateDailyTrendObservation(record.day);
-    }
-  }
-
-  private recalculateDailySnapshot(
-    day: string,
-    tables: {
-      snapshot: "daily_asset_snapshots" | "daily_asset_trend_observations";
-      source: "daily_asset_source_snapshots" | "daily_asset_source_trend_observations";
-    },
-  ): void {
-    const sources = this.dailySourceRows(day, tables.source);
-    if (sources.length === 0) {
-      this.database.prepare(`DELETE FROM ${tables.snapshot} WHERE day = ?`).run(day);
-      return;
-    }
-    const totals = (column: "total_usd" | "total_cny" | "total_hkd") => {
-      const values = sources.flatMap((source) =>
-        typeof source[column] === "string" ? [source[column]] : [],
-      );
-      return values.length > 0 ? decimalAdd(...values) : null;
-    };
-    const totalUsd = totals("total_usd");
-    const complete =
-      totalUsd !== null &&
-      totals("total_hkd") !== null &&
-      sources.every((source) => source.complete === 1);
-    const status = sources.some((source) => source.status === "expired")
-      ? "expired"
-      : complete
-        ? "complete"
-        : "incomplete";
-    this.database
-      .prepare(`
-        UPDATE ${tables.snapshot}
-        SET complete = ?, status = ?, total_usd = ?, total_cny = ?, total_hkd = ?
-        WHERE day = ?
-      `)
-      .run(
-        Number(complete),
-        status,
-        totalUsd,
-        totals("total_cny"),
-        totals("total_hkd"),
-        day,
-      );
-  }
-
-  private recalculateDailyTrendObservation(day: string): void {
-    this.recalculateDailySnapshot(day, {
-      snapshot: "daily_asset_trend_observations",
-      source: "daily_asset_source_trend_observations",
-    });
-  }
-
-  private dailySourceRows(
-    day: string,
-    table = "daily_asset_source_snapshots",
-  ): SqliteRow[] {
-    return this.database
-      .prepare(`
-        SELECT source_id, label, kind, captured_at, complete, status, total_usd, total_cny,
-          total_hkd, asset_class_totals_json
-        FROM ${table}
-        WHERE day = ?
-        ORDER BY rowid
-      `)
-      .all(day) as SqliteRow[];
   }
 
   private compactPositions(table: "asset_sources" | "asset_cards"): void {
@@ -1046,8 +715,8 @@ export class SqliteDashboardDatabase
     snapshot: DailyAssetSnapshot,
   ): Promise<boolean> {
     return this.transaction(() => {
-      const inserted = this.insertDailyBaseline(snapshot);
-      if (inserted) this.upsertDailyTrendObservation(snapshot);
+      const inserted = this.observations.insertBaseline(snapshot);
+      if (inserted) this.observations.upsertTrend(snapshot);
       return inserted;
     });
   }
@@ -1056,34 +725,7 @@ export class SqliteDashboardDatabase
     snapshot: DailyAssetTrendObservation,
     createBaseline: boolean,
   ): Promise<void> {
-    this.transaction(() => {
-      const baseline = this.database
-        .prepare("SELECT status FROM daily_asset_snapshots WHERE day = ?")
-        .get(snapshot.day) as { status: "complete" | "incomplete" | "expired" }
-          | undefined;
-      if (baseline === undefined && createBaseline) {
-        this.insertDailyBaseline(snapshot);
-      } else if (
-        createBaseline &&
-        baseline !== undefined &&
-        baseline.status === "expired"
-      ) {
-        this.replaceExpiredDailyBaseline(snapshot);
-      }
-      const hasTrend = this.database
-        .prepare("SELECT day FROM daily_asset_trend_observations WHERE day = ?")
-        .get(snapshot.day) !== undefined;
-      const existing = hasTrend
-        ? this.readModel.listDailyObservationsSync(
-            "daily_asset_trend_observations", "daily_asset_source_trend_observations", snapshot.day,
-          )[0]
-        : undefined;
-      this.upsertDailyTrendObservation(
-        existing
-          ? mergeDailyTrendObservation(existing, snapshot, !createBaseline)
-          : snapshot,
-      );
-    });
+    this.transaction(() => this.observations.record(snapshot, createBaseline));
   }
 
   async setAssetCardHidden(sourceId: string, hidden: boolean): Promise<void> {
@@ -1239,7 +881,7 @@ export class SqliteDashboardDatabase
       );
       const updated = applyLatestManualAssetRecord(source, latest, capturedAt);
       this.upsertSourceDetails(updated);
-      this.recordManualDailyObservation(updated, record, capturedAt);
+      this.observations.recordManual(updated, record, capturedAt);
     });
   }
 
@@ -1277,7 +919,7 @@ export class SqliteDashboardDatabase
         this.database
           .prepare(`DELETE FROM ${sourceTable} WHERE day = ? AND source_id = ?`)
           .run(day, sourceId);
-        this.recalculateDailySnapshot(day, {
+        this.observations.recalculate(day, {
           snapshot,
           source: sourceTable,
         });
@@ -1349,12 +991,12 @@ export class SqliteDashboardDatabase
       this.compactPositions("asset_sources");
       this.compactPositions("asset_cards");
       for (const { day } of baselineDays) {
-        this.recalculateDailySnapshot(day as string, {
+        this.observations.recalculate(day as string, {
           snapshot: "daily_asset_snapshots",
           source: "daily_asset_source_snapshots",
         });
       }
-      for (const { day } of trendDays) this.recalculateDailyTrendObservation(day as string);
+      for (const { day } of trendDays) this.observations.recalculateTrend(day as string);
       return typeof source.credential_reference === "string"
         ? source.credential_reference
         : null;
@@ -1491,8 +1133,8 @@ export class SqliteDashboardDatabase
         const hasBaseline = this.database
           .prepare("SELECT day FROM daily_asset_snapshots WHERE day = ?")
           .get(observation.day) !== undefined;
-        if (!hasBaseline) this.insertDailyBaseline(observation);
-        this.upsertDailyTrendObservation(observation);
+        if (!hasBaseline) this.observations.insertBaseline(observation);
+        this.observations.upsertTrend(observation);
       }
     });
   }
