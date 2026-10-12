@@ -26,6 +26,7 @@ import type {
   Prices,
 } from "@/server/ports";
 import { assetResponseError, hasManagedAssetRetry } from "@/server/asset-sync-diagnostics";
+import { positiveDecimal } from "@/server/asset-sources/value-guards";
 
 type BitgetFetch = (
   input: string | URL | Request,
@@ -125,9 +126,7 @@ const {
   identifier,
 } = createJsonDecoder("Bitget");
 
-function positive(value: string): boolean {
-  return decimalCompare(value, "0") > 0;
-}
+const positive = positiveDecimal;
 
 function optionalParentId(value: unknown): string {
   if (value === "") return "";

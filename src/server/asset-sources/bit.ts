@@ -13,6 +13,7 @@ import type {
   Prices,
 } from "@/server/ports";
 import { assetResponseError } from "@/server/asset-sync-diagnostics";
+import { positiveDecimal } from "@/server/asset-sources/value-guards";
 
 type JsonRecord = Record<string, unknown>;
 type BitFetch = (
@@ -129,9 +130,7 @@ function identifier(value: unknown, field: string): string {
   throw new Error(`BIT 响应中的 ${field} 不是有效标识`);
 }
 
-function positive(value: string): boolean {
-  return decimalCompare(value, "0") > 0;
-}
+const positive = positiveDecimal;
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "读取失败";

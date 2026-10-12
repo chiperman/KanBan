@@ -28,6 +28,7 @@ import type {
   Prices,
 } from "@/server/ports";
 import { assetResponseError } from "@/server/asset-sync-diagnostics";
+import { positiveDecimal } from "@/server/asset-sources/value-guards";
 
 type BinanceFetch = (
   input: string | URL | Request,
@@ -63,9 +64,7 @@ const {
   identifier,
 } = createJsonDecoder("Binance");
 
-function positive(value: string): boolean {
-  return decimalCompare(value, "0") > 0;
-}
+const positive = positiveDecimal;
 
 function integer(value: unknown, field: string): number {
   if (!Number.isSafeInteger(value) || Number(value) < 0) {
