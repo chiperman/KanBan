@@ -1,6 +1,7 @@
 {
   "name": "personal-asset-dashboard",
   "version": "0.1.0",
+  "type": "module",
   "private": true,
   "scripts": {
     "native:longbridge:build": "node scripts/build-longbridge-keychain-sdk.mjs",
