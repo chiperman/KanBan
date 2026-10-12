@@ -7,6 +7,7 @@ import { SqliteFormalSettlementStore } from "./sqlite-formal-settlements";
 import { SqliteObservationStore } from "./sqlite-observation-store";
 import { SqliteSourceInvestmentStore } from "./sqlite-source-investment-store";
 import { SqliteAssetSourceStore } from "./sqlite-asset-source-store";
+import { SqliteInvestmentCashflowStore } from "./sqlite-investment-cashflow-store";
 
 import { type BusinessDataState } from "@/server/business-data-backup";
 import type { InvestmentCashflowStore } from "@/server/investment-cashflows";
@@ -31,6 +32,7 @@ export class SqliteDashboardDatabase
   private observations!: SqliteObservationStore;
   private sourceInvestments!: SqliteSourceInvestmentStore;
   private sources!: SqliteAssetSourceStore;
+  private investmentCashflows!: SqliteInvestmentCashflowStore;
 
   constructor(
     private readonly databasePath: string,
@@ -44,6 +46,7 @@ export class SqliteDashboardDatabase
       this.observations = new SqliteObservationStore(this.database, this.readModel);
       this.sourceInvestments = new SqliteSourceInvestmentStore(this.database, this.readModel);
       this.sources = new SqliteAssetSourceStore(this.database, this.readModel, this.observations);
+      this.investmentCashflows = new SqliteInvestmentCashflowStore(this.database);
       chmodSync(databasePath, 0o600);
       this.database.exec("PRAGMA busy_timeout = 5000");
       this.database.exec("PRAGMA foreign_keys = ON");
@@ -283,7 +286,7 @@ export class SqliteDashboardDatabase
       ? (state as { investmentCashflows: InvestmentCashflow[] })
         .investmentCashflows
       : [];
-    cashflows.forEach((cashflow) => this.insertInvestmentCashflow(cashflow));
+    cashflows.forEach((cashflow) => this.investmentCashflows.insert(cashflow));
     if ("sourceInvestmentHistories" in state) {
       for (const history of state.sourceInvestmentHistories ?? []) this.sourceInvestments.writeHistory(history);
     }
@@ -305,31 +308,6 @@ export class SqliteDashboardDatabase
     for (const settlement of formalSettlements) {
       if (!this.formalSettlements.insert(settlement)) throw new Error("正式日结锚点重复");
     }
-  }
-
-  private insertInvestmentCashflow(cashflow: InvestmentCashflow): void {
-    this.database
-      .prepare(`
-        INSERT INTO investment_cashflows (
-          id, kind, occurred_at, amount, currency, note,
-          amount_usd, amount_cny, amount_hkd, exchange_rates_json,
-          created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `)
-      .run(
-        cashflow.id,
-        cashflow.kind,
-        cashflow.occurredAt,
-        cashflow.amount,
-        cashflow.currency,
-        cashflow.note,
-        cashflow.amounts.USD,
-        cashflow.amounts.CNY,
-        cashflow.amounts.HKD,
-        JSON.stringify(cashflow.exchangeRates),
-        cashflow.createdAt,
-        cashflow.updatedAt,
-      );
   }
 
   async readSourceDetail(query: { sourceId: string; from?: string; to?: string }) {
@@ -430,7 +408,7 @@ export class SqliteDashboardDatabase
     cashflow: InvestmentCashflow,
   ): Promise<void> {
     this.transaction(() => {
-      this.insertInvestmentCashflow(cashflow);
+      this.investmentCashflows.insert(cashflow);
     });
   }
 
@@ -438,37 +416,13 @@ export class SqliteDashboardDatabase
     cashflow: InvestmentCashflow,
   ): Promise<void> {
     this.transaction(() => {
-      const result = this.database
-        .prepare(`
-          UPDATE investment_cashflows
-          SET kind = ?, occurred_at = ?, amount = ?, currency = ?, note = ?,
-              amount_usd = ?, amount_cny = ?, amount_hkd = ?,
-              exchange_rates_json = ?, updated_at = ?
-          WHERE id = ?
-        `)
-        .run(
-          cashflow.kind,
-          cashflow.occurredAt,
-          cashflow.amount,
-          cashflow.currency,
-          cashflow.note,
-          cashflow.amounts.USD,
-          cashflow.amounts.CNY,
-          cashflow.amounts.HKD,
-          JSON.stringify(cashflow.exchangeRates),
-          cashflow.updatedAt,
-          cashflow.id,
-        );
-      if (result.changes !== 1) throw new Error("资金记录不存在");
+      this.investmentCashflows.update(cashflow);
     });
   }
 
   async deleteInvestmentCashflow(id: string): Promise<void> {
     this.transaction(() => {
-      const result = this.database
-        .prepare("DELETE FROM investment_cashflows WHERE id = ?")
-        .run(id);
-      if (result.changes !== 1) throw new Error("资金记录不存在");
+      this.investmentCashflows.delete(id);
     });
   }
 
