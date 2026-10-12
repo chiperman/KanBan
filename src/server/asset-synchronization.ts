@@ -1,12 +1,4 @@
-import {
-  abortableSyncDelay,
-  abortableSyncOperation,
-  AssetRequestError,
-  assetSyncErrorMessage,
-  diagnoseAssetSyncError,
-  withManagedAssetRetry,
-  ASSET_SYNC_ATTEMPT_LIMIT,
-} from "@/server/asset-sync-diagnostics";
+
 import type {
   AssetFullRefreshState,
   AssetRefreshIntent,
@@ -15,9 +7,6 @@ import type {
   AssetRefreshRequest,
   AssetRefreshScope,
   AssetSourceRefresher,
-  AssetSourceRefreshResult,
-  AssetSyncAttempt,
-  AssetSyncDiagnostic,
   AssetSourceSummary,
   AssetSources,
   AssetSynchronization,
@@ -26,7 +15,7 @@ import type {
   SecretStore,
 } from "@/server/ports";
 import { buildDailyAssetSnapshot } from "@/domain/daily-asset-snapshots";
-import { isMacOSKeychainCredentialReference } from "@/server/asset-sources/longbridge-keychain-sdk";
+import { SourceRefreshExecutor } from "@/server/source-refresh-executor";
 import { ASSET_SOURCE_TIMEOUT_MS, fullRefreshLeaseMs } from "@/server/asset-refresh-state";
 
 const FULL_REFRESH_INTERVAL_MS = 60 * 60 * 1_000;
@@ -65,6 +54,7 @@ export class SourceIsolatedAssetSynchronization
   private active: RefreshJob | null = null;
   private readonly pending: RefreshJob[] = [];
   private drainScheduled = false;
+  private readonly sourceRefreshExecutor: SourceRefreshExecutor;
 
   constructor(
     private readonly sources: AssetSources,
@@ -74,7 +64,15 @@ export class SourceIsolatedAssetSynchronization
     private readonly sourceTimeoutMs = ASSET_SOURCE_TIMEOUT_MS,
     private readonly dailySnapshots: DailyAssetSnapshots,
     private readonly fullRefreshState: AssetFullRefreshState,
-  ) {}
+  ) {
+    this.sourceRefreshExecutor = new SourceRefreshExecutor(
+      sources,
+      secrets,
+      clock,
+      refresher,
+      sourceTimeoutMs,
+    );
+  }
 
   request(input: AssetRefreshRequest): Promise<AssetRefreshReport> {
     const { intent } = input;
@@ -351,97 +349,7 @@ export class SourceIsolatedAssetSynchronization
     mode: AssetRefreshMode,
     attemptedAt: string,
   ): Promise<SourceOutcome> {
-    const controller = new AbortController();
-    const startedAt = performance.now();
-    const timeout = setTimeout(() => {
-      controller.abort(new DOMException("Source refresh budget exhausted", "TimeoutError"));
-    }, this.sourceTimeoutMs);
-    try {
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        const attemptController = new AbortController();
-        const signal = AbortSignal.any([controller.signal, attemptController.signal]);
-        const attemptStartedAt = performance.now();
-        const attemptAt = this.clock.now().toISOString();
-        let stage: AssetSyncDiagnostic["stage"] = "credentials";
-        let result: AssetSourceRefreshResult | undefined;
-        let failure: unknown;
-        try {
-          result = await abortableSyncOperation(signal, async () => {
-            signal.throwIfAborted();
-            const credentialReference = source.credentialReference;
-            if (credentialReference === null) throw new Error("只读凭证不可用");
-            const usesKeychainReference = source.kind === "longbridge" &&
-              isMacOSKeychainCredentialReference(credentialReference);
-            // 重试重新读取可能已轮换的凭证，Adapter 每次重新生成签名和时间戳。
-            const credentials = usesKeychainReference
-              ? credentialReference : await this.secrets.get(credentialReference);
-            signal.throwIfAborted();
-            if (credentials === null) throw new Error("只读凭证不可用");
-            stage = "refresh";
-            return withManagedAssetRetry(() => this.refresher.refresh({
-              source, credentials, mode, attemptedAt, signal,
-              persistCredentials: async (value) => {
-                signal.throwIfAborted();
-                if (usesKeychainReference) return;
-                if (await this.currentVersion(source) === null) {
-                  throw new DOMException("Source was replaced", "AbortError");
-                }
-                signal.throwIfAborted();
-                try { await this.secrets.replace(credentialReference, value); }
-                catch (error) { stage = "persist"; throw error; }
-              },
-            }));
-          });
-        } catch (error) {
-          failure = error;
-        } finally {
-          // 终止本次失败留下的并行请求，再进入下一次尝试；总预算不重置。
-          attemptController.abort();
-        }
-        const durationMs = Math.max(0, Math.round(performance.now() - attemptStartedAt));
-        const current = await this.currentVersion(source);
-        if (current === null) return "superseded";
-        const diagnostic = result === undefined
-          ? diagnoseAssetSyncError(failure, stage, durationMs) : null;
-        const record: AssetSyncAttempt = {
-          attemptedAt: attemptAt, mode, attempt,
-          outcome: result === undefined ? "failure" : "success",
-          durationMs, diagnostic,
-        };
-        const recentAttempts = [...(current.sync.recentAttempts ?? []), record].slice(-ASSET_SYNC_ATTEMPT_LIMIT);
-        if (result !== undefined) {
-          await this.sources.update({
-            ...current, snapshot: result.snapshot,
-            sync: {
-              status: "current", lastSuccessfulAt: result.snapshot.syncedAt,
-              lastAttemptAt: attemptedAt, error: null, failedMode: null,
-              diagnostic: null, recentAttempts,
-            },
-          });
-          return "success";
-        }
-        await this.sources.update({
-          ...current,
-          sync: {
-            ...current.sync, status: "expired", lastAttemptAt: attemptedAt,
-            error: assetSyncErrorMessage(diagnostic!), failedMode: mode,
-            diagnostic, recentAttempts,
-          },
-        });
-        if (!diagnostic!.retryable || attempt === 3 || controller.signal.aborted) return "failure";
-        const delay = Math.max(500 * 2 ** (attempt - 1),
-          failure instanceof AssetRequestError ? failure.retryAfterMs ?? 0 : 0);
-        const remaining = this.sourceTimeoutMs - (performance.now() - startedAt);
-        if (delay >= remaining) return "failure";
-        try { await abortableSyncDelay(delay, controller.signal); }
-        catch { return "failure"; }
-        if (await this.currentVersion(source) === null) return "superseded";
-      }
-      return "failure";
-    } finally {
-      clearTimeout(timeout);
-      controller.abort();
-    }
+    return this.sourceRefreshExecutor.execute(source, mode, attemptedAt);
   }
 
   private async recordFullBatchObservation(
@@ -472,20 +380,6 @@ export class SourceIsolatedAssetSynchronization
       dailySnapshot,
       dailySnapshot.complete && dailySnapshot.status === "complete",
     );
-  }
-
-  private async currentVersion(
-    source: AssetSourceSummary,
-  ): Promise<AssetSourceSummary | null> {
-    const current = (await this.sources.list()).find(
-      (candidate) => candidate.id === source.id,
-    );
-    if (
-      current === undefined ||
-      !this.isRefreshable(current) ||
-      current.credentialReference !== source.credentialReference
-    ) return null;
-    return current;
   }
 
   private async clearCycleWhenNoRefreshableSources(): Promise<void> {
