@@ -9,11 +9,12 @@ import { SqliteSourceInvestmentStore } from "./sqlite-source-investment-store";
 import { SqliteAssetSourceStore } from "./sqlite-asset-source-store";
 import { SqliteInvestmentCashflowStore } from "./sqlite-investment-cashflow-store";
 import { SqliteFormalSettlementExecutionStore } from "./sqlite-formal-settlement-execution-store";
+import { SqliteBusinessDataStore } from "./sqlite-business-data-store";
 
 import { type BusinessDataState } from "@/server/business-data-backup";
 import type { InvestmentCashflowStore } from "@/server/investment-cashflows";
-import type { DashboardDatabase, DashboardState, SqliteRow } from "@/server/persistence/contracts";
-import { migrateDailyObservation, parseLegacyDashboardStateSync } from "@/server/persistence/migrations";
+import type { DashboardDatabase, SqliteRow } from "@/server/persistence/contracts";
+import { parseLegacyDashboardStateSync } from "@/server/persistence/migrations";
 import type { SourceAuthorizationResult, SourceConnectionKind } from "@/server/persistence/source-record";
 import type { AssetSourceSummary, BinanceAuthorizationResult, BitAuthorizationResult, BitgetAuthorizationResult, Card, CreateManualAssetSourceInput, DailyAssetSnapshot, DailyAssetTrendObservation, EvmWatchAuthorizationResult, FormalDailySettlement, FormalSettlementExecution, ImportedAssetSourceHistoryObservation, InvestmentCashflow, LongbridgeAuthorizationResult, ManualAssetClass, ManualAssetRecord, ManualAssetRecordInput, OkxAuthorizationResult } from "@/server/ports";
 
@@ -35,6 +36,7 @@ export class SqliteDashboardDatabase
   private sources!: SqliteAssetSourceStore;
   private investmentCashflows!: SqliteInvestmentCashflowStore;
   private formalSettlementExecutions!: SqliteFormalSettlementExecutionStore;
+  private businessData!: SqliteBusinessDataStore;
 
   constructor(
     private readonly databasePath: string,
@@ -50,6 +52,14 @@ export class SqliteDashboardDatabase
       this.sources = new SqliteAssetSourceStore(this.database, this.readModel, this.observations);
       this.investmentCashflows = new SqliteInvestmentCashflowStore(this.database);
       this.formalSettlementExecutions = new SqliteFormalSettlementExecutionStore(this.database);
+      this.businessData = new SqliteBusinessDataStore(
+        this.database,
+        this.sources,
+        this.observations,
+        this.investmentCashflows,
+        this.sourceInvestments,
+        this.formalSettlements,
+      );
       chmodSync(databasePath, 0o600);
       this.database.exec("PRAGMA busy_timeout = 5000");
       this.database.exec("PRAGMA foreign_keys = ON");
@@ -80,7 +90,7 @@ export class SqliteDashboardDatabase
       this.legacyCardsPath,
     );
     this.transaction(() => {
-      this.replaceState(state);
+      this.businessData.replace(state);
       this.backupLegacyDashboard();
       this.database
         .prepare(
@@ -255,64 +265,6 @@ export class SqliteDashboardDatabase
     }
   }
 
-  private replaceState(state: DashboardState | BusinessDataState): void {
-    this.database.exec(`
-      DELETE FROM investment_cashflows;
-      DELETE FROM imported_asset_source_history_observations;
-      DELETE FROM daily_asset_source_trend_observations;
-      DELETE FROM daily_asset_trend_observations;
-      DELETE FROM daily_asset_source_snapshots;
-      DELETE FROM daily_asset_snapshots;
-      DELETE FROM formal_daily_settlements;
-      DELETE FROM asset_cards;
-      DELETE FROM asset_source_snapshots;
-      DELETE FROM asset_source_sync_states;
-      DELETE FROM asset_sources;
-    `);
-    state.assetSources.forEach((source, position) =>
-      this.sources.insert(source, position),
-    );
-    state.assetCards.forEach((card, position) => this.sources.insertCard(card, position));
-    state.dailyAssetSnapshots.forEach((snapshot) =>
-      this.observations.insertBaseline(migrateDailyObservation(snapshot)),
-    );
-    state.dailyAssetTrendObservations.forEach((observation) =>
-      this.observations.upsertTrend(migrateDailyObservation(observation)),
-    );
-    const importedHistory = "importedAssetSourceHistoryObservations" in state
-      ? state.importedAssetSourceHistoryObservations
-      : [];
-    importedHistory.forEach((observation) =>
-      this.observations.insertImportedHistory(observation),
-    );
-    const cashflows = "investmentCashflows" in state
-      ? (state as { investmentCashflows: InvestmentCashflow[] })
-        .investmentCashflows
-      : [];
-    cashflows.forEach((cashflow) => this.investmentCashflows.insert(cashflow));
-    if ("sourceInvestmentHistories" in state) {
-      for (const history of state.sourceInvestmentHistories ?? []) this.sourceInvestments.writeHistory(history);
-    }
-    if ("sourceInvestmentRecords" in state) {
-      for (const record of state.sourceInvestmentRecords ?? []) this.sourceInvestments.insertRecord(record);
-    }
-    const manualRecords = "manualAssetRecords" in state
-      ? state.manualAssetRecords
-      : [];
-    for (const record of manualRecords) {
-      this.database.prepare(`
-        INSERT INTO manual_asset_records (source_id, day, amount, currency, recorded_at)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(record.sourceId, record.day, record.amount, record.currency, record.recordedAt);
-    }
-    const formalSettlements = "formalDailySettlements" in state
-      ? state.formalDailySettlements
-      : [];
-    for (const settlement of formalSettlements) {
-      if (!this.formalSettlements.insert(settlement)) throw new Error("正式日结锚点重复");
-    }
-  }
-
   async readSourceDetail(query: { sourceId: string; from?: string; to?: string }) {
     return this.readModel.readSourceDetail(query);
   }
@@ -452,7 +404,7 @@ export class SqliteDashboardDatabase
   async validateBusinessData(state: BusinessDataState): Promise<void> {
     this.database.exec("BEGIN IMMEDIATE");
     try {
-      this.replaceState(state);
+      this.businessData.replace(state);
       this.assertIntegrity();
       this.database.exec("ROLLBACK");
     } catch (error) {
@@ -467,7 +419,7 @@ export class SqliteDashboardDatabase
 
   async replaceBusinessData(state: BusinessDataState): Promise<void> {
     this.transaction(() => {
-      this.replaceState(state);
+      this.businessData.replace(state);
       this.assertIntegrity();
     });
   }
