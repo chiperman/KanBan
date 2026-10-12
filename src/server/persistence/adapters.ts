@@ -1,15 +1,21 @@
-import type { DashboardDatabase } from "@/server/persistence/contracts";
+import type {
+  AssetCardDatabase,
+  AssetSnapshotDatabase,
+  AssetSourceDatabase,
+  DashboardDatabase,
+  ManualAssetRecordDatabase,
+} from "@/server/persistence/contracts";
 import { SqliteDashboardDatabase } from "@/server/persistence/sqlite-database";
 import type { AssetCardStore, AssetFullRefreshState, AssetSources, AssetSourceSummary, Card, Clock, CreateManualAssetSourceInput, DailyAssetSnapshot, DailyAssetSnapshots, DailyAssetTrendObservation, FormalDailySettlement, FormalDailySettlements, FormalSettlementExecution, FormalSettlementExecutions, ManualAssetRecord, ManualAssetRecordInput, ManualAssetRecords } from "@/server/ports";
 
 export class DatabaseAssetCardStore implements AssetCardStore {
-  constructor(private readonly database: DashboardDatabase) {}
+  constructor(private readonly database: AssetCardDatabase) {}
   list() { return this.database.listAssetCards(); }
   replaceAll(cards: Card[]) { return this.database.replaceAssetCards(cards); }
 }
 
 export class DatabaseAssetSources implements AssetSources {
-  constructor(private readonly database: DashboardDatabase) {}
+  constructor(private readonly database: AssetSourceDatabase) {}
   list() { return this.database.listSources(); }
   replaceAll(sources: AssetSourceSummary[]) { return this.database.replaceSources(sources); }
   update(source: AssetSourceSummary) { return this.database.updateSource(source); }
@@ -17,7 +23,7 @@ export class DatabaseAssetSources implements AssetSources {
 
 export class DatabaseManualAssetRecords implements ManualAssetRecords {
   constructor(
-    private readonly database: DashboardDatabase,
+    private readonly database: ManualAssetRecordDatabase,
     private readonly clock: Clock,
   ) {}
 
@@ -53,7 +59,7 @@ export class DatabaseManualAssetRecords implements ManualAssetRecords {
 }
 
 export class DatabaseDailyAssetSnapshots implements DailyAssetSnapshots {
-  constructor(private readonly database: DashboardDatabase) {}
+  constructor(private readonly database: AssetSnapshotDatabase) {}
   list() { return this.database.listDailyAssetSnapshots(); }
   listTrendObservations() {
     return this.database.listDailyAssetTrendObservations();

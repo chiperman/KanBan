@@ -3,14 +3,18 @@ import { updateEvmTokenPreferences } from "@/domain/evm-token-preferences";
 import { isMacOSKeychainCredentialReference } from "@/server/asset-sources/longbridge-keychain-sdk";
 import { SystemClock } from "@/server/clock";
 import type { TransactionalSecretStore } from "@/server/credentials/secret-store";
-import type { DashboardDatabase } from "@/server/persistence/contracts";
+import type {
+  AssetCardDatabase,
+  AssetSourceConnectionDatabase,
+  AssetSourceDatabase,
+} from "@/server/persistence/contracts";
 import type { SourceAuthorizationResult, SourceConnectionKind } from "@/server/persistence/source-record";
 import { connectedSourceKind } from "@/server/persistence/source-record";
 import type { AssetFullRefreshState, AssetSourceConnections, AssetSourceLifecycle, BinanceAuthorizationResult, BitAuthorizationResult, BitgetAuthorizationResult, Clock, EvmWatchAuthorizationResult, LongbridgeAuthorizationResult, ManualAssetClass, OkxAuthorizationResult, SecretStore } from "@/server/ports";
 
 export class DatabaseAssetSourceLifecycle implements AssetSourceLifecycle {
   constructor(
-    private readonly database: DashboardDatabase,
+    private readonly database: AssetCardDatabase & AssetSourceDatabase,
     private readonly secrets: SecretStore,
     private readonly fullRefreshState: AssetFullRefreshState,
   ) {}
@@ -112,7 +116,8 @@ export class DatabaseAssetSourceConnections implements AssetSourceConnections {
   private queue: Promise<void> = Promise.resolve();
 
   constructor(
-    private readonly database: DashboardDatabase,
+    private readonly database: AssetSourceConnectionDatabase &
+      AssetSourceDatabase,
     private readonly secrets: TransactionalSecretStore,
     private readonly ready: Promise<void> = Promise.resolve(),
     private readonly clock: Clock = new SystemClock(),

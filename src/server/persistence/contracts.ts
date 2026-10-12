@@ -14,25 +14,18 @@ export interface DashboardState {
 export const DASHBOARD_SCHEMA_VERSION = 9 as const;
 export const SQLITE_SCHEMA_VERSION = 20;
 
-export interface DashboardDatabase {
+/** 卡片布局持久化所需的最小接口。 */
+export interface AssetCardDatabase {
   listAssetCards(): Promise<Card[]>;
   replaceAssetCards(cards: Card[]): Promise<void>;
+  setAssetCardHidden(sourceId: string, hidden: boolean): Promise<void>;
+}
+
+/** 来源摘要与来源生命周期持久化所需的最小接口。 */
+export interface AssetSourceDatabase {
   listSources(): Promise<AssetSourceSummary[]>;
   replaceSources(sources: AssetSourceSummary[]): Promise<void>;
   updateSource(source: AssetSourceSummary): Promise<void>;
-  listDailyAssetSnapshots(): Promise<DailyAssetSnapshot[]>;
-  listDailyAssetTrendObservations(): Promise<DailyAssetTrendObservation[]>;
-  listImportedSourceHistoryObservations(): Promise<
-    ImportedAssetSourceHistoryObservation[]
-  >;
-  createDailyAssetSnapshotIfAbsent(
-    snapshot: DailyAssetSnapshot,
-  ): Promise<boolean>;
-  recordDailyAssetObservation(
-    snapshot: DailyAssetTrendObservation,
-    createBaseline: boolean,
-  ): Promise<void>;
-  setAssetCardHidden(sourceId: string, hidden: boolean): Promise<void>;
   setAssetSourceDisplayName(
     sourceId: string,
     displayName: string | null,
@@ -46,6 +39,28 @@ export interface DashboardDatabase {
     ignoredAssetKeys: string[],
     includedAssetKeys: string[],
   ): Promise<void>;
+  disconnectAssetSource(sourceId: string): Promise<string | null>;
+  deleteAssetSourceData(sourceId: string): Promise<string | null>;
+}
+
+/** 每日基准、趋势与来源历史观测持久化所需的最小接口。 */
+export interface AssetSnapshotDatabase {
+  listDailyAssetSnapshots(): Promise<DailyAssetSnapshot[]>;
+  listDailyAssetTrendObservations(): Promise<DailyAssetTrendObservation[]>;
+  listImportedSourceHistoryObservations(): Promise<
+    ImportedAssetSourceHistoryObservation[]
+  >;
+  createDailyAssetSnapshotIfAbsent(
+    snapshot: DailyAssetSnapshot,
+  ): Promise<boolean>;
+  recordDailyAssetObservation(
+    snapshot: DailyAssetTrendObservation,
+    createBaseline: boolean,
+  ): Promise<void>;
+}
+
+/** 手工来源记录持久化所需的最小接口。 */
+export interface ManualAssetRecordDatabase {
   createManualAssetSource(
     input: CreateManualAssetSourceInput,
     capturedAt: string,
@@ -61,8 +76,10 @@ export interface DashboardDatabase {
     day: string,
     capturedAt: string,
   ): Promise<void>;
-  disconnectAssetSource(sourceId: string): Promise<string | null>;
-  deleteAssetSourceData(sourceId: string): Promise<string | null>;
+}
+
+/** 来源授权写入持久化所需的最小接口。 */
+export interface AssetSourceConnectionDatabase {
   connectLongbridge(
     result: LongbridgeAuthorizationResult,
     credentialReference: string,
@@ -101,5 +118,13 @@ export interface DashboardDatabase {
     capturedAt: string,
   ): Promise<void>;
 }
+
+/** 兼容旧组合根的完整数据库接口；新适配器应依赖上面的最小接口。 */
+export interface DashboardDatabase
+  extends AssetCardDatabase,
+    AssetSourceDatabase,
+    AssetSnapshotDatabase,
+    ManualAssetRecordDatabase,
+    AssetSourceConnectionDatabase {}
 
 export type SqliteRow = Record<string, string | number | null>;
