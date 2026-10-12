@@ -14,8 +14,8 @@ import type {
   DailyAssetSnapshots,
   SecretStore,
 } from "@/server/ports";
-import { buildDailyAssetSnapshot } from "@/domain/daily-asset-snapshots";
 import { SourceRefreshExecutor } from "@/server/source-refresh-executor";
+import { RefreshObservationRecorder } from "@/server/refresh-observation-recorder";
 import { ASSET_SOURCE_TIMEOUT_MS, fullRefreshLeaseMs } from "@/server/asset-refresh-state";
 
 const FULL_REFRESH_INTERVAL_MS = 60 * 60 * 1_000;
@@ -55,6 +55,7 @@ export class SourceIsolatedAssetSynchronization
   private readonly pending: RefreshJob[] = [];
   private drainScheduled = false;
   private readonly sourceRefreshExecutor: SourceRefreshExecutor;
+  private readonly observationRecorder: RefreshObservationRecorder;
 
   constructor(
     private readonly sources: AssetSources,
@@ -71,6 +72,11 @@ export class SourceIsolatedAssetSynchronization
       clock,
       refresher,
       sourceTimeoutMs,
+    );
+    this.observationRecorder = new RefreshObservationRecorder(
+      sources,
+      dailySnapshots,
+      (source) => this.isRefreshable(source),
     );
   }
 
@@ -315,7 +321,7 @@ export class SourceIsolatedAssetSynchronization
     ).length;
 
     if (input.isFullBatch && sources.length > 0) {
-      await this.recordFullBatchObservation(sources, outcomes, attemptedAt);
+      await this.observationRecorder.record(sources, outcomes, attemptedAt);
       await this.fullRefreshState.finish(attemptedAt);
     }
     await this.clearCycleWhenNoRefreshableSources();
@@ -350,36 +356,6 @@ export class SourceIsolatedAssetSynchronization
     attemptedAt: string,
   ): Promise<SourceOutcome> {
     return this.sourceRefreshExecutor.execute(source, mode, attemptedAt);
-  }
-
-  private async recordFullBatchObservation(
-    sources: AssetSourceSummary[],
-    outcomes: SourceOutcome[],
-    attemptedAt: string,
-  ): Promise<void> {
-    // 趋势允许部分成功的过期观测；只有完整且新鲜的观测才能建立日初基准。
-    if (
-      !outcomes.some((outcome) => outcome === "success") ||
-      outcomes.some((outcome) => outcome === "superseded")
-    ) return;
-    const connectedSources = (await this.sources.list()).filter(
-      (source) => source.lifecycle !== "disconnected",
-    );
-    const currentTargetIds = connectedSources
-      .filter((source) => this.isRefreshable(source))
-      .map((source) => source.id)
-      .toSorted();
-    const targetIds = sources.map((source) => source.id).toSorted();
-    if (
-      currentTargetIds.length !== targetIds.length ||
-      !currentTargetIds.every((id, index) => id === targetIds[index])
-    ) return;
-
-    const dailySnapshot = buildDailyAssetSnapshot(connectedSources, attemptedAt);
-    await this.dailySnapshots.record(
-      dailySnapshot,
-      dailySnapshot.complete && dailySnapshot.status === "complete",
-    );
   }
 
   private async clearCycleWhenNoRefreshableSources(): Promise<void> {
