@@ -26,6 +26,7 @@ import type {
 } from "@/server/ports";
 import { assetResponseError } from "@/server/asset-sync-diagnostics";
 import { positiveDecimal } from "@/server/asset-sources/value-guards";
+import { compareSourceHoldingValue, effectiveUsdtUsdQuote } from "@/server/asset-sources/valuation-policy";
 
 type OkxFetch = (
   input: string | URL | Request,
@@ -341,14 +342,6 @@ function okxCoverage(input: {
   };
 }
 
-function compareHoldingValue(left: AssetHolding, right: AssetHolding): number {
-  const leftValue = left.sourceMarketValue?.amount ?? null;
-  const rightValue = right.sourceMarketValue?.amount ?? null;
-  if (leftValue === null) return rightValue === null ? 0 : 1;
-  if (rightValue === null) return -1;
-  return decimalCompare(rightValue, leftValue);
-}
-
 function nativeUsdtUsdQuote(
   instruments: unknown,
   tickers: unknown,
@@ -445,23 +438,7 @@ function valuePositions(input: {
       pricedAt: pricedAt.toISOString(),
     });
   }
-  const quoteAge = input.usdtUsdQuote
-    ? Math.abs(Date.parse(input.observedAt) - input.usdtUsdQuote.quotedAt.getTime())
-    : Number.POSITIVE_INFINITY;
-  const usdtUsdQuote =
-    input.usdtUsdQuote?.symbol === "USDT" &&
-    input.usdtUsdQuote.currency === "USD" &&
-    /^\d+(?:\.\d+)?$/.test(input.usdtUsdQuote.price) &&
-    positive(input.usdtUsdQuote.price) &&
-    Number.isFinite(quoteAge) &&
-    quoteAge <= 5 * 60_000
-      ? input.usdtUsdQuote
-      : {
-          symbol: "USDT",
-          currency: "USD",
-          price: "1",
-          quotedAt: new Date(input.observedAt),
-        };
+  const usdtUsdQuote = effectiveUsdtUsdQuote(input.usdtUsdQuote, input.observedAt);
   const usdtUsdSource = input.usdtUsdQuote === usdtUsdQuote
     ? input.usdtUsdSource ?? "CoinGecko Tether/USD 参考价格"
     : "USDT/USD 固定兜底（1:1）";
@@ -568,7 +545,7 @@ function valuePositions(input: {
       changePercent: null,
     };
   });
-  holdings.sort(compareHoldingValue);
+  holdings.sort(compareSourceHoldingValue);
   return {
     total: input.authoritativeTotal ?? { amount: total, currency: "USDT" },
     holdings,
@@ -640,7 +617,7 @@ function preserveNewerPrices(
     total: candidate.coverage?.status === "complete"
       ? candidate.total
       : { amount: total, currency: "USDT" },
-    holdings: holdings.sort(compareHoldingValue),
+    holdings: holdings.sort(compareSourceHoldingValue),
   };
 }
 

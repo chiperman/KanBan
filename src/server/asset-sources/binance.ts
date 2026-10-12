@@ -29,6 +29,7 @@ import type {
 } from "@/server/ports";
 import { assetResponseError } from "@/server/asset-sync-diagnostics";
 import { positiveDecimal } from "@/server/asset-sources/value-guards";
+import { compareSourceHoldingValue, effectiveUsdtUsdQuote } from "@/server/asset-sources/valuation-policy";
 
 type BinanceFetch = (
   input: string | URL | Request,
@@ -1166,25 +1167,7 @@ function valuePositions(input: {
     }),
   );
   const prices = tickerPrices(input.tickers, neededSymbols);
-  const quoteAge = input.usdtUsdQuote
-    ? Math.abs(
-        Date.parse(input.observedAt) - input.usdtUsdQuote.quotedAt.getTime(),
-      )
-    : Number.POSITIVE_INFINITY;
-  const usdtUsdQuote =
-    input.usdtUsdQuote?.symbol === "USDT" &&
-    input.usdtUsdQuote.currency === "USD" &&
-    /^\d+(?:\.\d+)?$/.test(input.usdtUsdQuote.price) &&
-    positive(input.usdtUsdQuote.price) &&
-    Number.isFinite(quoteAge) &&
-    quoteAge <= 5 * 60_000
-      ? input.usdtUsdQuote
-      : {
-          symbol: "USDT",
-          currency: "USD",
-          price: "1",
-          quotedAt: new Date(input.observedAt),
-        };
+  const usdtUsdQuote = effectiveUsdtUsdQuote(input.usdtUsdQuote, input.observedAt);
   const usdtUsdSource = input.usdtUsdQuote === usdtUsdQuote
     ? input.usdtUsdSource ?? "CoinGecko Tether/USD 参考价格"
     : "USDT/USD 固定兜底（1:1）";
@@ -1361,13 +1344,7 @@ function valuePositions(input: {
       changePercent: null,
     };
   });
-  holdings.sort((left, right) => {
-    const a = left.sourceMarketValue?.amount ?? null;
-    const b = right.sourceMarketValue?.amount ?? null;
-    if (a === null) return b === null ? 0 : 1;
-    if (b === null) return -1;
-    return decimalCompare(b, a);
-  });
+  holdings.sort(compareSourceHoldingValue);
   return {
     total: { amount: total, currency: "USDT" },
     holdings,
