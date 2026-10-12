@@ -162,7 +162,7 @@ export class SqliteDashboardDatabase
   }
 
   async listFormalDailySettlements(): Promise<FormalDailySettlement[]> {
-    return this.stores.formalSettlements.list();
+    return this.stores.readModel.listFormalDailySettlementsSync();
   }
 
 

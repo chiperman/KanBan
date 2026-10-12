@@ -6,24 +6,28 @@ import type {
   AssetSourceSummary,
   DailyAssetSnapshot,
   DailyAssetTrendObservation,
+  FormalDailySettlement,
   ImportedAssetSourceHistoryObservation,
   ManualAssetRecord,
 } from "@/server/ports";
 import type { DatabaseSync } from "node:sqlite";
+import { SqliteFormalSettlementReadStore } from "./sqlite-formal-settlement-read-store";
 import { SqliteInvestmentReadStore } from "./sqlite-investment-read-store";
 import { SqliteObservationReadStore } from "./sqlite-observation-read-store";
 import { SqliteSourceReadStore } from "./sqlite-source-read-store";
 
-/** SQLite 只读门面；按来源、观测与投资领域委托查询模块。 */
+/** SQLite 只读门面；按来源、观测、投资与正式日结领域委托查询模块。 */
 export class SqliteDashboardReadModel {
   private readonly sources: SqliteSourceReadStore;
   private readonly observations: SqliteObservationReadStore;
   private readonly investments: SqliteInvestmentReadStore;
+  private readonly formalSettlements: SqliteFormalSettlementReadStore;
 
   constructor(private readonly database: DatabaseSync) {
     this.sources = new SqliteSourceReadStore(database);
     this.observations = new SqliteObservationReadStore(database);
     this.investments = new SqliteInvestmentReadStore(database);
+    this.formalSettlements = new SqliteFormalSettlementReadStore(database);
   }
 
   dailySourceRows(
@@ -99,5 +103,9 @@ export class SqliteDashboardReadModel {
 
   listSourceInvestmentHistories(): SourceInvestmentHistory[] {
     return this.investments.listSourceInvestmentHistories();
+  }
+
+  listFormalDailySettlementsSync(): FormalDailySettlement[] {
+    return this.formalSettlements.list();
   }
 }
