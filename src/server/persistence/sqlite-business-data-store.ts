@@ -8,6 +8,7 @@ import type { SqliteInvestmentCashflowStore } from "./sqlite-investment-cashflow
 import type { SqliteObservationStore } from "./sqlite-observation-store";
 import type { SqliteSourceInvestmentStore } from "./sqlite-source-investment-store";
 import type { SqliteAssetCardStore } from "./sqlite-asset-card-store";
+import type { SqliteManualAssetRecordStore } from "./sqlite-manual-asset-record-store";
 
 /**
  * 完整业务状态的 SQLite 写入模块；调用方负责事务、完整性校验与提交/回滚。
@@ -22,6 +23,7 @@ export class SqliteBusinessDataStore {
     private readonly sourceInvestments: SqliteSourceInvestmentStore,
     private readonly formalSettlements: SqliteFormalSettlementStore,
     private readonly cards: SqliteAssetCardStore,
+    private readonly manualRecords: SqliteManualAssetRecordStore,
   ) {}
 
   replace(state: DashboardState | BusinessDataState): void {
@@ -75,16 +77,7 @@ export class SqliteBusinessDataStore {
     for (const record of "manualAssetRecords" in state
       ? state.manualAssetRecords
       : []) {
-      this.database.prepare(`
-        INSERT INTO manual_asset_records (source_id, day, amount, currency, recorded_at)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(
-        record.sourceId,
-        record.day,
-        record.amount,
-        record.currency,
-        record.recordedAt,
-      );
+      this.manualRecords.insert(record);
     }
 
     for (const settlement of "formalDailySettlements" in state

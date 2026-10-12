@@ -11,6 +11,7 @@ import type { SqliteDashboardReadModel } from "./sqlite-read-model";
 import type { SqliteObservationStore } from "./sqlite-observation-store";
 import type { AssetSourceSummary, CreateManualAssetSourceInput, ManualAssetClass, ManualAssetRecordInput } from "@/server/ports";
 import type { SqliteAssetCardStore } from "./sqlite-asset-card-store";
+import type { SqliteManualAssetRecordStore } from "./sqlite-manual-asset-record-store";
 
 /** 来源身份与快照写入模块；关联卡片由独立模块写入，跨表事务由拥有者统一控制。 */
 export class SqliteAssetSourceStore {
@@ -19,6 +20,7 @@ export class SqliteAssetSourceStore {
     private readonly readModel: SqliteDashboardReadModel,
     private readonly observations: SqliteObservationStore,
     private readonly cards: SqliteAssetCardStore,
+    private readonly manualRecords: SqliteManualAssetRecordStore,
   ) {}
 
   insert(source: AssetSourceSummary, position: number): void {
@@ -226,17 +228,7 @@ export class SqliteAssetSourceStore {
     if (source.kind !== "manual") {
       throw new Error("只有手工资产记录可以编辑今日总额");
     }
-    this.database
-      .prepare(`
-        INSERT INTO manual_asset_records (
-          source_id, day, amount, currency, recorded_at
-        ) VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(source_id, day) DO UPDATE SET
-          amount = excluded.amount,
-          currency = excluded.currency,
-          recorded_at = excluded.recorded_at
-      `)
-      .run(sourceId, input.day, input.amount, input.currency, capturedAt);
+    this.manualRecords.upsert(sourceId, input, capturedAt);
     const record = this.readModel.listManualAssetRecordsSync().find(
       (item) => item.sourceId === sourceId && item.day === input.day,
     );
@@ -259,12 +251,9 @@ export class SqliteAssetSourceStore {
     if (source.kind !== "manual") {
       throw new Error("只有手工资产记录可以删除");
     }
-    const result = this.database
-      .prepare(
-        "DELETE FROM manual_asset_records WHERE source_id = ? AND day = ?",
-      )
-      .run(sourceId, day);
-    if (result.changes === 0) throw new Error("指定日期没有手工资产记录");
+    if (!this.manualRecords.delete(sourceId, day)) {
+      throw new Error("指定日期没有手工资产记录");
+    }
     const latest = latestManualAssetRecord(
       this.readModel.listManualAssetRecordsSync().filter(
         (item) => item.sourceId === sourceId,

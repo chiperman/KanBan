@@ -144,3 +144,26 @@ test("完整业务恢复在手工记录写入失败时整批回滚，既有状�
     assert.deepEqual(await readState(database), original);
   });
 });
+
+test("完整业务恢复委托手工资产记录模块并保留记录字段", async () => {
+  await fixture(async (database) => {
+    const original = await seed(database);
+    await database.replaceBusinessData({
+      ...original,
+      manualAssetRecords: [{
+        sourceId: original.manualAssetRecords[0].sourceId,
+        day: "2026-10-02",
+        amount: "30",
+        currency: "USD",
+        recordedAt: capturedAt,
+      }],
+    });
+    assert.deepEqual(await database.listManualAssetRecords(), [{
+      sourceId: original.manualAssetRecords[0].sourceId,
+      day: "2026-10-02",
+      amount: "30",
+      currency: "USD",
+      recordedAt: capturedAt,
+    }]);
+  });
+});

@@ -144,3 +144,35 @@ test("卡片布局替换失败时整批回滚，隐藏状态只更新对应来�
     assert.equal(hidden.find((card) => card.sourceId === sources[1].id)?.hidden, undefined);
   });
 });
+
+test("手工资产原始记录写入失败时来源快照和观测整批回滚", async () => {
+  await fixture(async (database, sql) => {
+    await database.createManualAssetSource({ label: "手工资产" }, capturedAt);
+    const source = (await database.listSources())[0];
+    await database.recordManualAssetSource(
+      source.id,
+      { day: "2026-10-01", amount: "10", currency: "USD" },
+      capturedAt,
+    );
+    const before = await state(database);
+    sql.exec(`CREATE TRIGGER reject_manual_record_write
+      BEFORE INSERT ON manual_asset_records
+      BEGIN SELECT RAISE(ABORT, 'fixture manual record failure'); END;`);
+    await assert.rejects(
+      database.recordManualAssetSource(
+        source.id,
+        { day: "2026-10-01", amount: "20", currency: "USD" },
+        capturedAt,
+      ),
+      /fixture manual record failure/,
+    );
+    assert.deepEqual(await state(database), before);
+    sql.exec("DROP TRIGGER reject_manual_record_write");
+    await database.recordManualAssetSource(
+      source.id,
+      { day: "2026-10-01", amount: "20", currency: "USD" },
+      capturedAt,
+    );
+    assert.equal((await database.listManualAssetRecords())[0].amount, "20");
+  });
+});

@@ -13,6 +13,7 @@ import { SqliteBusinessDataStore } from "./sqlite-business-data-store";
 import { SqliteRefreshStateStore } from "./sqlite-refresh-state-store";
 import { SqliteAssetCardStore } from "./sqlite-asset-card-store";
 import { SqliteMetadataStore } from "./sqlite-metadata-store";
+import { SqliteManualAssetRecordStore } from "./sqlite-manual-asset-record-store";
 
 import { type BusinessDataState } from "@/server/business-data-backup";
 import type { InvestmentCashflowStore } from "@/server/investment-cashflows";
@@ -43,6 +44,7 @@ export class SqliteDashboardDatabase
   private refreshState!: SqliteRefreshStateStore;
   private cards!: SqliteAssetCardStore;
   private metadataStore!: SqliteMetadataStore;
+  private manualRecords!: SqliteManualAssetRecordStore;
 
   constructor(
     private readonly databasePath: string,
@@ -53,11 +55,18 @@ export class SqliteDashboardDatabase
       this.database = new DatabaseSync(databasePath);
       this.cards = new SqliteAssetCardStore(this.database);
       this.metadataStore = new SqliteMetadataStore(this.database);
+      this.manualRecords = new SqliteManualAssetRecordStore(this.database);
       this.readModel = new SqliteDashboardReadModel(this.database);
       this.formalSettlements = new SqliteFormalSettlementStore(this.database);
       this.observations = new SqliteObservationStore(this.database, this.readModel);
       this.sourceInvestments = new SqliteSourceInvestmentStore(this.database, this.readModel);
-      this.sources = new SqliteAssetSourceStore(this.database, this.readModel, this.observations, this.cards);
+      this.sources = new SqliteAssetSourceStore(
+        this.database,
+        this.readModel,
+        this.observations,
+        this.cards,
+        this.manualRecords,
+      );
       this.investmentCashflows = new SqliteInvestmentCashflowStore(this.database);
       this.formalSettlementExecutions = new SqliteFormalSettlementExecutionStore(this.database);
       this.refreshState = new SqliteRefreshStateStore(this.metadataStore);
@@ -69,6 +78,7 @@ export class SqliteDashboardDatabase
         this.sourceInvestments,
         this.formalSettlements,
         this.cards,
+        this.manualRecords,
       );
       chmodSync(databasePath, 0o600);
       this.database.exec("PRAGMA busy_timeout = 5000");
