@@ -9,14 +9,16 @@ import type { SourceAuthorizationResult, SourceConnectionKind } from "./source-r
 import { buildConnectedSource, connectedSourceKind } from "./source-record";
 import type { SqliteDashboardReadModel } from "./sqlite-read-model";
 import type { SqliteObservationStore } from "./sqlite-observation-store";
-import type { AssetSourceSummary, Card, CreateManualAssetSourceInput, ManualAssetClass, ManualAssetRecordInput } from "@/server/ports";
+import type { AssetSourceSummary, CreateManualAssetSourceInput, ManualAssetClass, ManualAssetRecordInput } from "@/server/ports";
+import type { SqliteAssetCardStore } from "./sqlite-asset-card-store";
 
-/** 来源身份、快照与关联卡片写入共用原连接；跨表事务由拥有者统一控制。 */
+/** 来源身份与快照写入模块；关联卡片由独立模块写入，跨表事务由拥有者统一控制。 */
 export class SqliteAssetSourceStore {
   constructor(
     private readonly database: DatabaseSync,
     private readonly readModel: SqliteDashboardReadModel,
     private readonly observations: SqliteObservationStore,
+    private readonly cards: SqliteAssetCardStore,
   ) {}
 
   insert(source: AssetSourceSummary, position: number): void {
@@ -97,31 +99,12 @@ export class SqliteAssetSourceStore {
       );
   }
 
-  insertCard(card: Card, position: number): void {
-    this.database
-      .prepare(`
-        INSERT INTO asset_cards (
-          id, position, title, body, source_id, hidden, span, starts_new_row
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `)
-      .run(
-        card.id,
-        position,
-        card.title,
-        card.body,
-        card.sourceId ?? null,
-        card.hidden === undefined ? null : Number(card.hidden),
-        card.span,
-        card.startsNewRow === undefined ? null : Number(card.startsNewRow),
-      );
-  }
-
-  private compactPositions(table: "asset_sources" | "asset_cards"): void {
+  private compactSourcePositions(): void {
     const rows = this.database
-      .prepare(`SELECT id, position FROM ${table} ORDER BY position`)
+      .prepare("SELECT id, position FROM asset_sources ORDER BY position")
       .all() as SqliteRow[];
     const update = this.database.prepare(
-      `UPDATE ${table} SET position = ? WHERE id = ?`,
+      "UPDATE asset_sources SET position = ? WHERE id = ?",
     );
     rows.forEach((row, position) => {
       if (row.position !== position) update.run(position, row.id as string);
@@ -156,20 +139,6 @@ export class SqliteAssetSourceStore {
         source.id,
       );
     this.upsertDetails(source);
-  }
-
-  setCardHidden(sourceId: string, hidden: boolean): void {
-    if (
-      this.database
-        .prepare("SELECT id FROM asset_sources WHERE id = ?")
-        .get(sourceId) === undefined
-    ) {
-      throw new Error("资产来源不存在");
-    }
-    const result = this.database
-      .prepare("UPDATE asset_cards SET hidden = ? WHERE source_id = ?")
-      .run(Number(hidden), sourceId);
-    if (result.changes === 0) throw new Error("资产卡片不存在");
   }
 
   setDisplayName(sourceId: string, displayName: string | null): void {
@@ -235,11 +204,8 @@ export class SqliteAssetSourceStore {
     const sourcePosition = (
       this.database.prepare("SELECT COUNT(*) AS count FROM asset_sources").get() as SqliteRow
     ).count as number;
-    const cardPosition = (
-      this.database.prepare("SELECT COUNT(*) AS count FROM asset_cards").get() as SqliteRow
-    ).count as number;
     this.insert(source, sourcePosition);
-    this.insertCard(
+    this.cards.append(
       {
         id: randomUUID(),
         kind: "asset",
@@ -248,7 +214,6 @@ export class SqliteAssetSourceStore {
         sourceId,
         span: 1,
       },
-      cardPosition,
     );
   }
 
@@ -367,9 +332,7 @@ export class SqliteAssetSourceStore {
         )
       `)
       .run(sourceId);
-    this.database
-      .prepare("DELETE FROM asset_cards WHERE source_id = ?")
-      .run(sourceId);
+    this.cards.deleteForSource(sourceId);
     this.database
       .prepare("DELETE FROM daily_asset_source_snapshots WHERE source_id = ?")
       .run(sourceId);
@@ -380,8 +343,7 @@ export class SqliteAssetSourceStore {
       .prepare("DELETE FROM imported_asset_source_history_observations WHERE source_id = ?")
       .run(sourceId);
     this.database.prepare("DELETE FROM asset_sources WHERE id = ?").run(sourceId);
-    this.compactPositions("asset_sources");
-    this.compactPositions("asset_cards");
+    this.compactSourcePositions();
     for (const { day } of baselineDays) {
       this.observations.recalculate(day as string, {
         snapshot: "daily_asset_snapshots",
@@ -449,11 +411,8 @@ export class SqliteAssetSourceStore {
     const sourcePosition = (
       this.database.prepare("SELECT COUNT(*) AS count FROM asset_sources").get() as SqliteRow
     ).count as number;
-    const cardPosition = (
-      this.database.prepare("SELECT COUNT(*) AS count FROM asset_cards").get() as SqliteRow
-    ).count as number;
     this.insert(connected.source, sourcePosition);
-    this.insertCard(connected.card, cardPosition);
+    this.cards.append(connected.card);
     const observation = buildDailyAssetSnapshot(
       this.readModel.listSourcesSync(),
       capturedAt,

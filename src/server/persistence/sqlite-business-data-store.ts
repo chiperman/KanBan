@@ -7,6 +7,7 @@ import type { SqliteFormalSettlementStore } from "./sqlite-formal-settlements";
 import type { SqliteInvestmentCashflowStore } from "./sqlite-investment-cashflow-store";
 import type { SqliteObservationStore } from "./sqlite-observation-store";
 import type { SqliteSourceInvestmentStore } from "./sqlite-source-investment-store";
+import type { SqliteAssetCardStore } from "./sqlite-asset-card-store";
 
 /**
  * 完整业务状态的 SQLite 写入模块；调用方负责事务、完整性校验与提交/回滚。
@@ -20,6 +21,7 @@ export class SqliteBusinessDataStore {
     private readonly cashflows: SqliteInvestmentCashflowStore,
     private readonly sourceInvestments: SqliteSourceInvestmentStore,
     private readonly formalSettlements: SqliteFormalSettlementStore,
+    private readonly cards: SqliteAssetCardStore,
   ) {}
 
   replace(state: DashboardState | BusinessDataState): void {
@@ -31,7 +33,6 @@ export class SqliteBusinessDataStore {
       DELETE FROM daily_asset_source_snapshots;
       DELETE FROM daily_asset_snapshots;
       DELETE FROM formal_daily_settlements;
-      DELETE FROM asset_cards;
       DELETE FROM asset_source_snapshots;
       DELETE FROM asset_source_sync_states;
       DELETE FROM asset_sources;
@@ -40,9 +41,7 @@ export class SqliteBusinessDataStore {
     state.assetSources.forEach((source, position) =>
       this.sources.insert(source, position),
     );
-    state.assetCards.forEach((card, position) =>
-      this.sources.insertCard(card, position),
-    );
+    this.cards.replace(state.assetCards);
     state.dailyAssetSnapshots.forEach((snapshot) =>
       this.observations.insertBaseline(migrateDailyObservation(snapshot)),
     );

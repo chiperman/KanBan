@@ -1,5 +1,4 @@
-import type { DatabaseSync } from "node:sqlite";
-import type { SqliteRow } from "@/server/persistence/contracts";
+import type { SqliteMetadataStore } from "./sqlite-metadata-store";
 
 export interface SqliteAssetFullRefreshState {
   attemptedAt: string | null;
@@ -8,13 +7,10 @@ export interface SqliteAssetFullRefreshState {
 
 /** 全量刷新租约与 SQLite 元数据共用的轻量写入模块；事务边界由调用方持有。 */
 export class SqliteRefreshStateStore {
-  constructor(private readonly database: DatabaseSync) {}
+  constructor(private readonly metadataStore: SqliteMetadataStore) {}
 
   metadata(key: string): string | null {
-    const row = this.database
-      .prepare("SELECT value FROM schema_metadata WHERE key = ?")
-      .get(key) as SqliteRow | undefined;
-    return typeof row?.value === "string" ? row.value : null;
+    return this.metadataStore.get(key);
   }
 
   read(): SqliteAssetFullRefreshState {
@@ -25,19 +21,15 @@ export class SqliteRefreshStateStore {
   }
 
   start(attemptedAt: string): void {
-    const write = this.database.prepare(
-      "INSERT OR REPLACE INTO schema_metadata (key, value) VALUES (?, ?)",
-    );
-    write.run("asset_full_refresh_attempted_at", attemptedAt);
-    write.run("asset_full_refresh_in_progress_at", attemptedAt);
+    this.metadataStore.set("asset_full_refresh_attempted_at", attemptedAt);
+    this.metadataStore.set("asset_full_refresh_in_progress_at", attemptedAt);
   }
 
   initialize(attemptedAt: string): boolean {
-    return this.database
-      .prepare(
-        "INSERT OR IGNORE INTO schema_metadata (key, value) VALUES (?, ?)",
-      )
-      .run("asset_full_refresh_attempted_at", attemptedAt).changes > 0;
+    return this.metadataStore.setIfAbsent(
+      "asset_full_refresh_attempted_at",
+      attemptedAt,
+    );
   }
 
   claim(input: {
@@ -78,22 +70,19 @@ export class SqliteRefreshStateStore {
 
   finish(attemptedAt?: string): void {
     if (attemptedAt === undefined) {
-      this.database
-        .prepare("DELETE FROM schema_metadata WHERE key = ?")
-        .run("asset_full_refresh_in_progress_at");
+      this.metadataStore.delete("asset_full_refresh_in_progress_at");
       return;
     }
-    this.database
-      .prepare("DELETE FROM schema_metadata WHERE key = ? AND value = ?")
-      .run("asset_full_refresh_in_progress_at", attemptedAt);
+    this.metadataStore.deleteIfValue(
+      "asset_full_refresh_in_progress_at",
+      attemptedAt,
+    );
   }
 
   clear(): void {
-    this.database
-      .prepare("DELETE FROM schema_metadata WHERE key IN (?, ?)")
-      .run(
-        "asset_full_refresh_attempted_at",
-        "asset_full_refresh_in_progress_at",
-      );
+    this.metadataStore.deleteMany([
+      "asset_full_refresh_attempted_at",
+      "asset_full_refresh_in_progress_at",
+    ]);
   }
 }

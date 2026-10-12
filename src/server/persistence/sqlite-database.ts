@@ -11,6 +11,8 @@ import { SqliteInvestmentCashflowStore } from "./sqlite-investment-cashflow-stor
 import { SqliteFormalSettlementExecutionStore } from "./sqlite-formal-settlement-execution-store";
 import { SqliteBusinessDataStore } from "./sqlite-business-data-store";
 import { SqliteRefreshStateStore } from "./sqlite-refresh-state-store";
+import { SqliteAssetCardStore } from "./sqlite-asset-card-store";
+import { SqliteMetadataStore } from "./sqlite-metadata-store";
 
 import { type BusinessDataState } from "@/server/business-data-backup";
 import type { InvestmentCashflowStore } from "@/server/investment-cashflows";
@@ -39,6 +41,8 @@ export class SqliteDashboardDatabase
   private formalSettlementExecutions!: SqliteFormalSettlementExecutionStore;
   private businessData!: SqliteBusinessDataStore;
   private refreshState!: SqliteRefreshStateStore;
+  private cards!: SqliteAssetCardStore;
+  private metadataStore!: SqliteMetadataStore;
 
   constructor(
     private readonly databasePath: string,
@@ -47,14 +51,16 @@ export class SqliteDashboardDatabase
   ) {
     try {
       this.database = new DatabaseSync(databasePath);
+      this.cards = new SqliteAssetCardStore(this.database);
+      this.metadataStore = new SqliteMetadataStore(this.database);
       this.readModel = new SqliteDashboardReadModel(this.database);
       this.formalSettlements = new SqliteFormalSettlementStore(this.database);
       this.observations = new SqliteObservationStore(this.database, this.readModel);
       this.sourceInvestments = new SqliteSourceInvestmentStore(this.database, this.readModel);
-      this.sources = new SqliteAssetSourceStore(this.database, this.readModel, this.observations);
+      this.sources = new SqliteAssetSourceStore(this.database, this.readModel, this.observations, this.cards);
       this.investmentCashflows = new SqliteInvestmentCashflowStore(this.database);
       this.formalSettlementExecutions = new SqliteFormalSettlementExecutionStore(this.database);
-      this.refreshState = new SqliteRefreshStateStore(this.database);
+      this.refreshState = new SqliteRefreshStateStore(this.metadataStore);
       this.businessData = new SqliteBusinessDataStore(
         this.database,
         this.sources,
@@ -62,6 +68,7 @@ export class SqliteDashboardDatabase
         this.investmentCashflows,
         this.sourceInvestments,
         this.formalSettlements,
+        this.cards,
       );
       chmodSync(databasePath, 0o600);
       this.database.exec("PRAGMA busy_timeout = 5000");
@@ -95,11 +102,7 @@ export class SqliteDashboardDatabase
     this.transaction(() => {
       this.businessData.replace(state);
       this.backupLegacyDashboard();
-      this.database
-        .prepare(
-          "INSERT OR REPLACE INTO schema_metadata (key, value) VALUES (?, ?)",
-        )
-        .run("json_import_complete", "1");
+      this.metadataStore.set("json_import_complete", "1");
     });
   }
 
@@ -118,7 +121,7 @@ export class SqliteDashboardDatabase
   }
 
   private metadata(key: string): string | null {
-    return this.refreshState.metadata(key);
+    return this.metadataStore.get(key);
   }
 
   async readAssetFullRefreshState(): Promise<{
@@ -225,28 +228,11 @@ export class SqliteDashboardDatabase
   }
 
   async listAssetCards(): Promise<Card[]> {
-    const rows = this.database
-      .prepare("SELECT * FROM asset_cards ORDER BY position")
-      .all() as SqliteRow[];
-    return rows.map((row) => ({
-      id: row.id as string,
-      kind: "asset",
-      title: row.title as string,
-      body: row.body as string,
-      span: row.span as 1 | 2 | 3,
-      ...(row.source_id === null ? {} : { sourceId: row.source_id as string }),
-      ...(row.hidden === null ? {} : { hidden: row.hidden === 1 }),
-      ...(row.starts_new_row === null
-        ? {}
-        : { startsNewRow: row.starts_new_row === 1 }),
-    }));
+    return this.cards.list();
   }
 
   async replaceAssetCards(cards: Card[]): Promise<void> {
-    this.transaction(() => {
-      this.database.exec("DELETE FROM asset_cards");
-      cards.forEach((card, position) => this.sources.insertCard(card, position));
-    });
+    this.transaction(() => this.cards.replace(cards));
   }
 
   async listSources(): Promise<AssetSourceSummary[]> {
@@ -374,7 +360,7 @@ export class SqliteDashboardDatabase
   }
 
   async setAssetCardHidden(sourceId: string, hidden: boolean): Promise<void> {
-    this.transaction(() => this.sources.setCardHidden(sourceId, hidden));
+    this.transaction(() => this.cards.setHidden(sourceId, hidden));
   }
 
   async setAssetSourceDisplayName(

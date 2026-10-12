@@ -115,3 +115,32 @@ test("断开保留快照，重连核对账户并保留来源身份、卡片与�
     assert.deepEqual(await database.listDailyAssetTrendObservations(), trends);
   });
 });
+
+test("卡片布局替换失败时整批回滚，隐藏状态只更新对应来源", async () => {
+  await fixture(async (database, sql) => {
+    await database.connectBinance(authorization, "fixture-old", capturedAt);
+    await database.createManualAssetSource({ label: "手工资产" }, capturedAt);
+    const before = await database.listAssetCards();
+    const sources = await database.listSources();
+    assert.equal(before.length, 2);
+
+    sql.exec(`CREATE TRIGGER reject_card_layout
+      BEFORE INSERT ON asset_cards
+      WHEN NEW.id = 'rejected'
+      BEGIN SELECT RAISE(ABORT, 'fixture card layout failure'); END;`);
+    await assert.rejects(
+      database.replaceAssetCards([
+        { ...before[0], id: "rejected" },
+        before[1],
+      ]),
+      /fixture card layout failure/,
+    );
+    assert.deepEqual(await database.listAssetCards(), before);
+
+    sql.exec("DROP TRIGGER reject_card_layout");
+    await database.setAssetCardHidden(sources[0].id, true);
+    const hidden = await database.listAssetCards();
+    assert.equal(hidden.find((card) => card.sourceId === sources[0].id)?.hidden, true);
+    assert.equal(hidden.find((card) => card.sourceId === sources[1].id)?.hidden, undefined);
+  });
+});

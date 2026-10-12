@@ -111,3 +111,29 @@ test("清除刷新状态同时移除尝试和在途元数据", async () => {
     });
   });
 });
+
+test("业务迁移完成标记由元数据模块写入且只导入一次", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "kanban-metadata-import-"));
+  const databasePath = path.join(root, "data.sqlite");
+  const dashboardPath = path.join(root, "dashboard.json");
+  const cardsPath = path.join(root, "cards.json");
+  const dashboard = {
+    schemaVersion: 9,
+    assetCards: [{ id: "legacy-card", kind: "asset", title: "旧卡片", body: "正文", span: 2 }],
+    assetSources: [],
+  };
+  const { writeFile } = await import("node:fs/promises");
+  await writeFile(dashboardPath, JSON.stringify(dashboard));
+  let database = new SqliteDashboardDatabase(databasePath, dashboardPath, cardsPath);
+  const sql = (database as unknown as { database: DatabaseSync }).database;
+  try {
+    assert.equal(sql.prepare("SELECT value FROM schema_metadata WHERE key = 'json_import_complete'").get()?.value, "1");
+    assert.equal((await database.listAssetCards()).length, 1);
+    sql.close();
+    database = new SqliteDashboardDatabase(databasePath, dashboardPath, cardsPath);
+    assert.equal((await database.listAssetCards()).length, 1);
+  } finally {
+    try { (database as unknown as { database: DatabaseSync }).database.close(); } catch {}
+    await rm(root, { recursive: true, force: true });
+  }
+});
