@@ -8,6 +8,7 @@ import { SqliteObservationStore } from "./sqlite-observation-store";
 import { SqliteSourceInvestmentStore } from "./sqlite-source-investment-store";
 import { SqliteAssetSourceStore } from "./sqlite-asset-source-store";
 import { SqliteInvestmentCashflowStore } from "./sqlite-investment-cashflow-store";
+import { SqliteFormalSettlementExecutionStore } from "./sqlite-formal-settlement-execution-store";
 
 import { type BusinessDataState } from "@/server/business-data-backup";
 import type { InvestmentCashflowStore } from "@/server/investment-cashflows";
@@ -33,6 +34,7 @@ export class SqliteDashboardDatabase
   private sourceInvestments!: SqliteSourceInvestmentStore;
   private sources!: SqliteAssetSourceStore;
   private investmentCashflows!: SqliteInvestmentCashflowStore;
+  private formalSettlementExecutions!: SqliteFormalSettlementExecutionStore;
 
   constructor(
     private readonly databasePath: string,
@@ -47,6 +49,7 @@ export class SqliteDashboardDatabase
       this.sourceInvestments = new SqliteSourceInvestmentStore(this.database, this.readModel);
       this.sources = new SqliteAssetSourceStore(this.database, this.readModel, this.observations);
       this.investmentCashflows = new SqliteInvestmentCashflowStore(this.database);
+      this.formalSettlementExecutions = new SqliteFormalSettlementExecutionStore(this.database);
       chmodSync(databasePath, 0o600);
       this.database.exec("PRAGMA busy_timeout = 5000");
       this.database.exec("PRAGMA foreign_keys = ON");
@@ -427,18 +430,11 @@ export class SqliteDashboardDatabase
   }
 
   async latestFormalSettlementExecution(): Promise<FormalSettlementExecution | null> {
-    const row = this.database.prepare(
-      "SELECT payload_json FROM formal_settlement_execution WHERE id = 1",
-    ).get() as { payload_json: string } | undefined;
-    return row ? JSON.parse(row.payload_json) as FormalSettlementExecution : null;
+    return this.formalSettlementExecutions.latest();
   }
 
   async recordFormalSettlementExecution(execution: FormalSettlementExecution): Promise<void> {
-    this.database.prepare(
-      "INSERT INTO formal_settlement_execution (id, started_at, payload_json) VALUES (1, ?, ?) " +
-      "ON CONFLICT(id) DO UPDATE SET started_at = excluded.started_at, payload_json = excluded.payload_json " +
-      "WHERE excluded.started_at >= formal_settlement_execution.started_at",
-    ).run(execution.startedAt, JSON.stringify(execution));
+    this.transaction(() => this.formalSettlementExecutions.record(execution));
   }
 
   async listFormalDailySettlements(): Promise<FormalDailySettlement[]> {
