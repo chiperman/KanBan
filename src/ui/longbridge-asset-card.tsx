@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
+import { assetSourceKindMetadata } from "@/domain/asset-source-kinds";
 import type {
   MarketBenchmarkComparison,
   MarketBenchmarkSymbol,
@@ -14,31 +15,20 @@ import {
   decimalSubtract,
   decimalToFixed,
 } from "@/domain/decimal";
+import { portfolioSourceTotal } from "@/domain/evm-token-preferences";
 import {
-  ignoredAssetKeySet,
-  includedAssetKeySet,
-  isUnrecognizedEvmTokenHolding,
-  portfolioSourceTotal,
-  unrecognizedEvmTokenCandidates,
-} from "@/domain/evm-token-preferences";
-import {
-  compareNullableDecimalDescending,
   convertCurrencyAmount,
   sourceReportingConversionRates,
   type ReportingCurrency,
 } from "@/domain/valuation";
 import {
-  daysForTrendRange,
   sourceTrendObservationStatus,
   type TrendRange,
 } from "@/domain/daily-trend-observations";
 import type {
   AssetExchangeRate,
   AssetHolding,
-  AssetSnapshot,
-  AssetSourceSyncState,
   DailyAssetTrendObservation,
-  ManualAssetClass,
   ManualAssetRecord,
 } from "@/server/ports";
 import {
@@ -64,45 +54,18 @@ import {
   formatShanghaiDayLabel,
 } from "@/ui/shanghai-date-time";
 import { AssetSourceRefreshButton } from "@/ui/asset-refresh-controls";
+import { assetSourceHoldingsModel } from "@/ui/asset-source-card/holdings-model";
+import { assetSourceTrendModel } from "@/ui/asset-source-card/source-trend-model";
+import type { AssetSourceView } from "@/ui/asset-source-card/types";
 
-export interface AssetSourceView {
-  id: string;
-  kind: string;
-  label: string;
-  displayName?: string;
-  accountId: string;
-  snapshot: AssetSnapshot;
-  sync: AssetSourceSyncState;
-  ignoredAssetKeys?: string[];
-  includedAssetKeys?: string[];
-  hasManualRecord?: boolean;
-  manualAssetClass?: ManualAssetClass;
-  manualRecords?: ManualAssetRecord[];
-  lifecycle?: "connected" | "disconnected";
-}
+export type { AssetSourceView } from "@/ui/asset-source-card/types";
 
 function providerCardLabel(source: AssetSourceView): string {
-  if (source.kind === "longbridge") return "长桥资产";
-  if (source.kind === "binance") return "Binance 资产";
-  if (source.kind === "okx") return "OKX 资产";
-  if (source.kind === "bitget") return "Bitget 资产";
-  if (source.kind === "bit") return "BIT / Matrixport 资产";
-  if (source.kind === "evm-watch-ethereum") return "Ethereum 观察钱包";
-  if (source.kind === "evm-watch-bsc") return "BNB Smart Chain 观察钱包";
-  if (source.kind === "manual") return "手工资产记录";
-  return "资产来源";
+  return assetSourceKindMetadata(source.kind)?.title ?? "资产来源";
 }
 
 function providerCode(source: AssetSourceView): string {
-  if (source.kind === "longbridge") return "LB";
-  if (source.kind === "binance") return "BN";
-  if (source.kind === "okx") return "OKX";
-  if (source.kind === "bitget") return "BG";
-  if (source.kind === "bit") return "BIT";
-  if (source.kind === "evm-watch-ethereum") return "ETH";
-  if (source.kind === "evm-watch-bsc") return "BSC";
-  if (source.kind === "manual") return "MANUAL";
-  return "SRC";
+  return assetSourceKindMetadata(source.kind)?.code ?? "SRC";
 }
 
 function sourceHeading(source: AssetSourceView): {
@@ -202,24 +165,6 @@ function signedAmount(value: string, format: (value: string) => string): string 
 
 function signedDisplayAmount(value: string, formatted: string): string {
   return decimalCompare(value, "0") > 0 ? `+${formatted}` : formatted;
-}
-
-function holdingMatchesSearch(
-  source: AssetSourceView,
-  holding: AssetHolding,
-  query: string,
-): boolean {
-  const normalizedQuery = query.trim().toLocaleLowerCase();
-  if (normalizedQuery.length === 0) return true;
-  return [
-    source.label,
-    source.displayName,
-    assetHoldingDisplayName(holding),
-    holding.symbol,
-    holding.sourceAsset,
-    holding.sourceAccount,
-    holding.sourceProduct,
-  ].some((value) => value?.toLocaleLowerCase().includes(normalizedQuery));
 }
 
 function profitDirection(
@@ -682,220 +627,45 @@ export function AssetSourceCard({
   useEffect(() => {
     if (!showSensitiveInfo) setCandlestickHolding(null);
   }, [showSensitiveInfo]);
-  const isManual = source.kind === "manual";
+  const holdings = useMemo(
+    () => assetSourceHoldingsModel({
+      hideSmallCryptoHoldings,
+      holdingsSearchQuery,
+      source,
+    }),
+    [hideSmallCryptoHoldings, holdingsSearchQuery, source],
+  );
+  const {
+    cashBalances,
+    compactProfitColumns,
+    hasHoldingsSearchQuery,
+    hiddenSmallHoldingCount,
+    includedAssetKeys,
+    isManual,
+    quoteUnavailableCount,
+    searchedHoldings,
+    showPlatformProfit,
+    supportsProductCoverage,
+    supportsSmallHoldingFilter,
+    unvaluedCount,
+    unreadableEvmTokens,
+    valuationAriaLabel,
+    valuationCaption,
+    valuationSegments,
+    visibleHoldings,
+  } = holdings;
   const hasManualRecord = !isManual || source.hasManualRecord !== false;
   const manualRecords = source.manualRecords ?? [];
-  const supportsSmallHoldingFilter =
-    !isManual && source.kind !== "longbridge";
-  const supportsEvmTokenPreferences = source.kind.startsWith("evm-watch-");
-  const supportsProductCoverage =
-    ["binance", "okx", "bitget", "bit"].includes(source.kind) ||
-    source.kind.startsWith("evm-watch-");
-  const orderedHoldings = useMemo(
-    () => source.snapshot.holdings.toSorted((left, right) =>
-      compareNullableDecimalDescending(
-        left.sourceMarketValue?.amount ?? null,
-        right.sourceMarketValue?.amount ?? null,
-      ),
-    ),
-    [source.snapshot.holdings],
-  );
-  const cashHoldings = orderedHoldings.filter(
-    ({ assetClass }) => assetClass === "cash",
-  );
-  const positionHoldings = orderedHoldings.filter(
-    ({ assetClass }) => assetClass !== "cash",
-  );
-  const ignoredAssetKeys = ignoredAssetKeySet(source);
-  const includedAssetKeys = includedAssetKeySet(source);
-  const activePositionHoldings = positionHoldings.filter(
-    (holding) =>
-      holding.sourceAsset === undefined ||
-      !ignoredAssetKeys.has(holding.sourceAsset),
-  );
-  const unrecognizedHoldings = supportsEvmTokenPreferences
-    ? activePositionHoldings.filter((holding) =>
-        isUnrecognizedEvmTokenHolding(source, holding)
-      )
-    : [];
-  const unrecognizedAssetKeys = new Set(
-    unrecognizedHoldings.flatMap((holding) =>
-      holding.sourceAsset ? [holding.sourceAsset] : [],
-    ),
-  );
-  const reviewedPositionHoldings = activePositionHoldings.filter(
-    (holding) =>
-      holding.sourceAsset === undefined ||
-      !unrecognizedAssetKeys.has(holding.sourceAsset),
-  );
-  const unreadableEvmTokens = supportsEvmTokenPreferences
-    ? unrecognizedEvmTokenCandidates(source).filter(
-      (token) =>
-        token.quantity === null && !ignoredAssetKeys.has(token.sourceAsset),
-    )
-    : [];
-  const cashBalances = cashHoldings.flatMap((holding) =>
-    holding.cashBalances ?? [{
-      amount: holding.marketValue ?? holding.quantity,
-      availableCash: holding.quantity,
-      currency: holding.currency,
-      frozenCash: "0",
-      settlingCash: "0",
-      withdrawCash: holding.quantity,
-    }]
-  );
-  const hiddenSmallHoldingCount = supportsSmallHoldingFilter
-    ? reviewedPositionHoldings.filter(
-        (holding) =>
-          holding.marketValue !== null &&
-          decimalCompare(holding.marketValue, "1") < 0,
-      ).length
-    : 0;
-  const visibleHoldings = supportsSmallHoldingFilter && hideSmallCryptoHoldings
-    ? reviewedPositionHoldings.filter(
-      (holding) =>
-        holding.marketValue === null ||
-        decimalCompare(holding.marketValue, "1") >= 0,
-      )
-    : reviewedPositionHoldings;
-  const searchedHoldings = visibleHoldings.filter((holding) =>
-    holdingMatchesSearch(source, holding, holdingsSearchQuery)
-  );
-  const hasHoldingsSearchQuery =
-    !isManual && holdingsSearchQuery.trim().length > 0;
-  const showPlatformProfit = visibleHoldings.some(
-    (holding) => holding.platformProfit !== null,
-  );
-  const compactProfitColumns = source.kind === "longbridge";
-  const sourceHistory = history.flatMap((snapshot) => {
-    const item = snapshot.sources.find(({ sourceId }) => sourceId === source.id);
-    return item ? [{ day: snapshot.day, ...item }] : [];
-  });
-  const firstSourceTrendDay = isManual
-    ? manualRecords.reduce<string | undefined>(
-      (earliest, record) =>
-        earliest === undefined || record.day < earliest ? record.day : earliest,
-      undefined,
-    )
-    : sourceHistory.reduce<string | undefined>(
-      (earliest, observation) =>
-        earliest === undefined || observation.day < earliest
-          ? observation.day
-          : earliest,
-      undefined,
-    );
-  const sourceTrendDays = trendDays ?? daysForTrendRange(
-    trendRange,
+  const sourceTrend = assetSourceTrendModel({
     currentDay,
-    firstSourceTrendDay,
-  );
-  const sourceTrendByDay = new Map(
-    sourceHistory.map((observation) => [observation.day, observation]),
-  );
-  const trendSnapshotByDay = new Map(
-    history.map((snapshot) => [snapshot.day, snapshot]),
-  );
-  const sourceDailyDetails = [...sourceHistory].sort((left, right) =>
-    right.day.localeCompare(left.day)
-  );
-  const missingSourceTrendDayCount = isManual
-    ? 0
-    : sourceTrendDays.filter((day) => !sourceTrendByDay.has(day)).length;
-  const sourceTrendPoints = sourceTrendDays.map((day, index) => {
-    if (isManual) {
-      const record = manualRecords
-        .filter((item) => item.day <= day)
-        .toSorted((left, right) => right.day.localeCompare(left.day))[0];
-      if (record === undefined) {
-        return {
-          day,
-          index,
-          amount: null,
-          observed: false,
-          status: "incomplete" as const,
-        };
-      }
-      const recordedObservation = sourceTrendByDay.get(record.day);
-      const recordedSnapshot = trendSnapshotByDay.get(record.day);
-      return {
-        day,
-        index,
-        amount: recordedObservation?.total[reportingCurrency] ??
-          convertCurrencyAmount(
-            record.amount,
-            record.currency,
-            reportingCurrency,
-            recordedSnapshot?.exchangeRates ?? [],
-          ),
-        manualRecordDay: record.day,
-        observed: record.day === day && recordedObservation !== undefined,
-        status: "complete" as const,
-      };
-    }
-    const observation = sourceTrendByDay.get(day);
-    return {
-      day,
-      index,
-      amount: observation?.total[reportingCurrency] ?? null,
-      observed: observation !== undefined,
-      status: observation === undefined
-        ? "incomplete"
-        : sourceTrendObservationStatus(observation),
-    };
+    history,
+    isManual,
+    manualRecords,
+    reportingCurrency,
+    sourceId: source.id,
+    trendDays,
+    trendRange,
   });
-  const unavailableSourceTrendPoints = sourceTrendPoints.filter(
-    (point) => point.amount === null && sourceTrendByDay.has(point.day),
-  );
-  const abnormalSourceTrendPoints = sourceTrendPoints.filter(
-    (point) => point.amount !== null && point.status !== "complete",
-  );
-  const sourceTrendNotice = [
-    isManual
-      ? "手工记录"
-      : missingSourceTrendDayCount > 0
-      ? `缺少 ${missingSourceTrendDayCount} 天观测`
-      : null,
-    abnormalSourceTrendPoints.length > 0 || unavailableSourceTrendPoints.length > 0
-      ? `数据受限：${
-        [
-          abnormalSourceTrendPoints.length > 0
-            ? `${abnormalSourceTrendPoints.length} 天不完整或过期`
-            : null,
-          unavailableSourceTrendPoints.length > 0
-            ? `${unavailableSourceTrendPoints.length} 天未估值`
-            : null,
-        ].filter(Boolean).join(" · ")
-      }`
-      : null,
-  ].filter(Boolean).join(" · ");
-  const unvaluedCount = visibleHoldings.filter(
-    ({ valuation }) => valuation.status === "unvalued",
-  ).length;
-  const quoteUnavailableCount = visibleHoldings.filter(
-    ({ valuation }) => valuation.status === "quote-unavailable",
-  ).length;
-  const valuedCount =
-    visibleHoldings.length - unvaluedCount - quoteUnavailableCount;
-  const valuationSegments = visibleHoldings.map((holding) => ({
-    key: assetHoldingKey(holding),
-    tone:
-      holding.valuation.status === "unvalued"
-        ? "error" as const
-        : holding.valuation.status === "quote-unavailable"
-          ? "muted" as const
-        : "primary" as const,
-    value: 1,
-  }));
-  const valuationAriaLabel = quoteUnavailableCount > 0
-    ? `${valuedCount} 项已估值，${unvaluedCount} 项未估值，${quoteUnavailableCount} 项行情未接入`
-    : `${valuedCount} 项已估值，${unvaluedCount} 项未估值`;
-  const valuationCaption = unvaluedCount > 0
-    ? `${unvaluedCount} UNVALUED${
-        quoteUnavailableCount > 0 ? ` · ${quoteUnavailableCount} QUOTE N/A` : ""
-      }`
-    : quoteUnavailableCount > 0
-      ? `${quoteUnavailableCount} QUOTE N/A`
-      : "VALUATION / COMPLETE";
   const heading = sourceHeading(source);
   const displayExchangeRates = sourceReportingConversionRates(
     source,
@@ -1023,7 +793,7 @@ export function AssetSourceCard({
               unavailableCount={0}
               variant="source"
             />
-          ) : sourceHistory.length === 0 ? (
+          ) : sourceTrend.sourceHistory.length === 0 ? (
             <p className="trend-empty">
               {isManual ? "等待首条记录" : "等待首次同步"}
             </p>
@@ -1039,10 +809,10 @@ export function AssetSourceCard({
                 currency={reportingCurrency}
                 formatAmount={moneyAmount}
                 formatDay={formatShanghaiDayLabel}
-                incompleteCount={abnormalSourceTrendPoints.length}
+                incompleteCount={sourceTrend.abnormalPoints.length}
                 lineType={isManual ? "stepAfter" : "linear"}
-                points={sourceTrendPoints}
-                unavailableCount={unavailableSourceTrendPoints.length}
+                points={sourceTrend.points}
+                unavailableCount={sourceTrend.unavailablePoints.length}
                 variant="source"
               />
               {!isManual ? (
@@ -1050,10 +820,10 @@ export function AssetSourceCard({
                   className="daily-trend-details source-daily-trend-details"
                   data-testid={`asset-source-daily-details-${source.id}`}
                 >
-                  <summary>每日总额（{sourceDailyDetails.length}）</summary>
+                  <summary>每日总额（{sourceTrend.sourceDailyDetails.length}）</summary>
                   <div className="daily-trend-details-content">
                     <ol className="daily-trend-detail-list">
-                      {sourceDailyDetails.map((observation) => {
+                      {sourceTrend.sourceDailyDetails.map((observation) => {
                         const observationStatus =
                           sourceTrendObservationStatus(observation);
                         const observationAmount =
@@ -1090,8 +860,8 @@ export function AssetSourceCard({
               ) : null}
             </>
           )}
-          {showSensitiveInfo && sourceTrendNotice ? (
-            <p className="trend-note">{sourceTrendNotice}</p>
+          {showSensitiveInfo && sourceTrend.notice ? (
+            <p className="trend-note">{sourceTrend.notice}</p>
           ) : null}
         </section> : null}
         {isManual ? (

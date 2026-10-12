@@ -34,3 +34,4 @@ export function normalizeAssetSourceDisplayName(value: string): string | null {
   }
   return normalized;
 }
+import { assetSourceKindMetadata } from "./asset-source-kinds";
