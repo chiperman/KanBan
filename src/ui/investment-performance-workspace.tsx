@@ -120,7 +120,11 @@ function cashflowSign(kind: InvestmentCashflowKind): "+" | "-" {
 }
 
 function toInputDateTime(value: string): string {
-  return value.slice(0, 16);
+  const date = new Date(value);
+  const pad = (part: number) => String(part).padStart(2, "0");
+  // datetime-local must use the same local time zone as toIso when saving.
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+    + `T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function toIso(value: string): string {
