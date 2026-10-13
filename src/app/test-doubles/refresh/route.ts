@@ -1,12 +1,14 @@
-import { getTestServices, isTestEnv } from "@/server/composition";
+import { getTestServices } from "@/server/composition";
 import type { Card } from "@/server/ports";
 import { refreshSourceFixture as sourceFixture } from "@/server/testing/asset-source-fixtures";
 import type { FakeRefreshScenario } from "@/server/testing/fakes";
+import { testGuard } from "@/server/testing/route-support";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
+  const denied = testGuard();
+  if (denied) return denied;
   const body = (await request.json().catch(() => null)) as {
     action?: unknown;
     scenario?: unknown;
@@ -112,7 +114,8 @@ export async function POST(request: Request) {
 }
 
 export async function GET() {
-  if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
+  const denied = testGuard();
+  if (denied) return denied;
   const synchronization = getTestServices().assetSynchronization;
   return Response.json({
     modes: synchronization.modes,

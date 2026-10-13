@@ -1,11 +1,11 @@
-import { getTestServices, isTestEnv } from "@/server/composition";
+import { getTestServices } from "@/server/composition";
+import { testGuard } from "@/server/testing/route-support";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  if (!isTestEnv()) {
-    return Response.json({ error: "not found" }, { status: 404 });
-  }
+  const denied = testGuard();
+  if (denied) return denied;
 
   const body = (await request.json()) as { now?: unknown };
   if (typeof body.now !== "string" || Number.isNaN(Date.parse(body.now))) {

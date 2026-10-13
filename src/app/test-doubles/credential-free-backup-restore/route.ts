@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
@@ -8,9 +7,11 @@ import {
   CredentialFreeBusinessDataBackup,
   type BusinessDataState,
 } from "@/server/business-data-backup";
-import { isTestEnv } from "@/server/composition";
+
 import type { AssetSourceSummary } from "@/server/ports";
 import { SqliteDashboardDatabase } from "@/server/production";
+import { withTestDirectory } from "@/server/testing/temporary-directory";
+import { testGuard } from "@/server/testing/route-support";
 
 export const dynamic = "force-dynamic";
 
@@ -161,7 +162,8 @@ function updateChecksum(document: Record<string, unknown>): void {
 }
 
 export async function POST(request: Request) {
-  if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
+  const denied = testGuard();
+  if (denied) return denied;
   const action = new URL(request.url).searchParams.get("action");
   if (
     action !== "round-trip" &&
@@ -175,8 +177,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "unknown action" }, { status: 400 });
   }
 
-  const root = await mkdtemp(path.join(tmpdir(), "pad-backup-restore-"));
-  try {
+  return withTestDirectory("pad-backup-restore-", async (root) => {
     const database = new SqliteDashboardDatabase(path.join(root, "dashboard.sqlite"));
     const backups = new CredentialFreeBusinessDataBackup(
       database,
@@ -473,7 +474,5 @@ export async function POST(request: Request) {
         })),
       },
     });
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
+  });
 }

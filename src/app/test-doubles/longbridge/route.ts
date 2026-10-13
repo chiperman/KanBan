@@ -1,10 +1,12 @@
-import { getTestServices, isTestEnv } from "@/server/composition";
+import { getTestServices } from "@/server/composition";
 import type { FakeLongbridgeConfig } from "@/server/testing/fakes";
+import { testGuard } from "@/server/testing/route-support";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
+  const denied = testGuard();
+  if (denied) return denied;
   const config = (await request.json()) as FakeLongbridgeConfig & {
     scenario?: string;
   };
@@ -19,7 +21,8 @@ export async function POST(request: Request) {
 }
 
 export async function GET() {
-  if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
+  const denied = testGuard();
+  if (denied) return denied;
   const services = getTestServices();
   return Response.json({
     savedSources: (await services.assetSources.list()).length,

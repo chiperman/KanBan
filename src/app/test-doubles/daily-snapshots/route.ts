@@ -1,5 +1,3 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
@@ -7,13 +5,15 @@ import {
   sourceTrendClassTotals,
 } from "@/domain/daily-asset-snapshots";
 import { buildSnapshotFromPositions } from "@/domain/valuation";
-import { getTestServices, isTestEnv } from "@/server/composition";
+import { getTestServices } from "@/server/composition";
 import type { AssetSourceSummary, Card } from "@/server/ports";
 import { SqliteDashboardDatabase } from "@/server/production";
 import {
   DAILY_SNAPSHOT_FIXTURE_AT as INITIAL_AT,
   dailySnapshotSourceFixture as sourceFixture,
 } from "@/server/testing/asset-source-fixtures";
+import { withTestDirectory } from "@/server/testing/temporary-directory";
+import { testGuard } from "@/server/testing/route-support";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +29,8 @@ function sourceCard(source: AssetSourceSummary, index: number): Card {
 }
 
 export async function POST(request: Request) {
-  if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
+  const denied = testGuard();
+  if (denied) return denied;
   const body = (await request.json().catch(() => null)) as {
     action?: unknown;
     iso?: unknown;
@@ -39,8 +40,7 @@ export async function POST(request: Request) {
   const services = getTestServices();
 
   if (body?.action === "production-persistence") {
-    const root = await mkdtemp(path.join(tmpdir(), "pad-daily-snapshot-"));
-    try {
+    return withTestDirectory("pad-daily-snapshot-", async (root) => {
       const dashboardPath = path.join(root, "dashboard.sqlite");
       const database = new SqliteDashboardDatabase(dashboardPath);
       const snapshot = buildDailyAssetSnapshot(
@@ -85,13 +85,10 @@ export async function POST(request: Request) {
         baselineUsd: baseline?.total.USD,
         trendUsd: trend?.total.USD,
       });
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
+    });
   }
   if (body?.action === "production-incomplete-baseline-repair") {
-    const root = await mkdtemp(path.join(tmpdir(), "pad-daily-snapshot-"));
-    try {
+    return withTestDirectory("pad-daily-snapshot-", async (root) => {
       const dashboardPath = path.join(root, "dashboard.sqlite");
       const database = new SqliteDashboardDatabase(dashboardPath);
       const snapshot = buildDailyAssetSnapshot(
@@ -137,9 +134,7 @@ export async function POST(request: Request) {
         totalUsd: baseline?.total.USD,
         sourceCount: baseline?.sources.length,
       });
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
+    });
   }
   if (body?.action === "connect-before-failed-refresh") {
     services.clock.set(INITIAL_AT);
@@ -696,7 +691,8 @@ export async function POST(request: Request) {
 }
 
 export async function GET() {
-  if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
+  const denied = testGuard();
+  if (denied) return denied;
   const dailySnapshots = getTestServices().dailyAssetSnapshots;
   const baselines = await dailySnapshots.list();
   return Response.json({

@@ -1,9 +1,11 @@
-import { getTestServices, isTestEnv } from "@/server/composition";
+import { getTestServices } from "@/server/composition";
+import { testGuard } from "@/server/testing/route-support";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
+  const denied = testGuard();
+  if (denied) return denied;
   const body = (await request.json().catch(() => ({}))) as { scenario?: string; commitError?: string };
   const services = getTestServices();
   if (body.scenario === "refresh-ethereum-failure") {
@@ -47,7 +49,8 @@ export async function POST(request: Request) {
 }
 
 export async function GET() {
-  if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
+  const denied = testGuard();
+  if (denied) return denied;
   const services = getTestServices();
   const sources = (await services.assetSources.list()).filter(({ kind }) =>
     kind.startsWith("evm-watch-"),

@@ -1,9 +1,10 @@
-import { isTestEnv } from "@/server/composition";
+import { testGuard } from "@/server/testing/route-support";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
+  const denied = testGuard();
+  if (denied) return denied;
   const url = new URL(request.url);
   const callback = new URL(
     "/api/asset-sources/longbridge/oauth/callback",

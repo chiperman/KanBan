@@ -1,6 +1,7 @@
-import { getTestServices, isTestEnv } from "@/server/composition";
+import { getTestServices } from "@/server/composition";
 import type { Card } from "@/server/ports";
 import { BINANCE_OBSERVED_AT, BINANCE_USDT_USD_QUOTE } from "@/server/testing/binance-fixtures";
+import { testGuard } from "@/server/testing/route-support";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,8 @@ const LOGIN_CARD: Card = {
 };
 
 export async function POST(request: Request) {
-  if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
+  const denied = testGuard();
+  if (denied) return denied;
   const body = (await request.json().catch(() => null)) as {
     scenario?: unknown;
   } | null;
@@ -40,7 +42,8 @@ export async function POST(request: Request) {
 }
 
 export async function GET() {
-  if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
+  const denied = testGuard();
+  if (denied) return denied;
   const services = getTestServices();
   return Response.json({
     savedSources: (await services.assetSources.list()).filter(

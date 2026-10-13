@@ -1,5 +1,3 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { buildSnapshotFromPositions } from "@/domain/valuation";
@@ -11,7 +9,7 @@ import {
   DatabaseFormalDailySettlements,
   SqliteDashboardDatabase,
 } from "@/server/production";
-import { getTestServices, isTestEnv } from "@/server/composition";
+import { getTestServices } from "@/server/composition";
 import type {
   AssetSourceRefresher,
   AssetSourceSummary,
@@ -19,6 +17,8 @@ import type {
   FormalSettlementSourceCapture,
   SecretStore,
 } from "@/server/ports";
+import { withTestDirectory } from "@/server/testing/temporary-directory";
+import { testGuard } from "@/server/testing/route-support";
 
 export const dynamic = "force-dynamic";
 
@@ -249,7 +249,8 @@ const candleReader: FormalSettlementCandleReader = {
 };
 
 export async function POST(request: Request) {
-  if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
+  const denied = testGuard();
+  if (denied) return denied;
   const body = (await request.json().catch(() => null)) as { action?: unknown; quality?: unknown; scenario?: unknown } | null;
   if (body?.action === "seed-runtime-view") {
     const services = getTestServices();
@@ -323,10 +324,10 @@ export async function POST(request: Request) {
   ) {
     return Response.json({ error: "正式日结测试配置无效" }, { status: 400 });
   }
-  const root = await mkdtemp(path.join(tmpdir(), "pad-formal-settlement-"));
-  try {
+  const action = body.action;
+  return withTestDirectory("pad-formal-settlement-", async (root) => {
     const database = new SqliteDashboardDatabase(path.join(root, "dashboard.sqlite"));
-    const isPublicScenario = body.action.startsWith("run-with-public-evm-source");
+    const isPublicScenario = action.startsWith("run-with-public-evm-source");
     const sources = [
       ...(isPublicScenario
         ? [publicEvmSourceFixture()]
@@ -411,7 +412,5 @@ export async function POST(request: Request) {
       settlements: recordedSettlements,
       settlementCountAfterSourceDeletion: (await settlements.list()).length,
     });
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
+  });
 }

@@ -1,6 +1,7 @@
 import { buildSnapshotFromPositions, type RawAssetPosition } from "@/domain/valuation";
-import { getTestServices, isTestEnv } from "@/server/composition";
+import { getTestServices } from "@/server/composition";
 import type { AssetExchangeRate, AssetSourceSummary, Card } from "@/server/ports";
+import { testGuard } from "@/server/testing/route-support";
 
 export const dynamic = "force-dynamic";
 
@@ -623,7 +624,8 @@ function detailCoveragePartialSources(): AssetSourceSummary[] {
 }
 
 export async function POST(request: Request) {
-  if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
+  const denied = testGuard();
+  if (denied) return denied;
   const url = new URL(request.url);
   const scenario = url.searchParams.get("scenario");
   const sources = scenario === "rounding"

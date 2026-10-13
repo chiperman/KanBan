@@ -1,19 +1,18 @@
 import { parseAssetCards } from "@/server/asset-cards";
-import { getTestServices, isTestEnv } from "@/server/composition";
+import { getTestServices } from "@/server/composition";
+import { testGuard } from "@/server/testing/route-support";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  if (!isTestEnv()) {
-    return Response.json({ error: "not found" }, { status: 404 });
-  }
+  const denied = testGuard();
+  if (denied) return denied;
   return Response.json({ assetCards: await getTestServices().assetCards.list() });
 }
 
 export async function POST(request: Request) {
-  if (!isTestEnv()) {
-    return Response.json({ error: "not found" }, { status: 404 });
-  }
+  const denied = testGuard();
+  if (denied) return denied;
 
   const body = (await request.json()) as { assetCards?: unknown };
   const assetCards = parseAssetCards(body.assetCards);

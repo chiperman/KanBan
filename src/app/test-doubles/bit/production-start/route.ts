@@ -6,7 +6,7 @@ import {
   ProductionBitSourceRefresher,
 } from "@/server/asset-sources/bit";
 import { CoinGeckoUsdtUsdPrices } from "@/server/asset-sources/binance";
-import { isTestEnv } from "@/server/composition";
+
 import type {
   AssetSourceSummary,
   ExternalServiceConfiguration,
@@ -14,6 +14,7 @@ import type {
   ExternalServiceConfigurationStatus,
   Prices,
 } from "@/server/ports";
+import { testGuard } from "@/server/testing/route-support";
 
 export const dynamic = "force-dynamic";
 
@@ -78,7 +79,8 @@ function rawResponse(body: string) {
 }
 
 export async function POST(request: Request) {
-  if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
+  const denied = testGuard();
+  if (denied) return denied;
   const body = (await request.json().catch(() => null)) as {
     action?: unknown;
   } | null;

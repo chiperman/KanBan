@@ -1,11 +1,12 @@
 import { buildSnapshotFromPositions } from "@/domain/valuation";
-import { getTestServices, isTestEnv } from "@/server/composition";
+import { getTestServices } from "@/server/composition";
 import type {
   AssetSourceSummary,
   DailyAssetSourceSnapshot,
   DailyAssetTrendObservation,
 } from "@/server/ports";
 import { dataHealthSourceFixture as valuedSource } from "@/server/testing/asset-source-fixtures";
+import { testGuard } from "@/server/testing/route-support";
 
 export const dynamic = "force-dynamic";
 
@@ -117,7 +118,8 @@ function observation(input: {
 }
 
 export async function POST(request: Request) {
-  if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
+  const denied = testGuard();
+  if (denied) return denied;
   const body = (await request.json().catch(() => null)) as {
     action?: unknown;
   } | null;

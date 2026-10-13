@@ -5,7 +5,7 @@ import {
   ProductionBinanceReadOnly,
   ProductionBinanceSourceRefresher,
 } from "@/server/asset-sources/binance";
-import { isTestEnv } from "@/server/composition";
+
 import type {
   ExternalServiceConfiguration,
   ExternalServiceConfigurationInput,
@@ -18,6 +18,7 @@ import {
   binanceFixture,
   binancePermissions,
 } from "@/server/testing/binance-fixtures";
+import { testGuard } from "@/server/testing/route-support";
 
 export const dynamic = "force-dynamic";
 
@@ -69,7 +70,8 @@ function businessLabel(method: string, url: URL, body: URLSearchParams | null) {
 }
 
 export async function POST(request: Request) {
-  if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
+  const denied = testGuard();
+  if (denied) return denied;
   const body = (await request.json().catch(() => null)) as { action?: unknown } | null;
   if (
     body?.action !== "preview-valid" &&

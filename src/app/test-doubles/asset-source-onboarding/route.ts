@@ -3,7 +3,7 @@ import {
   type AssetSourceAuthorization,
   type AssetSourceProviderAdapter,
 } from "@/server/asset-source-onboarding";
-import { isTestEnv } from "@/server/composition";
+import { testGuard } from "@/server/testing/route-support";
 
 export const dynamic = "force-dynamic";
 
@@ -21,9 +21,8 @@ const AUTHORIZATION: AssetSourceAuthorization = {
 };
 
 export async function POST(request: Request) {
-  if (!isTestEnv()) {
-    return Response.json({ error: "not found" }, { status: 404 });
-  }
+  const denied = testGuard();
+  if (denied) return denied;
   const action = new URL(request.url).searchParams.get("action");
   const connected: string[] = [];
   let now = 0;

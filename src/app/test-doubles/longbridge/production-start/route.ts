@@ -7,13 +7,15 @@ import {
   ProductionLongbridgeOAuth,
   ProductionLongbridgeSourceRefresher,
 } from "@/server/asset-sources/longbridge";
-import { isTestEnv } from "@/server/composition";
+
 import type { AssetSourceSummary } from "@/server/ports";
+import { testGuard } from "@/server/testing/route-support";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
+  const denied = testGuard();
+  if (denied) return denied;
   const body = (await request.json().catch(() => ({}))) as {
     action?:
       | "start"

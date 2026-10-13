@@ -1,14 +1,11 @@
-import {
-  getTestServices,
-  isTestEnv,
-} from "@/server/composition";
+import { getTestServices } from "@/server/composition";
+import { testGuard } from "@/server/testing/route-support";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  if (!isTestEnv()) {
-    return Response.json({ error: "not found" }, { status: 404 });
-  }
+  const denied = testGuard();
+  if (denied) return denied;
 
   const services = getTestServices();
   return Response.json({
@@ -37,9 +34,8 @@ export async function GET() {
  * 仅测试环境可达，用于验证组合根会在服务契约扩展时自动重建。
  */
 export async function POST(request: Request) {
-  if (!isTestEnv()) {
-    return Response.json({ error: "not found" }, { status: 404 });
-  }
+  const denied = testGuard();
+  if (denied) return denied;
 
   const body = (await request.json().catch(() => ({}))) as {
     staleContract?: "asset-source-lifecycle" | "longbridge-holding-candlesticks";

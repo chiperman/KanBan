@@ -54,6 +54,19 @@ test("热更新后会替换缺少五日走势读取方法的缓存服务", async
   });
 });
 
+test("重置测试状态撤销旧会话且允许重新创建所有者会话", async ({ request }) => {
+  const activity = "/api/auth/session/activity";
+  expect((await request.post(activity)).status()).toBe(401);
+  const session = await request.post("/test-doubles/owner-session");
+  expect(session.ok()).toBeTruthy();
+  expect(session.headers()["set-cookie"]).toMatch(/^pad_session=[^;]+; Path=\/; HttpOnly; SameSite=Strict$/);
+  expect((await request.post(activity)).ok()).toBeTruthy();
+  expect((await request.post("/test-doubles/reset")).ok()).toBeTruthy();
+  expect((await request.post(activity)).status()).toBe(401);
+  expect((await request.post("/test-doubles/owner-session")).ok()).toBeTruthy();
+  expect((await request.post(activity)).ok()).toBeTruthy();
+});
+
 test.describe("本地时区时钟", () => {
   test.use({ timezoneId: "America/New_York" });
 
@@ -83,6 +96,9 @@ test("生产运行不暴露测试替身", async ({ playwright }) => {
   expect((await prodRequest.get("/test-doubles/context")).status()).toBe(404);
   expect((await prodRequest.get("/test-doubles/asset-cards")).status()).toBe(404);
   expect((await prodRequest.post("/test-doubles/reset")).status()).toBe(404);
+  const ownerSession = await prodRequest.post("/test-doubles/owner-session");
+  expect(ownerSession.status()).toBe(404);
+  expect(ownerSession.headers()["set-cookie"]).toBeUndefined();
   expect(
     (
       await prodRequest.post("/test-doubles/asset-cards", {

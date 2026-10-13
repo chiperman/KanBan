@@ -1,10 +1,10 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { getTestServices, isTestEnv } from "@/server/composition";
+import { getTestServices } from "@/server/composition";
 import type { AssetSourceSummary } from "@/server/ports";
 import { SqliteDashboardDatabase } from "@/server/production";
+import { withTestDirectory } from "@/server/testing/temporary-directory";
+import { testGuard } from "@/server/testing/route-support";
 
 export const dynamic = "force-dynamic";
 
@@ -67,12 +67,14 @@ function longbridgeRateSource(capturedAt: string): AssetSourceSummary {
 }
 
 export async function GET() {
-  if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
+  const denied = testGuard();
+  if (denied) return denied;
   return Response.json(await currentManualState());
 }
 
 export async function POST(request: Request) {
-  if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
+  const denied = testGuard();
+  if (denied) return denied;
   const body = (await request.json().catch(() => null)) as {
     action?: unknown;
   } | null;
@@ -86,8 +88,7 @@ export async function POST(request: Request) {
     return Response.json({ sourceId: source.id });
   }
   if (body?.action === "file-persistence") {
-    const root = await mkdtemp(path.join(tmpdir(), "pad-manual-assets-"));
-    try {
+    return withTestDirectory("pad-manual-assets-", async (root) => {
       const dashboardPath = path.join(root, "dashboard.sqlite");
       const database = new SqliteDashboardDatabase(dashboardPath);
       const capturedAt = "2026-01-01T01:00:00.000Z";
@@ -112,13 +113,10 @@ export async function POST(request: Request) {
         ),
         trend: trend?.sources.filter((item) => item.sourceId === source.id),
       });
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
+    });
   }
   if (body?.action === "sqlite-same-day-cny-observation") {
-    const root = await mkdtemp(path.join(tmpdir(), "pad-manual-assets-sqlite-"));
-    try {
+    return withTestDirectory("pad-manual-assets-sqlite-", async (root) => {
       const database = new SqliteDashboardDatabase(path.join(root, "dashboard.sqlite"));
       const firstCapturedAt = "2026-03-04T12:00:00.000Z";
       await database.replaceSources([longbridgeRateSource(firstCapturedAt)]);
@@ -145,9 +143,7 @@ export async function POST(request: Request) {
         baseline: baseline === undefined ? null : sourceTotal(baseline),
         trend: trend === undefined ? null : sourceTotal(trend),
       });
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
+    });
   }
   if (body?.action === "seed-nonmanual") {
     const services = getTestServices();

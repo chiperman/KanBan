@@ -2,13 +2,14 @@ import {
   ProductionEvmWatchSourceRefresher,
   ProductionEvmWatchWallet,
 } from "@/server/asset-sources/ethereum";
-import { isTestEnv } from "@/server/composition";
+
 import type {
   EvmChain,
   ExternalServiceConfiguration,
   ExternalServiceConfigurationInput,
   ExternalServiceConfigurationStatus,
 } from "@/server/ports";
+import { testGuard } from "@/server/testing/route-support";
 
 export const dynamic = "force-dynamic";
 
@@ -100,7 +101,8 @@ const testExternalServices: ExternalServiceConfiguration = {
 };
 
 export async function POST(request: Request) {
-  if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });
+  const denied = testGuard();
+  if (denied) return denied;
   const body = (await request.json().catch(() => ({}))) as {
     chain?: "ethereum" | "bsc";
     action?: "preview" | "empty" | "partial-failure" | "index-failure" | "price-failure" | "price-network-failure" | "rpc-network-once" | "metadata-decimals-failure" | "metadata-rpc-failure" | "refresh-ignored-unreadable" | "refresh-prices" | "refresh-holdings" | "preview-lido-withdrawal" | "preview-lido-failure" | "refresh-lido-prices" | "preview-lista-withdrawal" | "preview-lista-empty" | "preview-lista-failure" | "refresh-lista-holdings";
