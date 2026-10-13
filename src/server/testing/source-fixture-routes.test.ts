@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import test from "node:test";
 
+import { buildDailyAssetSnapshot } from "@/domain/daily-asset-snapshots";
 import type { AssetSourceSummary } from "@/server/ports";
 import type { TestServices } from "@/server/testing/fakes";
 
@@ -173,6 +174,58 @@ test("数据健康夹具区分过期、未估值、手工记录与已断开汇�
     assert.equal(observations.length, 4);
     assert.equal(observations[2].sources.some((source) => source.sourceId === "source-alpha"), false);
     assert.equal(observations[3].sources.find((source) => source.sourceId === "source-beta")?.status, "expired");
+  });
+});
+
+test("历史汇率夹具补齐完整观测但不改动业务来源、金额、卡片或凭证", async () => {
+  await withTestServices(async (services) => {
+    await refresh.POST(request({ action: "configure", scenario: "schedule" }));
+    services.assetSynchronization.reset("passthrough");
+    const before = structuredClone({
+      sources: await services.assetSources.list(), cards: await services.assetCards.list(),
+      at: services.clock.now().toISOString(), secrets: services.secrets.size(),
+    });
+    assert.equal(buildDailyAssetSnapshot(before.sources, before.at).complete, false);
+
+    const response = await daily.POST(request({ action: "seed-reporting-rates" }));
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { sourceId: "history-longbridge-rates" });
+    const sources = await services.assetSources.list();
+    assert.deepEqual(sources.slice(0, -1), before.sources);
+    const rates = sources.at(-1)!;
+    assert.equal(rates.kind, "longbridge");
+    assert.equal(rates.lifecycle, "connected");
+    assert.equal(rates.credentialReference, null);
+    assert.deepEqual(rates.snapshot.total, { amount: "0", currency: "USD" });
+    assert.deepEqual(rates.snapshot.holdings, []);
+    assert.deepEqual(rates.snapshot.exchangeRates, [
+      { baseCurrency: "USD", quoteCurrency: "CNY", rate: "7.2", source: "Longbridge 测试汇率观测", observedAt: before.at },
+      { baseCurrency: "USD", quoteCurrency: "HKD", rate: "7.8", source: "Longbridge 测试汇率观测", observedAt: before.at },
+    ]);
+    assert.deepEqual(await services.assetCards.list(), before.cards);
+    assert.equal(services.secrets.size(), before.secrets);
+    assert.equal(services.clock.now().toISOString(), before.at);
+    assert.deepEqual(await services.dailyAssetSnapshots.list(), []);
+    assert.deepEqual(await services.dailyAssetSnapshots.listTrendObservations(), []);
+
+    const report = await services.assetSynchronization.request({ intent: { reason: "manual-global" } });
+    assert.equal(report.successCount, 2);
+    assert.equal(report.failureCount, 0);
+    const [baseline] = await services.dailyAssetSnapshots.list();
+    assert.equal(baseline.complete, true);
+    assert.equal(baseline.status, "complete");
+    assert.deepEqual(baseline.total, { USD: "300", CNY: "2160", HKD: "2340" });
+    assert.deepEqual(baseline.sources.map(({ sourceId }) => sourceId), sources.map(({ id }) => id));
+    assert.deepEqual(await services.dailyAssetSnapshots.listTrendObservations(), [baseline]);
+
+    const refreshedSources = structuredClone(await services.assetSources.list());
+    services.clock.set("2026-04-03T08:00:00.000Z");
+    await daily.POST(request({ action: "seed-reporting-rates" }));
+    const updated = await services.assetSources.list();
+    assert.equal(updated.length, sources.length);
+    assert.deepEqual(updated.slice(0, -1), refreshedSources.slice(0, -1));
+    assert.ok(updated.at(-1)!.snapshot.exchangeRates.every(({ observedAt }) => observedAt === services.clock.now().toISOString()));
+    assert.deepEqual(await services.dailyAssetSnapshots.list(), [baseline]);
   });
 });
 

@@ -5,6 +5,12 @@ import {
   type Locator,
   type Page,
 } from "@playwright/test";
+import {
+  expectCompleteHistory,
+  prepareCompleteHistory,
+  REPORTING_RATE_SOURCE_ID,
+  seedReportingRates,
+} from "./history-observation-helpers";
 
 const ADDRESS = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
 const OTHER_ADDRESS = "0x1111111111111111111111111111111111111111";
@@ -145,6 +151,8 @@ test("隐藏与恢复只改变卡片可见性，来源仍同步并计入总额�
 }) => {
   await loginAsOwner(page);
   await connectEthereum(page);
+  const originalId = (await lifecycleState(page)).sources[0].id;
+  const historyBeforeHide = await prepareCompleteHistory(page.request, [originalId]);
   await expect(page.getByTestId("total-overview-card")).toContainText("5,519");
 
   await page.getByRole("button", { name: "隐藏 Ethereum 观察钱包" }).click();
@@ -154,14 +162,15 @@ test("隐藏与恢复只改变卡片可见性，来源仍同步并计入总额�
 
   const hidden = await lifecycleState(page);
   expect(hidden.cards.find(({ sourceId }) => sourceId === hidden.sources[0].id)?.hidden).toBe(true);
-  expect(hidden.snapshotSourceIds).toEqual([hidden.sources[0].id]);
+  expect(hidden.snapshotSourceIds).toEqual([originalId, REPORTING_RATE_SOURCE_ID]);
 
   const callsBeforeRefresh = (await lifecycleState(page)).refreshCalls;
   const refresh = await page.request.post("/api/asset-sources/refresh", {
     data: { mode: "all" },
   });
-  await expect(refresh.json()).resolves.toEqual({ successCount: 1, failureCount: 0 });
+  await expect(refresh.json()).resolves.toMatchObject({ successCount: 1, failureCount: 0 });
   expect((await lifecycleState(page)).refreshCalls).toBeGreaterThan(callsBeforeRefresh);
+  expect(await expectCompleteHistory(page.request, [originalId])).toEqual(historyBeforeHide);
 
   await page.getByRole("button", { name: "重新显示 Ethereum 观察钱包" }).click();
   await expect(page.getByTestId("ethereum-watch-card")).toBeVisible();
@@ -249,6 +258,7 @@ test("原凭证不存在时重新输入相同公开地址，恢复原卡片和�
   await loginAsOwner(page);
   await connectEthereum(page);
   const original = (await lifecycleState(page)).sources[0]!;
+  const historyBeforeDisconnect = await prepareCompleteHistory(page.request, [original.id]);
 
   const management = await openSourceManagement(page, "Ethereum 观察钱包");
   await disconnectSource(page, management, "Ethereum 观察钱包");
@@ -284,7 +294,8 @@ test("原凭证不存在时重新输入相同公开地址，恢复原卡片和�
   expect(restored.cards).toEqual([
     expect.objectContaining({ sourceId: original.id }),
   ]);
-  expect(restored.snapshotSourceIds).toEqual([original.id]);
+  expect(restored.snapshotSourceIds).toEqual([original.id, REPORTING_RATE_SOURCE_ID]);
+  expect(await expectCompleteHistory(page.request, [original.id])).toEqual(historyBeforeDisconnect);
 });
 
 test("重新添加相同公开地址时恢复原来源，不创建重复卡片", async ({
@@ -293,6 +304,7 @@ test("重新添加相同公开地址时恢复原来源，不创建重复卡片",
   await loginAsOwner(page);
   await connectEthereum(page);
   const original = (await lifecycleState(page)).sources[0]!;
+  const historyBeforeDisconnect = await prepareCompleteHistory(page.request, [original.id]);
 
   const management = await openSourceManagement(page, "Ethereum 观察钱包");
   await disconnectSource(page, management, "Ethereum 观察钱包");
@@ -305,7 +317,8 @@ test("重新添加相同公开地址时恢复原来源，不创建重复卡片",
   expect(restored.cards).toEqual([
     expect.objectContaining({ sourceId: original.id }),
   ]);
-  expect(restored.snapshotSourceIds).toEqual([original.id]);
+  expect(restored.snapshotSourceIds).toEqual([original.id, REPORTING_RATE_SOURCE_ID]);
+  expect(await expectCompleteHistory(page.request, [original.id])).toEqual(historyBeforeDisconnect);
 });
 
 test("不同公开地址不能替换旧来源", async ({ page }) => {
@@ -360,11 +373,15 @@ test("其他来源次日成功同步时，不为已断开来源生成新快照",
     .getByRole("button", { name: "确认并保存" })
     .click();
 
+  const connectedIds = (await lifecycleState(page)).sources.map(({ id }) => id);
+  const historyBeforeDisconnect = await prepareCompleteHistory(page.request, connectedIds);
+
   const management = await openSourceManagement(page, "Ethereum 观察钱包");
   await disconnectSource(page, management, "Ethereum 观察钱包");
   await page.request.post("/test-doubles/clock", {
     data: { now: "2026-01-01T16:01:00.000Z" },
   });
+  await seedReportingRates(page.request);
   const refresh = await page.request.post("/api/asset-sources/refresh", {
     data: { mode: "all" },
   });
@@ -377,10 +394,16 @@ test("其他来源次日成功同步时，不为已断开来源生成新快照",
   expect(bsc).toBeDefined();
   expect(state.snapshots.find(({ day }) => day === "2026-01-02")?.sourceIds).toEqual([
     bsc!.id,
+    REPORTING_RATE_SOURCE_ID,
   ]);
   expect(state.snapshots.find(({ day }) => day === "2026-01-02")?.sourceIds).not.toContain(
     ethereum!.id,
   );
+  const historyAfterRefresh = await expectCompleteHistory(page.request, [bsc!.id], "2026-01-02");
+  expect(historyAfterRefresh.baselines.find(({ day }) => day === "2026-01-01"))
+    .toEqual(historyBeforeDisconnect.baselines[0]);
+  expect(historyAfterRefresh.trendObservations.find(({ day }) => day === "2026-01-01"))
+    .toEqual(historyBeforeDisconnect.trendObservations[0]);
 });
 
 test("永久删除需要第二次确认，取消无变化，确认后清除来源及全部历史", async ({

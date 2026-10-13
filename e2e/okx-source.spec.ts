@@ -1,5 +1,6 @@
 import { expect, test, type CDPSession, type Page } from "@playwright/test";
 import { PROD_BASE_URL } from "../playwright.config";
+import { expectCompleteHistory, prepareCompleteHistory } from "./history-observation-helpers";
 
 const API_KEY = "okx-browser-api-key";
 const API_SECRET = "okx-browser-secret-must-not-leak";
@@ -485,11 +486,15 @@ test("OKX 同步失败保留最后成功数据并接入过期状态和日快照"
     .getByRole("dialog", { name: "确认 OKX 资产来源" })
     .getByRole("button", { name: "确认并保存" })
     .click();
+  const historyBeforeFailure = await prepareCompleteHistory(page.request, ["test-okx-source-1"]);
   const card = page.getByTestId("okx-card");
   await expect(card).toContainText("11,637.65 USDT");
   await expect(page.getByTestId("asset-source-trend-test-okx-source-1")).toContainText(
     "01月01日",
   );
+  const coverage = card.getByTestId("okx-product-coverage")
+    .locator(".vibe-coverage-summary-freshness");
+  await expect(coverage).toHaveText("06 CURRENT");
 
   await configure(page, "refresh-failure");
   await page.getByRole("button", { name: "立即刷新资产" }).click();
@@ -499,14 +504,13 @@ test("OKX 同步失败保留最后成功数据并接入过期状态和日快照"
   await expect(card).toContainText("11,637.65 USDT");
   await expect(card).toContainText("过期数据");
   await expect(card).toContainText("OKX 同步失败");
-  await expect(
-    card
-      .getByTestId("okx-product-coverage")
-      .locator(".vibe-coverage-summary-freshness"),
-  ).toHaveText("00 CURRENT / 06 STALE");
+  // Source expiry does not rewrite the last successful product coverage.
+  await expect(coverage).toHaveText("06 CURRENT");
   await expect(page.getByTestId("total-asset-overview")).toContainText(
     "包含 1 个过期来源",
   );
+  expect(await expectCompleteHistory(page.request, ["test-okx-source-1"]))
+    .toEqual(historyBeforeFailure);
 });
 
 test("OKX 价格刷新保持公开边界，并规范化时间偏差、认证错误与区域域名", async ({

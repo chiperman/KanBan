@@ -5,6 +5,7 @@ import {
   type Page,
 } from "@playwright/test";
 import { PROD_BASE_URL } from "../playwright.config";
+import { expectCompleteHistory, prepareCompleteHistory } from "./history-observation-helpers";
 
 const API_KEY = "binance-browser-api-key";
 const API_SECRET = "binance-browser-secret-must-not-leak";
@@ -124,6 +125,7 @@ test("Binance 只读凭证先预览后原子保存，并展示现货、资金与
   expect(await page.content()).not.toContain(API_SECRET);
 
   await preview.getByRole("button", { name: "确认并保存" }).click();
+  const savedHistory = await prepareCompleteHistory(page.request, ["test-binance-source-1"]);
   const card = page.getByTestId("binance-card");
   await expect(card).toContainText("Binance 资产");
   await expect(card.getByTestId("asset-source-total")).toHaveText(
@@ -140,6 +142,8 @@ test("Binance 只读凭证先预览后原子保存，并展示现货、资金与
 
   expect(await state(page)).toEqual({ savedSources: 1, savedSecrets: 1 });
   expect(responseBodies.join("\n")).not.toContain(API_SECRET);
+  expect(await expectCompleteHistory(page.request, ["test-binance-source-1"]))
+    .toEqual(savedHistory);
 });
 
 test("重新验证同一 Binance 账户时替换凭证并保留原卡片", async ({

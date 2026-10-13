@@ -1,5 +1,6 @@
 import { expect, test, type CDPSession, type Page } from "@playwright/test";
 import { PROD_BASE_URL } from "../playwright.config";
+import { expectCompleteHistory, prepareCompleteHistory } from "./history-observation-helpers";
 
 const API_KEY = "bitget-browser-api-key";
 const API_SECRET = "bitget-browser-secret-must-not-leak";
@@ -722,9 +723,13 @@ test("Bitget 同步失败保留最后成功数据并接入过期状态和日快�
     .getByRole("dialog", { name: "确认 Bitget 资产来源" })
     .getByRole("button", { name: "确认并保存" })
     .click();
+  const historyBeforeFailure = await prepareCompleteHistory(page.request, ["test-bitget-source-1"]);
   const card = page.getByTestId("bitget-card");
   await expect(card).toContainText("11,941.14 USDT");
   await expect(page.getByTestId("asset-source-trend-test-bitget-source-1")).toContainText("01月01日");
+  const coverage = card.getByTestId("bitget-product-coverage")
+    .locator(".vibe-coverage-summary-freshness");
+  await expect(coverage).toHaveText("09 CURRENT");
 
   await configure(page, "refresh-failure");
   await page.getByRole("button", { name: "立即刷新资产" }).click();
@@ -732,12 +737,11 @@ test("Bitget 同步失败保留最后成功数据并接入过期状态和日快�
   await expect(card).toContainText("11,941.14 USDT");
   await expect(card).toContainText("过期数据");
   await expect(card).toContainText("Bitget 同步失败");
-  await expect(
-    card
-      .getByTestId("bitget-product-coverage")
-      .locator(".vibe-coverage-summary-freshness"),
-  ).toHaveText("00 CURRENT / 09 STALE");
+  // Source expiry does not rewrite the last successful product coverage.
+  await expect(coverage).toHaveText("09 CURRENT");
   await expect(page.getByTestId("total-asset-overview")).toContainText("包含 1 个过期来源");
+  expect(await expectCompleteHistory(page.request, ["test-bitget-source-1"]))
+    .toEqual(historyBeforeFailure);
 });
 
 test("Bitget 价格刷新保持公开边界并规范化时间与认证错误", async ({ request }) => {

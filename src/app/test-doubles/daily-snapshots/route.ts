@@ -39,6 +39,43 @@ export async function POST(request: Request) {
   } | null;
   const services = getTestServices();
 
+  if (body?.action === "seed-reporting-rates") {
+    const capturedAt = services.clock.now().toISOString();
+    // Zero-value reference data supplies reporting FX without adding a refresh target.
+    const source: AssetSourceSummary = {
+      id: "history-longbridge-rates",
+      kind: "longbridge",
+      label: "长桥历史汇率观测",
+      accountId: "fixture:history-longbridge-rates",
+      permissions: ["account"],
+      credentialReference: null,
+      lifecycle: "connected",
+      snapshot: buildSnapshotFromPositions({
+        positions: [],
+        sourceCurrency: "USD",
+        exchangeRates: (["CNY", "HKD"] as const).map((quoteCurrency) => ({
+          baseCurrency: "USD",
+          quoteCurrency,
+          rate: quoteCurrency === "CNY" ? "7.2" : "7.8",
+          source: "Longbridge 测试汇率观测",
+          observedAt: capturedAt,
+        })),
+        syncedAt: capturedAt,
+      }),
+      sync: {
+        status: "current",
+        lastSuccessfulAt: capturedAt,
+        lastAttemptAt: capturedAt,
+        error: null,
+      },
+    };
+    await services.assetSources.replaceAll([
+      ...(await services.assetSources.list()).filter((item) => item.id !== source.id),
+      source,
+    ]);
+    return Response.json({ sourceId: source.id });
+  }
+
   if (body?.action === "production-persistence") {
     return withTestDirectory("pad-daily-snapshot-", async (root) => {
       const dashboardPath = path.join(root, "dashboard.sqlite");
