@@ -45,6 +45,7 @@ function accept(source: Ports.AssetSourceSummary, view: AssetSourceView, raw: un
 test("来源实体、前端模型和稳定端口统一使用封闭来源类型，并要求先校验外部值", () => {
   const options = {
     target: ts.ScriptTarget.ES2022,
+    lib: ["lib.dom.d.ts", "lib.dom.iterable.d.ts", "lib.esnext.d.ts"],
     module: ts.ModuleKind.ESNext,
     moduleResolution: ts.ModuleResolutionKind.Bundler,
     strict: true, skipLibCheck: true, noEmit: true, types: [],

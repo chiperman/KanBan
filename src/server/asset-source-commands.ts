@@ -1,5 +1,5 @@
 import type { AssetSourceSummary } from "@/server/ports";
-import type { AppServices } from "@/server/composition";
+import type { AppServices, AssetServices } from "@/server/app-services";
 import { InvalidSourceInvestmentRecordError, parseSourceInvestmentRecordInput } from "@/domain/source-investment-records";
 import { InvalidEvmTokenPreferenceError } from "@/domain/evm-token-preferences";
 import {
@@ -39,13 +39,18 @@ export function parseAssetSourceCommandBody(
     : null;
 }
 
+type SourceCommandServices = Pick<
+  AssetServices,
+  "assetSourceLifecycle" | "manualAssetRecords" | "assetSourceDetails" | "assetSourceOnboarding"
+> & Pick<AppServices, "clock">;
+
 type SourceCommandContext = {
   id: string;
-  services: AppServices;
+  services: SourceCommandServices;
   source: AssetSourceSummary;
 };
 
-function requireDetails(services: AppServices) {
+function requireDetails(services: Pick<AssetServices, "assetSourceDetails">) {
   if (!services.assetSourceDetails) {
     throw new Error("来源详情服务不可用");
   }

@@ -60,7 +60,7 @@ import type {
   ManualAssetRecord,
   ManualAssetRecords,
 } from "@/server/ports";
-import type { AppServices } from "@/server/composition";
+import type { AppServices } from "@/server/app-services";
 import { SessionOwnerAuth } from "@/server/auth/session-auth";
 import { updateEvmTokenPreferences } from "@/domain/evm-token-preferences";
 import {

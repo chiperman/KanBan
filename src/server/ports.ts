@@ -8,6 +8,7 @@ export * from "./ports/core";
 export * from "./ports/cards";
 export * from "./ports/assets";
 export * from "./ports/sources";
+export * from "./ports/source-details";
 export * from "./ports/source-sync-state";
 export * from "./ports/synchronization";
 export * from "./ports/history";

@@ -1,91 +1,13 @@
-import type {
-  AssetSources,
-  AssetSourceSummary,
-  ManualAssetRecord,
-  DailyAssetTrendObservation,
-  AssetSourceLifecycle,
-  AssetSynchronization,
-  AssetSourceConnections,
-  AssetFullRefreshState,
-  ManualAssetRecords,
-  BitReadOnly,
-  BinanceReadOnly,
-  BitgetReadOnly,
-  EvmWatchWalletReadOnly,
-  OkxReadOnly,
-  AssetCardStore,
-  Clock,
-  DailyAssetSnapshots,
-  ExternalServiceConfiguration,
-  FormalDailySettlementRunner,
-  FormalSettlementExecutions,
-  FormalSettlementScheduler,
-  FormalDailySettlements,
-  InvestmentCashflows,
-  LongbridgeBenchmarkCandlestickReader,
-  LongbridgeHoldingCandlestickReader,
-  LongbridgeOAuth,
-  OwnerAuth,
-  OwnerCredentialStore,
-  OwnerRecoveryCredentialStore,
-  Prices,
-  SecretStore,
-} from "@/server/ports";
+import type { AppServices } from "@/server/app-services";
 import { createProductionServices } from "@/server/production";
 import { clearAllSessions } from "@/server/auth/session";
-import { LongbridgeOAuthState } from "@/server/asset-sources/longbridge";
-import type { BusinessDataBackup } from "@/server/business-data-backup";
-import type { SourceInvestmentHistory } from "@/domain/source-investment-history";
-import type { SourceInvestmentRecord, SourceInvestmentRecordInput } from "@/domain/source-investment-records";
-import type { AssetSourceOnboarding } from "@/server/asset-source-onboarding";
 import {
   createTestServices,
   type TestServices,
 } from "@/server/testing/fakes";
 
 export type { Card } from "@/server/ports";
-
-/** 应用服务组合根：所有系统边界端口在此装配。 */
-export interface AppServices {
-  clock: Clock;
-  assetCards: AssetCardStore;
-  assetSources: AssetSources;
-  assetSourceDetails?: {
-    readSourceDetail(query: {sourceId: string; from?: string; to?: string}): Promise<{sources: AssetSourceSummary[]; manualRecords: ManualAssetRecord[]; history: DailyAssetTrendObservation[]; firstDay?: string; investmentHistory?: SourceInvestmentHistory | null; investmentRecords: SourceInvestmentRecord[]}>;
-    listSourceInvestmentHistories?(): Promise<SourceInvestmentHistory[]>;
-    listSourceInvestmentRecords(sourceId?: string): Promise<SourceInvestmentRecord[]>;
-    saveSourceInvestmentRecord(sourceId: string, input: SourceInvestmentRecordInput, capturedAt: string): Promise<void>;
-    deleteSourceInvestmentRecord(sourceId: string, id: string): Promise<void>;
-  };
-  assetSourceLifecycle: AssetSourceLifecycle;
-  assetSynchronization: AssetSynchronization;
-  assetFullRefreshState: AssetFullRefreshState;
-  dailyAssetSnapshots: DailyAssetSnapshots;
-  formalDailySettlements: FormalDailySettlements;
-  formalDailySettlementRunner: FormalDailySettlementRunner;
-  formalSettlementExecutions: FormalSettlementExecutions;
-  formalSettlementScheduler: FormalSettlementScheduler;
-  externalServices: ExternalServiceConfiguration;
-  prices: Prices;
-  auth: OwnerAuth;
-  ownerCredentials: OwnerCredentialStore;
-  ownerRecoveryCredentials: OwnerRecoveryCredentialStore;
-  secrets: SecretStore;
-  longbridge: LongbridgeOAuth;
-  longbridgeBenchmarkCandlesticks: LongbridgeBenchmarkCandlestickReader;
-  longbridgeHoldingCandlesticks: LongbridgeHoldingCandlestickReader;
-  longbridgeOAuthState: LongbridgeOAuthState;
-  binance: BinanceReadOnly;
-  okx: OkxReadOnly;
-  bitget: BitgetReadOnly;
-  bit: BitReadOnly;
-  evm: EvmWatchWalletReadOnly;
-  assetSourceConnections: AssetSourceConnections;
-  manualAssetRecords: ManualAssetRecords;
-  investmentCashflows: InvestmentCashflows;
-  assetSourceOnboarding: AssetSourceOnboarding;
-  businessDataBackups: BusinessDataBackup;
-}
+export type { AppServices } from "@/server/app-services";
 
 const GLOBAL_KEY = "__personal_asset_dashboard_services__";
 
@@ -107,12 +29,16 @@ export function isTestEnv(): boolean {
 function hasCurrentServices(
   services: AppServices | null,
 ): services is AppServices {
+  if (services === null) return false;
+  const details = services.assetSourceDetails;
+  const hasDetails =
+    typeof details?.readSourceDetail === "function" &&
+    typeof details?.listSourceInvestmentHistories === "function" &&
+    typeof details?.listSourceInvestmentRecords === "function" &&
+    typeof details?.saveSourceInvestmentRecord === "function" &&
+    typeof details?.deleteSourceInvestmentRecord === "function";
   return (
-    services !== null &&
-    (isTestEnv() || (typeof services.assetSourceDetails?.listSourceInvestmentHistories === "function" &&
-      typeof services.assetSourceDetails?.listSourceInvestmentRecords === "function" &&
-      typeof services.assetSourceDetails?.saveSourceInvestmentRecord === "function" &&
-      typeof services.assetSourceDetails?.deleteSourceInvestmentRecord === "function")) &&
+    (hasDetails || (isTestEnv() && details === undefined)) &&
     services.externalServices !== undefined &&
     typeof services.formalSettlementExecutions?.latest === "function" &&
     typeof services.formalSettlementScheduler?.read === "function" &&

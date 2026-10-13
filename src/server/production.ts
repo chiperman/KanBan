@@ -17,7 +17,7 @@ import { RoutedAssetSourceRefresher } from "@/server/asset-sources/router";
 import { SourceIsolatedAssetSynchronization } from "@/server/asset-synchronization";
 import { SessionOwnerAuth } from "@/server/auth/session-auth";
 import { CredentialFreeBusinessDataBackup } from "@/server/business-data-backup";
-import type { AppServices } from "@/server/composition";
+import type { ProductionAppServices } from "@/server/app-services";
 import { FileOwnerCredentialStore, FileOwnerRecoveryCredentialStore } from "@/server/credentials/owner-store";
 import { FileEncryptedSecretStore, ReadySecretStore } from "@/server/credentials/secret-store";
 import { FileExternalServiceConfiguration } from "@/server/external-service-configuration";
@@ -31,7 +31,7 @@ import { DatabaseAssetSourceConnections, DatabaseAssetSourceLifecycle } from "@/
 
 export function createProductionServices(
   dataDir = process.env.KANBAN_DATA_DIR?.trim() || path.join(process.cwd(), "data"),
-): AppServices {
+): ProductionAppServices {
   hardenLocalDataPermissions(dataDir);
   const databasePath = path.join(dataDir, "dashboard.sqlite");
   const legacyDashboardPath = path.join(dataDir, "dashboard.json");

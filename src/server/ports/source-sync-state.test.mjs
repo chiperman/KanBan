@@ -99,12 +99,14 @@ function callers(synchronization: Root.AssetSynchronization) {
 
 const options = {
   target: ts.ScriptTarget.ES2022,
+  lib: ["lib.dom.d.ts", "lib.dom.iterable.d.ts", "lib.esnext.d.ts"],
   module: ts.ModuleKind.ESNext,
   moduleResolution: ts.ModuleResolutionKind.Bundler,
   strict: true,
   skipLibCheck: true,
   noEmit: true,
   types: [],
+  paths: { "@/*": [path.resolve(directory, "../..", "*")] },
 };
 const host = ts.createCompilerHost(options);
 const getSourceFile = host.getSourceFile.bind(host);
