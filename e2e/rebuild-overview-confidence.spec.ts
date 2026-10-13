@@ -1,5 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
 
+async function anchorFullRefresh(page: Page): Promise<void> {
+  // 固定快照的金额回归不应被页面静默刷新改写；刷新行为由独立用例覆盖。
+  const response = await page.request.post("/test-doubles/refresh", {
+    data: { action: "anchor-full-refresh" },
+  });
+  expect(response.ok()).toBeTruthy();
+}
+
 async function seedOverviewHistory(page: Page): Promise<void> {
   await page.request.post("/test-doubles/reset");
   await page.request.post("/test-doubles/daily-snapshots", {
@@ -49,6 +57,7 @@ async function seedOverviewHistory(page: Page): Promise<void> {
     });
     expect(response.status()).toBe(201);
   }
+  await anchorFullRefresh(page);
 }
 
 async function chooseOption(page: Page, label: string, option: string) {
@@ -91,8 +100,11 @@ test("总览以来源总额为真相，解释今日判断并收口至收益与�
     "+185.00 USD",
   );
   await expect(overview.getByTestId("overview-trend")).toContainText(
-    "可绘制 3 / 7 天",
+    "完整 3 / 7 天",
   );
+  await expect(overview.locator("article").filter({
+    has: page.getByRole("heading", { name: "今日资产变化", exact: true }),
+  })).toContainText("数据不足");
   const overviewTrend = overview.getByTestId("overview-trend");
   await expect(
     overviewTrend.getByRole("heading", {
@@ -130,16 +142,24 @@ test("总览以来源总额为真相，解释今日判断并收口至收益与�
   await expect(overview.getByTestId("overview-current-total")).toContainText(
     "数据不足",
   );
-  await expect(overview.getByTestId("overview-current-total")).toContainText(
-    "长桥参考汇率",
+  await expect(overview.getByTestId("overview-confidence")).toContainText(
+    "无法折算为 CNY",
   );
+  await expect(overview.getByTestId("overview-reporting-rate")).toHaveCount(0);
+  await expect(overview.getByTestId("overview-investment-profit")).toContainText(
+    "数据不足",
+  );
+  await expect(trendPath).toHaveCount(0);
   await expect(overviewTrend).not.toContainText("短趋势");
   await expect(overviewTrend).not.toContainText("暂以 USD 观察提供");
 
   await chooseOption(page, "计价货币", "USD");
   await page.getByRole("button", { name: "隐藏关键信息" }).click();
   await expect(overview).not.toContainText("185.00");
+  await expect(overview).not.toContainText("115.00");
+  await expect(overview).not.toContainText("300.00");
   await expect(overview.getByTestId("overview-trend")).toContainText("趋势已隐藏");
+  await expect(trendPath).toHaveCount(0);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator("body")).toHaveJSProperty(
@@ -204,24 +224,52 @@ test("首页近 7 日趋势显示观测时保存的 CNY 和 HKD 金额", async (
       data: { action: "record-current-observation" },
     });
   }
+  // 当前来源不再提供可靠报告汇率时，历史仍须使用观测时保存的金额。
+  await page.request.post("/test-doubles/valuation?fx=inverse");
+  await anchorFullRefresh(page);
   await page.request.post("/test-doubles/owner-session");
   await page.goto("/");
 
   const trend = page.getByTestId("overview-trend");
   const trendPath = trend.locator(".recharts-line-curve");
 
-  for (const currency of ["CNY", "HKD"]) {
+  for (const [currency, savedAmount] of [
+    ["CNY", "498,140.07 CNY"],
+    ["HKD", "546,328.91 HKD"],
+  ]) {
     await chooseOption(page, "计价货币", currency);
-    await expect(trend).toContainText("可绘制 3 / 7 天");
+    await expect(trend).toContainText("完整 3 / 7 天");
     await expect(trend).not.toContainText(
       "当前计价货币没有可用趋势金额",
     );
     await expect(trend).not.toContainText("暂以 USD 观察提供");
     await expect(trendPath).toHaveCount(1);
+    await expect(page.getByTestId("overview-current-total")).toContainText(
+      "数据不足",
+    );
+    await expect(page.getByTestId("overview-reporting-rate")).toHaveCount(0);
+    const chart = trend.getByRole("img", { name: "近 7 日总资产趋势" });
+    await chart.scrollIntoViewIfNeeded();
+    await chart.focus();
+    for (let index = 0; index < 7; index += 1) await chart.press("ArrowRight");
+    const tooltip = trend.locator(".asset-trend-tooltip");
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip).toContainText("03月04日");
+    await expect(tooltip).toContainText(savedAmount);
+    await chart.press("ArrowLeft");
+    await expect(tooltip).toContainText("03月03日");
+    await expect(tooltip).toContainText("未估值");
+    await expect(tooltip).not.toContainText(savedAmount);
+    await chart.press("ArrowLeft");
+    await expect(tooltip).toContainText("03月02日");
+    await expect(tooltip).toContainText(savedAmount);
+    await chart.press("ArrowLeft");
+    await expect(tooltip).toContainText("03月01日");
+    await expect(tooltip).toContainText(savedAmount);
   }
 });
 
-test("完整日初基准与长桥参考汇率可计算 CNY 和 HKD 今日资产变化", async ({
+test("昨日完整观测与长桥参考汇率可计算 CNY 和 HKD 今日资产变化", async ({
   page,
 }) => {
   await page.request.post("/test-doubles/reset");
@@ -234,8 +282,12 @@ test("完整日初基准与长桥参考汇率可计算 CNY 和 HKD 今日资产�
   await page.request.post("/test-doubles/daily-snapshots", {
     data: { action: "record-current-observation" },
   });
-  await page.request.post("/test-doubles/owner-session");
   await page.request.post("/test-doubles/valuation?scenario=longbridge-cash");
+  await page.request.post("/test-doubles/daily-snapshots", {
+    data: { action: "set-time", iso: "2026-04-02T08:00:00.000Z" },
+  });
+  await anchorFullRefresh(page);
+  await page.request.post("/test-doubles/owner-session");
   await page.goto("/");
 
   const todayChange = page
@@ -244,6 +296,7 @@ test("完整日初基准与长桥参考汇率可计算 CNY 和 HKD 今日资产�
     .filter({
       has: page.getByRole("heading", { name: "今日资产变化" }),
     });
+  await expect(todayChange).toContainText("较 04月01日");
 
   await chooseOption(page, "计价货币", "CNY");
   await expect(todayChange).toContainText("-492,563.73 CNY");
@@ -286,19 +339,24 @@ test("正向今日资产变化也会跟随盈亏颜色设置", async ({ page }) 
   await page.request.post("/test-doubles/daily-snapshots", {
     data: { action: "record-current-observation" },
   });
-  await page.request.post("/test-doubles/owner-session");
   await page.request.post(
     "/test-doubles/valuation?scenario=longbridge-option-quote-unavailable",
   );
+  await page.request.post("/test-doubles/daily-snapshots", {
+    data: { action: "set-time", iso: "2026-04-02T08:00:00.000Z" },
+  });
+  await anchorFullRefresh(page);
+  await page.request.post("/test-doubles/owner-session");
   await page.goto("/");
 
-  const todayChangeMetric = page
+  const todayChange = page
     .getByTestId("portfolio-overview-workspace")
     .locator("article")
     .filter({
       has: page.getByRole("heading", { name: "今日资产变化" }),
-    })
-    .locator(".vibe-metric");
+    });
+  const todayChangeMetric = todayChange.locator(".vibe-metric");
+  await expect(todayChange).toContainText("较 04月01日");
   await expect(todayChangeMetric).toContainText("+69,147.28 USD");
   await expect(todayChangeMetric).toHaveAttribute(
     "data-profit-color-scheme",
@@ -316,6 +374,11 @@ test("正向今日资产变化也会跟随盈亏颜色设置", async ({ page }) 
   await page.goto("/settings");
   await page.getByRole("radio", { name: /绿涨红跌/ }).check();
   await page.goto("/");
+  await expect(todayChangeMetric).toContainText("+69,147.28 USD");
+  await expect(todayChangeMetric).toHaveAttribute(
+    "data-profit-direction",
+    "positive",
+  );
   await expect(todayChangeMetric).toHaveAttribute(
     "data-profit-color-scheme",
     "green-up",
@@ -340,6 +403,9 @@ test("总览保留过期来源总额，标明未估值与明细仅汇总而不�
   await expect(overview.getByTestId("overview-current-total")).not.toContainText(
     "数据不足",
   );
+  await expect(overview.getByTestId("overview-current-total")).toContainText(
+    "35,179.70 USD",
+  );
   await expect(overview.getByTestId("overview-confidence")).toContainText(
     "未估值 1 项",
   );
@@ -349,11 +415,19 @@ test("总览保留过期来源总额，标明未估值与明细仅汇总而不�
   await expect(overview).not.toContainText("总额异常");
 
   await page.request.post("/test-doubles/valuation?scenario=detail-coverage-partial");
+  await anchorFullRefresh(page);
   await page.goto("/");
+  await expect(overview.getByTestId("overview-current-total")).toContainText(
+    "150.00 USD",
+  );
   await expect(overview.getByTestId("overview-source-summary")).toContainText(
     "部分仅汇总",
   );
   await expect(overview.getByTestId("overview-confidence")).toContainText(
-    "已覆盖 1 个来源",
+    "已覆盖 2 个来源",
   );
+  await expect(overview.getByTestId("overview-confidence")).toContainText(
+    "总额完整",
+  );
+  await expect(overview).not.toContainText("总额异常");
 });
