@@ -3,7 +3,7 @@ import type {
   AssetSnapshot,
   ManualAssetClass,
 } from "./assets";
-import type { AssetSourceSyncState } from "./synchronization";
+import type { AssetSourceSyncState } from "./source-sync-state";
 
 /** 外部资产来源的持久化摘要；凭证正文永不进入这个接口。 */
 export interface AssetSourceSummary {
