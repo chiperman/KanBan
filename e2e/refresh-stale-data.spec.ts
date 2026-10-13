@@ -48,6 +48,18 @@ async function metrics(request: APIRequestContext) {
   };
 }
 
+async function expectSummaryAmount(page: Page, sourceId: string, value: string) {
+  const row = page.getByTestId("overview-source-summary").getByRole("listitem").filter({
+    has: page.locator(`a[href="/asset-sources/${sourceId}"]`),
+  });
+  const counter = row.locator('[data-vibe-component="live-counter"]');
+  await expect(counter).toHaveAttribute("data-counter-target", value);
+  await counter.scrollIntoViewIfNeeded();
+  await expect(counter).toHaveAttribute("data-counter-state", "complete");
+  await expect(counter).toHaveText(value);
+  await expect(row).toContainText(`${value} USD`);
+}
+
 async function setVisibility(page: Page, state: "visible" | "hidden") {
   await page.evaluate((nextState) => {
     const scope = window as typeof window & { __testVisibility?: string };
@@ -204,9 +216,9 @@ test("部分失败保留最后成功数据并标记过期，手动刷新可见�
   await expect(overview).toContainText("过期来源 1 个");
   const sourceSummary = page.getByTestId("overview-source-summary");
   await expect(sourceSummary).toContainText("Alpha Securities");
-  await expect(sourceSummary).toContainText("110.00 USD");
+  await expectSummaryAmount(page, "source-alpha", "110.00");
   await expect(sourceSummary).toContainText("Beta Crypto");
-  await expect(sourceSummary).toContainText("200.00 USD");
+  await expectSummaryAmount(page, "source-beta", "200.00");
   await expect(sourceSummary).toContainText("同步失败 · 数据过期");
 
   await request.post("/test-doubles/refresh", {
@@ -223,11 +235,12 @@ test("部分失败保留最后成功数据并标记过期，手动刷新可见�
 
   await expect(refreshStatus).toHaveText("刷新完成");
   await expect(refreshStatus).toHaveAttribute("data-vibe-tone", "success");
-  await expect(refresh).toContainText("立即刷新资产");
+  await expect(refresh).toHaveAccessibleName("立即刷新资产");
   await expect(refresh).toBeEnabled();
   await expect(overview).toContainText("330.00 USD");
   await expect(overview).not.toContainText("过期来源 1 个");
-  await expect(sourceSummary).toContainText("210.00 USD");
+  await expectSummaryAmount(page, "source-alpha", "120.00");
+  await expectSummaryAmount(page, "source-beta", "210.00");
   await expect(sourceSummary).not.toContainText("同步失败 · 数据过期");
 });
 
@@ -330,9 +343,10 @@ test("挂起来源超时不阻塞成功提交，刷新期间新增来源也不�
   const overview = page.getByRole("region", { name: "总资产" });
   await expect(overview).toContainText("361.00 USD");
   const sourceSummary = page.getByTestId("overview-source-summary");
-  await expect(sourceSummary).toContainText("110.00 USD");
+  await expectSummaryAmount(page, "source-alpha", "110.00");
   await expect(sourceSummary).toContainText("同步失败 · 数据过期");
-  await expect(sourceSummary).toContainText("50.00 USD");
+  await expectSummaryAmount(page, "source-beta", "201.00");
+  await expectSummaryAmount(page, "source-gamma", "50.00");
 });
 
 test("未认证状态不能触发同步，也不会收到来源刷新状态", async ({ page, request }) => {

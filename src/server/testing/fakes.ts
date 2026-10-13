@@ -202,7 +202,7 @@ export class InMemoryDailyAssetSnapshots implements DailyAssetSnapshots {
       left.day.localeCompare(right.day),
     );
     this.trendObservations = [
-      ...this.trendObservations,
+      ...this.trendObservations.filter(({ day }) => day !== snapshot.day),
       structuredClone(snapshot),
     ].sort((left, right) => left.day.localeCompare(right.day));
     return true;

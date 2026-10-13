@@ -23,17 +23,19 @@ async function attachPasskey(page: Page): Promise<CDPSession> {
   return client;
 }
 
-async function loginAsOwner(page: Page): Promise<void> {
+async function loginAsOwner(page: Page, automaticFailureCount?: number): Promise<void> {
   await attachPasskey(page);
   await page.goto("/setup");
   await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
   await expect(page.getByRole("status")).toContainText("预置完成");
   await page.goto("/");
-  await unlockAsOwner(page);
+  await unlockAsOwner(page, automaticFailureCount);
 }
 
-async function unlockAsOwner(page: Page): Promise<void> {
-
+async function unlockAsOwner(page: Page, automaticFailureCount?: number): Promise<void> {
+  const refreshed = automaticFailureCount === undefined
+    ? null
+    : waitForRefreshReport(page, automaticFailureCount);
   const [verification] = await Promise.all([
     page.waitForResponse((response) =>
       response.url().endsWith("/api/auth/login/verify"),
@@ -42,6 +44,11 @@ async function unlockAsOwner(page: Page): Promise<void> {
   ]);
   expect(verification.ok()).toBeTruthy();
   await expect(page.getByTestId("workbench-shell")).toBeVisible();
+  if (refreshed !== null) {
+    await refreshed;
+    await expect(page.getByTestId("asset-refresh-status")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "立即刷新资产" })).toBeEnabled();
+  }
 }
 
 async function configure(
@@ -90,20 +97,18 @@ async function waitForRefreshReport(
   page: Page,
   expectedFailureCount: number,
 ): Promise<void> {
-  while (true) {
-    const response = await page.waitForResponse((candidate) =>
-      candidate.url().endsWith("/api/asset-sources/refresh") &&
-      candidate.request().method() === "POST"
-    );
-    expect(response.ok()).toBeTruthy();
-    const report = await response.json().catch(() => null) as {
-      failureCount?: unknown;
-    } | null;
-    if (report?.failureCount === expectedFailureCount) return;
-  }
+  const response = await page.waitForResponse((candidate) =>
+    candidate.url().endsWith("/api/asset-sources/refresh") &&
+    candidate.request().method() === "POST"
+  );
+  expect(response.ok()).toBeTruthy();
+  const report = await response.json();
+  expect(report).toMatchObject({ failureCount: expectedFailureCount });
+  expect(report).not.toHaveProperty("skipped");
 }
 
 async function manualRefresh(page: Page, expectedFailureCount = 0) {
+  await expect(page.getByRole("button", { name: "立即刷新资产" })).toBeEnabled();
   const completed = waitForRefreshReport(page, expectedFailureCount);
   await page.getByRole("button", { name: "立即刷新资产" }).click();
   await completed;
@@ -114,6 +119,23 @@ async function manualRefresh(page: Page, expectedFailureCount = 0) {
         ? "刷新失败"
         : "部分来源刷新失败",
   );
+}
+
+async function refreshMetrics(request: APIRequestContext) {
+  const response = await request.get("/test-doubles/refresh");
+  expect(response.ok()).toBeTruthy();
+  return await response.json() as { adapterCalls: number; active: number };
+}
+
+async function latestTrendTooltip(page: Page) {
+  const trend = page.getByTestId("overview-trend");
+  const chart = trend.getByRole("img", { name: "近 7 日总资产趋势" });
+  await chart.scrollIntoViewIfNeeded();
+  await chart.focus();
+  for (let index = 0; index < 7; index += 1) await chart.press("ArrowRight");
+  const tooltip = trend.locator(".asset-trend-tooltip");
+  await expect(tooltip).toBeVisible();
+  return tooltip;
 }
 
 async function openSourceDetail(page: Page, label: string): Promise<void> {
@@ -190,21 +212,24 @@ test("当天部分成功的资产总额会作为今日变化兜底", async ({
     data: { action: "partial-failure" },
   });
 
-  await loginAsOwner(page);
+  await loginAsOwner(page, 1);
   await manualRefresh(page, 1);
   expect((await history(request)).trendObservations).toEqual(expect.arrayContaining([
     expect.objectContaining({
       day: "2026-08-06",
-      complete: false,
+      complete: true,
       status: "expired",
-      total: { USD: "310", CNY: null, HKD: null },
+      capturedAt: "2026-08-06T12:00:00.000Z",
+      total: { USD: "310", CNY: "2232", HKD: "2418" },
     }),
   ]));
+  const beforeFailure = await history(request);
 
   await request.post("/test-doubles/daily-snapshots", {
     data: { action: "fail-all" },
   });
   await manualRefresh(page, 2);
+  expect(await history(request)).toEqual(beforeFailure);
 
   const change = page.getByRole("heading", { name: "今日资产变化" }).locator("..");
   const issues = change.getByTestId("overview-today-change-issues");
@@ -236,7 +261,13 @@ test("当天完整观测不会因后续刷新失败而失去资产变化", async
   });
   expect(todayObservation.ok()).toBeTruthy();
 
-  await loginAsOwner(page);
+  await loginAsOwner(page, 0);
+  const beforeFailure = await history(request);
+  expect(beforeFailure.trendObservations.at(-1)).toMatchObject({
+    complete: true,
+    status: "complete",
+    total: { USD: "302", CNY: "2174.4", HKD: "2355.6" },
+  });
   await request.post("/test-doubles/daily-snapshots", {
     data: { action: "partial-failure" },
   });
@@ -244,14 +275,15 @@ test("当天完整观测不会因后续刷新失败而失去资产变化", async
   expect((await history(request)).trendObservations).toEqual(expect.arrayContaining([
     expect.objectContaining({
       day: "2026-08-06",
-      complete: false,
+      complete: true,
       status: "expired",
-      total: { USD: "300", CNY: "2160", HKD: "2340" },
+      total: { USD: "302", CNY: "2174.4", HKD: "2355.6" },
     }),
   ]));
+  expect((await history(request)).baselines).toEqual(beforeFailure.baselines);
 
   const change = page.getByRole("heading", { name: "今日资产变化" }).locator("..");
-  await expect(change).toContainText("+0.00 USD");
+  await expect(change).toContainText("+2.00 USD");
   await expect(change).toContainText("较 08月05日");
   await expect(change).toContainText("当前刷新有失败");
   await expect(change).toContainText("变化截至");
@@ -270,16 +302,18 @@ test("缺少昨日观测时回退到最近完整记录，并明确累计间隔",
   expect(priorObservation.ok()).toBeTruthy();
   await setServerTime(request, "2026-08-18T12:00:00.000Z");
 
-  await loginAsOwner(page);
-  await manualRefresh(page);
+  await loginAsOwner(page, 0);
+  expect(await refreshMetrics(request)).toMatchObject({ adapterCalls: 2, active: 0 });
 
   const change = page
     .getByRole("heading", { name: "自上次完整记录以来资产变化" })
     .locator("..");
   await expect(change).toContainText("+2.00 USD");
-  await expect(change).toContainText(
-    "相对上次完整记录（08月15日，间隔 3 天）以来",
-  );
+  await expect(change).toContainText("较 08月15日（3 日）");
+  await manualRefresh(page);
+  expect(await refreshMetrics(request)).toMatchObject({ adapterCalls: 4, active: 0 });
+  await expect(change).toContainText("+4.00 USD");
+  await expect(change).toContainText("较 08月15日（3 日）");
 });
 
 test("没有每日趋势观测时提示首次成功同步", async ({ page, request }) => {
@@ -381,10 +415,7 @@ test("北京时间日界线建立唯一基准，同日幂等且跨日不回填",
   request,
 }) => {
   await configure(request);
-  await loginAsOwner(page);
-  await expect(page.getByTestId("asset-refresh-status")).toContainText(
-    "同步完成",
-  );
+  await loginAsOwner(page, 0);
 
   await expect(page.getByTestId("overview-trend")).toContainText(
     "04月01日",
@@ -396,9 +427,7 @@ test("北京时间日界线建立唯一基准，同日幂等且跨日不回填",
   expect((await history(request)).trendObservations[0].total.HKD).toBe("2355.6");
   await chooseOverviewOption(page, "计价货币", "CNY");
   await chooseOverviewOption(page, "计价货币", "HKD");
-  await expect(page.getByTestId("overview-trend")).toContainText(
-    "2,355.60 HKD",
-  );
+  await expect(await latestTrendTooltip(page)).toContainText("2,355.60 HKD");
   await chooseOverviewOption(page, "计价货币", "USD");
   const persistence = await request.post("/test-doubles/daily-snapshots", {
     data: { action: "production-persistence" },
@@ -435,10 +464,7 @@ test("北京时间日界线建立唯一基准，同日幂等且跨日不回填",
     data: { action: "fail-all" },
   });
   await page.goto("/");
-  await unlockAsOwner(page);
-  await expect(page.getByTestId("asset-refresh-status")).toContainText(
-    "2 个来源失败",
-  );
+  await unlockAsOwner(page, 2);
   expect((await history(request)).days.map(({ day }) => day)).toEqual([
     "2026-04-01",
     "2026-04-02",
@@ -465,10 +491,7 @@ test("同日后续成功刷新只更新每日趋势观测，失败保留最后�
   request,
 }) => {
   await configure(request);
-  await loginAsOwner(page);
-  await expect(page.getByTestId("asset-refresh-status")).toContainText(
-    "同步完成",
-  );
+  await loginAsOwner(page, 0);
 
   const before = await history(request);
   expect(before.baselines).toMatchObject([{
@@ -509,63 +532,45 @@ test("同日后续成功刷新只更新每日趋势观测，失败保留最后�
     (await history(request)).trendObservations,
   ).toMatchObject([{
     day: "2026-04-01",
-    capturedAt: "2026-04-01T15:59:57.000Z",
-    complete: false,
+    capturedAt: "2026-04-01T15:59:55.000Z",
+    complete: true,
     status: "expired",
-    total: { USD: "312" },
+    total: { USD: "304", CNY: "2188.8", HKD: "2371.2" },
     sources: [
       {
         sourceId: "source-alpha",
-        capturedAt: "2026-04-01T15:59:57.000Z",
+        capturedAt: "2026-04-01T15:59:55.000Z",
         complete: true,
         status: "complete",
-        total: { USD: "110" },
+        total: { USD: "102" },
       },
       {
         sourceId: "source-beta",
         capturedAt: "2026-04-01T15:59:55.000Z",
-        complete: false,
+        complete: true,
         status: "expired",
         total: { USD: "202" },
       },
     ],
   }]);
-  const trend = page.getByTestId("overview-trend");
-  await expect(trend).toContainText("1 天不完整或过期");
-  await expect(trend).toContainText("04月01日");
-  await expect(trend).toContainText("312.00 USD");
-  await expect(trend).toContainText("过期");
+  const afterPartialFailure = await history(request);
+  expect(afterPartialFailure.baselines).toEqual(before.baselines);
+  await expect(page.getByTestId("overview-current-total")).toContainText("312.00 USD");
+  const tooltip = await latestTrendTooltip(page);
+  await expect(tooltip).toContainText("04月01日");
+  await expect(tooltip).toContainText("304.00 USD");
+  await expect(tooltip).toContainText("过期");
 
   await request.post("/test-doubles/daily-snapshots", {
     data: { action: "fail-all" },
   });
   await setServerTime(request, "2026-04-01T15:59:58.000Z");
   await manualRefresh(page, 2);
-  await expect.poll(async () =>
-    (await history(request)).trendObservations,
-  ).toMatchObject([{
-    day: "2026-04-01",
-    capturedAt: "2026-04-01T15:59:57.000Z",
-    total: { USD: "312" },
-    complete: false,
-    status: "expired",
-    sources: [
-      {
-        sourceId: "source-alpha",
-        capturedAt: "2026-04-01T15:59:57.000Z",
-        complete: false,
-        status: "expired",
-        total: { USD: "110" },
-      },
-      {
-        sourceId: "source-beta",
-        capturedAt: "2026-04-01T15:59:55.000Z",
-        complete: false,
-        status: "expired",
-        total: { USD: "202" },
-      },
-    ],
-  }]);
+  expect(await history(request)).toEqual(afterPartialFailure);
+  await expect(page.getByTestId("overview-current-total")).toContainText("312.00 USD");
+  await expect(page.getByTestId("overview-source-summary").getByText(
+    /同步失败 · 数据过期/,
+  )).toHaveCount(2);
 });
 
 test("首轮部分失败不冻结日初基准，首次完整同步才建立", async ({
@@ -578,12 +583,15 @@ test("首轮部分失败不冻结日初基准，首次完整同步才建立", as
   });
   expect(partialFailure.ok()).toBeTruthy();
 
-  await loginAsOwner(page);
-  await expect(page.getByTestId("asset-refresh-status")).toContainText(
-    "同步完成 · 1 个来源失败",
-  );
+  await loginAsOwner(page, 1);
   expect((await history(request)).baselines).toEqual([]);
-  expect((await history(request)).trendObservations).toEqual([]);
+  expect((await history(request)).trendObservations).toMatchObject([{
+    day: "2026-04-01",
+    capturedAt: "2026-04-01T15:59:50.000Z",
+    complete: true,
+    status: "expired",
+    total: { USD: "310", CNY: "2232", HKD: "2418" },
+  }]);
 
   await request.post("/test-doubles/daily-snapshots", {
     data: { action: "recover" },
@@ -634,13 +642,12 @@ test("未估值趋势不伪造零值，平台盈亏只出现在来源提供的�
   await request.post("/test-doubles/daily-snapshots", {
     data: { action: "add-unvalued-source" },
   });
-  await loginAsOwner(page);
-  await expect(page.getByTestId("asset-refresh-status")).toContainText(
-    "同步完成",
-  );
+  await loginAsOwner(page, 0);
 
   const snapshot = await history(request);
-  const unvalued = snapshot.days[0].sources.find(
+  expect(snapshot.baselines).toEqual([]);
+  expect(snapshot.trendObservations).toHaveLength(1);
+  const unvalued = snapshot.trendObservations[0].sources.find(
     ({ sourceId }) => sourceId === "source-unvalued",
   );
   expect(unvalued).toMatchObject({
@@ -683,10 +690,7 @@ test("缺少可靠 HKD 汇率时趋势金额不可用且观测不完整", async 
 
 test("历史 HKD 金额固定使用各自观测时汇率", async ({ page, request }) => {
   await configure(request);
-  await loginAsOwner(page);
-  await expect(page.getByTestId("asset-refresh-status")).toContainText(
-    "同步完成",
-  );
+  await loginAsOwner(page, 0);
 
   await setServerTime(request, "2026-04-02T16:00:00.000Z");
   const updated = await request.post("/test-doubles/daily-snapshots", {
@@ -694,17 +698,19 @@ test("历史 HKD 金额固定使用各自观测时汇率", async ({ page, reques
   });
   expect(updated.ok()).toBeTruthy();
   await page.goto("/");
-  await unlockAsOwner(page);
+  await unlockAsOwner(page, 0);
 
   await chooseOverviewOption(page, "计价货币", "HKD");
   const overview = page.getByTestId("overview-current-total");
   await expect(overview).toContainText("USD/HKD 8.0000");
-  await expect(page.getByTestId("overview-trend")).toContainText(
-    "2,355.60 HKD",
-  );
-  await expect(page.getByTestId("overview-trend")).toContainText(
-    "2,432.00 HKD",
-  );
+  const tooltip = await latestTrendTooltip(page);
+  await expect(tooltip).toContainText("04月03日");
+  await expect(tooltip).toContainText("2,432.00 HKD");
+  const chart = page.getByTestId("overview-trend").getByRole("img");
+  await chart.press("ArrowLeft");
+  await chart.press("ArrowLeft");
+  await expect(tooltip).toContainText("04月01日");
+  await expect(tooltip).toContainText("2,355.60 HKD");
   expect((await history(request)).trendObservations.map(({ total }) => total.HKD))
     .toEqual(["2355.6", "2432"]);
 });
@@ -717,10 +723,7 @@ test("期权行情未接入不降低每日总额观测完整性", async ({
   await request.post("/test-doubles/daily-snapshots", {
     data: { action: "add-option-quote-unavailable-source" },
   });
-  await loginAsOwner(page);
-  await expect(page.getByTestId("asset-refresh-status")).toContainText(
-    "同步完成",
-  );
+  await loginAsOwner(page, 0);
 
   const snapshot = await history(request);
   const optionSource = snapshot.days[0].sources.find(
@@ -745,12 +748,12 @@ test("来源确认的首次可信快照先建基准，随后刷新全失败也�
     day: "2026-04-01",
     total: { USD: "88" },
   }]);
+  const beforeFailure = await history(request);
+  await setServerTime(request, "2026-04-01T16:59:50.000Z");
 
-  await loginAsOwner(page);
-  await expect(page.getByTestId("asset-refresh-status")).toContainText(
-    "同步完成 · 1 个来源失败",
-  );
-  expect((await history(request)).days).toHaveLength(1);
+  await loginAsOwner(page, 1);
+  expect(await refreshMetrics(request)).toMatchObject({ adapterCalls: 1, active: 0 });
+  expect(await history(request)).toEqual(beforeFailure);
 });
 
 test("同日新增来源从首次成功同步开始加入来源趋势但不改写总基准", async ({
@@ -758,10 +761,7 @@ test("同日新增来源从首次成功同步开始加入来源趋势但不改�
   request,
 }) => {
   await configure(request);
-  await loginAsOwner(page);
-  await expect(page.getByTestId("asset-refresh-status")).toContainText(
-    "同步完成",
-  );
+  await loginAsOwner(page, 0);
   const original = (await history(request)).days[0];
 
   await request.post("/test-doubles/daily-snapshots", {
