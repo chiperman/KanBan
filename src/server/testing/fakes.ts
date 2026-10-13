@@ -2078,9 +2078,6 @@ export class InMemoryAssetSourceLifecycle implements AssetSourceLifecycle {
     if (source.kind === "manual") {
       throw new Error("手工资产记录不支持断开");
     }
-    if (source.credentialReference !== null) {
-      await this.secrets.remove(source.credentialReference);
-    }
     await this.sources.update({ ...source, lifecycle: "disconnected" });
     await this.clearCycleWhenNoRefreshableSources();
   }

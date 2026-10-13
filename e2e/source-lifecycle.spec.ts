@@ -105,11 +105,11 @@ test("所有者可自定义资产来源名称并清空恢复默认名称", async
   await management.getByRole("button", { name: "保存名称" }).click();
 
   await expect(
-    page.getByTestId("ethereum-watch-card").getByRole("heading"),
+    page.getByTestId("ethereum-watch-card").getByRole("heading", { level: 2 }),
   ).toHaveText("长期钱包");
   await page.reload();
   await expect(
-    page.getByTestId("ethereum-watch-card").getByRole("heading"),
+    page.getByTestId("ethereum-watch-card").getByRole("heading", { level: 2 }),
   ).toHaveText("长期钱包");
 
   management = await openSourceManagement(page, "长期钱包");
@@ -117,7 +117,7 @@ test("所有者可自定义资产来源名称并清空恢复默认名称", async
   await management.getByRole("button", { name: "保存名称" }).click();
 
   await expect(
-    page.getByTestId("ethereum-watch-card").getByRole("heading"),
+    page.getByTestId("ethereum-watch-card").getByRole("heading", { level: 2 }),
   ).toHaveText("Ethereum 观察钱包 · 1 个地址");
 });
 
@@ -180,6 +180,8 @@ test("隐藏与恢复只改变卡片可见性，来源仍同步并计入总额�
 test("断开 EVM 观察钱包时保留公开地址配置、来源身份和已有快照", async ({ page }) => {
   await loginAsOwner(page);
   await connectEthereum(page);
+  const originalId = (await lifecycleState(page)).sources[0].id;
+  const historyBeforeDisconnect = await prepareCompleteHistory(page.request, [originalId]);
 
   await expect(page.getByRole("button", { name: "断开 Ethereum 观察钱包" })).toHaveCount(0);
   const management = await openSourceManagement(page, "Ethereum 观察钱包");
@@ -208,13 +210,14 @@ test("断开 EVM 观察钱包时保留公开地址配置、来源身份和已有
   expect(disconnected.sources).toHaveLength(1);
   expect(disconnected.sources[0].lifecycle).toBe("disconnected");
   expect(disconnected.savedSecrets).toBe(1);
-  expect(disconnected.snapshotSourceIds).toEqual([disconnected.sources[0].id]);
+  expect(disconnected.snapshotSourceIds).toEqual([originalId, REPORTING_RATE_SOURCE_ID]);
+  expect(await expectCompleteHistory(page.request, [originalId])).toEqual(historyBeforeDisconnect);
 
   const callsBeforeRefresh = disconnected.refreshCalls;
   const refresh = await page.request.post("/api/asset-sources/refresh", {
     data: { mode: "all" },
   });
-  await expect(refresh.json()).resolves.toEqual({ successCount: 0, failureCount: 0 });
+  await expect(refresh.json()).resolves.toEqual({ successCount: 0, failureCount: 0, skipped: "no-sources" });
   expect((await lifecycleState(page)).refreshCalls).toBe(callsBeforeRefresh);
   await expect(page.getByTestId("total-overview-card")).toContainText("5,519");
 });
@@ -224,6 +227,8 @@ test("已断开的 EVM 观察钱包恢复原卡片和历史", async ({
 }) => {
   await loginAsOwner(page);
   await connectEthereum(page);
+  const originalId = (await lifecycleState(page)).sources[0].id;
+  const historyBeforeDisconnect = await prepareCompleteHistory(page.request, [originalId]);
   const before = await lifecycleState(page);
   const original = before.sources[0]!;
 
@@ -243,13 +248,20 @@ test("已断开的 EVM 观察钱包恢复原卡片和历史", async ({
     .click();
 
   await expect(page.getByText("已断开 · 历史数据保留")).toHaveCount(0);
+  const refreshResponse = page.waitForResponse((response) =>
+    response.url().endsWith("/api/asset-sources/refresh") && response.request().method() === "POST",
+  );
+  await page.getByRole("button", { name: "刷新 Ethereum 观察钱包 · 1 个地址", exact: true }).click();
+  await expect((await refreshResponse).json()).resolves.toMatchObject({ successCount: 1, failureCount: 0 });
   const restored = await lifecycleState(page);
   expect(restored.sources).toHaveLength(1);
   expect(restored.sources[0]?.id).toBe(original.id);
   expect(restored.sources[0]?.lifecycle).toBe("connected");
   expect(restored.savedSecrets).toBe(1);
   expect(restored.refreshCalls).toBeGreaterThan(before.refreshCalls);
-  expect(restored.snapshotSourceIds).toEqual([original.id]);
+  expect(restored.cards).toEqual(before.cards);
+  expect(restored.snapshotSourceIds).toEqual([original.id, REPORTING_RATE_SOURCE_ID]);
+  expect(await expectCompleteHistory(page.request, [original.id])).toEqual(historyBeforeDisconnect);
 });
 
 test("原凭证不存在时重新输入相同公开地址，恢复原卡片和历史", async ({

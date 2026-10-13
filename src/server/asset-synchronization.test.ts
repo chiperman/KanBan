@@ -329,6 +329,65 @@ async function synchronizationFixture(input: {
   };
 }
 
+for (const failedMode of ["holdings", "all"] as const) {
+  test(`行情失败及恢复不清除此前的 ${failedMode} 失败，持仓恢复才解除过期`, async () => {
+    let failing = true;
+    const fixture = await synchronizationFixture({
+      refresher: {
+        refresh: async ({ source, attemptedAt }) => {
+          if (failing && source.id === "source-alpha") throw new Error("余额读取失败");
+          return { snapshot: {
+            ...source.snapshot,
+            total: { amount: "125", currency: "USD" },
+            syncedAt: attemptedAt,
+          } };
+        },
+      },
+    });
+    await fixture.synchronization.refresh(failedMode);
+    const failed = structuredClone((await fixture.sources.list())[0].sync);
+    assert.equal(failed.status, "expired");
+    assert.equal(failed.failedMode, failedMode);
+
+    fixture.clock.set("2026-08-20T05:00:00.000Z");
+    await fixture.synchronization.refresh("prices");
+    assert.equal((await fixture.sources.list())[0].sync.failedMode, failedMode);
+    failing = false;
+    fixture.clock.set("2026-08-20T06:00:00.000Z");
+    await fixture.synchronization.refresh("prices");
+    const [stale, healthy] = await fixture.sources.list();
+    assert.equal(stale.snapshot.total.amount, "125");
+    assert.equal(stale.snapshot.syncedAt, "2026-08-20T06:00:00.000Z");
+    assert.equal(stale.sync.status, "expired");
+    assert.equal(stale.sync.failedMode, failedMode);
+    assert.equal(stale.sync.error, failed.error);
+    assert.deepEqual(stale.sync.diagnostic, failed.diagnostic);
+    assert.equal(stale.sync.lastSuccessfulAt, failed.lastSuccessfulAt);
+    assert.equal(stale.sync.lastAttemptAt, "2026-08-20T06:00:00.000Z");
+    assert.equal(stale.sync.recentAttempts?.at(-1)?.outcome, "success");
+    assert.equal(healthy.sync.status, "current");
+
+    await fixture.synchronization.refresh("holdings");
+    const recovered = (await fixture.sources.list())[0].sync;
+    assert.equal(recovered.status, "current");
+    assert.equal(recovered.failedMode, null);
+    assert.equal(recovered.error, null);
+    assert.equal(recovered.diagnostic, null);
+    assert.equal(recovered.lastSuccessfulAt, "2026-08-20T06:00:00.000Z");
+  });
+}
+
+test("仅行情失败可由后续成功行情刷新恢复", async () => {
+  const fixture = await synchronizationFixture();
+  fixture.refresher.configure("partial-failure");
+  await fixture.synchronization.refresh("prices");
+  assert.equal((await fixture.sources.list())[1].sync.failedMode, "prices");
+  fixture.refresher.configure("schedule");
+  await fixture.synchronization.refresh("prices");
+  assert.equal((await fixture.sources.list())[1].sync.status, "current");
+  assert.equal((await fixture.sources.list())[1].sync.error, null);
+});
+
 test("完整全量批次冻结当天首个基准并更新趋势", async () => {
   const fixture = await synchronizationFixture();
   fixture.refresher.configure("schedule");

@@ -209,6 +209,7 @@ export function AssetSourceFlow({
   }
 
   function backToChoice() {
+    setProviderId("");
     setError("");
     setStep("choose");
   }

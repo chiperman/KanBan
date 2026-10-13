@@ -202,38 +202,25 @@ test("全局持仓搜索筛选 Binance 明细", async ({ page }) => {
     .getByRole("button", { name: "确认并保存" })
     .click();
 
-  const layout = await page.request.post("/test-doubles/asset-cards", {
-    data: {
-      assetCards: [{
-        id: "test-binance-card-test-binance-source-1",
-        kind: "asset",
-        title: "Binance 资产",
-        body: "投资产品明细、钱包守恒与覆盖状态",
-        sourceId: "test-binance-source-1",
-        span: 3,
-      }],
-    },
-  });
-  expect(layout.ok()).toBeTruthy();
-  await page.goto("/");
-
   const card = page.getByTestId("binance-card");
-  const details = card.getByTestId("asset-holdings-detail");
+  const bitcoin = card.getByTestId("asset-holdings-detail").locator("tbody tr").filter({ hasText: "BTC" });
+  await expect(bitcoin.locator("td").nth(4)).toContainText(/^49,949\.90?(?:\s|$)/);
+  await expect(bitcoin).toContainText("现货成交计算");
+  await expect(card.getByRole("searchbox")).toHaveCount(0);
+  await page.goto("/assets");
+
+  const details = page.getByTestId("assets-holdings-table");
   const search = page.getByRole("searchbox", { name: "搜索全部持仓" });
   await expect(search).toBeVisible();
-  await expect(card.getByRole("searchbox")).toHaveCount(0);
-  const bitcoin = details.locator("tbody tr").filter({ hasText: "BTC" });
-  await expect(bitcoin).toContainText("49,949.90");
-  await expect(bitcoin).toContainText("现货成交计算");
   const totalRows = await details.locator("tbody tr").count();
   expect(totalRows).toBeGreaterThan(1);
 
-  await search.fill("BTC");
+  await search.fill(" btc ");
   await expect(details.locator("tbody tr")).toHaveCount(1);
   await expect(details).toContainText("BTC");
 
   await search.fill("not-a-holding");
-  await expect(details.getByTestId("asset-holdings-search-empty")).toBeVisible();
+  await expect(page.getByTestId("assets-holdings-empty")).toBeVisible();
   await expect(details.locator("tbody tr")).toHaveCount(0);
 
   await search.fill("");

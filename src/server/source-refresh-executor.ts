@@ -94,10 +94,15 @@ export class SourceRefreshExecutor {
           durationMs, diagnostic,
         };
         const recentAttempts = [...(current.sync.recentAttempts ?? []), record].slice(-ASSET_SYNC_ATTEMPT_LIMIT);
+        // A quote update cannot repair a failed balance/position observation.
+        const retainHoldingsFailure = mode === "prices" && current.sync.status === "expired" &&
+          (current.sync.failedMode === "holdings" || current.sync.failedMode === "all");
         if (result !== undefined) {
           await this.sources.update({
             ...current, snapshot: result.snapshot,
-            sync: {
+            sync: retainHoldingsFailure ? {
+              ...current.sync, lastAttemptAt: attemptedAt, recentAttempts,
+            } : {
               status: "current", lastSuccessfulAt: result.snapshot.syncedAt,
               lastAttemptAt: attemptedAt, error: null, failedMode: null,
               diagnostic: null, recentAttempts,
@@ -107,7 +112,9 @@ export class SourceRefreshExecutor {
         }
         await this.sources.update({
           ...current,
-          sync: {
+          sync: retainHoldingsFailure ? {
+            ...current.sync, lastAttemptAt: attemptedAt, recentAttempts,
+          } : {
             ...current.sync, status: "expired", lastAttemptAt: attemptedAt,
             error: assetSyncErrorMessage(diagnostic!), failedMode: mode,
             diagnostic, recentAttempts,

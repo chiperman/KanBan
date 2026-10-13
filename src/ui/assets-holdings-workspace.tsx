@@ -29,6 +29,7 @@ import { sourceSyncStatus } from "@/ui/asset-source-status";
 import { formatShanghaiDateTime } from "@/ui/shanghai-date-time";
 import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
 import {
+  VibeField,
   VibeSelect,
   type VibeSelectOption,
 } from "@/ui/vibe/vibe-field";
@@ -337,6 +338,7 @@ export function AssetsHoldingsWorkspace({
     showSensitiveInfo,
   } = useWorkbenchDisplayPreferences();
   const [sourceId, setSourceId] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [assetClass, setAssetClass] = useState<AssetClassFilter>("all");
   const [valuation, setValuation] = useState<ValuationFilter>("all");
   const { active: realtimeActive, liveSources, state: realtimeState, retry } = useLongbridgeRealtime(sources);
@@ -374,6 +376,13 @@ export function AssetsHoldingsWorkspace({
   const filteredObservations = useMemo(
     () =>
       observations
+        .filter(({ holding, source }) => {
+          const query = searchQuery.trim().toLocaleLowerCase();
+          return query === "" || [
+            source.label, source.displayName, assetHoldingDisplayName(holding),
+            holding.symbol, holding.sourceAsset, holding.sourceAccount, holding.sourceProduct,
+          ].some((value) => value?.toLocaleLowerCase().includes(query));
+        })
         .filter((item) => sourceId === "all" || item.source.id === sourceId)
         .filter(
           (item) =>
@@ -406,6 +415,7 @@ export function AssetsHoldingsWorkspace({
       currency,
       observations,
       reportingRates,
+      searchQuery,
       sourceId,
       valuation,
     ],
@@ -498,6 +508,13 @@ export function AssetsHoldingsWorkspace({
         </header>
 
         <div className="assets-holdings__filters" aria-label="持仓筛选">
+          <VibeField
+            fieldId="assets-holdings-search"
+            label="搜索全部持仓"
+            onChange={(event) => setSearchQuery(event.target.value)}
+            type="search"
+            value={searchQuery}
+          />
           <VibeSelect
             fieldId="assets-source-filter"
             label="资产来源"

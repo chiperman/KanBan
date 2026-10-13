@@ -1677,6 +1677,7 @@ html {
     min-width: 0;
   }
 
+  .assets-holdings__filters > .vibe-field,
   .assets-holdings__filters > .vibe-select:last-of-type,
   .assets-holdings__filters > p {
     grid-column: 1 / -1;
