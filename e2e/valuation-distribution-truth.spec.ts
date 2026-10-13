@@ -91,6 +91,10 @@ test("来源总额、严格长桥汇率与未估值明细在新工作区分层�
   await expect(holdings).toContainText("Tether");
   await expect(holdings).toContainText("Mystery Token");
   await expect(holdings).toContainText("未估值");
+  const evidence = holdings.getByRole("button", { name: "查看 Mystery Token 行情依据" });
+  await expect(evidence).toHaveAttribute("aria-expanded", "false");
+  await evidence.click();
+  await expect(evidence).toHaveAttribute("aria-expanded", "true");
   await expect(holdings).toContainText("来源没有可靠价格");
 });
 
@@ -152,8 +156,12 @@ test("总览隐藏关键数据时同时遮蔽总额、来源身份和同步状�
     "Alpha Securities",
   );
   await expect(workspace.getByTestId("overview-source-summary")).toContainText(
-    "已隐藏 2 个来源的身份、金额与同步状态",
+    "已隐藏 2 个来源。",
   );
+  for (const sensitive of ["Beta Crypto", "264.01", "297.33", "来源账户/平台总额", "数据过期"]) {
+    await expect(workspace.getByTestId("overview-source-summary")).not.toContainText(sensitive);
+  }
+  await expect(workspace.getByTestId("overview-source-summary").getByRole("listitem")).toHaveCount(0);
 
   await page.getByRole("button", { name: "显示关键信息" }).click();
   await expect(workspace.getByTestId("overview-current-total")).toContainText(
@@ -263,7 +271,7 @@ test("期权行情缺失与明细仅汇总不会否定来源账户总额", async
   await expect(overview(page).getByTestId("overview-confidence")).toContainText(
     "总额完整",
   );
-  await page.getByRole("link", { name: "查看 长桥美股 来源详情" }).click();
+  await page.locator('a[href="/asset-sources/source-longbridge-options"]').click();
   const optionCard = page.getByTestId("longbridge-card");
   await expect(optionCard).toContainText("NVDA260805C210000.US");
   await expect(optionCard).toContainText("期权行情未接入");
