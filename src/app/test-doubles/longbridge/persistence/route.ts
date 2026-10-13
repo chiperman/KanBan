@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { isDeepStrictEqual } from "node:util";
 
 import { getTestServices } from "@/server/composition";
 import {
@@ -17,6 +18,7 @@ import type {
 } from "@/server/ports";
 import { withTestDirectory } from "@/server/testing/temporary-directory";
 import { testGuard } from "@/server/testing/route-support";
+import { readSqliteFiles } from "@/server/testing/sqlite-files";
 
 export const dynamic = "force-dynamic";
 
@@ -224,7 +226,17 @@ export async function POST(request: Request) {
       ).connectLongbridge(RESULT);
       const sources = await database.listSources();
       const reference = sources[0]?.credentialReference ?? "";
-      const dashboardRaw = (await readFile(dashboardPath)).toString("latin1");
+      const dashboardRaw = await readSqliteFiles(dashboardPath);
+      database.close();
+      const reopenedDatabase = new SqliteDashboardDatabase(dashboardPath);
+      let sourceSurvivesReopen: boolean;
+      try {
+        sourceSurvivesReopen = isDeepStrictEqual(
+          await reopenedDatabase.listSources(), sources,
+        );
+      } finally {
+        reopenedDatabase.close();
+      }
       const secretRaw = await readFile(secretPath, "utf8");
       const committedSecretReadable =
         (await secrets.get(reference)) === PROBE_SECRET;
@@ -359,9 +371,9 @@ export async function POST(request: Request) {
       );
       await keychainConnections.connectLongbridge(KEYCHAIN_RESULT);
       const [keychainSource] = await keychainDatabase.listSources();
-      const keychainDashboardRaw = (await readFile(
+      const keychainDashboardRaw = await readSqliteFiles(
         path.join(keychainDir, "dashboard.sqlite"),
-      )).toString("latin1");
+      );
       const keychainSecretsRaw = await readFile(
         path.join(keychainDir, "secrets.json"),
         "utf8",
@@ -436,7 +448,9 @@ export async function POST(request: Request) {
       const [reauthorizedSource] = await reauthorizationDatabase.listSources();
 
       return Response.json({
+        sourceSurvivesReopen,
         dashboardHasOnlyReference:
+          reference !== "" &&
           dashboardRaw.includes(reference) &&
           !dashboardRaw.includes(PROBE_SECRET) &&
           !dashboardRaw.includes('"secrets"'),

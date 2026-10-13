@@ -288,10 +288,12 @@ test("生产 OKX 适配器以平台总额守恒并覆盖 On-chain Earn P0 产品
   expect(persistence.ok()).toBeTruthy();
   await expect(persistence.json()).resolves.toEqual({
     sourceKind: "okx",
+    sourceSurvivesReopen: true,
     dashboardHasOnlyReference: true,
     encryptedStoreHasNoPlaintext: true,
     committedSecretReadable: true,
-    dailySnapshotCount: 1,
+    // 没有长桥报告汇率时，独立交易所来源不生成完整日初基准。
+    dailySnapshotCount: 0,
   });
 });
 

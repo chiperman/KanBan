@@ -497,10 +497,12 @@ test("生产 Binance 适配器只调用允许的读取端点并覆盖权限、�
   expect(persistence.ok()).toBeTruthy();
   await expect(persistence.json()).resolves.toEqual({
     sourceKind: "binance",
+    sourceSurvivesReopen: true,
     dashboardHasOnlyReference: true,
     encryptedStoreHasNoPlaintext: true,
     committedSecretReadable: true,
-    dailySnapshotCount: 1,
+    // 没有长桥报告汇率时，独立交易所来源不生成完整日初基准。
+    dailySnapshotCount: 0,
   });
 
   const rejected = await request.post("/test-doubles/binance/production-start", {

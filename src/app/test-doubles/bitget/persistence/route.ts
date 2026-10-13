@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { isDeepStrictEqual } from "node:util";
 
 import {
   DatabaseAssetSourceConnections,
@@ -13,6 +14,7 @@ import {
 import { InMemoryAssetFullRefreshState } from "@/server/testing/fakes";
 import { withTestDirectory } from "@/server/testing/temporary-directory";
 import { testGuard } from "@/server/testing/route-support";
+import { readSqliteFiles } from "@/server/testing/sqlite-files";
 
 export const dynamic = "force-dynamic";
 
@@ -52,10 +54,23 @@ export async function POST() {
         snapshot: bitgetFixtureSnapshot(BITGET_OBSERVED_AT),
       });
       const source = (await database.listSources())[0];
-      const dashboardRaw = (await readFile(dashboardPath)).toString("latin1");
+      const dashboardRaw = await readSqliteFiles(dashboardPath);
       const secretRaw = await readFile(secretsPath, "utf8");
+      database.close();
+      const reopenedDatabase = new SqliteDashboardDatabase(dashboardPath);
+      let sourceSurvivesReopen: boolean;
+      let dailySnapshotCount: number;
+      try {
+        sourceSurvivesReopen = isDeepStrictEqual(
+          (await reopenedDatabase.listSources())[0], source,
+        );
+        dailySnapshotCount = (await reopenedDatabase.listDailyAssetSnapshots()).length;
+      } finally {
+        reopenedDatabase.close();
+      }
       return Response.json({
         sourceKind: source.kind,
+        sourceSurvivesReopen,
         dashboardHasOnlyReference:
           source.credentialReference !== null &&
           dashboardRaw.includes(source.credentialReference) &&
@@ -69,7 +84,7 @@ export async function POST() {
         committedSecretReadable:
           source.credentialReference !== null &&
           (await secrets.get(source.credentialReference)) === credentials,
-        dailySnapshotCount: (await database.listDailyAssetSnapshots()).length,
+        dailySnapshotCount,
       });
     } finally {
       if (previousKey === undefined) delete process.env.PAD_SECRET_ENCRYPTION_KEY;

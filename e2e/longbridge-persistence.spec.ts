@@ -7,6 +7,7 @@ test("SQLite 首次连接长桥来源保持持久化接口结果", async ({ requ
 
   expect(response.ok()).toBeTruthy();
   await expect(response.json()).resolves.toEqual({
+    sourceSurvivesReopen: true,
     dashboardHasOnlyReference: true,
     encryptedStoreHasNoPlaintext: true,
     committedSecretReadable: true,

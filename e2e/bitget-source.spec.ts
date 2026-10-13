@@ -314,10 +314,12 @@ test("生产 Bitget Classic 适配器以账户分区守恒并覆盖 SharkFin 与
   expect(persistence.ok()).toBeTruthy();
   await expect(persistence.json()).resolves.toEqual({
     sourceKind: "bitget",
+    sourceSurvivesReopen: true,
     dashboardHasOnlyReference: true,
     encryptedStoreHasNoPlaintext: true,
     committedSecretReadable: true,
-    dailySnapshotCount: 1,
+    // 没有长桥报告汇率时，独立交易所来源不生成完整日初基准。
+    dailySnapshotCount: 0,
   });
 });
 

@@ -1870,19 +1870,22 @@ export async function POST(request: Request) {
       if (action === "daily-idempotency") {
         const services = createProductionServices(dataDirectory);
         await services.secrets.get("startup-ready");
+        const firstSource = dailySnapshot("source-one", "10", "72");
+        const secondSource = dailySnapshot("source-two", "20", "144");
         const results = [
-          await services.dailyAssetSnapshots.createIfAbsent(
-            dailySnapshot("source-one", "10", "72"),
-          ),
+          await services.dailyAssetSnapshots.createIfAbsent(firstSource),
           await services.dailyAssetSnapshots.createIfAbsent(
             dailySnapshot("source-one", "999", "999"),
           ),
-          await services.dailyAssetSnapshots.createIfAbsent(
-            dailySnapshot("source-two", "20", "144"),
-          ),
+          await services.dailyAssetSnapshots.createIfAbsent(secondSource),
         ];
         await services.dailyAssetSnapshots.record(
-          dailySnapshot("source-two", "20", "144"),
+          // 自动来源记录接收整轮观测，包含所有参与本轮刷新的来源。
+          {
+            ...secondSource,
+            total: { USD: "30", CNY: "216" },
+            sources: [...firstSource.sources, ...secondSource.sources],
+          },
           true,
         );
         const snapshots = await services.dailyAssetSnapshots.list();

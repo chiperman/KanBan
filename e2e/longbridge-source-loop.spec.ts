@@ -1046,6 +1046,7 @@ test("生产 OAuth 只申请 scope=6，接受已知只读组合并在读取前�
   );
   expect(persistence.ok()).toBeTruthy();
   await expect(persistence.json()).resolves.toEqual({
+    sourceSurvivesReopen: true,
     dashboardHasOnlyReference: true,
     encryptedStoreHasNoPlaintext: true,
     committedSecretReadable: true,
