@@ -672,8 +672,9 @@ export async function POST(request: Request) {
         : 1,
   }));
   const services = getTestServices();
-  if (scenario === "longbridge-cash" && url.searchParams.get("refreshable") === "true") {
-    sources[0].credentialReference = await services.secrets.put("longbridge-cash-test-secret");
+  // 估值场景保持可刷新，避免页面自动刷新因悬空凭据引用而制造过期状态。
+  for (const source of sources) {
+    source.credentialReference = await services.secrets.put(`${source.id}-valuation-test-secret`);
   }
   await services.assetSources.replaceAll(sources);
   await services.assetCards.replaceAll(cards);

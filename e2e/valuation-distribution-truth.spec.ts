@@ -377,3 +377,131 @@ test("旧快照迁移后仍可读取来源总额，期权缺价降级为行情�
     "来源账户/平台总额",
   );
 });
+
+test("同步过期不降低总览估值完整性，比较仍使用最近观测", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.request.post("/test-doubles/daily-snapshots", {
+    data: { action: "configure-classified" },
+  });
+  for (const iso of ["2026-08-05T12:00:00.000Z", "2026-08-06T12:00:00.000Z"]) {
+    await page.request.post("/test-doubles/daily-snapshots", {
+      data: { action: "set-time", iso },
+    });
+    await page.request.post("/test-doubles/daily-snapshots", {
+      data: { action: "record-complete-observation" },
+    });
+  }
+  await page.request.post("/test-doubles/daily-snapshots", {
+    data: { action: "partial-failure" },
+  });
+  await page.request.post("/test-doubles/owner-session");
+  const cashflow = await page.request.post("/api/investment-cashflows", {
+    data: {
+      kind: "initial-investment",
+      occurredAt: "2026-08-05T04:00:00.000Z",
+      amount: "100",
+      currency: "USD",
+    },
+  });
+  expect(cashflow.status()).toBe(201);
+  const automaticRefresh = page.waitForResponse((response) =>
+    response.url().endsWith("/api/asset-sources/refresh") &&
+    response.request().method() === "POST"
+  );
+  await page.goto("/");
+  expect(await (await automaticRefresh).json()).toMatchObject({
+    successCount: 1,
+    failureCount: 1,
+  });
+
+  const workspace = overview(page);
+  const confidence = workspace.getByTestId("overview-confidence");
+  const change = workspace.getByRole("heading", { name: "今日资产变化" }).locator("..");
+  await expect(workspace.getByTestId("overview-current-total")).toContainText("310.00 USD");
+  await expect(confidence.getByRole("heading")).toHaveText("总额完整");
+  await expect(confidence).toContainText("过期来源 1 个");
+  await expect(workspace.getByTestId("overview-source-summary")).toContainText("同步失败 · 数据过期");
+  await expect(change).toContainText("+0.00 USD");
+  await expect(change).toContainText("当前刷新有失败");
+  await expect(workspace.getByTestId("overview-net-investment")).toContainText("100.00 USD");
+  await expect(workspace.getByTestId("overview-investment-profit")).toContainText("数据不足");
+
+  await page.request.post("/test-doubles/refresh", {
+    data: { action: "prepare-recovery" },
+  });
+  const recovery = page.waitForResponse((response) =>
+    response.url().endsWith("/api/asset-sources/refresh") &&
+    response.request().method() === "POST"
+  );
+  await page.getByRole("button", { name: "立即刷新资产" }).click();
+  expect(await (await recovery).json()).toMatchObject({
+    successCount: 2,
+    failureCount: 0,
+  });
+  await expect(workspace.getByTestId("overview-current-total")).toContainText("330.00 USD");
+  await expect(confidence.getByRole("heading")).toHaveText("总额完整");
+  await expect(confidence).not.toContainText("过期来源");
+  await expect(workspace.getByTestId("overview-source-summary")).not.toContainText("数据过期");
+  await expect(change).toContainText("+30.00 USD");
+  await expect(change).not.toContainText("当前刷新有失败");
+  await expect(workspace.getByTestId("overview-investment-profit")).toContainText("+230.00 USD");
+});
+
+for (const fixture of [
+  { name: "平台权威总额", scenario: "binance-authoritative-total", sourceCount: 1, total: "17,165.60 USD", complete: true },
+  { name: "期权行情缺失", scenario: "longbridge-option-quote-unavailable", sourceCount: 1, total: "69,930.10 USD", complete: true },
+  { name: "明细仅汇总", scenario: "detail-coverage-partial", sourceCount: 2, total: "150.00 USD", complete: true },
+  { name: "长桥现金与持仓", scenario: "longbridge-cash", sourceCount: 1, total: "782.82 USD", complete: true },
+  { name: "来源覆盖不足", scenario: "binance-coverage-partial", sourceCount: 1, total: "17,165.10 USD", complete: false },
+  { name: "未估值资产", scenario: "standard", sourceCount: 2, total: "561.34 USD", complete: false },
+  { name: "缺少来源折算汇率", scenario: "missing-source-fx", sourceCount: 1, total: "数据不足", complete: false },
+]) {
+  test(`估值测试来源自动刷新成功并保留估值边界：${fixture.name}`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const configured = await page.request.post(
+      `/test-doubles/valuation?scenario=${fixture.scenario}`,
+    );
+    expect(configured.ok()).toBeTruthy();
+    await page.request.post("/test-doubles/owner-session");
+    const automaticRefresh = page.waitForResponse((response) =>
+      response.url().endsWith("/api/asset-sources/refresh") &&
+      response.request().method() === "POST"
+    );
+    await page.goto("/");
+    expect(await (await automaticRefresh).json()).toMatchObject({
+      successCount: fixture.sourceCount,
+      failureCount: 0,
+    });
+    const workspace = overview(page);
+    const confidence = workspace.getByTestId("overview-confidence");
+    await expect(workspace.getByTestId("overview-current-total")).toContainText(fixture.total);
+    await expect(confidence.getByRole("heading")).toHaveText(
+      fixture.complete ? "总额完整" : "数据不完整",
+    );
+    await expect(workspace.getByTestId("overview-source-summary")).not.toContainText("数据过期");
+
+    await page.request.post("/test-doubles/daily-snapshots", {
+      data: { action: "fail-all" },
+    });
+    const failedRefresh = page.waitForResponse((response) =>
+      response.url().endsWith("/api/asset-sources/refresh") &&
+      response.request().method() === "POST"
+    );
+    await page.getByRole("button", { name: "立即刷新资产" }).click();
+    expect(await (await failedRefresh).json()).toMatchObject({
+      successCount: 0,
+      failureCount: fixture.sourceCount,
+    });
+    await expect(workspace.getByTestId("overview-source-summary")).toContainText("数据过期");
+    await expect(workspace.getByTestId("overview-current-total")).toContainText(fixture.total);
+    await expect(confidence.getByRole("heading")).toHaveText(
+      fixture.complete ? "总额完整" : "数据不完整",
+    );
+    if (fixture.scenario === "binance-authoritative-total") {
+      await chooseOption(page, "计价货币", "CNY");
+      await expect(workspace.getByTestId("overview-current-total")).toContainText("数据不足");
+      await expect(confidence.getByRole("heading")).toHaveText("数据不完整");
+      await expect(confidence).toContainText("无法折算为 CNY");
+    }
+  });
+}

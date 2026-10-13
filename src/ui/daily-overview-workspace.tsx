@@ -263,12 +263,15 @@ export function DailyOverviewWorkspace({
     () => longbridgeReferenceRates(recordedSources),
     [recordedSources],
   );
+  const usdValuationComplete =
+    usdValuation.amount !== null &&
+    !usdValuation.incomplete &&
+    recordedSources.length > 0;
   const currentTotals = useMemo(() => {
+    // 比较与收益仍要求新鲜数据，不与总额估值完整性共用展示判断。
     const complete =
-      usdValuation.amount !== null &&
-      !usdValuation.incomplete &&
+      usdValuationComplete &&
       usdValuation.expiredCount === 0 &&
-      recordedSources.length > 0 &&
       recordedSources.every(
         (source) =>
           source.lifecycle !== "disconnected" && source.sync.status === "current",
@@ -296,8 +299,9 @@ export function DailyOverviewWorkspace({
       },
       {} as Record<ReportingCurrency, PortfolioObservation | null>,
     );
-  }, [currentObservedAt, longbridgeRates, recordedSources, usdValuation]);
+  }, [currentObservedAt, longbridgeRates, recordedSources, usdValuation, usdValuationComplete]);
   const current = currentTotals[currency];
+  const currentValuationComplete = current !== null && usdValuationComplete;
   const recordedTodayObservation = useMemo(
     () =>
       trendObservations
@@ -559,7 +563,7 @@ export function DailyOverviewWorkspace({
         </article>
         <article className="daily-overview__confidence" data-testid="overview-confidence">
           <p className="card-label">CONFIDENCE / DATA</p>
-          <h2>{current?.complete ? "总额完整" : "数据不完整"}</h2>
+          <h2>{currentValuationComplete ? "总额完整" : "数据不完整"}</h2>
           <p>
             {currentReason ??
               `已覆盖 ${recordedSources.length} 个来源`}
