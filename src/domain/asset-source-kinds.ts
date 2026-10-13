@@ -1,4 +1,4 @@
-/** 生产环境支持的资产来源类型。测试夹具可以继续使用未知 kind。 */
+/** 业务来源与测试夹具共用的受支持来源类型。 */
 export type AssetSourceKind =
   | "longbridge"
   | "binance"
@@ -91,8 +91,8 @@ export function assetSourceKindMetadata(
   return isAssetSourceKind(kind) ? SOURCE_KIND_METADATA[kind] : null;
 }
 
-export function isAssetSourceKind(kind: string): kind is AssetSourceKind {
-  return Object.hasOwn(SOURCE_KIND_METADATA, kind);
+export function isAssetSourceKind(kind: unknown): kind is AssetSourceKind {
+  return typeof kind === "string" && Object.hasOwn(SOURCE_KIND_METADATA, kind);
 }
 
 export function isEvmWatchSourceKind(kind: string): boolean {

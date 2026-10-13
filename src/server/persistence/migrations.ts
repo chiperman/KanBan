@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 
+import { isAssetSourceKind } from "@/domain/asset-source-kinds";
 import { shanghaiDay, sourceTrendClassTotals } from "@/domain/daily-asset-snapshots";
 import { decimalAdd, decimalCompare, decimalDivide } from "@/domain/decimal";
 import { normalizeIgnoredAssetKeys } from "@/domain/evm-token-preferences";
@@ -14,7 +15,10 @@ export function migrateAssetSource(raw: unknown): AssetSourceSummary {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     throw new Error("资产来源数据格式无效");
   }
-  const source = raw as AssetSourceSummary;
+  const source = raw as Omit<AssetSourceSummary, "kind"> & { kind: unknown };
+  if (!isAssetSourceKind(source.kind)) {
+    throw new Error("资产来源类型无效或不受支持");
+  }
   if (
     typeof source.snapshot !== "object" ||
     source.snapshot === null ||
@@ -131,6 +135,7 @@ export function migrateAssetSource(raw: unknown): AssetSourceSummary {
   );
   return {
     ...source,
+    kind: source.kind,
     ...(ignoredAssetKeys.length === 0 ? {} : { ignoredAssetKeys }),
     ...(includedAssetKeys.length === 0 ? {} : { includedAssetKeys }),
     ...(source.kind === "manual"

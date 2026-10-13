@@ -85,7 +85,7 @@ async function keepOwnerSessionAlive(page: Page, now: string) {
 async function configureRefresh(
   request: APIRequestContext,
   scenario: "schedule" | "partial-failure",
-  sourceKind?: "refresh-fixture" | "evm-watch-ethereum",
+  sourceKind?: "okx" | "evm-watch-ethereum",
 ) {
   await request.post("/test-doubles/refresh", {
     data: { action: "configure", scenario, sourceKind },

@@ -154,7 +154,7 @@ export async function POST(request: Request) {
     const capturedAt = services.clock.now().toISOString();
     const source: AssetSourceSummary = {
       id: "manual-assets-nonmanual",
-      kind: "fixture",
+      kind: "okx",
       label: "外部测试来源",
       accountId: "fixture:manual-assets",
       permissions: ["account"],

@@ -22,6 +22,9 @@ const ASSET_TREND_CLASSES: readonly AssetTrendClass[] = [
 ];
 
 type SourceTrendClass = AssetTrendClass | "outside" | null;
+// 历史观测保留原始类型文本，不冒充已校验的当前来源。
+type SourceTrendIdentity = Pick<DailyAssetSourceSnapshot, "kind"> &
+  Pick<AssetSourceSummary, "manualAssetClass">;
 
 export function shanghaiDay(value: Date | string): string {
   const date = typeof value === "string" ? new Date(value) : value;
@@ -61,7 +64,7 @@ function sourceValue(
 }
 
 export function sourceTrendClass(
-  source: Pick<AssetSourceSummary, "kind" | "manualAssetClass">,
+  source: SourceTrendIdentity,
 ): SourceTrendClass {
   if (source.kind === "longbridge") return "securities";
   if (
@@ -86,7 +89,7 @@ export function sourceTrendClass(
 }
 
 export function sourceTrendClassTotals(
-  source: Pick<AssetSourceSummary, "kind" | "manualAssetClass">,
+  source: SourceTrendIdentity,
   observation: Pick<
     DailyAssetSourceSnapshot,
     "complete" | "status" | "total"

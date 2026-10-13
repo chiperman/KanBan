@@ -247,6 +247,26 @@ test("损坏备份和恢复中途失败都不覆盖原 SQLite", async () => {
   } finally { await f.close(); }
 });
 
+test("备份包含未知来源时预演与恢复均失败且不覆盖 SQLite 的任何业务记录", async () => {
+  const f = await sqliteFixture();
+  try {
+    const before = await readBusinessState(f.database);
+    await f.backup.exportBackup("unknown-kind.json");
+    const file = path.join(f.directory, "unknown-kind.json");
+    const document = JSON.parse(await readFile(file, "utf8"));
+    document.payload.assetSources.push({
+      ...document.payload.assetSources[0], id: "unknown-source", kind: "unknown-provider",
+    });
+    const { format, formatVersion, createdAt, payload } = document;
+    document.checksum.value = createHash("sha256")
+      .update(JSON.stringify({ format, formatVersion, createdAt, payload })).digest("hex");
+    await writeFile(file, JSON.stringify(document));
+    await assert.rejects(f.backup.previewRestore("unknown-kind.json"), /资产来源类型无效或不受支持/);
+    await assert.rejects(f.backup.restore("unknown-kind.json"), /资产来源类型无效或不受支持/);
+    assert.deepEqual(await readBusinessState(f.database), before);
+  } finally { await f.close(); }
+});
+
 test("业务备份排除运维执行记录，恢复业务数据也不改写最近执行", async () => {
   const f = await sqliteFixture();
   try {

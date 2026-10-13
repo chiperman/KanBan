@@ -1,5 +1,6 @@
 import type {
   AssetSnapshot,
+  AssetSourceKind,
   AssetSourceSyncState,
   ManualAssetClass,
   ManualAssetRecord,
@@ -7,7 +8,7 @@ import type {
 
 export interface AssetSourceView {
   id: string;
-  kind: string;
+  kind: AssetSourceKind;
   label: string;
   displayName?: string;
   accountId: string;

@@ -184,7 +184,7 @@ function unvaluedEvmHolding(): AssetHolding {
 
 function source(input: {
   id: string;
-  kind: string;
+  kind: DemoSource["kind"];
   label: string;
   displayName: string;
   accountId: string;

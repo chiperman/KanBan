@@ -1,3 +1,4 @@
+import type { AssetSourceKind } from "../../domain/asset-source-kinds";
 import type {
   AssetPermission,
   AssetSnapshot,
@@ -5,10 +6,12 @@ import type {
 } from "./assets";
 import type { AssetSourceSyncState } from "./source-sync-state";
 
+export type { AssetSourceKind } from "../../domain/asset-source-kinds";
+
 /** 外部资产来源的持久化摘要；凭证正文永不进入这个接口。 */
 export interface AssetSourceSummary {
   id: string;
-  kind: string;
+  kind: AssetSourceKind;
   label: string;
   /** 所有者设置的可选展示名；缺省时使用平台默认名称。 */
   displayName?: string;

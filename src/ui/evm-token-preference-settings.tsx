@@ -11,6 +11,7 @@ import {
 import type {
   AssetHolding,
   AssetSnapshot,
+  AssetSourceKind,
   EvmUnrecognizedToken,
 } from "@/server/ports";
 import { VibeButton } from "@/ui/vibe/vibe-button";
@@ -19,7 +20,7 @@ import { VibeNotice } from "@/ui/vibe/vibe-notice";
 
 export interface EvmTokenPreferenceSettingsSource {
   id: string;
-  kind: string;
+  kind: AssetSourceKind;
   name: string;
   snapshot: AssetSnapshot;
   ignoredAssetKeys?: string[];

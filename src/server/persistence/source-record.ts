@@ -67,12 +67,12 @@ export function buildConnectedSource(
               kind: "evm-watch-ethereum",
               title: "Ethereum 观察钱包",
               body: "公开地址 ETH 与 ERC-20 只读来源",
-            }
+            } as const
           : {
               kind: "evm-watch-bsc",
               title: "BNB Smart Chain 观察钱包",
               body: "公开地址 BNB 与 BEP-20 只读来源",
-            };
+            } as const;
       })()
     : SOURCE_CARD_DETAILS[sourceKind];
   const sourceId = randomUUID();

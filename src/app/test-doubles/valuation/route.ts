@@ -111,13 +111,13 @@ function betaPositions(): RawAssetPosition[] {
 function standardSources(input: {
   inverse: boolean;
   alphaAdjustment?: string;
-  alphaKind?: string;
+  alphaKind?: AssetSourceSummary["kind"];
   alphaLabel?: string;
 }): AssetSourceSummary[] {
   const rates = exchangeRates(input.inverse);
   return [{
     id: "source-alpha",
-    kind: input.alphaKind ?? "valuation-fixture",
+    kind: input.alphaKind ?? "okx",
     label: input.alphaLabel ?? "Alpha Securities",
     accountId: "alpha",
     permissions: ["market-data", "account", "positions"],
@@ -132,7 +132,7 @@ function standardSources(input: {
     sync: CURRENT_SYNC,
   }, {
     id: "source-beta",
-    kind: "valuation-fixture",
+    kind: "okx",
     label: "Beta Crypto",
     accountId: "beta",
     permissions: ["market-data", "account", "positions"],
@@ -151,7 +151,7 @@ function standardSources(input: {
 function roundingSources(): AssetSourceSummary[] {
   return [{
     id: "source-rounding",
-    kind: "valuation-fixture",
+    kind: "okx",
     label: "Rounding Source",
     accountId: "rounding",
     permissions: ["market-data", "account", "positions"],
@@ -191,7 +191,7 @@ function roundingSources(): AssetSourceSummary[] {
 function manyRoundingSources(): AssetSourceSummary[] {
   return Array.from({ length: 4 }, (_, index) => ({
     id: `source-rounding-${index + 1}`,
-    kind: "valuation-fixture",
+    kind: "okx",
     label: `Rounding Source ${index + 1}`,
     accountId: `rounding-${index + 1}`,
     permissions: ["market-data", "account", "positions"],
@@ -531,7 +531,7 @@ function detailCoveragePartialSources(): AssetSourceSummary[] {
   return [
     {
       id: "source-okx-detail-partial",
-      kind: "valuation-fixture",
+      kind: "okx",
       label: "OKX 账户",
       accountId: "okx:detail-partial",
       permissions: ["market-data", "account", "positions"],
@@ -576,7 +576,7 @@ function detailCoveragePartialSources(): AssetSourceSummary[] {
     },
     {
       id: "source-bitget-detail-partial",
-      kind: "valuation-fixture",
+      kind: "bitget",
       label: "Bitget 账户",
       accountId: "bitget:detail-partial",
       permissions: ["market-data", "account", "positions"],

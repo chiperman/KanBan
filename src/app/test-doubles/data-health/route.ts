@@ -15,7 +15,7 @@ function valuedSource(input: {
   id: string;
   label: string;
   amount: string;
-  kind?: string;
+  kind?: AssetSourceSummary["kind"];
   credentialReference?: string | null;
   exchangeRates?: AssetSourceSummary["snapshot"]["exchangeRates"];
   lifecycle?: AssetSourceSummary["lifecycle"];
@@ -23,7 +23,7 @@ function valuedSource(input: {
 }): AssetSourceSummary {
   return {
     id: input.id,
-    kind: input.kind ?? "data-health-fixture",
+    kind: input.kind ?? "okx",
     label: input.label,
     displayName: input.label,
     accountId: input.id,
@@ -83,7 +83,7 @@ function manualCnySource(): AssetSourceSummary {
 function unvaluedSource(): AssetSourceSummary {
   return {
     id: "source-unvalued",
-    kind: "data-health-fixture",
+    kind: "okx",
     label: "Unknown Wallet",
     accountId: "source-unvalued",
     permissions: ["market-data", "account", "positions"],

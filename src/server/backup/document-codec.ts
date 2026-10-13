@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isAssetSourceKind } from "@/domain/asset-source-kinds";
 import { parseSourceInvestmentHistory, type SourceInvestmentHistory } from "@/domain/source-investment-history";
 import { parseSourceInvestmentRecordInput, type SourceInvestmentRecord } from "@/domain/source-investment-records";
 import { normalizeAssetSyncState } from "@/server/asset-sync-diagnostics";
@@ -763,6 +764,9 @@ function restoredState(document: BackupDocument): BusinessDataState {
     if (!isRecord(source)) throw new Error("资产来源备份格式无效");
     assertString(source.id, "assetSources.id");
     assertString(source.kind, "assetSources.kind");
+    if (!isAssetSourceKind(source.kind)) {
+      throw new Error("资产来源类型无效或不受支持");
+    }
     assertString(source.label, "assetSources.label");
     assertString(source.accountId, "assetSources.accountId");
     if (!Array.isArray(source.permissions)) throw new Error("资产来源权限格式无效");

@@ -93,7 +93,7 @@ export interface RawAssetPosition {
 /** 汇总可用于统一展示的汇率，保持长桥账户的 USD 观察优先。 */
 export function reportingExchangeRatesForSources(
   sources: Array<{
-    kind: string;
+    kind: AssetSourceSummary["kind"];
     hasManualRecord?: boolean;
     snapshot: Pick<AssetSnapshot, "exchangeRates">;
   }>,
@@ -124,7 +124,7 @@ function isLongbridgeReportingRate(rate: AssetExchangeRate): boolean {
  */
 export function longbridgeReportingExchangeRatesForSources(
   sources: Array<{
-    kind: string;
+    kind: AssetSourceSummary["kind"];
     hasManualRecord?: boolean;
     snapshot: Pick<AssetSnapshot, "exchangeRates">;
   }>,

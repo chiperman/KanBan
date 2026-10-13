@@ -105,7 +105,7 @@ function sourceFixture(): AssetSourceSummary[] {
     },
   }, {
     id: "crypto-source",
-    kind: "crypto-fixture",
+    kind: "okx",
     label: "加密资产",
     accountId: "crypto:test",
     permissions: ["account", "positions", "market-data"],

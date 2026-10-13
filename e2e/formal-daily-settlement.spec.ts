@@ -113,7 +113,7 @@ test("正式日结固定证券官方收盘、同窗加密价格且幂等", async
       }, {
         sourceId: "crypto-source",
         label: "加密资产",
-        kind: "crypto-fixture",
+        kind: "okx",
         capturedAt: "2026-08-05T20:05:00.000Z",
         status: "complete",
         diagnostic: null,

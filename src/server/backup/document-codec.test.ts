@@ -12,7 +12,7 @@ import {
 
 const at = "2026-08-02T00:00:00.000Z";
 
-function source(id: string, kind: string): AssetSourceSummary {
+function source(id: string, kind: AssetSourceSummary["kind"]): AssetSourceSummary {
   return {
     id, kind, label: id, accountId: id, permissions: [],
     credentialReference: kind === "manual" ? null : "fixture-private-reference",
@@ -129,6 +129,30 @@ test("备份解码保留零值与来源独立历史，仅自动来源要求重�
   assert.equal(formatVersion, 7);
   assert.deepEqual(restored, expected);
   assert.deepEqual(state, businessState());
+});
+
+test("备份往返保留全部受支持来源类型及手工与自动来源恢复语义", () => {
+  const kinds = ["longbridge", "binance", "okx", "bitget", "bit",
+    "evm-watch-ethereum", "evm-watch-bsc", "manual"] as const;
+  for (const kind of kinds) {
+    const state = businessState();
+    state.assetSources[0] = source("automatic", kind);
+    const before = structuredClone(state);
+    const { state: restored } = decodeBackupDocument(encodeBackupDocument(state, at).contents);
+    assert.equal(restored.assetSources[0].kind, kind);
+    assert.equal(restored.assetSources[0].credentialReference, null);
+    assert.equal(restored.assetSources[0].lifecycle, kind === "manual" ? "connected" : "disconnected");
+    assert.equal(restored.assetSources[0].sync.status, kind === "manual" ? "current" : "expired");
+    assert.deepEqual(state, before);
+  }
+});
+
+test("有效校验和不能绕过来源类型校验，未知来源不被静默丢弃或转换", () => {
+  for (const kind of ["fixture", "__proto__", "constructor", "manual ", null, 1, ["manual"]]) {
+    const data = payload();
+    data.assetSources[1].kind = kind;
+    assert.throws(() => decodeBackupDocument(signedDocument(7, data)), /资产来源类型|assetSources.kind/);
+  }
 });
 
 for (const version of [1, 2, 3, 4, 5, 6]) {

@@ -25,7 +25,7 @@ const CAPTURED_AT = "2026-08-05T16:06:00.000Z";
 
 function source(input: {
   id: string;
-  kind: string;
+  kind: AssetSourceSummary["kind"];
   label: string;
   snapshot: AssetSnapshot;
 }): AssetSourceSummary {
@@ -144,7 +144,7 @@ test("正式日结把同一采集批的长桥汇率用于加密来源总额", as
     }),
     source({
       id: "crypto-source",
-      kind: "crypto-fixture",
+      kind: "okx",
       label: "加密资产",
       snapshot: snapshot("102"),
     }),
@@ -159,7 +159,7 @@ test("正式日结把同一采集批的长桥汇率用于加密来源总额", as
   assert.deepEqual(settlement.sources[1], {
     sourceId: "crypto-source",
     label: "加密资产",
-    kind: "crypto-fixture",
+    kind: "okx",
     capturedAt: CAPTURED_AT,
     status: "complete",
     diagnostic: null,
@@ -171,7 +171,7 @@ test("正式日结没有可用长桥汇率时保留 CNY/HKD 缺失并标记不�
   const settlement = await runSettlement([
     source({
       id: "crypto-source",
-      kind: "crypto-fixture",
+      kind: "okx",
       label: "加密资产",
       snapshot: snapshot("102"),
     }),
@@ -204,7 +204,7 @@ for (const observedAt of ["2026-08-04T16:06:00.000Z", "2026-08-06T16:06:00.000Z"
     });
     const crypto = source({
       id: "crypto-source",
-      kind: "crypto-fixture",
+      kind: "okx",
       label: "加密资产",
       snapshot: snapshot("102"),
     });

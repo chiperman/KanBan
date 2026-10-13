@@ -9,7 +9,7 @@ const INITIAL_AT = "2026-04-01T08:00:00.000Z";
 
 function sourceFixture(input: {
   id: string;
-  kind: "refresh-fixture" | "evm-watch-ethereum";
+  kind: AssetSourceSummary["kind"];
   label: string;
   amount: string;
   credentialReference: string;
@@ -85,7 +85,7 @@ export async function POST(request: Request) {
     const reference = await services.secrets.put("gamma-readonly-secret");
     const source = sourceFixture({
       id: "source-gamma",
-      kind: "refresh-fixture",
+      kind: "okx",
       label: "Gamma Wallet",
       amount: "50",
       credentialReference: reference,
@@ -113,16 +113,14 @@ export async function POST(request: Request) {
       body.scenario !== "partial-failure" &&
       body.scenario !== "all-failure") ||
     (body.sourceKind !== undefined &&
-      body.sourceKind !== "refresh-fixture" &&
+      body.sourceKind !== "okx" &&
       body.sourceKind !== "evm-watch-ethereum") ||
     (body.sourceCount !== undefined && body.sourceCount !== 1 && body.sourceCount !== 2)
   ) {
     return Response.json({ error: "刷新测试配置无效" }, { status: 400 });
   }
   const scenario = body.scenario as FakeRefreshScenario;
-  const sourceKind = (body.sourceKind ?? "refresh-fixture") as
-    | "refresh-fixture"
-    | "evm-watch-ethereum";
+  const sourceKind = body.sourceKind ?? "okx";
   services.clock.set("2026-04-02T08:00:00.000Z");
   services.assetSynchronization.reset(scenario);
   const alphaReference = await services.secrets.put("alpha-readonly-secret");

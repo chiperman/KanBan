@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   assetClassTrendObservation,
   buildDailyAssetSnapshot,
+  sourceTrendClassTotals,
 } from "@/domain/daily-asset-snapshots";
 import {
   daysForTrendRange,
@@ -13,6 +14,16 @@ import {
 import type { AssetSourceSummary } from "@/server/ports";
 
 const CAPTURED_AT = "2026-08-20T04:00:00.000Z";
+
+test("未知历史来源保留分类未估值，不套用当前来源类型或伪造零值", () => {
+  const unavailable = {
+    complete: false, status: "incomplete",
+    total: { USD: null, CNY: null, HKD: null },
+  };
+  assert.deepEqual(sourceTrendClassTotals({ kind: "retired-provider" }, {
+    complete: true, total: { USD: "10", CNY: "72", HKD: "78" },
+  }), { securities: unavailable, crypto: unavailable });
+});
 
 function valuedSource(input: {
   assetClass: "securities" | "crypto" | "cash";

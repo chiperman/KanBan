@@ -17,7 +17,7 @@ const INITIAL_AT = "2026-04-01T15:59:50.000Z";
 
 function sourceFixture(input: {
   id: string;
-  kind?: string;
+  kind?: AssetSourceSummary["kind"];
   label: string;
   amount: string;
   credentialReference: string;
@@ -27,7 +27,7 @@ function sourceFixture(input: {
 }): AssetSourceSummary {
   return {
     id: input.id,
-    kind: input.kind ?? "daily-fixture",
+    kind: input.kind ?? "okx",
     label: input.label,
     accountId: input.id,
     permissions: ["market-data", "account", "positions"],

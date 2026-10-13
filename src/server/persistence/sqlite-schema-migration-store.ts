@@ -1,7 +1,7 @@
 import { shanghaiDay, sourceTrendClassTotals } from "@/domain/daily-asset-snapshots";
 import type { SqliteRow } from "@/server/persistence/contracts";
 import { SQLITE_SCHEMA_VERSION } from "@/server/persistence/contracts";
-import type { AssetSourceSummary, DailyAssetSourceSnapshot, ManualAssetClass } from "@/server/ports";
+import type { DailyAssetSourceSnapshot, ManualAssetClass } from "@/server/ports";
 import type { DatabaseSync } from "node:sqlite";
 
 type Transaction = <T>(operation: () => T) => T;
@@ -449,7 +449,7 @@ export class SqliteSchemaMigrationStore {
         for (const row of rows) {
           const manualAssetClass = manualClasses.get(row.source_id as string);
           const source = {
-            kind: row.kind as AssetSourceSummary["kind"],
+            kind: row.kind as DailyAssetSourceSnapshot["kind"],
             ...(manualAssetClass === null || manualAssetClass === undefined
               ? {}
               : { manualAssetClass }),
@@ -457,7 +457,7 @@ export class SqliteSchemaMigrationStore {
           const observation = {
             sourceId: row.source_id as string,
             label: row.label as string,
-            kind: row.kind as AssetSourceSummary["kind"],
+            kind: row.kind as DailyAssetSourceSnapshot["kind"],
             capturedAt: row.captured_at as string,
             complete: row.complete === 1,
             status: row.status as DailyAssetSourceSnapshot["status"],

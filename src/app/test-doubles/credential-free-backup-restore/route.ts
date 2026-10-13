@@ -9,11 +9,12 @@ import {
   type BusinessDataState,
 } from "@/server/business-data-backup";
 import { isTestEnv } from "@/server/composition";
+import type { AssetSourceSummary } from "@/server/ports";
 import { SqliteDashboardDatabase } from "@/server/production";
 
 export const dynamic = "force-dynamic";
 
-function source() {
+function source(): AssetSourceSummary {
   return {
     id: "backup-source",
     kind: "binance",

@@ -1783,7 +1783,7 @@ export class InMemoryAssetSourceConnections implements AssetSourceConnections {
       | BitgetAuthorizationResult
       | BitAuthorizationResult
       | EvmWatchAuthorizationResult,
-    config: { kind: string; title: string; body: string },
+    config: { kind: AssetSourceSummary["kind"]; title: string; body: string },
     reconnectSourceId?: string,
   ): Promise<void> {
     const credentialReference = await this.secrets.put(result.credentials);
