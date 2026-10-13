@@ -1,78 +1,20 @@
+import { AssetSourcePreviewStore } from "@/server/asset-source-onboarding/preview-store";
 import {
-  createCipheriv,
-  createDecipheriv,
-  randomBytes,
-  randomUUID,
-} from "node:crypto";
+  AssetSourceOnboardingError,
+  type AssetSourceAuthorization,
+  type AssetSourceOnboardingPreview,
+  type AssetSourceProvider,
+  type AssetSourceProviderAdapter,
+  type AssetSourceReauthorization,
+} from "@/server/asset-source-onboarding/types";
 
-import type {
-  AssetMoney,
-  AssetPermission,
-  AssetSnapshot,
-  BitgetAccountMode,
-} from "@/server/ports";
-import type { AssetSourceProviderId } from "@/domain/asset-source-providers";
-
-export type AssetSourceProvider = AssetSourceProviderId;
-
-export interface AssetSourceAuthorization {
-  provider: AssetSourceProvider;
-  credentials: string;
-  permissions: AssetPermission[];
-  account: { id: string; label: string };
-  snapshot: AssetSnapshot;
-  accountMode?: BitgetAccountMode;
-  scopeFingerprint?: string;
-}
-
-export interface AssetSourceOnboardingPreview {
-  id: string;
-  provider: AssetSourceProvider;
-  account: { id: string; label: string };
-  permissions: AssetPermission[];
-  total: AssetMoney;
-  accountMode?: BitgetAccountMode;
-}
-
-export interface AssetSourceProviderAdapter<Input = unknown> {
-  readonly provider: AssetSourceProvider;
-  readonly scopeChangedMessage?: string;
-  authorize(input: Input, observedAt: string): Promise<AssetSourceAuthorization>;
-  revalidate(
-    authorization: AssetSourceAuthorization,
-    observedAt: string,
-  ): Promise<AssetSourceAuthorization>;
-  connect(
-    authorization: AssetSourceAuthorization,
-    reconnectSourceId?: string,
-  ): Promise<void>;
-}
-
-interface SealedCredentials {
-  iv: string;
-  tag: string;
-  value: string;
-}
-
-interface StoredPreview {
-  id: string;
-  expiresAt: number;
-  authorization: Omit<AssetSourceAuthorization, "credentials">;
-  credentials: SealedCredentials;
-  reauthorization?: {
-    sourceId: string;
-    expectedAccountId: string;
-  };
-}
-
-export class AssetSourceOnboardingError extends Error {
-  constructor(
-    readonly code: "unsupported-provider" | "preview-unavailable" | "scope-changed",
-    message: string,
-  ) {
-    super(message);
-  }
-}
+export { AssetSourceOnboardingError } from "@/server/asset-source-onboarding/types";
+export type {
+  AssetSourceAuthorization,
+  AssetSourceOnboardingPreview,
+  AssetSourceProvider,
+  AssetSourceProviderAdapter,
+} from "@/server/asset-source-onboarding/types";
 
 /**
  * 资产来源接入的完整事务边界。
@@ -85,16 +27,14 @@ export class AssetSourceOnboarding {
     AssetSourceProvider,
     AssetSourceProviderAdapter
   >();
-  private readonly previews = new Map<string, StoredPreview>();
-  private readonly claimed = new Set<string>();
-  private readonly expiryTimers = new Map<string, NodeJS.Timeout>();
-  private readonly transientKey = randomBytes(32);
+  private readonly previews: AssetSourcePreviewStore;
 
   constructor(
     adapters: AssetSourceProviderAdapter[],
-    private readonly now: () => number = Date.now,
-    private readonly previewTtlMs = 10 * 60_000,
+    now: () => number = Date.now,
+    previewTtlMs = 10 * 60_000,
   ) {
+    this.previews = new AssetSourcePreviewStore(now, previewTtlMs);
     for (const adapter of adapters) this.adapters.set(adapter.provider, adapter);
   }
 
@@ -102,10 +42,7 @@ export class AssetSourceOnboarding {
     provider: AssetSourceProvider,
     input: Input,
     observedAt: string,
-    reauthorization?: {
-      sourceId: string;
-      expectedAccountId: string;
-    },
+    reauthorization?: AssetSourceReauthorization,
   ): Promise<AssetSourceOnboardingPreview> {
     const adapter = this.adapter(provider) as AssetSourceProviderAdapter<Input>;
     const authorization = await adapter.authorize(input, observedAt);
@@ -118,7 +55,7 @@ export class AssetSourceOnboarding {
     ) {
       throw new Error("输入的公开地址或账户与此来源不一致；请新建资产来源。");
     }
-    const id = this.remember(authorization, reauthorization);
+    const id = this.previews.remember(authorization, reauthorization);
     return this.publicPreview(provider, id)!;
   }
 
@@ -126,24 +63,11 @@ export class AssetSourceOnboarding {
     provider: AssetSourceProvider,
     id: string,
   ): AssetSourceOnboardingPreview | null {
-    const stored = this.available(id);
-    if (!stored || stored.authorization.provider !== provider) return null;
-    const { authorization } = stored;
-    return {
-      id,
-      provider: authorization.provider,
-      account: authorization.account,
-      permissions: authorization.permissions,
-      total: authorization.snapshot.total,
-      ...(authorization.accountMode
-        ? { accountMode: authorization.accountMode }
-        : {}),
-    };
+    return this.previews.publicPreview(provider, id);
   }
 
   cancel(provider: AssetSourceProvider, id: string): void {
-    const stored = this.previews.get(id);
-    if (stored?.authorization.provider === provider) this.clear(id);
+    this.previews.cancel(provider, id);
   }
 
   async confirm(
@@ -152,19 +76,11 @@ export class AssetSourceOnboarding {
     observedAt: string,
     expectedReauthorizationSourceId?: string,
   ): Promise<void> {
-    const stored = this.claim(provider, id);
-    if (!stored) {
-      throw new AssetSourceOnboardingError(
-        "preview-unavailable",
-        "资产来源预览已失效或正在确认",
-      );
-    }
-    const original = this.open(stored);
-    const adapter = this.adapter(original.provider);
-    try {
+    await this.previews.consume(provider, id, async (original, reauthorization) => {
+      const adapter = this.adapter(original.provider);
       if (
         expectedReauthorizationSourceId !== undefined &&
-        stored.reauthorization?.sourceId !== expectedReauthorizationSourceId
+        reauthorization?.sourceId !== expectedReauthorizationSourceId
       ) {
         throw new AssetSourceOnboardingError(
           "preview-unavailable",
@@ -172,8 +88,8 @@ export class AssetSourceOnboarding {
         );
       }
       if (
-        stored.reauthorization !== undefined &&
-        original.account.id !== stored.reauthorization.expectedAccountId
+        reauthorization !== undefined &&
+        original.account.id !== reauthorization.expectedAccountId
       ) {
         throw new Error("输入的公开地址或账户与此来源不一致；请新建资产来源。");
       }
@@ -184,17 +100,13 @@ export class AssetSourceOnboarding {
         adapter.scopeChangedMessage,
       );
       if (
-        stored.reauthorization !== undefined &&
-        revalidated.account.id !== stored.reauthorization.expectedAccountId
+        reauthorization !== undefined &&
+        revalidated.account.id !== reauthorization.expectedAccountId
       ) {
         throw new Error("输入的公开地址或账户与此来源不一致；请新建资产来源。");
       }
-      await adapter.connect(revalidated, stored.reauthorization?.sourceId);
-      this.clear(id);
-    } catch (error) {
-      this.claimed.delete(id);
-      throw error;
-    }
+      await adapter.connect(revalidated, reauthorization?.sourceId);
+    });
   }
 
   async reauthorize<Input>(
@@ -237,56 +149,6 @@ export class AssetSourceOnboarding {
     return adapter;
   }
 
-  private remember(
-    authorization: AssetSourceAuthorization,
-    reauthorization?: {
-      sourceId: string;
-      expectedAccountId: string;
-    },
-  ): string {
-    const id = randomUUID();
-    const { credentials, ...safeAuthorization } = authorization;
-    this.previews.set(id, {
-      id,
-      expiresAt: this.now() + this.previewTtlMs,
-      authorization: safeAuthorization,
-      credentials: this.seal(credentials),
-      ...(reauthorization === undefined ? {} : { reauthorization }),
-    });
-    const timer = setTimeout(() => this.clear(id), this.previewTtlMs);
-    timer.unref();
-    this.expiryTimers.set(id, timer);
-    return id;
-  }
-
-  private available(id: string): StoredPreview | null {
-    if (this.claimed.has(id)) return null;
-    const stored = this.previews.get(id) ?? null;
-    if (stored && stored.expiresAt < this.now()) {
-      this.clear(id);
-      return null;
-    }
-    return stored;
-  }
-
-  private claim(
-    provider: AssetSourceProvider,
-    id: string,
-  ): StoredPreview | null {
-    const stored = this.available(id);
-    if (!stored || stored.authorization.provider !== provider) return null;
-    this.claimed.add(id);
-    return stored;
-  }
-
-  private clear(id: string): void {
-    this.previews.delete(id);
-    this.claimed.delete(id);
-    const timer = this.expiryTimers.get(id);
-    if (timer) clearTimeout(timer);
-    this.expiryTimers.delete(id);
-  }
-
   private assertStable(
     original: AssetSourceAuthorization,
     revalidated: AssetSourceAuthorization,
@@ -307,33 +169,5 @@ export class AssetSourceOnboarding {
         scopeChangedMessage,
       );
     }
-  }
-
-  private seal(value: string): SealedCredentials {
-    const iv = randomBytes(12);
-    const cipher = createCipheriv("aes-256-gcm", this.transientKey, iv);
-    const encrypted = Buffer.concat([
-      cipher.update(value, "utf8"),
-      cipher.final(),
-    ]);
-    return {
-      iv: iv.toString("base64"),
-      tag: cipher.getAuthTag().toString("base64"),
-      value: encrypted.toString("base64"),
-    };
-  }
-
-  private open(stored: StoredPreview): AssetSourceAuthorization {
-    const decipher = createDecipheriv(
-      "aes-256-gcm",
-      this.transientKey,
-      Buffer.from(stored.credentials.iv, "base64"),
-    );
-    decipher.setAuthTag(Buffer.from(stored.credentials.tag, "base64"));
-    const credentials = Buffer.concat([
-      decipher.update(Buffer.from(stored.credentials.value, "base64")),
-      decipher.final(),
-    ]).toString("utf8");
-    return { ...stored.authorization, credentials };
   }
 }
