@@ -1,52 +1,9 @@
-import { buildSnapshotFromPositions } from "@/domain/valuation";
 import { getTestServices, isTestEnv } from "@/server/composition";
-import type { AssetSourceSummary, Card } from "@/server/ports";
+import type { Card } from "@/server/ports";
+import { refreshSourceFixture as sourceFixture } from "@/server/testing/asset-source-fixtures";
 import type { FakeRefreshScenario } from "@/server/testing/fakes";
 
 export const dynamic = "force-dynamic";
-
-const INITIAL_AT = "2026-04-01T08:00:00.000Z";
-
-function sourceFixture(input: {
-  id: string;
-  kind: AssetSourceSummary["kind"];
-  label: string;
-  amount: string;
-  credentialReference: string;
-}): AssetSourceSummary {
-  return {
-    id: input.id,
-    kind: input.kind,
-    label: input.label,
-    accountId: input.id,
-    permissions: ["market-data", "account", "positions"],
-    credentialReference: input.credentialReference,
-    snapshot: buildSnapshotFromPositions({
-      positions: [{
-        symbol: input.id.replace("source-", "").toUpperCase(),
-        name: input.label,
-        quantity: "1",
-        currency: "USD",
-        assetClass: "securities",
-        currentPrice: { amount: input.amount, currency: "USD" },
-        priceSource: `${input.label} 初始行情`,
-        pricedAt: INITIAL_AT,
-        costPrice: null,
-        platformProfit: null,
-        changePercent: null,
-      }],
-      sourceCurrency: "USD",
-      exchangeRates: [],
-      syncedAt: INITIAL_AT,
-    }),
-    sync: {
-      status: "current",
-      lastSuccessfulAt: INITIAL_AT,
-      lastAttemptAt: INITIAL_AT,
-      error: null,
-    },
-  };
-}
 
 export async function POST(request: Request) {
   if (!isTestEnv()) return Response.json({ error: "not found" }, { status: 404 });

@@ -5,54 +5,12 @@ import type {
   DailyAssetSourceSnapshot,
   DailyAssetTrendObservation,
 } from "@/server/ports";
+import { dataHealthSourceFixture as valuedSource } from "@/server/testing/asset-source-fixtures";
 
 export const dynamic = "force-dynamic";
 
 const CURRENT_AT = "2026-03-04T12:00:00.000Z";
 const PREVIOUS_AT = "2026-03-03T12:00:00.000Z";
-
-function valuedSource(input: {
-  id: string;
-  label: string;
-  amount: string;
-  kind?: AssetSourceSummary["kind"];
-  credentialReference?: string | null;
-  exchangeRates?: AssetSourceSummary["snapshot"]["exchangeRates"];
-  lifecycle?: AssetSourceSummary["lifecycle"];
-  sync: AssetSourceSummary["sync"];
-}): AssetSourceSummary {
-  return {
-    id: input.id,
-    kind: input.kind ?? "okx",
-    label: input.label,
-    displayName: input.label,
-    accountId: input.id,
-    permissions: ["market-data", "account", "positions"],
-    credentialReference: input.credentialReference === undefined
-      ? `test-${input.id}`
-      : input.credentialReference,
-    lifecycle: input.lifecycle ?? "connected",
-    snapshot: buildSnapshotFromPositions({
-      positions: [{
-        symbol: input.id.replace("source-", "").toUpperCase(),
-        name: input.label,
-        quantity: "1",
-        currency: "USD",
-        assetClass: "securities",
-        currentPrice: { amount: input.amount, currency: "USD" },
-        priceSource: `${input.label} 确定性行情`,
-        pricedAt: input.sync.lastSuccessfulAt,
-        costPrice: null,
-        platformProfit: null,
-        changePercent: null,
-      }],
-      sourceCurrency: "USD",
-      exchangeRates: input.exchangeRates ?? [],
-      syncedAt: input.sync.lastSuccessfulAt,
-    }),
-    sync: input.sync,
-  };
-}
 
 function manualCnySource(): AssetSourceSummary {
   return {

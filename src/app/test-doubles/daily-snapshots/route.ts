@@ -10,66 +10,12 @@ import { buildSnapshotFromPositions } from "@/domain/valuation";
 import { getTestServices, isTestEnv } from "@/server/composition";
 import type { AssetSourceSummary, Card } from "@/server/ports";
 import { SqliteDashboardDatabase } from "@/server/production";
+import {
+  DAILY_SNAPSHOT_FIXTURE_AT as INITIAL_AT,
+  dailySnapshotSourceFixture as sourceFixture,
+} from "@/server/testing/asset-source-fixtures";
 
 export const dynamic = "force-dynamic";
-
-const INITIAL_AT = "2026-04-01T15:59:50.000Z";
-
-function sourceFixture(input: {
-  id: string;
-  kind?: AssetSourceSummary["kind"];
-  label: string;
-  amount: string;
-  credentialReference: string;
-  assetClass?: "securities" | "crypto";
-  platformProfit?: string | null;
-  rate?: string;
-}): AssetSourceSummary {
-  return {
-    id: input.id,
-    kind: input.kind ?? "okx",
-    label: input.label,
-    accountId: input.id,
-    permissions: ["market-data", "account", "positions"],
-    credentialReference: input.credentialReference,
-    snapshot: buildSnapshotFromPositions({
-      positions: [{
-        symbol: input.id.replace("source-", "").toUpperCase(),
-        name: input.label,
-        quantity: "1",
-        currency: "USD",
-        assetClass: input.assetClass ?? "securities",
-        currentPrice: { amount: input.amount, currency: "USD" },
-        priceSource: `${input.label} 初始行情`,
-        pricedAt: INITIAL_AT,
-        costPrice: null,
-        platformProfit: input.platformProfit ?? null,
-        changePercent: null,
-      }],
-      sourceCurrency: "USD",
-      exchangeRates: [{
-        baseCurrency: "USD",
-        quoteCurrency: "CNY",
-        rate: input.rate ?? "7.2",
-        source: "每日快照确定性汇率",
-        observedAt: INITIAL_AT,
-      }, {
-        baseCurrency: "USD",
-        quoteCurrency: "HKD",
-        rate: "7.8",
-        source: "每日快照确定性港币汇率",
-        observedAt: INITIAL_AT,
-      }],
-      syncedAt: INITIAL_AT,
-    }),
-    sync: {
-      status: "current",
-      lastSuccessfulAt: INITIAL_AT,
-      lastAttemptAt: INITIAL_AT,
-      error: null,
-    },
-  };
-}
 
 function sourceCard(source: AssetSourceSummary, index: number): Card {
   return {
