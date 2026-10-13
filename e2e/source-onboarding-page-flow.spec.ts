@@ -1,5 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import {
+  expectCompleteHistory,
+  prepareCompleteHistory,
+} from "./history-observation-helpers";
+
 const API_KEY = "ticket-04-binance-key";
 const API_SECRET = "ticket-04-binance-secret-must-not-leak";
 const ADDRESS = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
@@ -70,6 +75,7 @@ test("资产来源页通过独立步骤页完成只读验证、预览与保存�
   await expect(page.locator("body")).not.toContainText(API_SECRET);
 
   await source.click();
+  await expect(page).toHaveURL(/\/asset-sources\/[^/]+$/);
   const sourceDetailUrl = page.url();
   await page.getByRole("link", { name: "更换授权 / 重新授权" }).click();
   await expect(page.getByLabel("Binance API Key")).toHaveValue("");
@@ -137,8 +143,15 @@ test("观察钱包重新授权只接受同一公开地址，并保留来源、�
   await page.getByRole("button", { name: "验证公开地址" }).click();
   await page.getByRole("button", { name: "确认并保存" }).click();
 
+  await expect(page).toHaveURL("/asset-sources");
+  const original = (await ethereumState(page)).sources.find(({ kind }) => kind === "evm-watch-ethereum")!;
+  const stable = await page.request.post("/test-doubles/ethereum", {
+    data: { scenario: "refresh-passthrough" },
+  });
+  expect(stable.ok()).toBeTruthy();
+  const historyBefore = await prepareCompleteHistory(page.request, [original.id]);
   const before = await ethereumState(page);
-  const original = before.sources.find(({ kind }) => kind === "evm-watch-ethereum")!;
+  expect(before.snapshotSourceIds).toContain(original.id);
   await page.getByRole("link", { name: /Ethereum 观察钱包.*观察钱包/ }).click();
   await page.getByRole("link", { name: "更换授权 / 重新授权" }).click();
   await expect(page).toHaveURL(
@@ -170,6 +183,11 @@ test("观察钱包重新授权只接受同一公开地址，并保留来源、�
     expect.objectContaining({ sourceId: original.id }),
   ]);
   expect(after.snapshotSourceIds).toContain(original.id);
+  expect(after.sources).toEqual(before.sources);
+  expect(after.cards).toEqual(before.cards);
+  expect(after.savedSources).toBe(before.savedSources);
+  expect(after.savedSecrets).toBe(before.savedSecrets);
+  expect(await expectCompleteHistory(page.request, [original.id])).toEqual(historyBefore);
   await expect(page.locator("body")).not.toContainText(/OAuth Token|TOTP|API Secret/);
 });
 

@@ -1,22 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { prepareCompleteHistory } from "./history-observation-helpers";
+
 async function seedPerformanceHistory(page: Page): Promise<void> {
   await page.request.post("/test-doubles/reset");
   await page.request.post("/test-doubles/daily-snapshots", {
     data: { action: "configure" },
   });
-  for (const iso of [
-    "2026-03-01T04:00:00.000Z",
-    "2026-03-02T04:00:00.000Z",
-    "2026-03-04T04:00:00.000Z",
-  ]) {
-    await page.request.post("/test-doubles/daily-snapshots", {
-      data: { action: "set-time", iso },
-    });
-    await page.request.post("/test-doubles/daily-snapshots", {
-      data: { action: "record-complete-observation" },
-    });
-  }
   await page.request.post("/test-doubles/clock", {
     data: { now: "2026-03-04T12:00:00.000Z" },
   });
@@ -49,7 +39,36 @@ async function seedPerformanceHistory(page: Page): Promise<void> {
       data: input,
     });
     expect(response.status()).toBe(201);
+    expect(await response.json()).toMatchObject({
+      cashflow: {
+        amounts: { USD: input.amount, CNY: null, HKD: null },
+        exchangeRates: [],
+      },
+    });
   }
+
+  // Keep the original cashflows' missing FX evidence; asset history has its own rates.
+  for (const day of ["2026-03-01", "2026-03-02", "2026-03-04"]) {
+    await page.request.post("/test-doubles/daily-snapshots", {
+      data: { action: "set-time", iso: `${day}T04:00:00.000Z` },
+    });
+    const history = await prepareCompleteHistory(
+      page.request,
+      ["source-alpha", "source-beta"],
+      day,
+    );
+    for (const observations of [history.baselines, history.trendObservations]) {
+      expect(observations.find((item) => item.day === day)?.total.USD).toBe("302");
+    }
+    // The first real refresh values the assets at 302; later refreshes preserve that fact.
+    const stable = await page.request.post("/test-doubles/ethereum", {
+      data: { scenario: "refresh-passthrough" },
+    });
+    expect(stable.ok()).toBeTruthy();
+  }
+  await page.request.post("/test-doubles/clock", {
+    data: { now: "2026-03-04T12:00:00.000Z" },
+  });
 }
 
 async function chooseOption(page: Page, label: string, option: string) {
@@ -220,10 +239,22 @@ test("收益分析按真实资产观测和资金账本解释收益，并支持�
     "+167.00 USD",
   );
   await expect(workspace.getByText("历史补录", { exact: true })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "新增资金记录" })).toBeHidden();
 
   await page.getByRole("button", { name: /编辑资金记录.*历史补录/ }).click();
+  await expect(page.getByRole("dialog", { name: "编辑资金记录" })).toBeVisible();
+  await expect(page.getByLabel("金额")).toHaveValue("20");
   await page.getByLabel("金额").fill("10");
+  const updateResponse = page.waitForResponse((response) =>
+    response.request().method() === "PATCH"
+    && response.url().includes("/api/investment-cashflows/"),
+  );
   await page.getByRole("button", { name: "保存资金记录" }).click();
+  const updated = await updateResponse;
+  expect(updated.status()).toBe(200);
+  expect(await updated.json()).toMatchObject({ cashflow: { amount: "10" } });
+  await expect(page.getByRole("dialog", { name: "编辑资金记录" })).toBeHidden();
+  await workspace.getByTestId("performance-net-investment").scrollIntoViewIfNeeded();
   await expect(workspace.getByTestId("performance-net-investment")).toContainText(
     "125.00 USD",
   );
@@ -234,18 +265,28 @@ test("收益分析按真实资产观测和资金账本解释收益，并支持�
   ).toContainText("将永久删除 外部入金记录");
   await page.getByRole("button", { name: "永久删除这条记录" }).click();
   await expect(workspace.getByText("历史补录", { exact: true })).toHaveCount(0);
+  await workspace.getByTestId("performance-net-investment").scrollIntoViewIfNeeded();
   await expect(workspace.getByTestId("performance-net-investment")).toContainText(
     "115.00 USD",
   );
 
   await chooseOption(page, "计价货币", "CNY");
   await expect(workspace.getByTestId("performance-current-profit")).toContainText(
+    "+1,346.40 CNY",
+  );
+  await expect(workspace.getByTestId("performance-current-profit")).toContainText(
+    "按当前汇率折算",
+  );
+  await expect(workspace.getByTestId("performance-interval")).toContainText(
+    "区间资金缺少汇率证据。",
+  );
+  await expect(workspace.getByTestId("performance-interval")).toContainText(
     "数据不足",
   );
 
   await page.getByRole("button", { name: "隐藏关键信息" }).click();
   await expect(workspace).not.toContainText("首笔本金");
-  await expect(workspace).not.toContainText("185.00");
+  await expect(workspace).not.toContainText("1,346.40");
   await expect(workspace.getByTestId("performance-trend")).toContainText(
     "趋势已隐藏",
   );

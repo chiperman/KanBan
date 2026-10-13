@@ -1,5 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
+import { contrastRatio } from "./color-contrast-helpers";
+
 const VIEWPORTS = [
   { name: "桌面", width: 1280, height: 800 },
   { name: "中等", width: 800, height: 900 },
@@ -12,54 +14,26 @@ test.beforeEach(async ({ request }) => {
   await request.post("/test-doubles/reset");
 });
 
-function channelToLinear(channel: number): number {
-  const normalized = channel / 255;
-  return normalized <= 0.04045
-    ? normalized / 12.92
-    : ((normalized + 0.055) / 1.055) ** 2.4;
-}
-
-function luminance(rgb: number[]): number {
-  const [red, green, blue] = rgb.map(channelToLinear);
-  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
-}
-
-function contrastRatio(foreground: number[], background: number[]): number {
-  const lighter = Math.max(luminance(foreground), luminance(background));
-  const darker = Math.min(luminance(foreground), luminance(background));
-  return (lighter + 0.05) / (darker + 0.05);
-}
-
-function parseRgb(color: string): number[] {
-  const channels = color.match(/[\d.]+/g)?.slice(0, 3).map(Number);
-  expect(channels, `无法解析颜色 ${color}`).toHaveLength(3);
-  return channels!;
-}
-
 async function expectReadableText(locator: Locator): Promise<void> {
   await expect(locator).toBeVisible();
   const styles = await locator.evaluate((element) => {
     const computed = getComputedStyle(element);
-    let background = "rgb(255, 255, 255)";
+    const backgrounds: string[] = [];
     let current: Element | null = element;
     while (current !== null) {
-      const candidate = getComputedStyle(current).backgroundColor;
-      if (candidate !== "transparent" && candidate !== "rgba(0, 0, 0, 0)") {
-        background = candidate;
-        break;
-      }
+      backgrounds.push(getComputedStyle(current).backgroundColor);
       current = current.parentElement;
     }
     return {
       color: computed.color,
       fontSize: Number.parseFloat(computed.fontSize),
-      background,
+      backgrounds,
     };
   });
 
   expect(styles.fontSize).toBeGreaterThanOrEqual(12);
   expect(
-    contrastRatio(parseRgb(styles.color), parseRgb(styles.background)),
+    contrastRatio(styles.color, styles.backgrounds),
   ).toBeGreaterThanOrEqual(4.5);
 }
 
@@ -268,7 +242,7 @@ test("所有者预置页在桌面提供合理正文宽度和可读反馈", async
   });
   expect(moduleLabel.fontSize).toBeGreaterThanOrEqual(12);
   expect(
-    contrastRatio(parseRgb(moduleLabel.color), parseRgb(moduleLabel.background)),
+    contrastRatio(moduleLabel.color, [moduleLabel.background]),
   ).toBeGreaterThanOrEqual(4.5);
 
   const primaryAction = page.getByRole("button", {

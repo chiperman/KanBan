@@ -113,7 +113,8 @@ test("待确认 EVM 资产在对应钱包的设置页中管理", async ({
   await expect(card).not.toContainText("待确认资产");
   await page.goto("/");
   const overview = page.getByTestId("overview-confidence");
-  await expect(overview).toContainText("未估值 1 项");
+  await expect(overview).toContainText("总额完整");
+  await expect(overview).not.toContainText("未估值");
 
   await openEthereumAssetScope(page);
   await page.getByRole("link", { name: "返回来源详情" }).click();
@@ -146,9 +147,9 @@ test("待确认 EVM 资产在对应钱包的设置页中管理", async ({
   await page.goto("/asset-sources");
   await page.getByRole("link", { name: /Ethereum 观察钱包.*观察钱包/ }).click();
   const refreshedCard = page.getByTestId("ethereum-watch-card");
-  await refreshedCard.getByRole("button", { name: "刷新 Ethereum 观察钱包" }).click();
+  await page.getByRole("button", { name: "刷新 Ethereum 观察钱包" }).click();
   await expect(
-    refreshedCard.getByTestId(/asset-source-refresh-status-/),
+    page.getByTestId(/asset-source-refresh-status-/),
   ).toContainText("刷新完成");
   await expect(refreshedCard).toContainText("VALUATION / COMPLETE");
   await expect(refreshedCard).not.toContainText("待确认资产");

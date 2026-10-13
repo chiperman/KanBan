@@ -256,19 +256,28 @@ test("BSC Lista 适配器明确覆盖空申请，读取失败时保留普通资�
     data: { action: "preview-lista-empty", chain: "bsc" },
   });
   expect(empty.ok()).toBeTruthy();
-  await expect(empty.json()).resolves.toMatchObject({
+  const emptyBody = await empty.json();
+  expect(emptyBody).toMatchObject({
     snapshot: {
       coverage: {
         status: "complete",
-        products: [{
-          product: "lista-slisbnb-withdrawal-request",
-          capability: "detailed",
-          freshness: "current",
-          message: "未发现未领取申请",
-        }],
+        products: [],
       },
     },
   });
+  expect(emptyBody.rpcMethods).toContain("eth_call");
+  expect(emptyBody.snapshot.holdings).toEqual(expect.arrayContaining([
+    expect.objectContaining({ sourceAsset: "evm:56:native", symbol: "BNB" }),
+    expect.objectContaining({
+      sourceAsset: "evm:56:0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", symbol: "SAME",
+    }),
+    expect.objectContaining({
+      sourceAsset: "evm:56:0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", symbol: "SAME",
+    }),
+  ]));
+  expect(emptyBody.snapshot.holdings).not.toEqual(expect.arrayContaining([
+    expect.objectContaining({ sourceProduct: "lista-slisbnb-withdrawal-request" }),
+  ]));
 
   const failed = await request.post("/test-doubles/ethereum/production-start", {
     data: { action: "preview-lista-failure", chain: "bsc" },
