@@ -121,6 +121,7 @@ const READ_ONLY_AUTHORITIES = new Set([
 ]);
 const {
   record,
+  credentialRecord,
   list,
   text,
   nonNegativeDecimal: decimal,
@@ -1094,12 +1095,7 @@ function preserveNewerPrices(
 }
 
 function parseCredentials(value: string): StoredBitgetCredentials {
-  let credentials: JsonRecord;
-  try {
-    credentials = record(JSON.parse(value), "Bitget 凭证");
-  } catch {
-    throw new Error("Bitget 只读凭证格式无效");
-  }
+  const credentials = credentialRecord(value);
   const accountMode = credentials.accountMode;
   if (accountMode !== "classic" && accountMode !== "uta") {
     throw new Error("Bitget 账户类型无效");

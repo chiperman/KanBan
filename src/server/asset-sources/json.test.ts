@@ -6,6 +6,31 @@ import {
 } from "@/server/asset-sources/json";
 
 for (const provider of ["Binance", "OKX", "Bitget"]) {
+  test(`${provider} 凭证解码保留字段原值，不改写平台专属字段`, () => {
+    const decoder = createJsonDecoder(provider);
+    const credentials = {
+      apiKey: " readonly-key ",
+      apiSecret: "readonly-secret",
+      passphrase: "readonly-passphrase",
+      region: "eea",
+      accountMode: "uta",
+    };
+    assert.deepEqual(decoder.credentialRecord(JSON.stringify(credentials)), credentials);
+    assert.deepEqual(decoder.credentialRecord("{}"), {});
+  });
+
+  test(`${provider} 凭证解码拒绝畸形 JSON 和非对象，不泄露输入`, () => {
+    const decoder = createJsonDecoder(provider);
+    for (const input of [
+      '{"apiSecret":"must-not-leak",', "null", "[]", '"must-not-leak"', "1", "true",
+    ]) {
+      assert.throws(
+        () => decoder.credentialRecord(input),
+        new Error(`${provider} 只读凭证格式无效`),
+      );
+    }
+  });
+
   test(`${provider} JSON 解码保留结构与字段失败边界`, () => {
     const decoder = createJsonDecoder(provider);
 

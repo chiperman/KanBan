@@ -2,6 +2,7 @@ export type JsonRecord = Record<string, unknown>;
 
 export interface JsonDecoder {
   record(value: unknown, context?: string): JsonRecord;
+  credentialRecord(value: string): JsonRecord;
   list(value: unknown, context: string): JsonRecord[];
   text(value: unknown, field: string): string;
   nonNegativeDecimal(value: unknown, field: string): string;
@@ -21,6 +22,15 @@ export function createJsonDecoder(provider: string): JsonDecoder {
   function list(value: unknown, context: string): JsonRecord[] {
     if (!Array.isArray(value)) throw new Error(`${context}格式无效`);
     return value.map((item) => record(item, context));
+  }
+
+  function credentialRecord(value: string): JsonRecord {
+    try {
+      return record(JSON.parse(value), `${provider} 凭证`);
+    } catch {
+      // 不暴露 JSON 解析异常，它可能包含凭证正文。
+      throw new Error(`${provider} 只读凭证格式无效`);
+    }
   }
 
   function text(value: unknown, field: string): string {
@@ -45,5 +55,5 @@ export function createJsonDecoder(provider: string): JsonDecoder {
     throw new Error(`${response}缺少 ${field}`);
   }
 
-  return { record, list, text, nonNegativeDecimal, identifier };
+  return { record, credentialRecord, list, text, nonNegativeDecimal, identifier };
 }

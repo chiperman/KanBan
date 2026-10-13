@@ -57,6 +57,7 @@ const OKX_ORIGINS: Record<OkxRegion, string> = {
 const OKX_EQUITY_ROUNDING_TOLERANCE = "0.000000000001";
 const {
   record,
+  credentialRecord,
   list,
   text,
   nonNegativeDecimal: decimal,
@@ -622,12 +623,7 @@ function preserveNewerPrices(
 }
 
 function parseCredentials(value: string): StoredOkxCredentials {
-  let credentials: JsonRecord;
-  try {
-    credentials = record(JSON.parse(value), "OKX 凭证");
-  } catch {
-    throw new Error("OKX 只读凭证格式无效");
-  }
+  const credentials = credentialRecord(value);
   return {
     apiKey: text(credentials.apiKey, "apiKey"),
     apiSecret: text(credentials.apiSecret, "apiSecret"),

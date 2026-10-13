@@ -59,6 +59,7 @@ const READ_ONLY_PERMISSIONS: AssetPermission[] = [
 ];
 const {
   record,
+  credentialRecord,
   list,
   text,
   nonNegativeDecimal: decimal,
@@ -1411,12 +1412,7 @@ interface StoredBinanceCredentials {
 }
 
 function parseCredentials(credentials: string): StoredBinanceCredentials {
-  let value: JsonRecord;
-  try {
-    value = record(JSON.parse(credentials), "Binance 凭证");
-  } catch {
-    throw new Error("Binance 只读凭证格式无效");
-  }
+  const value = credentialRecord(credentials);
   return {
     apiKey: text(value.apiKey, "apiKey"),
     apiSecret: text(value.apiSecret, "apiSecret"),
