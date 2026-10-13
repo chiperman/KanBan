@@ -23,6 +23,16 @@ export async function POST(request: Request) {
     return Response.json({ error: "Binance 测试场景无效" }, { status: 400 });
   }
   const services = getTestServices();
+  if (body.scenario === "forget-credential") {
+    const source = (await services.assetSources.list()).find(
+      ({ kind }) => kind === "binance",
+    );
+    if (!source?.credentialReference) {
+      return Response.json({ error: "缺少 Binance 测试凭证" }, { status: 400 });
+    }
+    await services.secrets.remove(source.credentialReference);
+    return Response.json({ ok: true });
+  }
   if (body.scenario === "refresh-failure") {
     services.assetSynchronization.reset("binance-refresh-failure");
     return Response.json({ ok: true });

@@ -216,6 +216,15 @@ test("来源详情保留隐藏、断开、缺少凭证的恢复保护与永久�
     .getByRole("button", { name: "确认断开" })
     .click();
   await expect(page.getByText("已断开", { exact: true })).toBeVisible();
+  const beforeRemoval = await (await request.get("/test-doubles/binance")).json();
+  const credentialRemoval = await request.post("/test-doubles/binance", {
+    data: { scenario: "forget-credential" },
+  });
+  expect(credentialRemoval.ok()).toBeTruthy();
+  expect(await (await request.get("/test-doubles/binance")).json()).toMatchObject({
+    savedSources: 1,
+    savedSecrets: beforeRemoval.savedSecrets - 1,
+  });
   await page.getByRole("button", { name: "恢复连接" }).click();
   await expect(page.getByRole("region", { name: "危险操作" }).getByRole("alert")).toContainText(
     "原连接凭证已不存在，无法直接恢复",
