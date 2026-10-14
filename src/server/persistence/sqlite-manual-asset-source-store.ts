@@ -59,7 +59,7 @@ export class SqliteManualAssetSourceStore {
 
   recordManual(sourceId: string, input: ManualAssetRecordInput, capturedAt: string): void {
     assertManualAssetRecordNotFuture(input.day, shanghaiDay(capturedAt));
-    const source = this.readModel.listSourcesSync().find(
+    const source = this.readModel.listSourcesSync(sourceId).find(
       (item) => item.id === sourceId,
     );
     if (!source) throw new Error("资产来源不存在");
@@ -67,14 +67,12 @@ export class SqliteManualAssetSourceStore {
       throw new Error("只有手工资产记录可以编辑今日总额");
     }
     this.manualRecords.upsert(sourceId, input, capturedAt);
-    const record = this.readModel.listManualAssetRecordsSync().find(
-      (item) => item.sourceId === sourceId && item.day === input.day,
+    const record = this.readModel.listManualAssetRecordsSync(sourceId).find(
+      (item) => item.day === input.day,
     );
     if (!record) throw new Error("手工资产记录保存失败");
     const latest = latestManualAssetRecord(
-      this.readModel.listManualAssetRecordsSync().filter(
-        (item) => item.sourceId === sourceId,
-      ),
+      this.readModel.listManualAssetRecordsSync(sourceId),
     );
     const updated = applyLatestManualAssetRecord(source, latest, capturedAt);
     this.data.writeDetails(updated);
@@ -82,7 +80,7 @@ export class SqliteManualAssetSourceStore {
   }
 
   deleteManualRecord(sourceId: string, day: string, capturedAt: string): void {
-    const source = this.readModel.listSourcesSync().find(
+    const source = this.readModel.listSourcesSync(sourceId).find(
       (item) => item.id === sourceId,
     );
     if (!source) throw new Error("资产来源不存在");
@@ -93,9 +91,7 @@ export class SqliteManualAssetSourceStore {
       throw new Error("指定日期没有手工资产记录");
     }
     const latest = latestManualAssetRecord(
-      this.readModel.listManualAssetRecordsSync().filter(
-        (item) => item.sourceId === sourceId,
-      ),
+      this.readModel.listManualAssetRecordsSync(sourceId),
     );
     this.data.writeDetails(
       applyLatestManualAssetRecord(source, latest, capturedAt),

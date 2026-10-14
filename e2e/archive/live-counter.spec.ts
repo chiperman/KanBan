@@ -1,24 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-
-async function loginAsOwner(page: Page): Promise<void> {
-  const client = await page.context().newCDPSession(page);
-  await client.send("WebAuthn.enable");
-  await client.send("WebAuthn.addVirtualAuthenticator", {
-    options: {
-      protocol: "ctap2",
-      transport: "internal",
-      hasResidentKey: true,
-      hasUserVerification: true,
-      isUserVerified: true,
-    },
-  });
-  await page.goto("/setup");
-  await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
-  await expect(page.getByRole("status")).toContainText("预置完成");
-  await page.goto("/");
-  await page.getByRole("button", { name: "使用 Passkey 登录" }).click();
-  await expect(page.getByTestId("workbench-shell")).toBeVisible();
-}
+import { loginAsOwner } from "../owner-auth-helpers";
 
 test.beforeEach(async ({ request }) => {
   await request.post("/test-doubles/reset");

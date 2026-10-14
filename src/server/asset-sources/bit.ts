@@ -14,6 +14,7 @@ import type {
 } from "@/server/ports";
 import { assetResponseError } from "@/server/asset-sync-diagnostics";
 import { positiveDecimal } from "@/server/asset-sources/value-guards";
+import { createAbortableSleep } from "@/server/asset-sources/abortable-sleep";
 
 type JsonRecord = Record<string, unknown>;
 type BitFetch = (
@@ -41,25 +42,7 @@ const READ_ONLY_PATHS = new Set([
   DCP_ORDERS_PATH,
 ]);
 
-function abortableSleep(milliseconds: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(signal.reason ?? new Error("BIT 请求已取消"));
-      return;
-    }
-    const timer = setTimeout(done, milliseconds);
-    function done() {
-      signal?.removeEventListener("abort", abort);
-      resolve();
-    }
-    function abort() {
-      clearTimeout(timer);
-      signal?.removeEventListener("abort", abort);
-      reject(signal?.reason ?? new Error("BIT 请求已取消"));
-    }
-    signal?.addEventListener("abort", abort, { once: true });
-  });
-}
+const abortableSleep = createAbortableSleep("BIT 请求已取消");
 
 const DEFAULT_RUNTIME: BitRuntime = {
   now: () => Date.now(),

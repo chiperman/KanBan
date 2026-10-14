@@ -1,14 +1,10 @@
-import { expect, test, type CDPSession, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import {
   isLongbridgeUsOptionSymbol,
 } from "@/server/asset-sources/longbridge";
 import { supportsLongbridgeCandlesticks } from "@/domain/longbridge-symbols";
-
-interface VirtualPasskey {
-  client: CDPSession;
-  authenticatorId: string;
-}
+import { loginAsOwner } from "../owner-auth-helpers";
 
 const PRIVATE_CARD = {
   id: "private-entry",
@@ -50,24 +46,6 @@ test("长桥美股期权代码支持可变长度行权价且拒绝无效到期�
   expect(supportsLongbridgeCandlesticks("HK0000038064")).toBe(false);
 });
 
-async function attachPasskey(page: Page): Promise<VirtualPasskey> {
-  const client = await page.context().newCDPSession(page);
-  await client.send("WebAuthn.enable");
-  const { authenticatorId } = (await client.send(
-    "WebAuthn.addVirtualAuthenticator",
-    {
-      options: {
-        protocol: "ctap2",
-        transport: "internal",
-        hasResidentKey: true,
-        hasUserVerification: true,
-        isUserVerified: true,
-      },
-    },
-  )) as { authenticatorId: string };
-  return { client, authenticatorId };
-}
-
 async function colorToken(
   page: Page,
   token: "--success" | "--error",
@@ -80,17 +58,6 @@ async function colorToken(
     probe.remove();
     return color;
   }, token);
-}
-
-async function loginAsOwner(page: Page): Promise<void> {
-  await attachPasskey(page);
-  await page.goto("/setup");
-  await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
-  await expect(page.getByRole("status")).toContainText("预置完成");
-  await page.goto("/");
-
-  await page.getByRole("button", { name: "使用 Passkey 登录" }).click();
-  await expect(page.getByTestId("workbench-shell")).toBeVisible();
 }
 
 async function configureLongbridge(

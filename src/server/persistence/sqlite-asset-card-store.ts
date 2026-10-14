@@ -1,6 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { Card } from "@/server/ports";
 import type { SqliteRow } from "./contracts";
+import { compactPositions } from "./sqlite-position-compaction";
 
 /** 卡片布局与来源卡片可见性写入模块；事务边界由调用方持有。 */
 export class SqliteAssetCardStore {
@@ -59,15 +60,7 @@ export class SqliteAssetCardStore {
     this.database
       .prepare("DELETE FROM asset_cards WHERE source_id = ?")
       .run(sourceId);
-    const rows = this.database
-      .prepare("SELECT id, position FROM asset_cards ORDER BY position")
-      .all() as SqliteRow[];
-    const update = this.database.prepare(
-      "UPDATE asset_cards SET position = ? WHERE id = ?",
-    );
-    rows.forEach((row, position) => {
-      if (row.position !== position) update.run(position, row.id as string);
-    });
+    compactPositions(this.database, "asset_cards");
   }
 
   setHidden(sourceId: string, hidden: boolean): void {

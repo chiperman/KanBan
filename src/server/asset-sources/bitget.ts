@@ -27,7 +27,8 @@ import type {
 } from "@/server/ports";
 import { assetResponseError, hasManagedAssetRetry } from "@/server/asset-sync-diagnostics";
 import { positiveDecimal } from "@/server/asset-sources/value-guards";
-import { compareSourceHoldingValue, effectiveUsdtUsdQuote } from "@/server/asset-sources/valuation-policy";
+import { createAbortableSleep } from "@/server/asset-sources/abortable-sleep";
+import { compareSourceHoldingValue, effectiveUsdtUsdQuote, preserveNewerPrices } from "@/server/asset-sources/valuation-policy";
 
 type BitgetFetch = (
   input: string | URL | Request,
@@ -41,25 +42,7 @@ export interface BitgetRuntime {
   retryDelaysMs: readonly number[];
 }
 
-function abortableSleep(milliseconds: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(signal.reason ?? new Error("Bitget 请求已取消"));
-      return;
-    }
-    const finish = () => {
-      signal?.removeEventListener("abort", abort);
-      resolve();
-    };
-    const timer = setTimeout(finish, milliseconds);
-    const abort = () => {
-      clearTimeout(timer);
-      signal?.removeEventListener("abort", abort);
-      reject(signal?.reason ?? new Error("Bitget 请求已取消"));
-    };
-    signal?.addEventListener("abort", abort, { once: true });
-  });
-}
+const abortableSleep = createAbortableSleep("Bitget 请求已取消");
 
 const DEFAULT_RUNTIME: BitgetRuntime = {
   now: () => Date.now(),
@@ -1034,66 +1017,6 @@ function valuePositions(input: {
   };
 }
 
-function preserveNewerPrices(
-  previous: AssetSnapshot,
-  candidate: AssetSnapshot,
-): AssetSnapshot {
-  const previousByPosition = new Map(
-    previous.holdings.map((holding) => [
-      [
-        holding.sourceAccount ?? "default",
-        holding.sourceProduct ?? "legacy",
-        holding.providerPositionId ?? "aggregate",
-        holding.sourceAsset ?? holding.symbol,
-      ].join(":"),
-      holding,
-    ]),
-  );
-  const holdings = candidate.holdings.map((holding) => {
-    const prior = previousByPosition.get(
-      [
-        holding.sourceAccount ?? "default",
-        holding.sourceProduct ?? "legacy",
-        holding.providerPositionId ?? "aggregate",
-        holding.sourceAsset ?? holding.symbol,
-      ].join(":"),
-    );
-    if (
-      prior?.valuation.status === "valued" &&
-      holding.valuation.status === "valued" &&
-      Date.parse(prior.valuation.pricedAt) > Date.parse(holding.valuation.pricedAt)
-    ) {
-      if (prior.currentPrice === null) return holding;
-      const marketValue = decimalMultiply(
-        holding.quantity,
-        prior.currentPrice.amount,
-      );
-      return {
-        ...holding,
-        currentPrice: prior.currentPrice,
-        marketValue,
-        sourceMarketValue: { amount: marketValue, currency: holding.currency },
-        valuation: prior.valuation,
-      };
-    }
-    return holding;
-  });
-  const total = holdings.reduce(
-    (sum, holding) =>
-      holding.sourceMarketValue
-        ? decimalAdd(sum, holding.sourceMarketValue.amount)
-        : sum,
-    "0",
-  );
-  return {
-    ...candidate,
-    total: candidate.coverage?.status === "complete"
-      ? candidate.total
-      : { amount: total, currency: candidate.total.currency },
-    holdings: holdings.sort(compareSourceHoldingValue),
-  };
-}
-
 function parseCredentials(value: string): StoredBitgetCredentials {
   const credentials = credentialRecord(value);
   const accountMode = credentials.accountMode;
@@ -1632,7 +1555,10 @@ export class ProductionBitgetSourceRefresher implements AssetSourceRefresher {
             : {}),
         });
       return {
-        snapshot: preserveNewerPrices(source.snapshot, candidate),
+        snapshot: preserveNewerPrices(source.snapshot, candidate, {
+          holding: (source_) => source_.currency,
+          total: candidate.total.currency,
+        }),
       };
     }
     const candidate = (await readFullSnapshot({
@@ -1642,7 +1568,10 @@ export class ProductionBitgetSourceRefresher implements AssetSourceRefresher {
         accountMode: stored.accountMode,
       })).snapshot;
     return {
-      snapshot: preserveNewerPrices(source.snapshot, candidate),
+      snapshot: preserveNewerPrices(source.snapshot, candidate, {
+        holding: (source_) => source_.currency,
+        total: candidate.total.currency,
+      }),
     };
   }
 }

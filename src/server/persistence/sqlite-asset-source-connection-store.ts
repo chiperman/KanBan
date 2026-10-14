@@ -1,6 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { buildDailyAssetSnapshot } from "@/domain/daily-asset-snapshots";
 import type { SqliteRow } from "./contracts";
+import { compactPositions } from "./sqlite-position-compaction";
 import type { SourceAuthorizationResult, SourceConnectionKind } from "./source-record";
 import { buildConnectedSource, connectedSourceKind } from "./source-record";
 import type { SqliteAssetCardStore } from "./sqlite-asset-card-store";
@@ -140,7 +141,7 @@ export class SqliteAssetSourceConnectionStore {
       .prepare("DELETE FROM imported_asset_source_history_observations WHERE source_id = ?")
       .run(sourceId);
     this.database.prepare("DELETE FROM asset_sources WHERE id = ?").run(sourceId);
-    this.compactSourcePositions();
+    compactPositions(this.database, "asset_sources");
     for (const { day } of baselineDays) {
       this.observations.recalculate(day as string, {
         snapshot: "daily_asset_snapshots",
@@ -153,15 +154,4 @@ export class SqliteAssetSourceConnectionStore {
       : null;
   }
 
-  private compactSourcePositions(): void {
-    const rows = this.database
-      .prepare("SELECT id, position FROM asset_sources ORDER BY position")
-      .all() as SqliteRow[];
-    const update = this.database.prepare(
-      "UPDATE asset_sources SET position = ? WHERE id = ?",
-    );
-    rows.forEach((row, position) => {
-      if (row.position !== position) update.run(position, row.id as string);
-    });
-  }
 }

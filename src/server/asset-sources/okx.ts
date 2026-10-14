@@ -26,7 +26,7 @@ import type {
 } from "@/server/ports";
 import { assetResponseError } from "@/server/asset-sync-diagnostics";
 import { positiveDecimal } from "@/server/asset-sources/value-guards";
-import { compareSourceHoldingValue, effectiveUsdtUsdQuote } from "@/server/asset-sources/valuation-policy";
+import { compareSourceHoldingValue, effectiveUsdtUsdQuote, preserveNewerPrices } from "@/server/asset-sources/valuation-policy";
 
 type OkxFetch = (
   input: string | URL | Request,
@@ -562,66 +562,6 @@ function valuePositions(input: {
   };
 }
 
-function preserveNewerPrices(
-  previous: AssetSnapshot,
-  candidate: AssetSnapshot,
-): AssetSnapshot {
-  const previousByPosition = new Map(
-    previous.holdings.map((holding) => [
-      [
-        holding.sourceAccount ?? "default",
-        holding.sourceProduct ?? "legacy",
-        holding.providerPositionId ?? "aggregate",
-        holding.sourceAsset ?? holding.symbol,
-      ].join(":"),
-      holding,
-    ]),
-  );
-  const holdings = candidate.holdings.map((holding) => {
-    const prior = previousByPosition.get(
-      [
-        holding.sourceAccount ?? "default",
-        holding.sourceProduct ?? "legacy",
-        holding.providerPositionId ?? "aggregate",
-        holding.sourceAsset ?? holding.symbol,
-      ].join(":"),
-    );
-    if (
-      prior?.valuation.status === "valued" &&
-      holding.valuation.status === "valued" &&
-      Date.parse(prior.valuation.pricedAt) > Date.parse(holding.valuation.pricedAt)
-    ) {
-      if (prior.currentPrice === null) return holding;
-      const marketValue = decimalMultiply(
-        holding.quantity,
-        prior.currentPrice.amount,
-      );
-      return {
-        ...holding,
-        currentPrice: prior.currentPrice,
-        marketValue,
-        sourceMarketValue: { amount: marketValue, currency: "USDT" },
-        valuation: prior.valuation,
-      };
-    }
-    return holding;
-  });
-  const total = holdings.reduce(
-    (sum, holding) =>
-      holding.sourceMarketValue
-        ? decimalAdd(sum, holding.sourceMarketValue.amount)
-        : sum,
-    "0",
-  );
-  return {
-    ...candidate,
-    total: candidate.coverage?.status === "complete"
-      ? candidate.total
-      : { amount: total, currency: "USDT" },
-    holdings: holdings.sort(compareSourceHoldingValue),
-  };
-}
-
 function parseCredentials(value: string): StoredOkxCredentials {
   const credentials = credentialRecord(value);
   return {
@@ -777,6 +717,8 @@ async function readFullSnapshot(input: {
   };
 }
 
+const OKX_QUOTE_CURRENCIES = { holding: () => "USDT", total: "USDT" } as const;
+
 export class ProductionOkxReadOnly implements OkxReadOnly {
   constructor(
     private readonly prices: Prices,
@@ -896,7 +838,7 @@ export class ProductionOkxSourceRefresher implements AssetSourceRefresher {
           authoritativeTotal: source.snapshot.total,
         });
       return {
-        snapshot: preserveNewerPrices(source.snapshot, candidate),
+        snapshot: preserveNewerPrices(source.snapshot, candidate, OKX_QUOTE_CURRENCIES),
       };
     }
     const candidate = (await readFullSnapshot({
@@ -905,7 +847,7 @@ export class ProductionOkxSourceRefresher implements AssetSourceRefresher {
         observedAt: attemptedAt,
       })).snapshot;
     return {
-      snapshot: preserveNewerPrices(source.snapshot, candidate),
+      snapshot: preserveNewerPrices(source.snapshot, candidate, OKX_QUOTE_CURRENCIES),
     };
   }
 }

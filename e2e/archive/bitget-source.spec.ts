@@ -1,37 +1,12 @@
-import { expect, test, type CDPSession, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { confirmSourceFlow, expectSourceObservation, openSourceFlow, sourceFlow } from "../source-flow-helpers";
 import { PROD_BASE_URL } from "../../playwright.config";
 import { expectCompleteHistory, prepareCompleteHistory } from "../history-observation-helpers";
+import { loginAsOwner } from "../owner-auth-helpers";
 
 const API_KEY = "bitget-browser-api-key";
 const API_SECRET = "bitget-browser-secret-must-not-leak";
 const PASSPHRASE = "bitget-browser-passphrase-must-not-leak";
-
-async function attachPasskey(page: Page): Promise<CDPSession> {
-  const client = await page.context().newCDPSession(page);
-  await client.send("WebAuthn.enable");
-  await client.send("WebAuthn.addVirtualAuthenticator", {
-    options: {
-      protocol: "ctap2",
-      transport: "internal",
-      hasResidentKey: true,
-      hasUserVerification: true,
-      isUserVerified: true,
-    },
-  });
-  return client;
-}
-
-async function loginAsOwner(page: Page): Promise<void> {
-  await attachPasskey(page);
-  await page.goto("/setup");
-  await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
-  await expect(page.getByRole("status")).toContainText("预置完成");
-  await page.goto("/");
-
-  await page.getByRole("button", { name: "使用 Passkey 登录" }).click();
-  await expect(page.getByTestId("workbench-shell")).toBeVisible();
-}
 
 async function configure(page: Page, scenario = "valid") {
   const response = await page.request.post("/test-doubles/bitget", {
