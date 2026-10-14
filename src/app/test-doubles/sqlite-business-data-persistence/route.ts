@@ -1923,9 +1923,9 @@ export async function POST(request: Request) {
           sourceCount: (await services.assetSources.list()).length,
           dailySourceCount: retainedDailySnapshot?.sources.length ?? 0,
           trendSourceCount: retainedTrendObservation?.sources.length ?? 0,
-          secretRemoved:
+          secretRetained:
             connected.credentialReference !== null &&
-            (await services.secrets.get(connected.credentialReference)) === null,
+            (await services.secrets.get(connected.credentialReference)) !== null,
         };
         await services.assetSourceLifecycle.deleteData(connected.id);
         return Response.json({
@@ -1937,6 +1937,9 @@ export async function POST(request: Request) {
             dailyTrendObservationCount: (
               await services.dailyAssetSnapshots.listTrendObservations()
             ).length,
+            secretRemoved:
+              connected.credentialReference !== null &&
+              (await services.secrets.get(connected.credentialReference)) === null,
           },
         });
       }

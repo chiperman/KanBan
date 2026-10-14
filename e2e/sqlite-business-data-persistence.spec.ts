@@ -624,7 +624,7 @@ test("每日快照按上海日期保持幂等且完整刷新包含全部来源",
   });
 });
 
-test("断开保留快照，永久删除清理全部来源业务数据", async ({ request }) => {
+test("断开保留凭证与快照，永久删除清理凭证及全部来源业务数据", async ({ request }) => {
   const response = await request.post(
     "/test-doubles/sqlite-business-data-persistence?action=source-lifecycle",
   );
@@ -637,13 +637,14 @@ test("断开保留快照，永久删除清理全部来源业务数据", async ({
       sourceCount: 1,
       dailySourceCount: 1,
       trendSourceCount: 1,
-      secretRemoved: true,
+      secretRetained: true,
     },
     deleted: {
       sourceCount: 0,
       cardCount: 0,
       dailySnapshotCount: 0,
       dailyTrendObservationCount: 0,
+      secretRemoved: true,
     },
   });
 });
