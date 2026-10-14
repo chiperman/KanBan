@@ -1,6 +1,14 @@
+import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 const sourceRoot = pathToFileURL(`${process.cwd()}/src/`);
+
+function resolveTsModule(specifier, base, context, nextResolve) {
+  if (existsSync(new URL(`${specifier}/index.ts`, base))) {
+    return nextResolve(new URL(`${specifier}/index.ts`, base).href, context);
+  }
+  return nextResolve(new URL(`${specifier}.ts`, base).href, context);
+}
 
 export async function resolve(specifier, context, nextResolve) {
   // Standalone production CLIs load session-auth outside Next's bundler.
@@ -8,9 +16,11 @@ export async function resolve(specifier, context, nextResolve) {
     return nextResolve("next/headers.js", context);
   }
   if (specifier.startsWith("@/")) {
-    return nextResolve(
-      new URL(`${specifier.slice(2)}.ts`, sourceRoot).href,
+    return resolveTsModule(
+      specifier.slice(2),
+      sourceRoot,
       context,
+      nextResolve,
     );
   }
   if (
@@ -22,10 +32,7 @@ export async function resolve(specifier, context, nextResolve) {
     !specifier.endsWith(".ts") &&
     !specifier.endsWith(".tsx")
   ) {
-    return nextResolve(
-      new URL(`${specifier}.ts`, context.parentURL).href,
-      context,
-    );
+    return resolveTsModule(specifier, context.parentURL, context, nextResolve);
   }
   return nextResolve(specifier, context);
 }
