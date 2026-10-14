@@ -56,6 +56,7 @@ import {
 } from "@/ui/workbench-display-preferences";
 import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
 import { AssetGlobalRefreshControl } from "@/ui/asset-refresh-controls";
+import { lockOnUnauthorizedResponse, OWNER_SESSION_EXPIRED_MESSAGE, readJsonResult } from "@/ui/owner-request-lock";
 
 type CurrentTotals = Record<ReportingCurrency, PortfolioObservation | null>;
 
@@ -225,9 +226,8 @@ async function cashflowRequest<T>(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  const result = await response.json().catch(() => null) as {
-    error?: string;
-  } | null;
+  const result = await readJsonResult<{ error?: string }>(response);
+  if (lockOnUnauthorizedResponse(response)) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
   if (!response.ok) throw new Error(result?.error ?? "资金记录保存失败，请重试");
   return result as T;
 }

@@ -42,6 +42,7 @@ import {
   type VibeSelectOption,
 } from "@/ui/vibe/vibe-field";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
+import { lockOnUnauthorizedResponse, OWNER_SESSION_EXPIRED_MESSAGE, readJsonResult } from "@/ui/owner-request-lock";
 
 type DetailSource = AssetSourceView & {
   permissions: AssetPermission[];
@@ -73,9 +74,8 @@ async function sourceRequest(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  const result = (await response.json().catch(() => null)) as
-    | { error?: string }
-    | null;
+  const result = await readJsonResult<{ error?: string }>(response);
+  if (lockOnUnauthorizedResponse(response)) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
   if (!response.ok) throw new Error(result?.error ?? "来源操作失败");
 }
 

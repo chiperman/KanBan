@@ -6,6 +6,7 @@ import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeDialog } from "@/ui/vibe/vibe-dialog";
 import { VibeField } from "@/ui/vibe/vibe-field";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
+import { lockOnUnauthorizedResponse, OWNER_SESSION_EXPIRED_MESSAGE, readJsonResult } from "@/ui/owner-request-lock";
 
 interface BackupPreview {
   discardConfirmation?: string;
@@ -42,10 +43,8 @@ async function requestBackup<T>(
       fileName === undefined ? { action } : { action, fileName, discardConfirmation },
     ),
   });
-  const result = (await response.json().catch(() => null)) as
-    | (T & { error?: never })
-    | { error?: string }
-    | null;
+  const result = await readJsonResult<T & { error?: string }>(response);
+  if (lockOnUnauthorizedResponse(response)) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
   if (!response.ok || result === null || "error" in result) {
     throw new Error(
       result && "error" in result
@@ -53,7 +52,7 @@ async function requestBackup<T>(
         : "备份操作失败",
     );
   }
-  return result as T;
+  return result;
 }
 
 function previewSummary(preview: BackupPreview) {
