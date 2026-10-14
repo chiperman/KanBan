@@ -207,7 +207,10 @@ test("键盘焦点决定关闭和执行目标且保留输入法事件", async ({
   await expect(page).toHaveURL("/settings");
   await expect(trigger).toBeFocused();
   await trigger.click();
-  await menu.getByRole("button", { name: "前往资产来源" }).focus();
+  await expect(search).toBeFocused();
+  const sourceCommand = menu.getByRole("button", { name: "前往资产来源" });
+  await sourceCommand.focus();
+  await expect(sourceCommand).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL("/asset-sources");
   await trigger.click();
