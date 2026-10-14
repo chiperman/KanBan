@@ -95,9 +95,6 @@ test("全产品核心路径在三种宽度、浅深色与减少动态下保持�
     await expect(
       page.getByRole("link", { name: "查看全部资产与持仓" }),
     ).toHaveAttribute("href", "/assets");
-    await expect(
-      page.locator("main").getByRole("link", { name: "资产来源", exact: true }),
-    ).toHaveAttribute("href", "/asset-sources");
 
     const navigation = page.getByTestId(
       profile.viewport.width < 1200

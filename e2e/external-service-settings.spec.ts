@@ -29,11 +29,11 @@ test.beforeEach(async ({ request }) => {
   await request.post("/test-doubles/reset");
 });
 
-test("外部服务只在本机设置中加密配置，EVM 来源仅提示依赖", async ({
+test("外部服务只在设置与安全中加密配置，EVM 来源仅提示依赖", async ({
   page,
 }) => {
   await loginAsOwner(page);
-  await page.getByRole("link", { name: "本机设置" }).click();
+  await page.getByRole("link", { name: "设置与安全", exact: true }).click();
   await expect(page).toHaveURL(/\/settings$/);
 
   const statuses = page.getByTestId("external-service-statuses");
@@ -41,9 +41,9 @@ test("外部服务只在本机设置中加密配置，EVM 来源仅提示依赖"
   await page.getByLabel("CoinGecko Demo API Key").fill("demo-test-key");
   await page.getByLabel("Ethereum RPC URL").fill("https://ethereum.example/rpc");
   await page.getByLabel("BNB Smart Chain RPC URL").fill("https://bsc.example/rpc");
-  await page.getByRole("button", { name: "保存并验证服务" }).click();
+  await page.getByRole("button", { name: "保存并验证", exact: true }).click();
 
-  await expect(page.getByRole("status")).toContainText("外部服务已保存并验证");
+  await expect(page.getByRole("status")).toContainText("已保存并验证。");
   await expect(statuses).toContainText("已验证");
   const response = await page.request.get("/api/external-services");
   const body = await response.json();

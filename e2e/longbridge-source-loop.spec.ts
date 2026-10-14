@@ -600,15 +600,14 @@ test("长桥持仓刷新失败时保留最后成功数据并明确标记过期",
   });
   expect(configured.ok()).toBeTruthy();
 
-  await card.getByRole("button", { name: /^刷新 / }).click();
-  await expect(card.getByTestId(/asset-source-refresh-status-/)).toContainText(
+  await page.getByRole("button", { name: /^刷新 / }).click();
+  await expect(page.getByTestId(/asset-source-refresh-status-/)).toContainText(
     "刷新失败",
   );
   await expect(card.getByTestId("asset-source-total")).toHaveText(
     "123,456.79 USD",
   );
-  await expect(card).toContainText("过期数据");
-  await expect(card).toContainText("长桥同步失败");
+  await expect(card.locator(".source-live-state")).toHaveText("LB / ERROR");
   await page.goto("/");
   await expect(page.getByTestId("overview-confidence")).toContainText(
     "过期来源 1 个",

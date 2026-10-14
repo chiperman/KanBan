@@ -248,9 +248,9 @@ test("钱包设置页可按合约忽略和恢复待确认 EVM 资产", async ({
   await page.request.post("/test-doubles/ethereum", {
     data: { scenario: "refresh-unknown-valued" },
   });
-  await updatedCard.getByRole("button", { name: "刷新 Ethereum 观察钱包" }).click();
+  await page.getByRole("button", { name: "刷新 Ethereum 观察钱包" }).click();
   await expect(
-    updatedCard.getByTestId(/asset-source-refresh-status-/),
+    page.getByTestId(/asset-source-refresh-status-/),
   ).toContainText("刷新完成");
 
   await page.goto(scopeUrl);

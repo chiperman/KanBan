@@ -434,11 +434,11 @@ test("Ethereum 余额失败只使该来源过期，BSC 继续当前且未认证�
   await page.goto("/asset-sources");
   await page.getByRole("link", { name: /Ethereum 观察钱包.*观察钱包/ }).click();
   const ethereumCard = page.getByTestId("ethereum-watch-card");
-  await expect(ethereumCard).toContainText("过期数据");
-  await expect(ethereumCard).toContainText("Ethereum 同步失败");
+  await expect(ethereumCard.locator(".source-live-state")).toHaveText("ETH / ERROR");
+  await expect(ethereumCard.getByTestId("asset-source-total")).toHaveText("5,519.00 USD");
   await page.goto("/asset-sources");
   await page.getByRole("link", { name: /BNB Smart Chain 观察钱包.*观察钱包/ }).click();
-  await expect(page.getByTestId("bsc-watch-card")).toContainText("数据当前");
+  await expect(page.getByTestId("bsc-watch-card").locator(".source-live-state")).toHaveText("BSC / CURRENT");
   await page.request.post("/test-doubles/ethereum", {
     data: { scenario: "refresh-ethereum-price-failure" },
   });
@@ -455,11 +455,11 @@ test("Ethereum 余额失败只使该来源过期，BSC 继续当前且未认证�
   await expect(prices.json()).resolves.toEqual({ successCount: 2, failureCount: 0 });
   await page.goto("/asset-sources");
   await page.getByRole("link", { name: /Ethereum 观察钱包.*观察钱包/ }).click();
-  await expect(page.getByTestId("ethereum-watch-card")).toContainText("过期数据");
-  await expect(page.getByTestId("ethereum-watch-card")).toContainText("Ethereum 同步失败");
+  await expect(page.getByTestId("ethereum-watch-card").locator(".source-live-state")).toHaveText("ETH / ERROR");
+  await expect(page.getByTestId("ethereum-watch-card").getByTestId("asset-source-total")).toHaveText("5,519.00 USD");
   await page.goto("/asset-sources");
   await page.getByRole("link", { name: /BNB Smart Chain 观察钱包.*观察钱包/ }).click();
-  await expect(page.getByTestId("bsc-watch-card")).toContainText("数据当前");
+  await expect(page.getByTestId("bsc-watch-card").locator(".source-live-state")).toHaveText("BSC / CURRENT");
   await page.goto("/");
   await page.getByRole("button", { name: "立即锁定（退出登录）" }).click();
   await expect(page.getByRole("heading", { name: "看板已锁定" })).toBeVisible();

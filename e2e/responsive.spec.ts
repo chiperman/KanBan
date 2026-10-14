@@ -8,33 +8,10 @@ const VIEWPORTS = [
 
 test.beforeEach(async ({ request }) => {
   await request.post("/test-doubles/reset");
-  await request.post("/test-doubles/asset-cards", {
-    data: {
-      assetCards: [
-        {
-          id: "wide",
-          kind: "asset",
-          title: "宽卡片",
-          body: "占据三列的内容卡片",
-          span: 3,
-        },
-        {
-          id: "mid",
-          kind: "asset",
-          title: "中卡片",
-          body: "占据两列的内容卡片",
-          span: 2,
-        },
-        {
-          id: "narrow",
-          kind: "asset",
-          title: "窄卡片",
-          body: "占据一列的内容卡片",
-          span: 1,
-        },
-      ],
-    },
+  const seeded = await request.post("/test-doubles/release-acceptance", {
+    data: { action: "seed" },
   });
+  expect(seeded.ok()).toBeTruthy();
 });
 
 async function loginAsOwner(page: Page): Promise<void> {
@@ -71,8 +48,9 @@ for (const viewport of VIEWPORTS) {
     );
     expect(overflow).toBeLessThanOrEqual(0);
 
-    await expect(page.getByTestId("card-grid")).toBeVisible();
-    await expect(page.getByTestId("card").first()).toBeVisible();
+    await expect(page.getByTestId("portfolio-overview-workspace")).toBeVisible();
+    await expect(page.getByTestId("overview-source-summary")).toBeVisible();
+    await expect(page.locator(".daily-overview__source-list > li")).toHaveCount(6);
     await expect(page.getByRole("button", { name: /^当前主题：/ })).toBeVisible();
   });
 }

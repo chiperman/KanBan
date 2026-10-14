@@ -121,7 +121,9 @@ test("BIT / Matrixport 同步异常时来源详情明确标记失败", async ({ 
 
   await configure(page, "refresh-failure");
   await page.getByRole("button", { name: /刷新 BIT \/ Matrixport/ }).click();
-  await expect(card).toContainText("重试来源同步失败，已保留最后成功数据");
+  await expect(page.getByTestId(/asset-source-refresh-status-/)).toContainText("刷新失败");
+  await expect(card.locator(".source-live-state")).toHaveText("BIT / ERROR");
+  await expect(card.getByTestId("asset-source-total")).toHaveText("160.00 USD");
 });
 
 test("DCP 订单列表失败时保留总额并退回仅汇总", async ({ page }) => {

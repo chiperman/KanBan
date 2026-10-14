@@ -53,22 +53,39 @@ test("六类来源形成正确总额、分布、真实稳定币价格与失败�
   await loginAsOwner(page);
 
   await page.setViewportSize({ width: 1280, height: 900 });
-  const overview = page.getByTestId("total-overview-card");
-  await expect(overview.getByTestId("total-asset-amount")).toHaveText("142,548.00 USD");
-  await expect(overview).toContainText("当前估值：不完整 · 2 项未估值");
-  await expect(overview.getByLabel("资产分布")).toContainText("证券");
-  await expect(overview.getByLabel("资产分布")).toContainText("100,000.00 USD");
-  await expect(overview.getByLabel("资产分布")).toContainText("加密资产");
-  await expect(overview.getByLabel("资产分布")).toContainText("42,548.00 USD");
+  const overview = page.getByTestId("overview-current-total");
+  await expect(overview).toContainText("142,548.00 USD");
+  await expect(page.getByTestId("overview-confidence")).toContainText("总额完整");
+  await page.goto("/assets");
+  await expect(page.locator("tr.is-unvalued")).toHaveCount(0);
+  // Unfollowed EVM assets stay visible in asset scope, outside the valued portfolio.
+  for (const [sourceId, chainId] of [
+    ["test-evm-watch-ethereum-source-5", "1"],
+    ["test-evm-watch-bsc-source-6", "56"],
+  ]) {
+    await page.goto(`/asset-sources/${sourceId}/settings`);
+    const pending = page.getByRole("region", { name: "待确认资产" });
+    await expect(pending.getByRole("listitem")).toHaveCount(1);
+    await expect(pending).toContainText("UNKNOWN");
+    await expect(pending).toContainText(`evm:${chainId}:0xcccccccccccccccccccccccccccccccccccccccc`);
+    await expect(pending).toContainText("数量：7");
+    await expect(pending.getByRole("button", { name: "需要关注" })).toBeEnabled();
+  }
+  await page.goto("/");
+  const summaries = page.locator(".daily-overview__source-list > li");
+  await expect(summaries).toHaveCount(6);
+  const securities = summaries.filter({ hasText: "长桥账户" });
+  await expect(securities.locator(".daily-overview__source-total")).toContainText("100,000.00 USD");
+  const cryptoAmounts = await summaries.filter({ hasNotText: "长桥账户" }).locator(".daily-overview__source-total").allTextContents();
+  expect(cryptoAmounts.reduce((sum, amount) => sum + Number(amount.replaceAll(",", "").replace("USD", "").trim()), 0)).toBe(42548);
 
   await chooseOverviewOption(page, "计价货币", "CNY");
-  await expect(overview.getByTestId("total-asset-amount")).toHaveText(
+  await expect(overview).toContainText(
     "1,026,345.60 CNY",
   );
-  await expect(overview).toContainText("USD/CNY 7.2000 · 发布验收汇率");
+  await expect(page.getByTestId("overview-reporting-rate")).toContainText("USD/CNY 7.2000");
   await chooseOverviewOption(page, "计价货币", "USD");
 
-  await expect(page.getByTestId("asset-refresh-status")).toContainText("同步完成");
   await page.request.post("/test-doubles/clock", {
     data: { now: "2026-01-01T00:10:00.000Z" },
   });
@@ -78,14 +95,14 @@ test("六类来源形成正确总额、分布、真实稳定币价格与失败�
   expect(failed.ok()).toBeTruthy();
   await page.getByRole("button", { name: "立即刷新资产" }).click();
   await expect(page.getByTestId("asset-refresh-status")).toContainText(
-    "同步完成 · 2 个来源失败",
+    "部分来源刷新失败",
   );
-  await expect(overview).toContainText("包含 2 个过期来源");
-  await expect(overview.getByTestId("total-asset-amount")).toHaveText("142,548.00 USD");
+  await expect(page.getByTestId("overview-confidence")).toContainText("过期来源 2 个");
+  await expect(overview).toContainText("142,548.00 USD");
 
-  await page.getByRole("link", { name: "查看 长桥资产来源详情" }).click();
+  await page.getByRole("link", { name: "查看 长桥账户 的资产明细" }).click();
   const longbridge = page.getByTestId("longbridge-card");
-  await expect(longbridge).toContainText("过期数据");
+  await expect(longbridge.locator(".source-live-state")).toHaveText("LB / ERROR");
   await expect(longbridge).toContainText("最后更新：2026-01-01 08:00");
   await expect(longbridge).not.toContainText("最后成功：");
   await expect(longbridge.getByTestId("asset-source-total")).toHaveText(
@@ -93,28 +110,28 @@ test("六类来源形成正确总额、分布、真实稳定币价格与失败�
   );
 
   await page.goto("/");
-  await page.getByRole("link", { name: "查看 Binance 资产来源详情" }).click();
+  await page.getByRole("link", { name: "查看 Binance 只读账户 的资产明细" }).click();
   const binance = page.getByTestId("binance-card");
-  await expect(binance).toContainText("数据当前");
+  await expect(binance.locator(".source-live-state")).toHaveText("BN / CURRENT");
   await expect(binance).toContainText("最后更新：2026-01-01 08:10");
 
   await page.goto("/");
   await page.getByRole("link", {
-    name: "查看 Ethereum 观察钱包来源详情",
+    name: "查看 Ethereum 观察钱包 的资产明细",
   }).click();
-  await expect(page.getByTestId("ethereum-watch-card")).toContainText("过期数据");
+  await expect(page.getByTestId("ethereum-watch-card").locator(".source-live-state")).toHaveText("ETH / ERROR");
   await page.goto("/");
   await page.getByRole("link", {
-    name: "查看 BNB Smart Chain 观察钱包来源详情",
+    name: "查看 BNB Smart Chain 观察钱包 的资产明细",
   }).click();
-  await expect(page.getByTestId("bsc-watch-card")).toContainText("数据当前");
+  await expect(page.getByTestId("bsc-watch-card").locator(".source-live-state")).toHaveText("BSC / CURRENT");
 });
 
 test("完整锁定到所有者再锁定旅程不泄露敏感数据且不存在越界入口", async ({
   page,
 }) => {
   await loginAsOwner(page);
-  await expect(page.getByRole("link", { name: "本机设置" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "设置与安全", exact: true })).toBeVisible();
   await expect(
     page.getByRole("button", { name: "配置 TOTP 登录" }),
   ).toHaveCount(0);
@@ -133,9 +150,10 @@ test("完整锁定到所有者再锁定旅程不泄露敏感数据且不存在�
   await expect(page.getByTestId("card")).toHaveCount(0);
 
   const networkBodies: string[] = [];
+  const origin = new URL(page.url()).origin;
   page.on("response", async (response) => {
     const url = new URL(response.url());
-    if (url.origin !== "http://localhost:3101" || url.pathname.startsWith("/_next/")) {
+    if (url.origin !== origin || url.pathname.startsWith("/_next/")) {
       return;
     }
     const contentType = response.headers()["content-type"] ?? "";

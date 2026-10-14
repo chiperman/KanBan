@@ -46,12 +46,11 @@ test("设置与安全集中低频入口，计价货币属于总览且隐私开�
   await expect(page.getByText("唯一所有者 Passkey 已启用")).toBeVisible();
   await expect(page.getByRole("heading", { name: "TOTP 登录" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "备份与恢复" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "本机数据" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "默认偏好" })).toBeVisible();
   await expect(page.getByRole("button", { name: "导出业务数据备份" })).toBeVisible();
-  await expect(page.getByLabel("要恢复的本机备份文件名")).toBeVisible();
+  await expect(page.getByLabel("备份文件名", { exact: true })).toBeVisible();
   await expect(
-    page.getByText("资金账本及对应的长桥参考汇率观察", { exact: false }),
+    page.getByText("备份业务数据与资金账本", { exact: false }),
   ).toBeVisible();
 
   await expect(page.getByLabel("计价货币")).toHaveCount(0);
@@ -106,10 +105,7 @@ test("备份与恢复入口不回显外部来源凭证，且可用键盘预演�
   await confirmRestore.focus();
   await page.keyboard.press("Enter");
   await expect(
-    page.getByRole("status").filter({ hasText: "已恢复业务数据" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("status").filter({ hasText: "资金账本" }),
+    page.getByRole("status").filter({ hasText: "已恢复。自动来源需重新授权。" }),
   ).toBeVisible();
 });
 
