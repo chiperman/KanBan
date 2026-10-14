@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { PROD_BASE_URL } from "../playwright.config";
+import { PROD_BASE_URL } from "../../playwright.config";
 
 const REPLACEABLE_DOUBLES = [
   "clock",

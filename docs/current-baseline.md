@@ -36,12 +36,12 @@
 复现本轮浏览器范围（先设置独立 `NEXT_DIST_DIR` 并构建，再设置空闲的 `PLAYWRIGHT_TEST_PORT`）：
 
 ```sh
-pnpm exec playwright test e2e/asset-refresh-workbench.spec.ts \
-  e2e/card-layout-responsive.spec.ts e2e/demo-mode.spec.ts \
-  e2e/formal-daily-settlement.spec.ts e2e/live-counter.spec.ts \
-  e2e/manual-asset-exchange-rate-snapshots.spec.ts \
-  e2e/manual-asset-records.spec.ts e2e/manual-record-currency.spec.ts \
-  e2e/overview-layout-mode.spec.ts e2e/workbench-shell-navigation.spec.ts
+pnpm exec playwright test e2e/smoke/asset-refresh-workbench.spec.ts \
+  e2e/archive/card-layout-responsive.spec.ts e2e/archive/demo-mode.spec.ts \
+  e2e/smoke/formal-daily-settlement.spec.ts e2e/archive/live-counter.spec.ts \
+  e2e/archive/manual-asset-exchange-rate-snapshots.spec.ts \
+  e2e/archive/manual-asset-records.spec.ts e2e/archive/manual-record-currency.spec.ts \
+  e2e/smoke/overview-layout-mode.spec.ts e2e/smoke/workbench-shell-navigation.spec.ts
 ```
 
 源码、范围内浏览器路径与文档为 `changed-and-verified`；现役 Agent 规则只读核对，未修改；记忆为生成只读资料；部署、真实账户与全仓浏览器为 `out-of-scope`。本轮交付仅包含本地提交，不推送或部署。隔离构建产物、测试结果与临时证据保留供复核，不计入 Git；本轮生成的 `tsconfig.json` include 路径已移除。Node 类型转换实验性提示与 ESM 模块类型提示仍保留，未为消除提示改变运行方式。

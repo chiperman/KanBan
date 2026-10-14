@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import {
   expectCompleteHistory,
   prepareCompleteHistory,
-} from "./history-observation-helpers";
+} from "../history-observation-helpers";
 
 const API_KEY = "ticket-04-binance-key";
 const API_SECRET = "ticket-04-binance-secret-must-not-leak";

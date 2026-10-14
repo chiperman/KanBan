@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { prepareCompleteHistory } from "./history-observation-helpers";
+import { prepareCompleteHistory } from "../history-observation-helpers";
 
 async function seedPerformanceHistory(page: Page): Promise<void> {
   await page.request.post("/test-doubles/reset");

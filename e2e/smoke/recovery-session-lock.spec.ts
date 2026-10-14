@@ -7,7 +7,7 @@ import {
   type Page,
 } from "@playwright/test";
 
-import { TEST_BASE_URL } from "../playwright.config";
+import { TEST_BASE_URL } from "../../playwright.config";
 
 const FIXED_NOW = "2026-01-01T00:00:00.000Z";
 const SENSITIVE_TITLE = "SENSITIVE-TITLE-总资产";

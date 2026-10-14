@@ -4,9 +4,9 @@ import {
   type CDPSession,
   type Page,
 } from "@playwright/test";
-import { confirmSourceFlow, expectSourceObservation, openSourceFlow, sourceFlow } from "./source-flow-helpers";
-import { PROD_BASE_URL } from "../playwright.config";
-import { expectCompleteHistory, prepareCompleteHistory } from "./history-observation-helpers";
+import { confirmSourceFlow, expectSourceObservation, openSourceFlow, sourceFlow } from "../source-flow-helpers";
+import { PROD_BASE_URL } from "../../playwright.config";
+import { expectCompleteHistory, prepareCompleteHistory } from "../history-observation-helpers";
 
 const API_KEY = "binance-browser-api-key";
 const API_SECRET = "binance-browser-secret-must-not-leak";

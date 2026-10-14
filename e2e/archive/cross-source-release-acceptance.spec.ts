@@ -1,6 +1,6 @@
 import { expect, test, type CDPSession, type Page } from "@playwright/test";
 
-import { chooseOverviewOption } from "./overview-control-helpers";
+import { chooseOverviewOption } from "../overview-control-helpers";
 
 const FORBIDDEN_SECRETS = [
   "release-longbridge-token",

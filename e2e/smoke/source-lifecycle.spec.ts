@@ -6,13 +6,13 @@ import {
   type Page,
 } from "@playwright/test";
 
-import { confirmSourceFlow, openSourceFlow } from "./source-flow-helpers";
+import { confirmSourceFlow, openSourceFlow } from "../source-flow-helpers";
 import {
   expectCompleteHistory,
   prepareCompleteHistory,
   REPORTING_RATE_SOURCE_ID,
   seedReportingRates,
-} from "./history-observation-helpers";
+} from "../history-observation-helpers";
 
 const ADDRESS = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
 const OTHER_ADDRESS = "0x1111111111111111111111111111111111111111";

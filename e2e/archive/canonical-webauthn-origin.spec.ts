@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { TEST_SERVER_PORT } from "../playwright.config";
+import { TEST_SERVER_PORT } from "../../playwright.config";
 
 test("127.0.0.1 的 Passkey 页面重定向到同端口的 localhost", async () => {
   for (const pathname of ["/", "/setup"]) {

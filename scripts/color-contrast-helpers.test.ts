@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { contrastRatio, parseColor } from "../e2e/color-contrast-helpers";
+import { contrastRatio, parseColor } from "../e2e/smoke/color-contrast-helpers";
 
 test("computed RGB and normalized sRGB retain channel scale and alpha", () => {
   assert.deepEqual(parseColor("rgb(88, 90, 90)"), [88, 90, 90, 1]);

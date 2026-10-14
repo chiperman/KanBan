@@ -7,7 +7,7 @@ import {
   type Page,
 } from "@playwright/test";
 
-import { chooseOverviewOption } from "./overview-control-helpers";
+import { chooseOverviewOption } from "../overview-control-helpers";
 
 async function attachPasskey(page: Page): Promise<CDPSession> {
   const client = await page.context().newCDPSession(page);

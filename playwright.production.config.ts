@@ -9,10 +9,10 @@ import {
 export default defineConfig({
   ...sharedPlaywrightConfig,
   testMatch: [
-    "binance-source.spec.ts",
-    "bitget-source.spec.ts",
-    "okx-source.spec.ts",
-    "test-doubles.spec.ts",
+    "archive/binance-source.spec.ts",
+    "archive/bitget-source.spec.ts",
+    "archive/okx-source.spec.ts",
+    "archive/test-doubles.spec.ts",
   ],
   webServer: [
     { ...testWebServer },

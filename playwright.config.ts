@@ -7,12 +7,7 @@ import {
 
 export default defineConfig({
   ...sharedPlaywrightConfig,
-  testIgnore: [
-    "binance-source.spec.ts",
-    "bitget-source.spec.ts",
-    "okx-source.spec.ts",
-    "test-doubles.spec.ts",
-  ],
+  testMatch: ["smoke/**/*.spec.ts"],
   webServer: { ...testWebServer },
 });
 

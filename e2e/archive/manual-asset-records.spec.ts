@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { chooseOverviewOption } from "./overview-control-helpers";
+import { chooseOverviewOption } from "../overview-control-helpers";
 
 async function loginAsOwner(page: Page): Promise<void> {
   const response = await page.request.post("/test-doubles/owner-session");
