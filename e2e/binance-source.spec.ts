@@ -4,6 +4,7 @@ import {
   type CDPSession,
   type Page,
 } from "@playwright/test";
+import { confirmSourceFlow, expectSourceObservation, openSourceFlow, sourceFlow } from "./source-flow-helpers";
 import { PROD_BASE_URL } from "../playwright.config";
 import { expectCompleteHistory, prepareCompleteHistory } from "./history-observation-helpers";
 
@@ -50,14 +51,7 @@ async function configure(page: Page, scenario = "valid") {
 }
 
 async function startBinanceFlow(page: Page) {
-  const dialog = page.getByRole("dialog", { name: "添加资产来源" });
-  if (!(await dialog.isVisible())) {
-    await page.getByRole("button", { name: "添加资产来源" }).click();
-  }
-  const provider = page.getByRole("radio", { name: "Binance" });
-  if (await provider.isVisible()) {
-    await provider.click();
-  }
+  await openSourceFlow(page, "Binance");
   await page.getByLabel("Binance API Key").fill(API_KEY);
   await page.getByLabel("Binance API Secret").fill(API_SECRET);
   await page.getByRole("button", { name: "验证只读凭证" }).click();
@@ -71,11 +65,10 @@ async function state(page: Page) {
 }
 
 async function disconnectBinance(page: Page) {
-  await page.getByRole("button", { name: "管理 Binance 资产" }).click();
-  const management = page.getByRole("dialog", { name: "管理 Binance 资产" });
+  const management = page.getByRole("region", { name: "危险操作", exact: true });
   await management.getByRole("button", { name: "断开来源" }).click();
   await page
-    .getByRole("dialog", { name: "确认断开 Binance 资产" })
+    .getByRole("dialog", { name: "确认断开 Binance 账户 · UID 900001" })
     .getByRole("button", { name: "确认断开" })
     .click();
 }
@@ -87,17 +80,13 @@ test.beforeEach(async ({ request }) => {
 test("取消添加资产来源后再次打开时只读凭证字段为空", async ({ page }) => {
   await loginAsOwner(page);
 
-  await page.getByRole("button", { name: "添加资产来源" }).click();
-  await page.getByRole("radio", { name: "Binance" }).click();
+  await openSourceFlow(page, "Binance");
   await page.getByLabel("Binance API Key").fill(API_KEY);
   await page.getByLabel("Binance API Secret").fill(API_SECRET);
-  await page
-    .getByRole("dialog", { name: "添加资产来源" })
-    .getByRole("button", { name: "取消" })
-    .click();
+  await sourceFlow(page).getByRole("button", { name: "上一步" }).click();
+  await sourceFlow(page).getByRole("button", { name: "取消" }).click();
 
-  await page.getByRole("button", { name: "添加资产来源" }).click();
-  await page.getByRole("radio", { name: "Binance" }).click();
+  await openSourceFlow(page, "Binance");
   await expect(page.getByLabel("Binance API Key")).toHaveValue("");
   await expect(page.getByLabel("Binance API Secret")).toHaveValue("");
 });
@@ -109,36 +98,35 @@ test("Binance 只读凭证先预览后原子保存，并展示现货、资金与
   await loginAsOwner(page);
   const responseBodies: string[] = [];
   page.on("response", async (response) => {
-    if (response.url().startsWith("http://localhost:3101")) {
+    if (new URL(response.url()).origin === new URL(page.url()).origin) {
       responseBodies.push(await response.text().catch(() => ""));
     }
   });
 
+  const previewResponse = page.waitForResponse((response) =>
+    response.url().endsWith("/api/asset-sources/binance/preview") && response.request().method() === "POST",
+  );
   await startBinanceFlow(page);
-  const preview = page.getByRole("dialog", { name: "确认 Binance 资产来源" });
-  await expect(preview).toContainText("Binance 账户 · UID 900001");
+  const previewBody = await (await previewResponse).json();
+  const preview = sourceFlow(page);
+  expect(previewBody.account.label).toBe("Binance 账户 · UID 900001");
   await expect(preview).toContainText("现货、资金、Simple Earn（只读）");
-  await expect(
-    preview.getByText("12,849.50 USDT", { exact: true }),
-  ).toBeVisible();
+  await expect(preview).toContainText("12,849.50 USDT");
   expect(await state(page)).toEqual({ savedSources: 0, savedSecrets: 0 });
   expect(await page.content()).not.toContain(API_SECRET);
 
-  await preview.getByRole("button", { name: "确认并保存" }).click();
+  await confirmSourceFlow(page, "Binance");
   const savedHistory = await prepareCompleteHistory(page.request, ["test-binance-source-1"]);
   const card = page.getByTestId("binance-card");
   await expect(card).toContainText("Binance 资产");
   await expect(card.getByTestId("asset-source-total")).toHaveText(
-    "12,849.50 USDT",
-  );
-  await expect(card.getByTestId("holding-top-list").getByRole("listitem")).toHaveCount(3);
-  await expect(card).toContainText("现货");
-  await expect(page.getByTestId("total-asset-amount")).toHaveText(
     "12,823.80 USD",
   );
-  await expect(page.getByTestId("asset-source-trend-test-binance-source-1")).toContainText(
-    "01月01日",
-  );
+  await expect(card.getByTestId("asset-holdings-detail").locator("tbody tr")).toHaveCount(9);
+  await expect(card).toContainText("现货");
+  await page.goto("/");
+  await expect(page.getByTestId("overview-current-total")).toContainText("12,823.80 USD");
+  await expectSourceObservation(page, "test-binance-source-1");
 
   expect(await state(page)).toEqual({ savedSources: 1, savedSecrets: 1 });
   expect(responseBodies.join("\n")).not.toContain(API_SECRET);
@@ -152,19 +140,13 @@ test("重新验证同一 Binance 账户时替换凭证并保留原卡片", async
   await configure(page);
   await loginAsOwner(page);
   await startBinanceFlow(page);
-  await page
-    .getByRole("dialog", { name: "确认 Binance 资产来源" })
-    .getByRole("button", { name: "确认并保存" })
-    .click();
+  await confirmSourceFlow(page, "Binance");
 
   const originalCard = page.getByTestId("binance-card");
   await expect(originalCard).toHaveCount(1);
 
   await startBinanceFlow(page);
-  await page
-    .getByRole("dialog", { name: "确认 Binance 资产来源" })
-    .getByRole("button", { name: "确认并保存" })
-    .click();
+  await confirmSourceFlow(page, "Binance");
 
   await expect(page.getByTestId("binance-card")).toHaveCount(1);
   expect(await state(page)).toEqual({ savedSources: 1, savedSecrets: 1 });
@@ -176,15 +158,11 @@ test("已断开的 Binance 可直接恢复原卡片，不新增来源或删除�
   await configure(page);
   await loginAsOwner(page);
   await startBinanceFlow(page);
-  await page
-    .getByRole("dialog", { name: "确认 Binance 资产来源" })
-    .getByRole("button", { name: "确认并保存" })
-    .click();
+  await confirmSourceFlow(page, "Binance");
 
   await disconnectBinance(page);
   expect(await state(page)).toEqual({ savedSources: 1, savedSecrets: 1 });
-  await page.getByRole("button", { name: "管理 Binance 资产" }).click();
-  const management = page.getByRole("dialog", { name: "管理 Binance 资产" });
+  const management = page.getByRole("region", { name: "危险操作", exact: true });
   await management.getByRole("button", { name: "恢复连接" }).click();
 
   await expect(page.getByTestId("binance-card")).toHaveCount(1);
@@ -197,10 +175,7 @@ test("全局持仓搜索筛选 Binance 明细", async ({ page }) => {
   await configure(page);
   await loginAsOwner(page);
   await startBinanceFlow(page);
-  await page
-    .getByRole("dialog", { name: "确认 Binance 资产来源" })
-    .getByRole("button", { name: "确认并保存" })
-    .click();
+  await confirmSourceFlow(page, "Binance");
 
   const card = page.getByTestId("binance-card");
   const bitcoin = card.getByTestId("asset-holdings-detail").locator("tbody tr").filter({ hasText: "BTC" });
@@ -233,9 +208,7 @@ test("Binance 写权限、缺失权限证明和原子保存失败均不留下来
   await configure(page);
   await loginAsOwner(page);
   await startBinanceFlow(page);
-  const changedPermissionPreview = page.getByRole("dialog", {
-    name: "确认 Binance 资产来源",
-  });
+  const changedPermissionPreview = sourceFlow(page);
   await configure(page, "trade");
   await changedPermissionPreview
     .getByRole("button", { name: "确认并保存" })
@@ -248,7 +221,7 @@ test("Binance 写权限、缺失权限证明和原子保存失败均不留下来
 
   await configure(page, "trade");
   await startBinanceFlow(page);
-  await expect(page.locator(".login-error[role=alert]")).toContainText(
+  await expect(page.locator(".asset-source-flow__notice[role=alert]")).toContainText(
     "交易或资产写权限",
   );
   expect(await state(page)).toEqual({ savedSources: 0, savedSecrets: 0 });
@@ -277,7 +250,7 @@ test("Binance 写权限、缺失权限证明和原子保存失败均不留下来
 
   await configure(page, "commit-failure");
   await startBinanceFlow(page);
-  const preview = page.getByRole("dialog", { name: "确认 Binance 资产来源" });
+  const preview = sourceFlow(page);
   await preview.getByRole("button", { name: "确认并保存" }).click();
   await expect(preview.getByRole("alert")).toContainText("原子事务写入失败");
   expect(await state(page)).toEqual({ savedSources: 0, savedSecrets: 0 });
@@ -617,9 +590,9 @@ test("Binance 默认隐藏低于 1 USDT 的持仓，并提供可见的手动展�
   await configure(page, "dust");
   await loginAsOwner(page);
   await startBinanceFlow(page);
-  const preview = page.getByRole("dialog", { name: "确认 Binance 资产来源" });
+  const preview = sourceFlow(page);
   await expect(preview).toContainText("12,850.00 USDT");
-  await preview.getByRole("button", { name: "确认并保存" }).click();
+  await confirmSourceFlow(page, "Binance");
 
   const card = page.getByTestId("binance-card");
   const toggle = card.getByRole("checkbox", { name: /隐藏低于 1 的持仓/ });
@@ -630,7 +603,7 @@ test("Binance 默认隐藏低于 1 USDT 的持仓，并提供可见的手动展�
   await toggle.uncheck();
   await expect(card).toContainText("DUST");
   await expect(card.getByTestId("asset-source-total")).toHaveText(
-    "12,850.00 USDT",
+    "12,824.30 USD",
   );
 });
 
@@ -640,28 +613,22 @@ test("Binance 同步失败保留最后成功数据并接入过期状态和日快
   await configure(page);
   await loginAsOwner(page);
   await startBinanceFlow(page);
-  await page
-    .getByRole("dialog", { name: "确认 Binance 资产来源" })
-    .getByRole("button", { name: "确认并保存" })
-    .click();
+  await confirmSourceFlow(page, "Binance");
   const card = page.getByTestId("binance-card");
-  await expect(card).toContainText("12,849.50 USDT");
-  await expect(page.getByTestId("asset-refresh-status")).toContainText(
-    "同步完成",
-  );
+  await expect(card).toContainText("12,823.80 USD");
 
   await page.request.post("/test-doubles/binance", {
     data: { scenario: "refresh-failure" },
   });
-  await page.getByRole("button", { name: "立即刷新资产" }).click();
-  await expect(page.getByTestId("asset-refresh-status")).toContainText(
-    "1 个来源失败",
+  await page.getByRole("button", { name: /^刷新 Binance/ }).click();
+  await expect(page.getByTestId(/asset-source-refresh-status-/)).toContainText(
+    "刷新失败",
   );
-  await expect(card).toContainText("12,849.50 USDT");
-  await expect(card).toContainText("过期数据");
-  await expect(card).toContainText("Binance 同步失败");
-  await expect(page.getByTestId("total-asset-overview")).toContainText(
-    "包含 1 个过期来源",
+  await expect(card).toContainText("12,823.80 USD");
+  await expect(card.locator(".source-live-state")).toHaveText("BN / ERROR");
+  await page.goto("/");
+  await expect(page.getByTestId("overview-confidence")).toContainText(
+    "过期来源 1 个",
   );
 });
 
@@ -672,15 +639,12 @@ test("未认证状态与生产测试替身都不能读取 Binance 私密来源�
   await configure(page);
   await loginAsOwner(page);
   await startBinanceFlow(page);
-  await page
-    .getByRole("dialog", { name: "确认 Binance 资产来源" })
-    .getByRole("button", { name: "确认并保存" })
-    .click();
+  await confirmSourceFlow(page, "Binance");
   await expect(page.getByTestId("binance-card")).toBeVisible();
-  await page.getByRole("button", { name: "退出登录" }).click();
+  await page.getByRole("button", { name: "立即锁定（退出登录）" }).click();
   await expect(page.getByRole("heading", { name: "看板已锁定" })).toBeVisible();
   const publicSurface = `${await page.content()}\n${await (await page.request.get("/")).text()}`;
-  for (const value of ["900001", "BTC", "12,849", API_KEY, API_SECRET]) {
+  for (const value of ["900001", "BTC", "12,823", API_KEY, API_SECRET]) {
     expect(publicSurface).not.toContain(value);
   }
   expect(

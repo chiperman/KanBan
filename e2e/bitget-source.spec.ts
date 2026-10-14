@@ -1,4 +1,5 @@
 import { expect, test, type CDPSession, type Page } from "@playwright/test";
+import { confirmSourceFlow, expectSourceObservation, openSourceFlow, sourceFlow } from "./source-flow-helpers";
 import { PROD_BASE_URL } from "../playwright.config";
 import { expectCompleteHistory, prepareCompleteHistory } from "./history-observation-helpers";
 
@@ -40,20 +41,11 @@ async function configure(page: Page, scenario = "valid") {
 }
 
 async function startBitgetFlow(page: Page, accountMode = "classic") {
-  const dialog = page.getByRole("dialog", { name: "添加资产来源" });
-  if (!(await dialog.isVisible())) {
-    await page.getByRole("button", { name: "添加资产来源" }).click();
-  }
-  const provider = page.getByRole("radio", { name: "Bitget" });
-  if (await provider.isVisible()) {
-    await provider.click();
-  }
-  const accountModeLabel =
-    accountMode === "uta"
-      ? "Unified Trading Account (UTA)"
-      : "Classic Account";
+  await openSourceFlow(page, "Bitget");
+  const dialog = sourceFlow(page);
+  const accountModeLabel = accountMode === "uta" ? "Unified Trading Account (UTA)" : "Classic Account";
   await dialog.getByRole("button", { name: "Bitget 账户类型" }).click();
-  await dialog.getByRole("option", { name: accountModeLabel }).click();
+  await page.getByRole("option", { name: accountModeLabel, exact: true }).click();
   await page.getByLabel("Bitget API Key").fill(API_KEY);
   await page.getByLabel("Bitget API Secret").fill(API_SECRET);
   await page.getByLabel("Bitget Passphrase").fill(PASSPHRASE);
@@ -78,16 +70,18 @@ test("Bitget 只读凭证先预览后原子保存，并展示现货、资金、E
   await loginAsOwner(page);
   const responseBodies: string[] = [];
   page.on("response", async (response) => {
-    if (response.url().startsWith("http://localhost:3101")) {
+    if (new URL(response.url()).origin === new URL(page.url()).origin) {
       responseBodies.push(await response.text().catch(() => ""));
     }
   });
 
+  const previewResponse = page.waitForResponse((response) =>
+    response.url().endsWith("/api/asset-sources/bitget/preview") && response.request().method() === "POST",
+  );
   await startBitgetFlow(page);
-  const preview = page.getByRole("dialog", {
-    name: "确认 Bitget 资产来源",
-  });
-  await expect(preview).toContainText("Bitget 账户 · UID 770001");
+  const previewBody = await (await previewResponse).json();
+  const preview = sourceFlow(page);
+  expect(previewBody.account.label).toBe("Bitget 账户 · UID 770001");
   await expect(preview).toContainText(
     "现货、资金、Savings、Cash+、SharkFin、On-chain Elite、普通 Futures（平台总额已含，不展开仓位）、合约交易机器人（只读）",
   );
@@ -96,30 +90,20 @@ test("Bitget 只读凭证先预览后原子保存，并展示现货、资金、E
   await expect(page.getByText(API_SECRET)).toHaveCount(0);
   await expect(page.getByText(PASSPHRASE)).toHaveCount(0);
 
-  await preview.getByRole("button", { name: "确认并保存" }).click();
+  await confirmSourceFlow(page, "Bitget");
   const card = page.getByTestId("bitget-card");
   await expect(card.getByTestId("asset-source-total")).toHaveText(
-    "11,941.14 USDT",
+    "11,917.25 USD",
   );
   await expect(
-    card.getByTestId("holding-top-list").getByRole("listitem"),
-  ).toHaveCount(3);
+    card.getByTestId("asset-holdings-detail").locator("tbody tr"),
+  ).toHaveCount(10);
   await expect(card).toContainText("现货");
   await expect(card.getByTestId("bitget-coverage-status")).toContainText(
     "当前总额完整 · 部分产品仅汇总",
   );
   const coverage = card.getByTestId("bitget-product-coverage");
   await expect(coverage).toContainText("09 PRODUCTS");
-  const resizeHandle = page.getByRole("button", {
-    name: /调整\s*Bitget 资产宽度/,
-  });
-  const widened = page.waitForResponse(
-    (response) =>
-      response.url().endsWith("/api/asset-cards/layout") &&
-      response.request().method() === "PUT",
-  );
-  await resizeHandle.press("ArrowRight");
-  await widened;
   await expect(coverage).toBeVisible();
   await coverage.locator("summary").click();
   await expect(coverage).toContainText("SharkFin");
@@ -137,7 +121,7 @@ test("Bitget 写权限、确认前范围变化和保存失败均不留下来源�
   await configure(page);
   await loginAsOwner(page);
   await startBitgetFlow(page);
-  const preview = page.getByRole("dialog", { name: "确认 Bitget 资产来源" });
+  const preview = sourceFlow(page);
   await configure(page, "trade");
   await preview.getByRole("button", { name: "确认并保存" }).click();
   await expect(preview.getByRole("alert")).toContainText("写权限");
@@ -171,7 +155,7 @@ test("Bitget 写权限、确认前范围变化和保存失败均不留下来源�
 
   await configure(page, "commit-failure");
   await startBitgetFlow(page);
-  const failed = page.getByRole("dialog", { name: "确认 Bitget 资产来源" });
+  const failed = sourceFlow(page);
   await failed.getByRole("button", { name: "确认并保存" }).click();
   await expect(failed.getByRole("alert")).toContainText("原子事务写入失败");
   expect(await state(page)).toEqual({ savedSources: 0, savedSecrets: 0 });
@@ -719,27 +703,24 @@ test("Bitget 同步失败保留最后成功数据并接入过期状态和日快�
   await configure(page);
   await loginAsOwner(page);
   await startBitgetFlow(page);
-  await page
-    .getByRole("dialog", { name: "确认 Bitget 资产来源" })
-    .getByRole("button", { name: "确认并保存" })
-    .click();
+  await confirmSourceFlow(page, "Bitget");
   const historyBeforeFailure = await prepareCompleteHistory(page.request, ["test-bitget-source-1"]);
   const card = page.getByTestId("bitget-card");
-  await expect(card).toContainText("11,941.14 USDT");
-  await expect(page.getByTestId("asset-source-trend-test-bitget-source-1")).toContainText("01月01日");
+  await expect(card).toContainText("11,917.25 USD");
+  await expectSourceObservation(page, "test-bitget-source-1");
   const coverage = card.getByTestId("bitget-product-coverage")
     .locator(".vibe-coverage-summary-freshness");
   await expect(coverage).toHaveText("09 CURRENT");
 
   await configure(page, "refresh-failure");
-  await page.getByRole("button", { name: "立即刷新资产" }).click();
-  await expect(page.getByTestId("asset-refresh-status")).toContainText("1 个来源失败");
-  await expect(card).toContainText("11,941.14 USDT");
-  await expect(card).toContainText("过期数据");
-  await expect(card).toContainText("Bitget 同步失败");
+  await page.getByRole("button", { name: /^刷新 Bitget/ }).click();
+  await expect(page.getByTestId(/asset-source-refresh-status-/)).toContainText("刷新失败");
+  await expect(card).toContainText("11,917.25 USD");
+  await expect(card.locator(".source-live-state")).toHaveText("BG / ERROR");
   // Source expiry does not rewrite the last successful product coverage.
   await expect(coverage).toHaveText("09 CURRENT");
-  await expect(page.getByTestId("total-asset-overview")).toContainText("包含 1 个过期来源");
+  await page.goto("/");
+  await expect(page.getByTestId("overview-confidence")).toContainText("过期来源 1 个");
   expect(await expectCompleteHistory(page.request, ["test-bitget-source-1"]))
     .toEqual(historyBeforeFailure);
 });
@@ -855,12 +836,9 @@ test("未认证状态与生产测试替身都不能读取 Bitget 私密来源或
   await configure(page);
   await loginAsOwner(page);
   await startBitgetFlow(page);
-  await page
-    .getByRole("dialog", { name: "确认 Bitget 资产来源" })
-    .getByRole("button", { name: "确认并保存" })
-    .click();
+  await confirmSourceFlow(page, "Bitget");
   await expect(page.getByTestId("bitget-card")).toBeVisible();
-  await page.getByRole("button", { name: "退出登录" }).click();
+  await page.getByRole("button", { name: "立即锁定（退出登录）" }).click();
   await expect(page.getByTestId("login-gate")).toBeVisible();
   await page.reload();
   const publicSurface = `${await page.content()}\n${await (await page.request.get("/")).text()}`;

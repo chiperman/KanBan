@@ -115,10 +115,10 @@ test("手工资产也通过独立流程创建，且不伪造凭证、持仓或�
   await page.getByRole("button", { name: "查看确认" }).click();
 
   await expect(
-    page.getByRole("heading", { name: "确认创建手工资产来源" }),
+    page.getByRole("heading", { name: "确认手工来源" }),
   ).toBeVisible();
   await expect(page.getByText("无凭证来源", { exact: true })).toBeVisible();
-  await expect(page.getByText("不创建持仓或同步能力")).toBeVisible();
+  await expect(page.getByText("仅记录总额", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "确认创建来源" }).click();
 
   await expect(page).toHaveURL("/asset-sources");

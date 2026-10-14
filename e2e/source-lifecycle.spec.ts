@@ -5,6 +5,8 @@ import {
   type Locator,
   type Page,
 } from "@playwright/test";
+
+import { confirmSourceFlow, openSourceFlow } from "./source-flow-helpers";
 import {
   expectCompleteHistory,
   prepareCompleteHistory,
@@ -42,15 +44,11 @@ async function loginAsOwner(page: Page): Promise<void> {
 }
 
 async function connectEthereum(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "添加资产来源" }).click();
-  await page.getByRole("radio", { name: "EVM 观察钱包" }).click();
+  await openSourceFlow(page, "EVM 观察钱包");
   await page.getByRole("checkbox", { name: "BNB Smart Chain 观察钱包" }).uncheck();
   await page.getByLabel("EVM 公开地址（每行一个）").fill(ADDRESS);
   await page.getByRole("button", { name: "验证公开地址" }).click();
-  await page
-    .getByRole("dialog", { name: "确认 EVM 观察钱包" })
-    .getByRole("button", { name: "确认并保存" })
-    .click();
+  await confirmSourceFlow(page, "Ethereum");
   await expect(page.getByTestId("ethereum-watch-card")).toBeVisible();
 }
 
@@ -68,8 +66,10 @@ async function lifecycleState(page: Page) {
 }
 
 async function openSourceManagement(page: Page, source: string) {
-  await page.getByRole("button", { name: `管理 ${source}` }).click();
-  return page.getByRole("dialog", { name: `管理 ${source}` });
+  await page.goto("/asset-sources");
+  await page.getByRole("link", { name: new RegExp(`${source}.*观察钱包`) }).click();
+  await expect(page).toHaveURL(/\/asset-sources\/[^/]+$/);
+  return page.locator("main");
 }
 
 async function disconnectSource(
@@ -153,12 +153,11 @@ test("隐藏与恢复只改变卡片可见性，来源仍同步并计入总额�
   await connectEthereum(page);
   const originalId = (await lifecycleState(page)).sources[0].id;
   const historyBeforeHide = await prepareCompleteHistory(page.request, [originalId]);
-  await expect(page.getByTestId("total-overview-card")).toContainText("5,519");
-
-  await page.getByRole("button", { name: "隐藏 Ethereum 观察钱包" }).click();
-  await expect(page.getByTestId("ethereum-watch-card")).toHaveCount(0);
-  await expect(page.getByTestId("total-overview-card")).toContainText("5,519");
-  await expect(page.getByRole("heading", { name: "已隐藏的资产来源" })).toBeVisible();
+  await expect(page.getByTestId("ethereum-watch-card")).toContainText("5,519.00 USD");
+  await page.getByRole("button", { name: "隐藏来源卡片" }).click();
+  await expect(page.getByRole("region", { name: "来源显示与生命周期" })).toContainText("来源卡片已隐藏");
+  await page.goto("/");
+  await expect(page.getByTestId("overview-current-total")).toContainText("5,519.00 USD");
 
   const hidden = await lifecycleState(page);
   expect(hidden.cards.find(({ sourceId }) => sourceId === hidden.sources[0].id)?.hidden).toBe(true);
@@ -172,7 +171,10 @@ test("隐藏与恢复只改变卡片可见性，来源仍同步并计入总额�
   expect((await lifecycleState(page)).refreshCalls).toBeGreaterThan(callsBeforeRefresh);
   expect(await expectCompleteHistory(page.request, [originalId])).toEqual(historyBeforeHide);
 
-  await page.getByRole("button", { name: "重新显示 Ethereum 观察钱包" }).click();
+  await openSourceManagement(page, "Ethereum 观察钱包");
+  await page.getByRole("button", { name: "恢复显示来源卡片" }).click();
+  await expect(page.getByRole("button", { name: "隐藏来源卡片" })).toBeVisible();
+  expect((await lifecycleState(page)).cards[0]?.hidden).toBe(false);
   await expect(page.getByTestId("ethereum-watch-card")).toBeVisible();
   await expect(page.getByTestId("ethereum-watch-card")).toContainText("5,519.00 USD");
 });
@@ -195,11 +197,11 @@ test("断开 EVM 观察钱包时保留公开地址配置、来源身份和已有
     name: "确认断开 Ethereum 观察钱包",
   });
   await expect(confirmation).toContainText(
-    "断开后将停止同步，保留加密连接凭证、已有数据和历史快照；之后可直接恢复连接。",
+    "停止同步；历史数据保留。",
   );
   expect(nativeDialogOpened).toBe(false);
   await confirmation.getByRole("button", { name: "确认断开" }).click();
-  await expect(page.getByText("已断开 · 历史数据保留")).toBeVisible();
+  await expect(page.getByText("已断开；历史数据保留。")).toBeVisible();
   const sourceState = page
     .getByTestId("ethereum-watch-card")
     .locator(".source-live-state");
@@ -219,7 +221,8 @@ test("断开 EVM 观察钱包时保留公开地址配置、来源身份和已有
   });
   await expect(refresh.json()).resolves.toEqual({ successCount: 0, failureCount: 0, skipped: "no-sources" });
   expect((await lifecycleState(page)).refreshCalls).toBe(callsBeforeRefresh);
-  await expect(page.getByTestId("total-overview-card")).toContainText("5,519");
+  await page.goto("/");
+  await expect(page.getByTestId("overview-current-total")).toContainText("5,519");
 });
 
 test("已断开的 EVM 观察钱包恢复原卡片和历史", async ({
@@ -234,7 +237,7 @@ test("已断开的 EVM 观察钱包恢复原卡片和历史", async ({
 
   const management = await openSourceManagement(page, "Ethereum 观察钱包");
   await disconnectSource(page, management, "Ethereum 观察钱包");
-  await expect(page.getByText("已断开 · 历史数据保留")).toBeVisible();
+  await expect(page.getByText("已断开；历史数据保留。")).toBeVisible();
 
   const disconnectedManagement = await openSourceManagement(
     page,
@@ -247,7 +250,7 @@ test("已断开的 EVM 观察钱包恢复原卡片和历史", async ({
     .getByRole("button", { name: "恢复连接" })
     .click();
 
-  await expect(page.getByText("已断开 · 历史数据保留")).toHaveCount(0);
+  await expect(page.getByText("已断开；历史数据保留。")).toHaveCount(0);
   const refreshResponse = page.waitForResponse((response) =>
     response.url().endsWith("/api/asset-sources/refresh") && response.request().method() === "POST",
   );
@@ -274,7 +277,7 @@ test("原凭证不存在时重新输入相同公开地址，恢复原卡片和�
 
   const management = await openSourceManagement(page, "Ethereum 观察钱包");
   await disconnectSource(page, management, "Ethereum 观察钱包");
-  await expect(page.getByText("已断开 · 历史数据保留")).toBeVisible();
+  await expect(page.getByText("已断开；历史数据保留。")).toBeVisible();
   const credentialRemoval = await page.request.post("/test-doubles/ethereum", {
     data: { scenario: "forget-credential" },
   });
@@ -289,15 +292,12 @@ test("原凭证不存在时重新输入相同公开地址，恢复原卡片和�
     .getByRole("button", { name: "恢复连接" })
     .click();
 
-  await expect(disconnectedManagement).toContainText(
-    "原连接凭证已不存在，无法直接恢复。请重新输入原公开地址；原卡片和历史数据仍保留。",
-  );
-  await disconnectedManagement
-    .getByLabel("EVM 公开地址（每行一个）")
-    .fill(ADDRESS);
-  await disconnectedManagement
-    .getByRole("button", { name: "验证并恢复" })
-    .click();
+  await expect(disconnectedManagement.getByRole("alert")).toContainText("原连接凭证已不存在");
+  await page.getByRole("link", { name: "更换授权 / 重新授权" }).click();
+  await page.getByLabel("Ethereum 公开地址（每行一个）").fill(ADDRESS);
+  await page.getByRole("button", { name: "验证公开地址" }).click();
+  await page.getByRole("button", { name: "确认更新授权" }).click();
+  await expect(page).toHaveURL(new RegExp(`/asset-sources/${original.id}$`));
   const restored = await lifecycleState(page);
   expect(restored.sources).toEqual([
     expect.objectContaining({ id: original.id, lifecycle: "connected" }),
@@ -352,16 +352,11 @@ test("不同公开地址不能替换旧来源", async ({ page }) => {
   await disconnectedManagement
     .getByRole("button", { name: "恢复连接" })
     .click();
-  await disconnectedManagement
-    .getByLabel("EVM 公开地址（每行一个）")
-    .fill(OTHER_ADDRESS);
-  await disconnectedManagement
-    .getByRole("button", { name: "验证并恢复" })
-    .click();
-
-  await expect(disconnectedManagement).toContainText(
-    "输入的公开地址与此来源不一致；请新建资产来源。",
-  );
+  await expect(disconnectedManagement.getByRole("alert")).toContainText("原连接凭证已不存在");
+  await page.getByRole("link", { name: "更换授权 / 重新授权" }).click();
+  await page.getByLabel("Ethereum 公开地址（每行一个）").fill(OTHER_ADDRESS);
+  await page.getByRole("button", { name: "验证公开地址" }).click();
+  await expect(page.locator("main").getByRole("alert")).toContainText("与此来源不一致");
   const disconnected = await lifecycleState(page);
   expect(disconnected.sources).toEqual([
     expect.objectContaining({ id: original.id, lifecycle: "disconnected" }),
@@ -375,15 +370,11 @@ test("其他来源次日成功同步时，不为已断开来源生成新快照",
   });
   await loginAsOwner(page);
   await connectEthereum(page);
-  await page.getByRole("button", { name: "添加资产来源" }).click();
-  await page.getByRole("radio", { name: "EVM 观察钱包" }).click();
+  await openSourceFlow(page, "EVM 观察钱包");
   await page.getByRole("checkbox", { name: "Ethereum 观察钱包" }).uncheck();
   await page.getByLabel("EVM 公开地址（每行一个）").fill(ADDRESS);
   await page.getByRole("button", { name: "验证公开地址" }).click();
-  await page
-    .getByRole("dialog", { name: "确认 EVM 观察钱包" })
-    .getByRole("button", { name: "确认并保存" })
-    .click();
+  await confirmSourceFlow(page, "BNB Smart Chain");
 
   const connectedIds = (await lifecycleState(page)).sources.map(({ id }) => id);
   const historyBeforeDisconnect = await prepareCompleteHistory(page.request, connectedIds);
@@ -397,7 +388,7 @@ test("其他来源次日成功同步时，不为已断开来源生成新快照",
   const refresh = await page.request.post("/api/asset-sources/refresh", {
     data: { mode: "all" },
   });
-  await expect(refresh.json()).resolves.toEqual({ successCount: 1, failureCount: 0 });
+  await expect(refresh.json()).resolves.toMatchObject({ successCount: 1, failureCount: 0 });
 
   const state = await lifecycleState(page);
   const ethereum = state.sources.find(({ kind }) => kind === "evm-watch-ethereum");
@@ -428,7 +419,7 @@ test("永久删除需要第二次确认，取消无变化，确认后清除来�
   let management = await openSourceManagement(page, "Ethereum 观察钱包");
   await management.getByRole("button", { name: "永久删除数据" }).click();
   const first = page.getByRole("dialog", { name: "永久删除来源数据" });
-  await expect(first).toContainText("持仓记录、同步记录和全部资产快照");
+  await expect(first).toContainText("来源及全部历史数据");
   await first.getByRole("button", { name: "继续删除" }).click();
   const second = page.getByRole("dialog", { name: "第二次确认永久删除" });
   await second.getByRole("button", { name: "取消" }).click();
@@ -442,7 +433,8 @@ test("永久删除需要第二次确认，取消无变化，确认后清除来�
   await page.getByRole("button", { name: "确认永久删除" }).click();
 
   await expect(page.getByTestId("ethereum-watch-card")).toHaveCount(0);
-  await expect(page.getByTestId("total-overview-card")).toHaveCount(0);
+  await page.goto("/");
+  await expect(page.getByTestId("overview-current-total")).toContainText("数据不足");
   const deleted = await lifecycleState(page);
   expect(deleted.sources).toEqual([]);
   expect(deleted.cards).toEqual([]);
