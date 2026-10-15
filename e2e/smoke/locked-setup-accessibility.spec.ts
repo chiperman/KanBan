@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
+import { attachPasskey, setupOwnerPasskey } from "../owner-auth-helpers";
 import { contrastRatio } from "./color-contrast-helpers";
 
 const VIEWPORTS = [
@@ -47,20 +48,8 @@ async function expectNoHorizontalOverflow(page: Page): Promise<void> {
 }
 
 async function provisionOwner(page: Page): Promise<void> {
-  const client = await page.context().newCDPSession(page);
-  await client.send("WebAuthn.enable");
-  await client.send("WebAuthn.addVirtualAuthenticator", {
-    options: {
-      protocol: "ctap2",
-      transport: "internal",
-      hasResidentKey: true,
-      hasUserVerification: true,
-      isUserVerified: true,
-    },
-  });
-  await page.goto("/setup");
-  await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
-  await expect(page.getByRole("status")).toContainText("预置完成");
+  await attachPasskey(page);
+  await setupOwnerPasskey(page);
 }
 
 test("锁定页以可访问状态传达安全边界并保留清晰键盘焦点", async ({
