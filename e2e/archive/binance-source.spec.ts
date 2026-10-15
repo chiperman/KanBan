@@ -1,47 +1,15 @@
 import {
   expect,
   test,
-  type CDPSession,
   type Page,
 } from "@playwright/test";
 import { confirmSourceFlow, expectSourceObservation, openSourceFlow, sourceFlow } from "../source-flow-helpers";
+import { loginAsOwner } from "../owner-auth-helpers";
 import { PROD_BASE_URL } from "../../playwright.config";
 import { expectCompleteHistory, prepareCompleteHistory } from "../history-observation-helpers";
 
 const API_KEY = "binance-browser-api-key";
 const API_SECRET = "binance-browser-secret-must-not-leak";
-
-async function attachPasskey(page: Page): Promise<CDPSession> {
-  const client = await page.context().newCDPSession(page);
-  await client.send("WebAuthn.enable");
-  await client.send("WebAuthn.addVirtualAuthenticator", {
-    options: {
-      protocol: "ctap2",
-      transport: "internal",
-      hasResidentKey: true,
-      hasUserVerification: true,
-      isUserVerified: true,
-    },
-  });
-  return client;
-}
-
-async function loginAsOwner(page: Page): Promise<void> {
-  await attachPasskey(page);
-  await page.goto("/setup");
-  await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
-  await expect(page.getByRole("status")).toContainText("预置完成");
-  await page.goto("/");
-
-  const [response] = await Promise.all([
-    page.waitForResponse((candidate) =>
-      candidate.url().endsWith("/api/auth/login/verify"),
-    ),
-    page.getByRole("button", { name: "使用 Passkey 登录" }).click(),
-  ]);
-  expect(response.ok()).toBeTruthy();
-  await expect(page.getByTestId("workbench-shell")).toBeVisible();
-}
 
 async function configure(page: Page, scenario = "valid") {
   const response = await page.request.post("/test-doubles/binance", {
@@ -78,7 +46,7 @@ test.beforeEach(async ({ request }) => {
 });
 
 test("取消添加资产来源后再次打开时只读凭证字段为空", async ({ page }) => {
-  await loginAsOwner(page);
+  await loginAsOwner(page, { captureVerification: true });
 
   await openSourceFlow(page, "Binance");
   await page.getByLabel("Binance API Key").fill(API_KEY);
@@ -95,7 +63,7 @@ test("Binance 只读凭证先预览后原子保存，并展示现货、资金与
   page,
 }) => {
   await configure(page);
-  await loginAsOwner(page);
+  await loginAsOwner(page, { captureVerification: true });
   const responseBodies: string[] = [];
   page.on("response", async (response) => {
     if (new URL(response.url()).origin === new URL(page.url()).origin) {
@@ -138,7 +106,7 @@ test("重新验证同一 Binance 账户时替换凭证并保留原卡片", async
   page,
 }) => {
   await configure(page);
-  await loginAsOwner(page);
+  await loginAsOwner(page, { captureVerification: true });
   await startBinanceFlow(page);
   await confirmSourceFlow(page, "Binance");
 
@@ -156,7 +124,7 @@ test("已断开的 Binance 可直接恢复原卡片，不新增来源或删除�
   page,
 }) => {
   await configure(page);
-  await loginAsOwner(page);
+  await loginAsOwner(page, { captureVerification: true });
   await startBinanceFlow(page);
   await confirmSourceFlow(page, "Binance");
 
@@ -173,7 +141,7 @@ test("已断开的 Binance 可直接恢复原卡片，不新增来源或删除�
 
 test("全局持仓搜索筛选 Binance 明细", async ({ page }) => {
   await configure(page);
-  await loginAsOwner(page);
+  await loginAsOwner(page, { captureVerification: true });
   await startBinanceFlow(page);
   await confirmSourceFlow(page, "Binance");
 
@@ -206,7 +174,7 @@ test("Binance 写权限、缺失权限证明和原子保存失败均不留下来
   page,
 }) => {
   await configure(page);
-  await loginAsOwner(page);
+  await loginAsOwner(page, { captureVerification: true });
   await startBinanceFlow(page);
   const changedPermissionPreview = sourceFlow(page);
   await configure(page, "trade");
@@ -588,7 +556,7 @@ test("Binance 默认隐藏低于 1 USDT 的持仓，并提供可见的手动展�
   page,
 }) => {
   await configure(page, "dust");
-  await loginAsOwner(page);
+  await loginAsOwner(page, { captureVerification: true });
   await startBinanceFlow(page);
   const preview = sourceFlow(page);
   await expect(preview).toContainText("12,850.00 USDT");
@@ -611,7 +579,7 @@ test("Binance 同步失败保留最后成功数据并接入过期状态和日快
   page,
 }) => {
   await configure(page);
-  await loginAsOwner(page);
+  await loginAsOwner(page, { captureVerification: true });
   await startBinanceFlow(page);
   await confirmSourceFlow(page, "Binance");
   const card = page.getByTestId("binance-card");
@@ -637,7 +605,7 @@ test("未认证状态与生产测试替身都不能读取 Binance 私密来源�
   playwright,
 }) => {
   await configure(page);
-  await loginAsOwner(page);
+  await loginAsOwner(page, { captureVerification: true });
   await startBinanceFlow(page);
   await confirmSourceFlow(page, "Binance");
   await expect(page.getByTestId("binance-card")).toBeVisible();

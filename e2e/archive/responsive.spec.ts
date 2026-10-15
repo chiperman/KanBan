@@ -1,4 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+
+import { loginAsOwner } from "../owner-auth-helpers";
 
 const VIEWPORTS = [
   { name: "桌面", width: 1280, height: 800 },
@@ -14,32 +16,13 @@ test.beforeEach(async ({ request }) => {
   expect(seeded.ok()).toBeTruthy();
 });
 
-async function loginAsOwner(page: Page): Promise<void> {
-  const client = await page.context().newCDPSession(page);
-  await client.send("WebAuthn.enable");
-  await client.send("WebAuthn.addVirtualAuthenticator", {
-    options: {
-      protocol: "ctap2",
-      transport: "internal",
-      hasResidentKey: true,
-      hasUserVerification: true,
-      isUserVerified: true,
-    },
-  });
-  await page.goto("/setup");
-  await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
-  await expect(page.getByRole("status")).toContainText("预置完成");
-  await page.goto("/");
-  await page.getByRole("button", { name: "使用 Passkey 登录" }).click();
-}
-
 for (const viewport of VIEWPORTS) {
   test(`${viewport.name}宽度下无横向溢出且内容可访问`, async ({ page }) => {
     await page.setViewportSize({
       width: viewport.width,
       height: viewport.height,
     });
-    await loginAsOwner(page);
+    await loginAsOwner(page, { waitForTestId: null });
 
     const overflow = await page.evaluate(
       () =>

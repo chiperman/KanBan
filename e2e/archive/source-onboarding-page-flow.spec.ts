@@ -4,18 +4,12 @@ import {
   expectCompleteHistory,
   prepareCompleteHistory,
 } from "../history-observation-helpers";
+import { loginAsOwnerBySession } from "../owner-auth-helpers";
 
 const API_KEY = "ticket-04-binance-key";
 const API_SECRET = "ticket-04-binance-secret-must-not-leak";
 const ADDRESS = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
 const OTHER_ADDRESS = "0x1111111111111111111111111111111111111111";
-
-async function loginAsOwner(page: Page): Promise<void> {
-  const response = await page.request.post("/test-doubles/owner-session");
-  expect(response.ok()).toBeTruthy();
-  await page.goto("/asset-sources");
-  await expect(page.getByTestId("workbench-shell")).toBeVisible();
-}
 
 async function selectBinance(page: Page): Promise<void> {
   await page.getByRole("radio", { name: "Binance" }).click();
@@ -51,7 +45,7 @@ test("资产来源页通过独立步骤页完成只读验证、预览与保存�
     data: { scenario: "valid" },
   });
   expect(configured.ok()).toBeTruthy();
-  await loginAsOwner(page);
+  await loginAsOwnerBySession(page, "/asset-sources");
 
   await page.getByRole("link", { name: "新增来源" }).click();
   await expect(page).toHaveURL("/asset-sources/new");
@@ -94,7 +88,7 @@ test("写权限校验失败不创建来源或保存凭证", async ({ page }) => 
     data: { scenario: "trade" },
   });
   expect(configured.ok()).toBeTruthy();
-  await loginAsOwner(page);
+  await loginAsOwnerBySession(page, "/asset-sources");
   await page.getByRole("link", { name: "新增来源" }).click();
   await selectBinance(page);
 
@@ -107,7 +101,7 @@ test("写权限校验失败不创建来源或保存凭证", async ({ page }) => 
 test("手工资产也通过独立流程创建，且不伪造凭证、持仓或同步", async ({
   page,
 }) => {
-  await loginAsOwner(page);
+  await loginAsOwnerBySession(page, "/asset-sources");
   await page.getByRole("link", { name: "新增来源" }).click();
   await page.getByRole("radio", { name: "手工记录资产" }).click();
   await expect(page.getByRole("heading", { name: "填写来源名称" })).toBeVisible();
@@ -135,7 +129,7 @@ test("观察钱包重新授权只接受同一公开地址，并保留来源、�
     data: { scenario: "valid" },
   });
   expect(configured.ok()).toBeTruthy();
-  await loginAsOwner(page);
+  await loginAsOwnerBySession(page, "/asset-sources");
   await page.getByRole("link", { name: "新增来源" }).click();
   await page.getByRole("radio", { name: "EVM 观察钱包" }).click();
   await page.getByRole("checkbox", { name: "BNB Smart Chain 观察钱包" }).uncheck();
@@ -200,7 +194,7 @@ test("锁定状态不暴露独立接入页；手机可用键盘进入且无横�
   await expect(page.getByRole("heading", { name: "新增资产来源" })).toHaveCount(0);
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await loginAsOwner(page);
+  await loginAsOwnerBySession(page, "/asset-sources");
   const addSource = page.getByRole("link", { name: "新增来源" });
   await addSource.focus();
   await expect(addSource).toBeFocused();

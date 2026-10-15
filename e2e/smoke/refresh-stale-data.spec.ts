@@ -2,41 +2,10 @@ import {
   expect,
   test,
   type APIRequestContext,
-  type CDPSession,
   type Page,
 } from "@playwright/test";
 
-async function attachPasskey(page: Page): Promise<CDPSession> {
-  const client = await page.context().newCDPSession(page);
-  await client.send("WebAuthn.enable");
-  await client.send("WebAuthn.addVirtualAuthenticator", {
-    options: {
-      protocol: "ctap2",
-      transport: "internal",
-      hasResidentKey: true,
-      hasUserVerification: true,
-      isUserVerified: true,
-    },
-  });
-  return client;
-}
-
-async function loginAsOwner(page: Page): Promise<void> {
-  await attachPasskey(page);
-  await page.goto("/setup");
-  await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
-  await expect(page.getByRole("status")).toContainText("预置完成");
-  await page.goto("/");
-
-  const [verification] = await Promise.all([
-    page.waitForResponse((response) =>
-      response.url().endsWith("/api/auth/login/verify"),
-    ),
-    page.getByRole("button", { name: "使用 Passkey 登录" }).click(),
-  ]);
-  expect(verification.ok()).toBeTruthy();
-  await expect(page.getByTestId("workbench-shell")).toBeVisible();
-}
+import { loginAsOwner } from "../owner-auth-helpers";
 
 async function metrics(request: APIRequestContext) {
   return (await (await request.get("/test-doubles/refresh")).json()) as {
@@ -114,7 +83,7 @@ test("统一周期只在可见且聚焦时到期刷新，恢复前台事件合�
 }) => {
   await configureRefresh(request, "schedule");
   await page.clock.install({ time: new Date("2026-04-02T08:00:00.000Z") });
-  await loginAsOwner(page);
+  await loginAsOwner(page, { captureVerification: true });
   await expect.poll(async () => (await metrics(request)).adapterCalls).toBe(2);
   expect((await metrics(request)).modes).toEqual(["all"]);
   expect((await metrics(request)).scopes).toEqual(["all"]);
@@ -162,7 +131,7 @@ test("页面重载与多标签共享统一周期且到期只执行一轮 Adapter
 }) => {
   await configureRefresh(request, "schedule");
   await page.clock.install({ time: new Date("2026-04-02T08:00:00.000Z") });
-  await loginAsOwner(page);
+  await loginAsOwner(page, { captureVerification: true });
   await expect.poll(async () => (await metrics(request)).adapterCalls).toBe(2);
 
   await request.post("/test-doubles/clock", {
@@ -208,7 +177,7 @@ test("部分失败保留最后成功数据并标记过期，手动刷新可见�
   await request.post("/test-doubles/refresh", {
     data: { action: "configure", scenario: "partial-failure" },
   });
-  await loginAsOwner(page);
+  await loginAsOwner(page, { captureVerification: true });
   await expect.poll(async () => (await metrics(request)).adapterCalls).toBe(2);
 
   const overview = page.getByRole("region", { name: "总资产" });
@@ -249,7 +218,7 @@ test("资产卡片只刷新对应来源，并在卡片内显示状态", async ({
   request,
 }) => {
   await configureRefresh(request, "schedule");
-  await loginAsOwner(page);
+  await loginAsOwner(page, { captureVerification: true });
   await expect.poll(async () => (await metrics(request)).sourceIds).toEqual([
     null,
   ]);
@@ -325,7 +294,7 @@ test("挂起来源超时不阻塞成功提交，刷新期间新增来源也不�
   await request.post("/test-doubles/refresh", {
     data: { action: "configure", scenario: "schedule" },
   });
-  await loginAsOwner(page);
+  await loginAsOwner(page, { captureVerification: true });
   await expect.poll(async () => (await metrics(request)).adapterCalls).toBe(2);
   await expect(page.getByTestId("asset-refresh-status")).toHaveCount(0);
   await request.post("/test-doubles/refresh", {
@@ -369,7 +338,7 @@ test("未认证状态不能触发同步，也不会收到来源刷新状态", as
 
 test("单来源刷新拒绝无效目标和范围组合", async ({ page, request }) => {
   await configureRefresh(request, "schedule");
-  await loginAsOwner(page);
+  await loginAsOwner(page, { captureVerification: true });
 
   const missing = await page.request.post("/api/asset-sources/refresh", {
     data: { mode: "all", sourceId: "source-missing" },
@@ -388,7 +357,7 @@ test("单来源刷新拒绝无效目标和范围组合", async ({ page, request 
 
 test("统一刷新批量目标拒绝歧义组合并保留意图目标", async ({ page, request }) => {
   await configureRefresh(request, "schedule");
-  await loginAsOwner(page);
+  await loginAsOwner(page, { captureVerification: true });
   await expect.poll(async () => (await metrics(request)).adapterCalls).toBe(2);
   await expect.poll(async () => (await metrics(request)).active).toBe(0);
   await request.post("/test-doubles/refresh", {

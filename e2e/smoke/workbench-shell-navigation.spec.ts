@@ -1,10 +1,11 @@
 import {
   expect,
   test,
-  type CDPSession,
   type Page,
   type TestInfo,
 } from "@playwright/test";
+
+import { loginAsOwner } from "../owner-auth-helpers";
 
 const SENSITIVE_TITLE = "SENSITIVE-WORKBENCH-ASSET";
 const SENSITIVE_BODY = "SENSITIVE-WORKBENCH-BODY-123456.78";
@@ -16,26 +17,6 @@ const PRIMARY_DESTINATIONS = [
   { label: "资产来源", shortLabel: "来源", path: "/asset-sources" },
   { label: "设置与安全", shortLabel: "设置", path: "/settings" },
 ] as const;
-
-async function loginAsOwner(page: Page): Promise<void> {
-  const client: CDPSession = await page.context().newCDPSession(page);
-  await client.send("WebAuthn.enable");
-  await client.send("WebAuthn.addVirtualAuthenticator", {
-    options: {
-      protocol: "ctap2",
-      transport: "internal",
-      hasResidentKey: true,
-      hasUserVerification: true,
-      isUserVerified: true,
-    },
-  });
-  await page.goto("/setup");
-  await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
-  await expect(page.getByRole("status")).toContainText("预置完成");
-  await page.goto("/");
-  await page.getByRole("button", { name: "使用 Passkey 登录" }).click();
-  await expect(page.getByTestId("workbench-shell")).toBeVisible();
-}
 
 async function expectNoHorizontalOverflow(page: Page): Promise<void> {
   const overflow = await page.evaluate(

@@ -1,5 +1,7 @@
 import { expect, test, type CDPSession, type Page } from "@playwright/test";
 
+import { attachPasskey } from "../owner-auth-helpers";
+
 const SENSITIVE_TITLE = "SENSITIVE-TITLE-总资产";
 const SENSITIVE_BODY = "SENSITIVE-BODY-1234567.89";
 
@@ -23,24 +25,6 @@ test.beforeEach(async ({ request }) => {
 interface VirtualPasskey {
   client: CDPSession;
   authenticatorId: string;
-}
-
-async function attachPasskey(page: Page): Promise<VirtualPasskey> {
-  const client = await page.context().newCDPSession(page);
-  await client.send("WebAuthn.enable");
-  const { authenticatorId } = (await client.send(
-    "WebAuthn.addVirtualAuthenticator",
-    {
-      options: {
-        protocol: "ctap2",
-        transport: "internal",
-        hasResidentKey: true,
-        hasUserVerification: true,
-        isUserVerified: true,
-      },
-    },
-  )) as { authenticatorId: string };
-  return { client, authenticatorId };
 }
 
 async function replaceWithCredentiallessPasskey(

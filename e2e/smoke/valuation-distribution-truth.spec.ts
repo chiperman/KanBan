@@ -1,29 +1,6 @@
-import { expect, test, type CDPSession, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
-async function attachPasskey(page: Page): Promise<CDPSession> {
-  const client = await page.context().newCDPSession(page);
-  await client.send("WebAuthn.enable");
-  await client.send("WebAuthn.addVirtualAuthenticator", {
-    options: {
-      protocol: "ctap2",
-      transport: "internal",
-      hasResidentKey: true,
-      hasUserVerification: true,
-      isUserVerified: true,
-    },
-  });
-  return client;
-}
-
-async function loginAsOwner(page: Page): Promise<void> {
-  await attachPasskey(page);
-  await page.goto("/setup");
-  await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
-  await expect(page.getByRole("status")).toContainText("预置完成");
-  await page.goto("/");
-  await page.getByRole("button", { name: "使用 Passkey 登录" }).click();
-  await expect(page.getByTestId("portfolio-overview-workspace")).toBeVisible();
-}
+import { loginAsOwner } from "../owner-auth-helpers";
 
 async function chooseOption(page: Page, label: string, option: string) {
   const control = page.getByRole("button", { name: label });
@@ -45,7 +22,7 @@ test.beforeEach(async ({ request }) => {
 test("来源总额、严格长桥汇率与未估值明细在新工作区分层表达", async ({
   page,
 }) => {
-  await loginAsOwner(page);
+  await loginAsOwner(page, { waitForTestId: "portfolio-overview-workspace" });
 
   const workspace = overview(page);
   const total = workspace.getByTestId("overview-current-total");
@@ -132,7 +109,7 @@ test("未认证首页只显示登录入口，不含估值、来源或持仓信�
 test("总览隐藏关键数据时同时遮蔽总额、来源身份和同步状态", async ({
   page,
 }) => {
-  await loginAsOwner(page);
+  await loginAsOwner(page, { waitForTestId: "portfolio-overview-workspace" });
 
   const workspace = overview(page);
   await expect(workspace.getByTestId("overview-current-total")).toContainText(
@@ -175,7 +152,7 @@ test("非长桥反向汇率不会回退用于报告货币，缺失时不显示�
 }) => {
   const configured = await request.post("/test-doubles/valuation?fx=inverse");
   expect(configured.ok()).toBeTruthy();
-  await loginAsOwner(page);
+  await loginAsOwner(page, { waitForTestId: "portfolio-overview-workspace" });
 
   await chooseOption(page, "计价货币", "CNY");
   await expect(overview(page).getByTestId("overview-current-total")).toContainText(
@@ -206,7 +183,7 @@ test("来源详情保留长桥现金与持仓的独立观察，不把现金伪�
     "/test-doubles/valuation?scenario=longbridge-cash",
   );
   expect(configured.ok()).toBeTruthy();
-  await loginAsOwner(page);
+  await loginAsOwner(page, { waitForTestId: "portfolio-overview-workspace" });
 
   await expect(overview(page).getByTestId("overview-current-total")).toContainText(
     "782.82 USD",
@@ -239,7 +216,7 @@ test("总资产只显示当前计价货币对应的长桥汇率", async ({
     "/test-doubles/valuation?scenario=longbridge-cash",
   );
   expect(configured.ok()).toBeTruthy();
-  await loginAsOwner(page);
+  await loginAsOwner(page, { waitForTestId: "portfolio-overview-workspace" });
 
   const total = overview(page).getByTestId("overview-current-total");
   const rate = total.getByTestId("overview-reporting-rate");
@@ -263,7 +240,7 @@ test("期权行情缺失与明细仅汇总不会否定来源账户总额", async
     "/test-doubles/valuation?scenario=longbridge-option-quote-unavailable",
   );
   expect(optionConfigured.ok()).toBeTruthy();
-  await loginAsOwner(page);
+  await loginAsOwner(page, { waitForTestId: "portfolio-overview-workspace" });
 
   await expect(overview(page).getByTestId("overview-current-total")).toContainText(
     "69,930.10 USD",
@@ -303,7 +280,7 @@ test("平台账户总额与持仓明细存在差异时，总览保留总额并�
     "/test-doubles/valuation?scenario=binance-authoritative-total",
   );
   expect(configured.ok()).toBeTruthy();
-  await loginAsOwner(page);
+  await loginAsOwner(page, { waitForTestId: "portfolio-overview-workspace" });
 
   const workspace = overview(page);
   await expect(workspace.getByTestId("overview-current-total")).toContainText(
@@ -333,7 +310,7 @@ test("来源覆盖不完整时保留最后成功总额并明确标注覆盖限�
     "/test-doubles/valuation?scenario=binance-coverage-partial",
   );
   expect(configured.ok()).toBeTruthy();
-  await loginAsOwner(page);
+  await loginAsOwner(page, { waitForTestId: "portfolio-overview-workspace" });
 
   const workspace = overview(page);
   await expect(workspace.getByTestId("overview-current-total")).not.toContainText(
@@ -363,7 +340,7 @@ test("旧快照迁移后仍可读取来源总额，期权缺价降级为行情�
     "/test-doubles/longbridge/persistence?legacy=1",
   );
   expect(loaded.ok()).toBeTruthy();
-  await loginAsOwner(page);
+  await loginAsOwner(page, { waitForTestId: "portfolio-overview-workspace" });
   await expect(overview(page).getByTestId("overview-current-total")).toContainText(
     "200.00 USD",
   );

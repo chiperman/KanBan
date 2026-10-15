@@ -3,10 +3,10 @@ import { createHmac } from "node:crypto";
 import {
   expect,
   test,
-  type CDPSession,
   type Page,
 } from "@playwright/test";
 
+import { attachPasskey } from "../owner-auth-helpers";
 import { TEST_BASE_URL } from "../../playwright.config";
 
 const FIXED_NOW = "2026-01-01T00:00:00.000Z";
@@ -22,29 +22,6 @@ const CARDS = [
     span: 2,
   },
 ] as const;
-
-interface VirtualPasskey {
-  client: CDPSession;
-  authenticatorId: string;
-}
-
-async function attachPasskey(page: Page): Promise<VirtualPasskey> {
-  const client = await page.context().newCDPSession(page);
-  await client.send("WebAuthn.enable");
-  const { authenticatorId } = (await client.send(
-    "WebAuthn.addVirtualAuthenticator",
-    {
-      options: {
-        protocol: "ctap2",
-        transport: "internal",
-        hasResidentKey: true,
-        hasUserVerification: true,
-        isUserVerified: true,
-      },
-    },
-  )) as { authenticatorId: string };
-  return { client, authenticatorId };
-}
 
 async function provisionAndLogin(page: Page): Promise<void> {
   await attachPasskey(page);

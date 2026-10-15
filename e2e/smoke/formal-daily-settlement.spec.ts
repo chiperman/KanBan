@@ -1,11 +1,12 @@
 import {
   expect,
   test,
-  type CDPSession,
   type Page,
 } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
+
+import { loginAsOwner } from "../owner-auth-helpers";
 
 async function screenshot(page: Page, name: string) {
   const directory = process.env.FORMAL_SETTLEMENT_SCREENSHOTS;
@@ -16,38 +17,6 @@ async function screenshot(page: Page, name: string) {
 
 async function expectNoOverflow(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-}
-
-async function attachPasskey(page: Page): Promise<CDPSession> {
-  const client = await page.context().newCDPSession(page);
-  await client.send("WebAuthn.enable");
-  await client.send("WebAuthn.addVirtualAuthenticator", {
-    options: {
-      protocol: "ctap2",
-      transport: "internal",
-      hasResidentKey: true,
-      hasUserVerification: true,
-      isUserVerified: true,
-    },
-  });
-  return client;
-}
-
-async function loginAsOwner(page: Page): Promise<void> {
-  await attachPasskey(page);
-  await page.goto("/setup");
-  await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
-  await expect(page.getByRole("status")).toContainText("预置完成");
-  await page.goto("/");
-  const [verification] = await Promise.all([
-    page.waitForResponse((response) =>
-      response.url().endsWith("/api/auth/login/verify"),
-    ),
-    page.getByRole("button", { name: "使用 Passkey 登录" }).click(),
-  ]);
-  expect(verification.ok()).toBeTruthy();
-  // Authentication responds before the client finishes its dashboard navigation.
-  await expect(page.getByTestId("portfolio-overview-workspace")).toBeVisible();
 }
 
 test.beforeEach(async ({ request }) => {
@@ -239,7 +208,7 @@ test("所有者首页保留每日趋势，不展示正式日结", async ({
   });
   expect(seeded.ok()).toBeTruthy();
 
-  await loginAsOwner(page);
+  await loginAsOwner(page, { captureVerification: true, waitForTestId: "portfolio-overview-workspace" });
   await expect(page.getByTestId("formal-daily-settlement")).toHaveCount(0);
   await expect(page.getByTestId("overview-trend").getByRole("heading", { name: "近 7 日资产走势" })).toBeVisible();
 });
@@ -247,7 +216,7 @@ test("所有者首页保留每日趋势，不展示正式日结", async ({
 for (const width of [1440, 390]) {
   test(`自动日结只读状态与安全原因 ${width}px`, async ({ page, request }) => {
     await page.setViewportSize({ width, height: 900 });
-    await loginAsOwner(page);
+    await loginAsOwner(page, { captureVerification: true, waitForTestId: "portfolio-overview-workspace" });
     for (const scenario of ["not-loaded", "unknown", "error", "waiting"] as const) {
       expect((await request.post("/test-doubles/formal-settlements", { data: { action: "seed-runtime-view", scenario } })).ok()).toBe(true);
       await page.goto("/settings#automatic-daily-settlement");

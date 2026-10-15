@@ -58,11 +58,14 @@ export async function setupOwnerPasskey(page: Page, flow: CredentiallessFlow = "
   await expect(page.getByRole("status")).toContainText("预置完成");
 }
 
-/** 用测试会话 test-double 建立所有者会话，跳过浏览器端 Passkey 交互。 */
-export async function loginAsOwnerBySession(page: Page): Promise<void> {
+/**
+ * 用测试会话 test-double 建立所有者会话，跳过浏览器端 Passkey 交互。
+ * @param path 登录后进入的路径，默认工作台首页。
+ */
+export async function loginAsOwnerBySession(page: Page, path = "/"): Promise<void> {
   const response = await page.request.post("/test-doubles/owner-session");
   expect(response.ok()).toBeTruthy();
-  await page.goto("/");
+  await page.goto(path);
   await expect(page.getByTestId("workbench-shell")).toBeVisible();
 }
 

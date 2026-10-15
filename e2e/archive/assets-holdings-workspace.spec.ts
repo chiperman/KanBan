@@ -1,29 +1,6 @@
-import { expect, test, type CDPSession, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
-async function attachPasskey(page: Page): Promise<CDPSession> {
-  const client = await page.context().newCDPSession(page);
-  await client.send("WebAuthn.enable");
-  await client.send("WebAuthn.addVirtualAuthenticator", {
-    options: {
-      protocol: "ctap2",
-      transport: "internal",
-      hasResidentKey: true,
-      hasUserVerification: true,
-      isUserVerified: true,
-    },
-  });
-  return client;
-}
-
-async function loginAsOwner(page: Page): Promise<void> {
-  await attachPasskey(page);
-  await page.goto("/setup");
-  await page.getByRole("button", { name: "创建所有者 Passkey" }).click();
-  await expect(page.getByRole("status")).toContainText("预置完成");
-  await page.goto("/");
-  await page.getByRole("button", { name: "使用 Passkey 登录" }).click();
-  await expect(page.getByTestId("workbench-shell")).toBeVisible();
-}
+import { loginAsOwner } from "../owner-auth-helpers";
 
 async function chooseOption(page: Page, label: string, option: string) {
   const control = page.getByRole("button", { name: label });

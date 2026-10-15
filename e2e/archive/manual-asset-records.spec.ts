@@ -1,13 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { loginAsOwnerBySession } from "../owner-auth-helpers";
 import { chooseOverviewOption } from "../overview-control-helpers";
-
-async function loginAsOwner(page: Page): Promise<void> {
-  const response = await page.request.post("/test-doubles/owner-session");
-  expect(response.ok()).toBeTruthy();
-  await page.goto("/");
-  await expect(page.getByTestId("workbench-shell")).toBeVisible();
-}
 
 async function createManualSource(page: Page, name: string): Promise<void> {
   await page.goto("/asset-sources/new");
@@ -60,7 +54,7 @@ test.beforeEach(async ({ request }) => {
 test("手工资产分类接口保留类别且不改变来源金额与总额完整性", async ({
   page,
 }) => {
-  await loginAsOwner(page);
+  await loginAsOwnerBySession(page);
   const created = await page.request.post("/api/asset-sources/manual", {
     data: { label: "A股" },
   });
@@ -111,7 +105,7 @@ test("手工资产独立接入后在来源详情按上海自然日保存一条�
   });
   expect(unauthorized.status()).toBe(401);
 
-  await loginAsOwner(page);
+  await loginAsOwnerBySession(page);
   await expect(
     page.getByRole("button", { name: "手工记录资产" }),
   ).toHaveCount(0);
@@ -208,7 +202,7 @@ test("手工资产历史可编辑、删除，并回退到最新保留记录", as
   await request.post("/test-doubles/clock", {
     data: { now: "2026-01-04T04:00:00.000Z" },
   });
-  await loginAsOwner(page);
+  await loginAsOwnerBySession(page);
   await createManualSource(page, "A股");
 
   const card = page.getByTestId("manual-asset-card");
@@ -281,7 +275,7 @@ test("低频手工记录不降低完整性，并按最近记录延用趋势金�
   await request.post("/test-doubles/clock", {
     data: { now: "2026-01-01T04:00:00.000Z" },
   });
-  await loginAsOwner(page);
+  await loginAsOwnerBySession(page);
   expect((await request.post("/test-doubles/manual-assets", {
     data: { action: "seed-reference-rates" },
   })).ok()).toBeTruthy();
@@ -368,7 +362,7 @@ test("手工记录拒绝非法金额和非手工来源编辑，并在文件存�
   page,
   request,
 }) => {
-  await loginAsOwner(page);
+  await loginAsOwnerBySession(page);
   const created = await page.request.post("/api/asset-sources/manual", {
     data: { label: "A股" },
   });
