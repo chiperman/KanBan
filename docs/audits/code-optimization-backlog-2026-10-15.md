@@ -33,7 +33,7 @@
 | P1-3 历史迁移覆盖 | 已完成 | 新增 `sqlite-schema-migration-store.test.ts`（v1 原始形状 → 当前版本回放、重开、列补齐） | 单元测试 3 例 + 既有 smoke v2/v4/v6/v8/v12/v14/v15 回放 |
 | P2-1 SQLite 查询 | 已完成（最小改动） | 临时代表性数据测量后不加索引，仅把手工记录读写改为按 `sourceId` 定向读取 | 临时库查询计划与耗时测量（毫秒级）；`pnpm test:unit` |
 | P2-2 局部语义重复 | 部分完成 | 抽取 `abortable-sleep.ts`、`preserveNewerPrices`（币种口径参数化） | 单元测试 460/460；OKX/Bitget 边界用例 |
-| P2-3 e2e 助手 | 部分完成 | 新增 `e2e/owner-auth-helpers.ts`，迁移 14 个既有 spec（新 spec 也复用） | 迁移后 spec 全量重跑通过（见下） |
+| P2-3 e2e 助手 | 已完成 | 新增 `e2e/owner-auth-helpers.ts`，全部既有 spec 均已迁移（仅 `daily-snapshots-asset-change` 保留本地变体） | 迁移后逐 spec 重跑通过：archive 50/50、smoke 103/103；`binance-source` 按 production 配置 12/12 |
 | P2-4 UI 请求与会话响应 | 已完成（范围收敛） | 新增 `owner-request-lock.ts`，接入 3 个受保护业务请求的 401 即时锁定 | 新增 `owner-request-lock.spec.ts` 3/3 |
 | P2-5 大文件拆分 | 暂缓 | 未实施 | 见该节依据 |
 | P2-6 持久化辅助逻辑 | 部分完成 | 抽取 `compactPositions` 供卡片与来源共用 | `pnpm test:unit` + 相关 e2e |
@@ -158,7 +158,7 @@
 
 测试路由中的环境变量暂存/恢复样板、action 分派和长测试 harness 可局部收敛；需要保存原值与未设置状态、处理异常恢复，并保持历史 fixture 的结构证据。不同测试密钥填充值或白名单写法本身不构成 bug，不为统一形式批量改动。
 
-**实施结果**：新增 `e2e/owner-auth-helpers.ts`（`attachPasskey`、`setupOwnerPasskey`、`replaceWithCredentiallessPasskey`、`loginAsOwnerBySession`、`loginAsOwner`），迁移 14 个既有 spec（13 个 archive + 1 个 smoke），删除各自重复的 `attachPasskey` / `loginAsOwner` 定义，保留原有断言与登录前置；新建的 `owner-request-lock.spec.ts` 直接使用共享助手。`loginAsOwner` 支持 `waitForTestId: null` 与 `captureVerification` 两个既有变体，避免改变调用方语义。全仓另有 18 个 smoke/archive spec 仍保留本地定义（含 `formal-daily-settlement` 等），其中部分带额外参数或断言（如 `automaticFailureCount`、虚拟验证器返回值），本轮不扩展。测试隔离结论未改，未新增文本门禁。
+**实施结果**：新增 `e2e/owner-auth-helpers.ts`（`attachPasskey`、`setupOwnerPasskey`、`replaceWithCredentiallessPasskey`、`loginAsOwnerBySession`、`loginAsOwner`），迁移 14 个既有 spec（13 个 archive + 1 个 smoke），删除各自重复的 `attachPasskey` / `loginAsOwner` 定义，保留原有断言与登录前置；新建的 `owner-request-lock.spec.ts` 直接使用共享助手。`loginAsOwner` 支持 `waitForTestId: null` 与 `captureVerification` 两个既有变体，避免改变调用方语义。**随后补齐其余 18 个 smoke/archive spec**：按各自原语义选用共享助手的对应变体（裸默认、`waitForTestId: null`、`captureVerification`、`waitForTestId: "portfolio-overview-workspace"`，或 `loginAsOwnerBySession`——`source-onboarding-page-flow` 为此增加可选路径参数）；`owner-auth`、`recovery-session-lock` 改用共享 `attachPasskey`，本地 `replaceWithCredentiallessPasskey`、`provisionAndLogin`、`unlockWithPasskey` 语义不变。`daily-snapshots-asset-change` 单独处理：保留 `loginAsOwner(page, automaticFailureCount?)` 与 `unlockAsOwner` 的 refresh-report 语义，函数体改为复用 `attachPasskey` + `setupOwnerPasskey`。除该变体外，全仓已无本地 `loginAsOwner` / `attachPasskey` 定义。迁移后逐 spec 重跑通过：archive 迁移文件 50/50、smoke 103/103，`binance-source` 按 `playwright.production.config.ts` 12/12。测试隔离结论未改，未新增文本门禁。
 
 ## P2-4 UI 请求处理与会话响应
 
@@ -283,4 +283,4 @@ Playwright 使用 `next start`，源码修改后需先生成当前构建，避�
 - 测试端点的唯一保护仍是 `APP_ENV === "test"` 单变量门禁，误配时测试服务会启用；生产响应头仍未知。
 - 生产运行验证仅限本地 `next start` 窄探针，不代表真实部署、反向代理与真实金融数据路径。
 - Binance `valuePositions` 无直接表驱动边界单测，本次未新增。
-- 18 个 spec 仍保留本地 `loginAsOwner`/`attachPasskey` 定义，登录入口变更时仍需多处同步（其余 16 个已迁移到共享助手）。
+- 仅 `daily-snapshots-asset-change` 保留本地 `loginAsOwner(page, automaticFailureCount?)` 变体（refresh-report 场景），登录入口变更时需与共享助手同步确认。
