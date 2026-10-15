@@ -22,24 +22,6 @@ async function virtualPasskey(page: Page): Promise<{ client: CDPSession; authent
   return { client, authenticatorId };
 }
 
-/**
- * 在已附加虚拟 Passkey 的页面上重新挂载一个不含凭据的验证器，
- * 用于验证「设备上没有已注册凭据」这条分支。
- */
-export async function replaceWithCredentiallessPasskey(page: Page): Promise<void> {
-  const { client, authenticatorId } = await virtualPasskey(page);
-  await client.send("WebAuthn.removeVirtualAuthenticator", { authenticatorId });
-  await client.send("WebAuthn.addVirtualAuthenticator", {
-    options: {
-      protocol: "ctap2",
-      transport: "internal",
-      hasResidentKey: true,
-      hasUserVerification: true,
-      isUserVerified: true,
-    },
-  });
-}
-
 export async function attachPasskey(page: Page): Promise<{ client: CDPSession; authenticatorId: string }> {
   return virtualPasskey(page);
 }
