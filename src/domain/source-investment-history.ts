@@ -7,7 +7,7 @@ import type { DailyAssetTrendObservation, InvestmentCashflowCurrency, ManualAsse
 export interface SourceInvestmentHistory {
   sourceId: string;
   sourceLabel: string;
-  provider: "youzhiyouxing";
+  provider: string;
   accountId: string;
   accountName: string;
   currency: InvestmentCashflowCurrency;
@@ -50,7 +50,8 @@ function object(value: unknown): Record<string, unknown> {
 /** 导入是独立账户事实；不自动创建组合资金进出，也不补造历史汇率或组合快照。 */
 export function parseSourceInvestmentHistory(value: unknown): SourceInvestmentHistory {
   const raw = object(value);
-  if (raw.provider !== "youzhiyouxing" || !["CNY", "USD", "HKD"].includes(String(raw.currency))) throw new Error("来源历史平台或币种无效");
+  if (typeof raw.provider !== "string" || !raw.provider.trim() || raw.provider.length > 500) throw new Error("来源历史平台无效");
+  if (!["CNY", "USD", "HKD"].includes(String(raw.currency))) throw new Error("来源历史币种无效");
   const opening = object(raw.openingInvestment);
   assertDay(opening.day); assertAmount(opening.amount);
   if (!Array.isArray(raw.records) || raw.records.length === 0) throw new Error("来源历史记录不能为空");
@@ -70,7 +71,7 @@ export function parseSourceInvestmentHistory(value: unknown): SourceInvestmentHi
   const importedAt = text(raw.importedAt);
   if (!Number.isFinite(Date.parse(importedAt))) throw new Error("来源历史导入时间无效");
   const result: SourceInvestmentHistory = {
-    sourceId: text(raw.sourceId), sourceLabel: text(raw.sourceLabel), provider: "youzhiyouxing",
+    sourceId: text(raw.sourceId), sourceLabel: text(raw.sourceLabel), provider: raw.provider,
     accountId: text(raw.accountId), accountName: text(raw.accountName), currency: raw.currency as InvestmentCashflowCurrency,
     openingInvestment: { day: opening.day, amount: opening.amount }, openingBasis: text(raw.openingBasis),
     records, importedAt,

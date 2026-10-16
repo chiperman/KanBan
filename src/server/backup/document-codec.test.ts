@@ -51,7 +51,7 @@ function businessState(): BusinessDataState {
     }],
     formalDailySettlements: [],
     sourceInvestmentHistories: [{
-      sourceId: "manual", sourceLabel: "manual", provider: "youzhiyouxing",
+      sourceId: "manual", sourceLabel: "manual", provider: "external-ledger",
       accountId: "fixture-history", accountName: "测试账户", currency: "USD",
       openingInvestment: { day: observation.day, amount: "0" }, openingBasis: "测试期初",
       importedAt: at,

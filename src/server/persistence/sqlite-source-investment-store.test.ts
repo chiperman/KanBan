@@ -24,7 +24,7 @@ test("来源投资记录与历史写入失败回滚原数据，重试仍保持�
     await database.saveSourceInvestmentRecord(source.id, record, capturedAt);
     const history = {
       sourceId: source.id, sourceLabel: source.label,
-      provider: "youzhiyouxing", accountId: "fixture", accountName: "A股",
+      provider: "external-ledger", accountId: "fixture", accountName: "A股",
       currency: "CNY", openingInvestment: { day: "2026-01-01", amount: "0" },
       openingBasis: "账本起点", importedAt: capturedAt,
       records: [

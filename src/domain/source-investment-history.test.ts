@@ -6,7 +6,7 @@ import type { AssetSourceSummary } from "../server/ports";
 
 export function historyFixture(sourceId = "a-share") {
   return {
-    sourceId, sourceLabel: "A股", provider: "youzhiyouxing", accountId: "test-account", accountName: "大A账户", currency: "CNY",
+    sourceId, sourceLabel: "A股", provider: "external-ledger", accountId: "test-account", accountName: "大A账户", currency: "CNY",
     openingInvestment: { day: "2026-01-01", amount: "100" },
     openingBasis: "用户确认的期初本金", importedAt: "2026-01-11T12:00:00.000Z",
     records: [
@@ -27,7 +27,7 @@ test("余额上涨80%而本金亏损时，两条曲线都应为负；投入不�
   assert.equal(result.points.length, 2, "没有资产记录的入金日不能伪造估值");
 });
 
-test("有知有行同日优先，保留本地独有日期且隔离其他账户", () => {
+test("导入历史同日优先，保留本地独有日期且隔离其他账户", () => {
   const result = analyzeSourceInvestmentHistory(parseSourceInvestmentHistory(historyFixture()), [
     { sourceId: "a-share", day: "2026-01-11", amount: "170", currency: "CNY", recordedAt: "2026-01-11T12:00:00Z" },
     { sourceId: "longbridge", day: "2026-01-12", amount: "999999", currency: "CNY", recordedAt: "2026-01-12T12:00:00Z" },

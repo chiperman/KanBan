@@ -90,7 +90,7 @@ export function SourceInvestmentPerformance({ history, sourceId, sourceName, rec
       <div className="daily-trend-details-content">
         <p>累计收益 = 当天资产金额 − 当天累计净投入。</p>
         <p>收益率按资金发生日加权（Modified Dietz），记账以来累计、不年化；切换区间只筛选日期。</p>
-        <p>仅在实际资产记录日计算；图表从首条资产记录开始。同日有知有行金额优先，其次为手动记录，再次为刷新数据。</p>
+        <p>仅在实际资产记录日计算；图表从首条资产记录开始。同日导入金额优先，其次为手动记录，再次为刷新数据。</p>
       </div>
     </details>
     {showSensitiveInfo && records.length ? <details className="daily-trend-details source-performance__records">
@@ -107,7 +107,7 @@ export function SourceInvestmentPerformance({ history, sourceId, sourceName, rec
       </ol>
     </details> : null}
     {showSensitiveInfo && history ? <details className="daily-trend-details">
-      <summary>有知有行原始更新记录（{history.records.length} 条）</summary>
+      <summary>导入记账记录（{history.records.length} 条）</summary>
       <p className="trend-note">{history.accountName} · 期初本金 {history.openingInvestment.day}：{money(history.openingInvestment.amount)} {history.currency}。{history.openingBasis}。</p>
       <ol className="manual-asset-history-list">
         {history.records.toReversed().map(record => <li key={record.id}>

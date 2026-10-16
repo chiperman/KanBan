@@ -19,7 +19,7 @@ test("来源历史事务导入、身份隔离、幂等与备份恢复", async ()
     const [aShare, other] = await database.listSources();
     const beforeSources = await database.listSources();
     const history = parseSourceInvestmentHistory({
-      sourceId: aShare.id, sourceLabel: "A股", provider: "youzhiyouxing", accountId: "a-share-account", accountName: "大A账户", currency: "CNY",
+      sourceId: aShare.id, sourceLabel: "A股", provider: "external-ledger", accountId: "a-share-account", accountName: "大A账户", currency: "CNY",
       openingInvestment: {day:"2026-01-01",amount:"100"}, openingBasis:"用户确认", importedAt:"2026-01-11T12:00:00Z",
       records:[{id:"v1",day:"2026-01-01",kind:"valuation",amount:"100"},{id:"d1",day:"2026-01-06",kind:"deposit",amount:"100"},{id:"v2",day:"2026-01-11",kind:"valuation",amount:"180"}],
       reconciliation:{asOf:"2026-01-11",netInvestment:"200",total:"180",profit:"-20"},
@@ -61,7 +61,7 @@ test("来源历史事务导入、身份隔离、幂等与备份恢复", async ()
   }
 });
 
-test("长桥有知有行历史允许导入及备份恢复，零期初与首次投入各计一次", async () => {
+test("长桥导入历史允许导入及备份恢复，零期初与首次投入各计一次", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "kanban-longbridge-import-"));
   const make = (name: string) => new SqliteDashboardDatabase(path.join(root, name + ".sqlite"));
   const database = make("original"), restored = make("restored");
@@ -72,7 +72,7 @@ test("长桥有知有行历史允许导入及备份恢复，零期初与首次�
     }, "test-reference", "2026-09-29T00:00:00Z");
     const source = (await database.listSources())[0];
     const history = parseSourceInvestmentHistory({
-      sourceId: source.id, sourceLabel: source.label, provider: "youzhiyouxing", accountId: "yz-lb", accountName: "长桥", currency: "CNY",
+      sourceId: source.id, sourceLabel: source.label, provider: "external-ledger", accountId: "yz-lb", accountName: "长桥", currency: "CNY",
       openingInvestment: { day: "2024-04-20", amount: "0" }, openingBasis: "账本起点", importedAt: "2026-09-29T01:00:00Z",
       records: [
         { id: "first-deposit", day: "2024-04-20", kind: "deposit", amount: "1275" },

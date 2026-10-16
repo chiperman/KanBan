@@ -45,7 +45,7 @@ export function SourceInvestmentRecordDialog({sourceId,sourceName,currentDay,cur
     <VibeDateField fieldId="investment-record-day" label="记录日期" max={currentDay} value={day} onValueChange={setDay} />
     <VibeField fieldId="investment-record-amount" label={kinds.find(option=>option.value===kind)!.label} inputMode="decimal" value={amount} onChange={e=>setAmount(e.target.value)} />
     {fixedCurrency ? <p className="trend-note">记账币种：{fixedCurrency}</p> : <VibeSelectField fieldId="investment-record-currency" label="币种" value={currency} onValueChange={value=>setCurrency(value as typeof currency)} options={CURRENCY_OPTIONS} />}
-    <p className="trend-note">{kind==="opening" ? "起点的历史投入本金（非当前资产），从零开始请填 0。" : kind==="valuation" ? "记录指定日期的账户总资产。自动刷新会保留此记录；同日已有有知有行金额时，计算采用有知有行。" : "仅记录实际转入/转出本金，不含买卖、分红及利息。"}</p>
+    <p className="trend-note">{kind==="opening" ? "起点的历史投入本金（非当前资产），从零开始请填 0。" : kind==="valuation" ? "记录指定日期的账户总资产。自动刷新会保留此记录；同日已有导入记录的资产金额时，计算采用导入记录。" : "仅记录实际转入/转出本金，不含买卖、分红及利息。"}</p>
     {error ? <VibeNotice tone="error" role="alert">{error}</VibeNotice>:null}
   </VibeDialog>;
 }
