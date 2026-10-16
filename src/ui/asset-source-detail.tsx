@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { lazy, Suspense, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
 import { AssetSourceRefreshButton } from "@/ui/asset-refresh-controls";
@@ -47,6 +47,13 @@ import { CURRENCY_OPTIONS, INTERVAL_OPTIONS } from "@/ui/reporting-currency-opti
 type DetailSource = AssetSourceView & {
   permissions: AssetPermission[];
 };
+
+// 资产类别表单只服务手工来源，动态导入避免自动来源页面下载其代码。
+const SourceManualAssetClassForm = lazy(() =>
+  import("./source-manual-asset-class-form").then((module) => ({
+    default: module.SourceManualAssetClassForm,
+  })),
+);
 
 async function sourceRequest(
   url: string,
@@ -683,6 +690,15 @@ export function AssetSourceDetail({
         <section aria-label="来源身份" className="asset-source-detail__metadata">
           <h2>来源身份</h2>
           <SourceDisplayNameForm key={`${source.id}:${source.displayName ?? ""}`} source={source} />
+          {manual ? (
+            <Suspense fallback={null}>
+              <SourceManualAssetClassForm
+                key={`${source.id}:${source.manualAssetClass ?? ""}`}
+                manualAssetClass={source.manualAssetClass ?? null}
+                sourceId={source.id}
+              />
+            </Suspense>
+          ) : null}
           <dl>
             <div>
               <dt>来源名称</dt>

@@ -51,7 +51,7 @@ test.beforeEach(async ({ request }) => {
   await request.post("/test-doubles/reset");
 });
 
-test("手工资产分类接口保留类别且不改变来源金额与总额完整性", async ({
+test("手工资产分类入口保留类别且不改变来源金额与总额完整性", async ({
   page,
 }) => {
   await loginAsOwnerBySession(page);
@@ -78,12 +78,27 @@ test("手工资产分类接口保留类别且不改变来源金额与总额完�
 
   await expect(page.getByTestId("overview-confidence")).toContainText("总额完整");
   await expect(page.getByTestId("overview-current-total")).toContainText("100,000.00");
-  const classified = await page.request.patch(
-    `/api/asset-sources/${encodeURIComponent(manualSource.id)}`,
-    { data: { action: "manual-asset-class", manualAssetClass: "securities" } },
+
+  await page.goto(`/asset-sources/${encodeURIComponent(manualSource.id)}`);
+  const classField = page.getByRole("button", { name: "资产类别" });
+  await expect(classField).toContainText("待分类");
+  await chooseOverviewOption(page, "资产类别", "证券");
+  const classified = page.waitForResponse(
+    (response) =>
+      response.request().method() === "PATCH" &&
+      response.url().endsWith(`/api/asset-sources/${encodeURIComponent(manualSource.id)}`)
   );
-  expect(classified.ok()).toBeTruthy();
+  await page.getByRole("button", { name: "保存类别" }).click();
+  expect((await classified).ok()).toBeTruthy();
+  await expect.poll(async () =>
+    (await manualState(page)).sources.find(({ id }) => id === manualSource.id)
+      ?.manualAssetClass
+  ).toBe("securities");
+
   await page.reload();
+  await expect(page.getByRole("button", { name: "资产类别" })).toContainText("证券");
+
+  await page.goto("/");
   await expect(page.getByTestId("overview-confidence")).toContainText("总额完整");
   await expect(page.getByTestId("overview-current-total")).toContainText("100,000.00");
 
@@ -94,6 +109,20 @@ test("手工资产分类接口保留类别且不改变来源金额与总额完�
   expect(state.sources.find(({ id }) => id === manualSource.id)?.total).toEqual({
     amount: "100000", currency: "USD",
   });
+
+  await page.goto(`/asset-sources/${encodeURIComponent(manualSource.id)}`);
+  await chooseOverviewOption(page, "资产类别", "待分类");
+  const cleared = page.waitForResponse(
+    (response) =>
+      response.request().method() === "PATCH" &&
+      response.url().endsWith(`/api/asset-sources/${encodeURIComponent(manualSource.id)}`)
+  );
+  await page.getByRole("button", { name: "保存类别" }).click();
+  expect((await cleared).ok()).toBeTruthy();
+  await expect.poll(async () =>
+    (await manualState(page)).sources.find(({ id }) => id === manualSource.id)
+      ?.manualAssetClass
+  ).toBeUndefined();
 });
 
 test("手工资产独立接入后在来源详情按上海自然日保存一条，并可编辑今日总额", async ({
