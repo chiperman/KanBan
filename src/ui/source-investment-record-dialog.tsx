@@ -8,11 +8,13 @@ import { VibeDateField } from "@/ui/vibe/vibe-date-field";
 import { VibeDialog } from "@/ui/vibe/vibe-dialog";
 import { VibeField, VibeSelectField } from "@/ui/vibe/vibe-field";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
+import { lockOnUnauthorizedResponse, OWNER_SESSION_EXPIRED_MESSAGE, readJsonResult } from "@/ui/owner-request-lock";
 
 const kinds = [{value:"valuation",label:"当天资产金额"},{value:"deposit",label:"投入"},{value:"withdrawal",label:"取出"},{value:"opening",label:"期初本金"}] as const;
 async function request(sourceId: string, method: "PATCH" | "DELETE", body: unknown) {
   const response = await fetch(`/api/asset-sources/${encodeURIComponent(sourceId)}`, {method,headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-  const result = await response.json().catch(()=>null);
+  const result = await readJsonResult<{ error?: string }>(response);
+  if (lockOnUnauthorizedResponse(response)) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
   if (!response.ok) throw new Error(result?.error ?? "保存记录失败");
 }
 

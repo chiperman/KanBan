@@ -10,6 +10,7 @@ import {
   type MarketBenchmarkComparison,
   type MarketBenchmarkSymbol,
 } from "@/domain/market-benchmark";
+import { lockOnUnauthorizedResponse } from "@/ui/owner-request-lock";
 
 export type MarketBenchmarkCandles = Record<
   MarketBenchmarkSymbol,
@@ -62,6 +63,8 @@ function useMarketBenchmarkCandles(visible: boolean): MarketBenchmarkCandlesStat
           setState({ kind: "unavailable" });
           return;
         }
+        // 会话失效时立即广播锁定，基准曲线不再退化成普通失败态。
+        if (lockOnUnauthorizedResponse(response)) return;
         if (!response.ok) {
           setState({ kind: "failed" });
           return;

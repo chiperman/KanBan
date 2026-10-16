@@ -17,6 +17,7 @@ import type {
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeDialog } from "@/ui/vibe/vibe-dialog";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
+import { lockOnUnauthorizedResponse, OWNER_SESSION_EXPIRED_MESSAGE, readJsonResult } from "@/ui/owner-request-lock";
 
 export interface EvmTokenPreferenceSettingsSource {
   id: string;
@@ -185,12 +186,9 @@ export function EvmTokenPreferenceSettings({
           }),
         },
       );
-      if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as
-          | { error?: string }
-          | null;
-        throw new Error(body?.error ?? "资产范围设置保存失败");
-      }
+      const body = await readJsonResult<{ error?: string }>(response);
+      if (lockOnUnauthorizedResponse(response)) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
+      if (!response.ok) throw new Error(body?.error ?? "资产范围设置保存失败");
       window.location.reload();
     } catch (caught) {
       setPendingAssetKey(null);

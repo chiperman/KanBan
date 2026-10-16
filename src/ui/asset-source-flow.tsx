@@ -28,6 +28,7 @@ import {
   VibeTextAreaField,
 } from "@/ui/vibe/vibe-field";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
+import { lockOnUnauthorizedResponse, OWNER_SESSION_EXPIRED_MESSAGE, readJsonResult } from "@/ui/owner-request-lock";
 
 interface Preview {
   id: string;
@@ -164,8 +165,10 @@ export function AssetSourceFlow({
     const endpoint = previewUrl ?? "/api/asset-sources/longbridge/preview";
     void fetch(`${endpoint}?id=${encodeURIComponent(previewId)}`)
       .then(async (response) => {
-        const body = (await response.json()) as Preview & { error?: string };
-        if (!response.ok) throw new Error(body.error ?? "授权预览失败");
+        const expired = lockOnUnauthorizedResponse(response);
+        const body = await readJsonResult<Preview & { error?: string }>(response);
+        if (expired) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
+        if (!response.ok || body === null) throw new Error(body?.error ?? "授权预览失败");
         setPreviews([body]);
         setStep("preview");
         window.history.replaceState(null, "", window.location.pathname);
@@ -224,10 +227,12 @@ export function AssetSourceFlow({
       ? "/api/asset-sources/longbridge/oauth/start"
       : `/api/asset-sources/${encodeURIComponent(reauthorization.sourceId)}/reauthorize/oauth/start`;
     const response = await fetch(endpoint, { method: "POST" });
-    const body = (await response.json().catch(() => null)) as {
-      authorizationUrl?: string;
-      error?: string;
-    } | null;
+    const body = await readJsonResult<{ authorizationUrl?: string; error?: string }>(response);
+    if (lockOnUnauthorizedResponse(response)) {
+      setError(OWNER_SESSION_EXPIRED_MESSAGE);
+      setPending(false);
+      return;
+    }
     if (!response.ok || !body?.authorizationUrl) {
       setError(body?.error ?? "无法开始长桥授权");
       setPending(false);
@@ -250,10 +255,12 @@ export function AssetSourceFlow({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(sourceAuthorizationBody()),
     });
-    const body = (await response.json().catch(() => null)) as
-      | (Preview & { error?: string })
-      | null;
+    const body = await readJsonResult<Preview & { error?: string }>(response);
     setPending(false);
+    if (lockOnUnauthorizedResponse(response)) {
+      setError(OWNER_SESSION_EXPIRED_MESSAGE);
+      return;
+    }
     if (!response.ok || body === null) {
       setError(body?.error ?? provider.validationError);
       return;
@@ -285,18 +292,21 @@ export function AssetSourceFlow({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ chain, addresses }),
         });
-        const body = (await response.json().catch(() => null)) as
-          | (Preview & { error?: string })
-          | null;
-        return { chain, body, ok: response.ok && body !== null };
+        const body = await readJsonResult<Preview & { error?: string }>(response);
+        return { chain, body, expired: lockOnUnauthorizedResponse(response), ok: response.ok && body !== null };
       }),
     );
+    if (results.some((result) => result.expired)) {
+      setPending(false);
+      setError(OWNER_SESSION_EXPIRED_MESSAGE);
+      return;
+    }
     const failed = results.find((result) => !result.ok);
     if (failed) {
       await Promise.all(
         results
           .filter(
-            (result): result is { chain: EvmChain; body: Preview; ok: true } =>
+            (result): result is { chain: EvmChain; body: Preview; expired: boolean; ok: true } =>
               result.ok && result.body !== null,
           )
           .map(({ chain, body }) =>
@@ -339,9 +349,12 @@ export function AssetSourceFlow({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ label: manualLabel }),
     });
-    const body = (await response.json().catch(() => null)) as
-      | { error?: string }
-      | null;
+    const body = await readJsonResult<{ error?: string }>(response);
+    if (lockOnUnauthorizedResponse(response)) {
+      setPending(false);
+      setError(OWNER_SESSION_EXPIRED_MESSAGE);
+      return;
+    }
     if (!response.ok) {
       setPending(false);
       setError(body?.error ?? "手工资产记录保存失败");
@@ -361,7 +374,12 @@ export function AssetSourceFlow({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: preview.id, provider: preview.provider }),
     });
-    const body = (await response.json().catch(() => null)) as { error?: string } | null;
+    const body = await readJsonResult<{ error?: string }>(response);
+    if (lockOnUnauthorizedResponse(response)) {
+      setPending(false);
+      setError(OWNER_SESSION_EXPIRED_MESSAGE);
+      return;
+    }
     if (!response.ok) {
       setPending(false);
       setError(body?.error ?? `保存 ${provider.label} 来源失败`);
@@ -386,7 +404,13 @@ export function AssetSourceFlow({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: current.id, provider: current.provider }),
       });
-      const body = (await response.json().catch(() => null)) as { error?: string } | null;
+      const body = await readJsonResult<{ error?: string }>(response);
+      if (lockOnUnauthorizedResponse(response)) {
+        setPending(false);
+        setPreviews(remaining);
+        setError(OWNER_SESSION_EXPIRED_MESSAGE);
+        return;
+      }
       if (!response.ok) {
         setPending(false);
         setPreviews(remaining);

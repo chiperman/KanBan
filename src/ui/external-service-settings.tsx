@@ -8,6 +8,7 @@ import type {
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeField } from "@/ui/vibe/vibe-field";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
+import { lockOnUnauthorizedResponse, OWNER_SESSION_EXPIRED_MESSAGE, readJsonResult } from "@/ui/owner-request-lock";
 
 const FIELD_LABELS = {
   coinGecko: "CoinGecko Demo API Key",
@@ -51,10 +52,15 @@ export function ExternalServiceSettings({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    const result = (await response.json().catch(() => null)) as
+    const result = await readJsonResult<
       | (ExternalServiceConfigurationStatus & { error?: never })
       | { error?: string }
-      | null;
+    >(response);
+    if (lockOnUnauthorizedResponse(response)) {
+      setError(OWNER_SESSION_EXPIRED_MESSAGE);
+      setPending(false);
+      return;
+    }
     if (!response.ok || !result || "error" in result) {
       setError(result && "error" in result ? result.error ?? "外部服务保存失败" : "外部服务保存失败");
       setPending(false);

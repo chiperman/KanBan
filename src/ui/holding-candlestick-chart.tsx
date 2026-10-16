@@ -6,6 +6,7 @@ import type { LongbridgeHoldingCandlePeriod } from "@/server/ports";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeDialog } from "@/ui/vibe/vibe-dialog";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
+import { lockOnUnauthorizedResponse, OWNER_SESSION_EXPIRED_MESSAGE, readJsonResult } from "@/ui/owner-request-lock";
 
 interface Candlestick {
   time: string;
@@ -333,7 +334,9 @@ export function HoldingCandlestickChart({
           `/api/asset-sources/${encodeURIComponent(sourceId)}/candles?symbol=${encodeURIComponent(symbol)}&period=${period}`,
           { signal: controller.signal },
         );
-        const result = (await response.json().catch(() => null)) as CandlestickResponse | null;
+        const result = await readJsonResult<CandlestickResponse>(response);
+        // 会话失效时立即广播锁定，K 线不再显示普通读取错误。
+        if (lockOnUnauthorizedResponse(response)) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
         if (!response.ok || result === null) {
           throw new Error(result?.error ?? "长桥 K 线读取失败");
         }

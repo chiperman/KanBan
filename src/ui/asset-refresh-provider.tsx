@@ -14,6 +14,7 @@ import {
 
 import type { AssetRefreshIntent, AssetRefreshReport } from "@/server/ports";
 import { OWNER_LOCK_EVENT } from "@/shared/session-policy";
+import { lockOnUnauthorizedResponse, OWNER_SESSION_EXPIRED_MESSAGE, readJsonResult } from "@/ui/owner-request-lock";
 import {
   AssetRefreshCoordinator,
   isRefreshableAssetSource,
@@ -57,13 +58,8 @@ async function requestAssetRefresh(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ mode: "all", intent }),
   });
-  const result = (await response.json().catch(() => null)) as
-    | (AssetRefreshReport & { error?: string })
-    | null;
-  if (response.status === 401) {
-    window.dispatchEvent(new Event(OWNER_LOCK_EVENT));
-    throw new Error("所有者会话已失效");
-  }
+  const result = await readJsonResult<AssetRefreshReport & { error?: string }>(response);
+  if (lockOnUnauthorizedResponse(response)) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
   if (!response.ok || result === null) {
     throw new Error(result?.error ?? "资产刷新失败");
   }
@@ -72,10 +68,7 @@ async function requestAssetRefresh(
 
 async function readAssetRefreshState() {
   const response = await fetch("/api/asset-sources/refresh", { cache: "no-store" });
-  if (response.status === 401) {
-    window.dispatchEvent(new Event(OWNER_LOCK_EVENT));
-    throw new Error("所有者会话已失效");
-  }
+  if (lockOnUnauthorizedResponse(response)) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
   if (!response.ok) throw new Error("读取资产刷新状态失败");
   return await response.json() as { attemptedAt: string | null; inProgressAt: string | null };
 }
