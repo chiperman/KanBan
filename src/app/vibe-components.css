@@ -15,7 +15,7 @@
   margin-bottom: 7px;
   color: var(--secondary);
   font-family: var(--f-mono);
-  font-size: 9px;
+  font-size: var(--vibe-type-micro);
   letter-spacing: 0.12em;
   line-height: 1.4;
   text-transform: uppercase;
@@ -31,10 +31,10 @@
   background: transparent;
   color: var(--primary);
   font-family: var(--f-mono);
-  font-size: 17px;
+  font-size: var(--vibe-type-body);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.14em;
-  transition: border-color var(--dur, 0.2s) var(--ease);
+  transition: border-color var(--vibe-duration-fast) var(--ease);
 }
 
 .vibe-field__input::placeholder {
@@ -65,7 +65,7 @@
   color: var(--primary);
   cursor: pointer;
   font-family: var(--f-display);
-  font-size: 17px;
+  font-size: var(--vibe-type-body);
   font-variation-settings: "ROND" 100;
   font-weight: 500;
   letter-spacing: 0.12em;
@@ -122,7 +122,7 @@
 .vibe-date-field__calendar-head strong {
   color: var(--display);
   font-family: var(--f-ui);
-  font-size: 13px;
+  font-size: var(--vibe-type-body-xs);
   font-weight: 600;
 }
 
@@ -178,7 +178,7 @@
   margin-bottom: 4px;
   color: var(--muted);
   font-family: var(--f-mono);
-  font-size: 9px;
+  font-size: var(--vibe-type-micro);
 }
 
 .vibe-date-field__day {
@@ -189,7 +189,7 @@
   color: var(--secondary);
   cursor: pointer;
   font-family: var(--f-display);
-  font-size: 13px;
+  font-size: var(--vibe-type-body-xs);
   font-variation-settings: "ROND" 100;
   font-weight: 500;
 }
@@ -245,11 +245,11 @@
   background: transparent;
   color: var(--display);
   font-family: var(--f-display);
-  font-size: 22px;
+  font-size: var(--vibe-type-title);
   font-variation-settings: "ROND" 100;
   font-weight: 500;
   line-height: 1;
-  transition: border-color var(--dur, 0.2s) var(--ease);
+  transition: border-color var(--vibe-duration-fast) var(--ease);
 }
 
 .vibe-verification-code__slot.is-active {
@@ -331,13 +331,13 @@ textarea.vibe-field__input {
   color: var(--primary);
   cursor: pointer;
   font-family: var(--f-mono);
-  font-size: 13px;
+  font-size: var(--vibe-type-body-xs);
   letter-spacing: 0.04em;
   text-transform: none;
   text-align: left;
   transition:
-    border-color var(--dur, 0.2s) var(--ease),
-    background var(--dur, 0.2s) var(--ease);
+    border-color var(--vibe-duration-fast) var(--ease),
+    background var(--vibe-duration-fast) var(--ease);
 }
 
 .vibe-select .vibe-select__trigger::after,
@@ -367,7 +367,7 @@ textarea.vibe-field__input {
   border-right: 1px solid currentColor;
   border-bottom: 1px solid currentColor;
   transform: translateY(-2px) rotate(45deg);
-  transition: transform var(--dur, 0.2s) var(--ease);
+  transition: transform var(--vibe-duration-fast) var(--ease);
 }
 
 .vibe-select
@@ -476,7 +476,7 @@ textarea.vibe-field__input {
   line-height: 1;
   text-decoration: none;
   white-space: nowrap;
-  transition: opacity var(--dur, 0.2s) var(--ease);
+  transition: opacity var(--vibe-duration-fast) var(--ease);
 }
 
 .vibe-button:not(:disabled):hover {
@@ -556,9 +556,9 @@ textarea.vibe-field__input {
   visibility: hidden;
   white-space: nowrap;
   transition:
-    opacity var(--dur, 0.2s) var(--ease),
-    transform var(--dur, 0.2s) var(--ease),
-    visibility 0s linear var(--dur, 0.2s);
+    opacity var(--vibe-duration-fast) var(--ease),
+    transform var(--vibe-duration-fast) var(--ease),
+    visibility 0s linear var(--vibe-duration-fast);
 }
 
 .vibe-tooltip__content::before {
@@ -720,7 +720,7 @@ textarea.vibe-field__input {
   margin: 0 0 6px;
   color: var(--muted);
   font-family: var(--f-mono);
-  font-size: 9px;
+  font-size: var(--vibe-type-micro);
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -729,7 +729,7 @@ textarea.vibe-field__input {
   margin: 0;
   color: var(--display);
   font-family: var(--f-head);
-  font-size: 19px;
+  font-size: var(--vibe-type-subheading);
   font-weight: 600;
   line-height: 1.2;
 }
@@ -742,7 +742,7 @@ textarea.vibe-field__input {
   margin: 0;
   color: var(--secondary);
   font-family: var(--f-ui);
-  font-size: 13px;
+  font-size: var(--vibe-type-body-xs);
   line-height: 1.65;
 }
 
@@ -877,23 +877,14 @@ body::before {
   margin-top: 8px;
 }
 
-.card.vibe-data-card {
-  position: relative;
-  isolation: isolate;
-  border: 0;
-  border-radius: var(--r-md);
-  background: var(--glass);
-  box-shadow: none;
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
-}
+
 
 .card-grid {
   align-items: stretch;
   grid-auto-rows: auto;
 }
 
-.card-drag-measurement,
+
 .card-drag-overlay {
   display: flex;
   flex-direction: column;
@@ -902,28 +893,11 @@ body::before {
   background: var(--glass);
 }
 
-.card-drag-measurement > .card-actions,
-.card-drag-overlay > .card-actions {
-  margin-top: auto;
-}
 
-.card.vibe-data-card::after {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  top: -8px;
-  right: -8px;
-  width: 112px;
-  height: 72px;
-  background-image: radial-gradient(circle, var(--line) 1px, transparent 1px);
-  background-size: 12px 12px;
-  opacity: 0.55;
-  pointer-events: none;
-}
 
-.total-overview-card.vibe-data-card {
-  width: 100%;
-}
+
+
+
 
 .vibe-data-module {
   color: var(--primary);
@@ -1007,7 +981,7 @@ body::before {
   border-radius: var(--r-sm);
   color: var(--secondary);
   font-family: var(--f-mono);
-  font-size: 10px;
+  font-size: var(--vibe-type-micro);
   font-weight: 400;
   letter-spacing: 0.06em;
   line-height: 1.2;
@@ -1079,7 +1053,7 @@ body::before {
   border-bottom: 1px solid var(--line-2);
   color: var(--muted);
   font-family: var(--f-mono);
-  font-size: 9px;
+  font-size: var(--vibe-type-micro);
   font-weight: 400;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1109,7 +1083,7 @@ body::before {
 .dashboard-control-deck[data-vibe-module="control-deck"]::before {
   color: var(--muted);
   font-family: var(--f-mono);
-  font-size: 9px;
+  font-size: var(--vibe-type-micro);
 }
 
 .dashboard-control-deck .asset-refresh-controls {
@@ -1266,7 +1240,7 @@ body::before {
 .vibe-preview-list dt {
   color: var(--muted);
   font-family: var(--f-mono);
-  font-size: 9px;
+  font-size: var(--vibe-type-micro);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -1356,7 +1330,7 @@ body::before {
 .command-menu-item.vibe-button small {
   color: var(--muted);
   font-family: var(--f-mono);
-  font-size: 10px;
+  font-size: var(--vibe-type-micro);
 }
 
 .layout-resize-preview {

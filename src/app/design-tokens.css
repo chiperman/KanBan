@@ -118,16 +118,32 @@
   --r-pill: 999px;
   --ease: ease-in-out;
 
-  /* KanBan layout scale. Visual semantics continue to come from upstream tokens. */
+  /* KanBan layout scale. Visual semantics continue to come from upstream tokens.
+   *
+   * 字号分两族，不要混用：
+   *   文字族（display-* / heading / subheading / title / body* / caption / label / micro）
+   *     用来排句子与标签，步长在 10–24px 之间密集。
+   *   展示族（display-*）用来排「一屏一个的大数字」，步长在 26–72px 之间。
+   * 每个档位都必须有真实使用点；没有使用点的档位不写进来。见 07-deviation-register.md D-18。 */
   --vibe-type-display-xl: 72px;
   --vibe-type-display-lg: 48px;
   --vibe-type-display-md: 36px;
+  /* 展示族最小一档。被 .asset-trend-yesterday > strong 等趋势数字使用。 */
+  --vibe-type-display-sm: 26px;
   --vibe-type-heading: 24px;
   --vibe-type-subheading: 18px;
+  /* 小标题与仪表数字共用的一档（身份名、锁定时钟、验证码格、趋势区间数字）。
+     上游的 20px 档位。 */
+  --vibe-type-title: 20px;
   --vibe-type-body: 16px;
   --vibe-type-body-sm: 14px;
+  /* 小正文：产品的正文基准。body 元素本身用的就是这一档，
+     对话框正文、下拉触发器、日历格、次级按钮文字、空态提示同属这一层。 */
+  --vibe-type-body-xs: 13px;
   --vibe-type-caption: 12px;
   --vibe-type-label: 11px;
+  /* 微标签：等宽大写、字距 .08–.14em 的最小一层（字段标签、表头、眉标、快捷键提示）。 */
+  --vibe-type-micro: 10px;
   --vibe-space-0: 2px;
   --vibe-space-1: 4px;
   --vibe-space-2: 8px;

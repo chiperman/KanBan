@@ -44,9 +44,16 @@ const entries = {
 };
 
 test("开发门禁、浏览器回归和串行排障命令保持分层", () => {
+  // 开发门禁依次是：类型 → 设计 token 守门 → 单元 → 冒烟。
+  // design:lint 是纯静态检查（不联网、不构建），因此放在昂贵步骤之前，
+  // 让裸值违规在最早的一步就暴露。它不产生任何构建产物，也不依赖浏览器。
   assert.equal(
     scripts.test,
-    "pnpm typecheck && pnpm test:unit && pnpm test:smoke",
+    "pnpm typecheck && pnpm design:lint && pnpm test:unit && pnpm test:smoke",
+  );
+  assert.equal(
+    scripts["design:lint"],
+    "node scripts/lint-design-tokens.mjs",
   );
   assert.equal(
     scripts["test:browser:build"],

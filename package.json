@@ -28,8 +28,11 @@
     "test:smoke": "pnpm build && pnpm test:smoke:quick",
     "test:e2e:full": "playwright test --config=playwright.archive.config.ts",
     "test:regression": "pnpm test:browser",
-    "test": "pnpm typecheck && pnpm test:unit && pnpm test:smoke",
+    "test": "pnpm typecheck && pnpm design:lint && pnpm test:unit && pnpm test:smoke",
     "preinstall": "node scripts/check-toolchain.mjs",
+    "design:styleguide": "node scripts/build-styleguide.mjs",
+    "design:styleguide:verify": "node scripts/verify-styleguide.mjs",
+    "design:lint": "node scripts/lint-design-tokens.mjs",
     "native:longbridge:check": "node scripts/native-artifact.mjs"
   },
   "dependencies": {

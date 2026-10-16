@@ -20,7 +20,7 @@
   margin-left: 6px;
   color: var(--secondary);
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 10px;
+  font-size: var(--vibe-type-micro);
 }
 
 .command-menu-overlay {
@@ -69,7 +69,7 @@
 .command-menu-hint {
   margin-top: 3px;
   color: var(--secondary);
-  font-size: 10px;
+  font-size: var(--vibe-type-micro);
 }
 
 .command-menu-close {
@@ -125,7 +125,7 @@
 .command-menu-item small {
   color: var(--secondary);
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 10px;
+  font-size: var(--vibe-type-micro);
   white-space: nowrap;
 }
 

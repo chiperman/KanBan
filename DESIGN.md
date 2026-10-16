@@ -44,6 +44,11 @@ These rules adapt the upstream system without changing its visual contract:
 - `src/app/product-layout.css` owns KanBan-specific layout and interaction adaptation.
 - `src/ui/vibe/` is the React interface consumed by product pages.
 - `public/fonts/nothing-open/` contains required runtime fonts and their OFL licenses.
+- `docs/design-system/` expands this contract into the normative specification set, a generated
+  `styleguide.html` living styleguide, and a register of known deviations. It is governed by
+  `docs/design-system/06-governance.md`, regenerated with `pnpm design:styleguide`, and enforced by
+  `pnpm design:lint` (existing deviations are baselined; new raw values fail). The lint runs as part
+  of `pnpm test`, so a raw value introduced by new code fails the default gate.
 
 The upstream repository must not be copied wholesale into this project. The local React module and styles are the maintained implementation.
 
