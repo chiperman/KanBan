@@ -11,7 +11,11 @@ import { AssetTrendChart } from "@/ui/asset-trend-chart";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeMetric } from "@/ui/vibe/vibe-data-instrument";
 
-const money = (value: string) => new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value));
+// 金额始终按十进制字符串格式化，避免大额金额经 Number 转换后丢精度。
+function money(value: string): string {
+  const [integer, fraction] = decimalToFixed(value, 2).split(".");
+  return `${integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.${fraction}`;
+}
 
 export function SourceInvestmentPerformance({ history, sourceId, sourceName, records, observations, source, manualRecords, currentDay, preset, customRange, showSensitiveInfo, rangeControls, onEdit, onDelete }: {
   history: SourceInvestmentHistory | null;
