@@ -9,6 +9,7 @@ import { VibeDialog } from "@/ui/vibe/vibe-dialog";
 import { VibeField, VibeSelectField } from "@/ui/vibe/vibe-field";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
 import { lockOnUnauthorizedResponse, OWNER_SESSION_EXPIRED_MESSAGE, readJsonResult } from "@/ui/owner-request-lock";
+import { CURRENCY_OPTIONS } from "@/ui/reporting-currency-options";
 
 const kinds = [{value:"valuation",label:"当天资产金额"},{value:"deposit",label:"投入"},{value:"withdrawal",label:"取出"},{value:"opening",label:"期初本金"}] as const;
 async function request(sourceId: string, method: "PATCH" | "DELETE", body: unknown) {
@@ -43,7 +44,7 @@ export function SourceInvestmentRecordDialog({sourceId,sourceName,currentDay,cur
     <VibeSelectField fieldId="investment-record-kind" label="记录类型" value={kind} onValueChange={value=>setKind(value as typeof kind)} options={kinds.filter(option=>option.value!=="opening"||!hasOpening||record?.kind==="opening")} />
     <VibeDateField fieldId="investment-record-day" label="记录日期" max={currentDay} value={day} onValueChange={setDay} />
     <VibeField fieldId="investment-record-amount" label={kinds.find(option=>option.value===kind)!.label} inputMode="decimal" value={amount} onChange={e=>setAmount(e.target.value)} />
-    {fixedCurrency ? <p className="trend-note">记账币种：{fixedCurrency}</p> : <VibeSelectField fieldId="investment-record-currency" label="币种" value={currency} onValueChange={value=>setCurrency(value as typeof currency)} options={[{value:"USD",label:"USD"},{value:"CNY",label:"CNY"},{value:"HKD",label:"HKD"}]} />}
+    {fixedCurrency ? <p className="trend-note">记账币种：{fixedCurrency}</p> : <VibeSelectField fieldId="investment-record-currency" label="币种" value={currency} onValueChange={value=>setCurrency(value as typeof currency)} options={CURRENCY_OPTIONS} />}
     <p className="trend-note">{kind==="opening" ? "起点的历史投入本金（非当前资产），从零开始请填 0。" : kind==="valuation" ? "记录指定日期的账户总资产。自动刷新会保留此记录；同日已有有知有行金额时，计算采用有知有行。" : "仅记录实际转入/转出本金，不含买卖、分红及利息。"}</p>
     {error ? <VibeNotice tone="error" role="alert">{error}</VibeNotice>:null}
   </VibeDialog>;

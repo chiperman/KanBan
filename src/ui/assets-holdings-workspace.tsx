@@ -42,6 +42,7 @@ import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
 import { LongbridgeRealtimeNotice, LongbridgeRealtimeStatus } from "@/ui/longbridge-realtime-notice";
 import { useLongbridgeRealtime } from "@/ui/use-longbridge-realtime";
 import { AssetGlobalRefreshControl } from "@/ui/asset-refresh-controls";
+import { CURRENCY_OPTIONS } from "@/ui/reporting-currency-options";
 
 type WorkspaceSource = Omit<
   AssetSourceSummary,
@@ -57,12 +58,6 @@ type HoldingObservation = {
   holding: AssetHolding;
   source: WorkspaceSource;
 };
-
-const CURRENCY_OPTIONS: readonly VibeSelectOption<ReportingCurrency>[] = [
-  { value: "USD", label: "USD" },
-  { value: "CNY", label: "CNY" },
-  { value: "HKD", label: "HKD" },
-];
 
 const ASSET_CLASS_OPTIONS: readonly VibeSelectOption<AssetClassFilter>[] = [
   { value: "all", label: "全部类别" },

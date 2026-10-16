@@ -39,30 +39,14 @@ import {
   VibeField,
   VibeSelect,
   VibeSelectField,
-  type VibeSelectOption,
 } from "@/ui/vibe/vibe-field";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
 import { lockOnUnauthorizedResponse, OWNER_SESSION_EXPIRED_MESSAGE, readJsonResult } from "@/ui/owner-request-lock";
+import { CURRENCY_OPTIONS, INTERVAL_OPTIONS } from "@/ui/reporting-currency-options";
 
 type DetailSource = AssetSourceView & {
   permissions: AssetPermission[];
 };
-
-const REPORTING_CURRENCY_OPTIONS: readonly VibeSelectOption<"USD" | "CNY" | "HKD">[] = [
-  { value: "USD", label: "USD" },
-  { value: "CNY", label: "CNY" },
-  { value: "HKD", label: "HKD" },
-];
-
-const INTERVAL_OPTIONS: readonly VibeSelectOption<InvestmentPerformanceIntervalPreset>[] = [
-  { value: "month-to-date", label: "本月" },
-  { value: "1m", label: "近 1 月" },
-  { value: "6m", label: "近 6 月" },
-  { value: "year-to-date", label: "本年" },
-  { value: "1y", label: "近 1 年" },
-  { value: "all", label: "全部" },
-  { value: "custom", label: "自定义" },
-];
 
 async function sourceRequest(
   url: string,
@@ -191,11 +175,7 @@ function ManualRecordDialog({
         fieldId="manual-record-currency"
         label="币种"
         onValueChange={(value) => setCurrency(value as "USD" | "CNY" | "HKD")}
-        options={[
-          { value: "USD", label: "USD" },
-          { value: "CNY", label: "CNY" },
-          { value: "HKD", label: "HKD" },
-        ]}
+        options={CURRENCY_OPTIONS}
         value={currency}
       />
       {error ? (
@@ -595,7 +575,7 @@ export function AssetSourceDetail({
               fieldId="asset-source-detail-reporting-currency"
               label="计价货币"
               onValueChange={setCurrency}
-              options={REPORTING_CURRENCY_OPTIONS}
+              options={CURRENCY_OPTIONS}
             value={currency}
               variant="compact"
             />

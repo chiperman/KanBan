@@ -42,7 +42,6 @@ import {
 import { VibeLink } from "@/ui/vibe/vibe-button";
 import {
   VibeSelect,
-  type VibeSelectOption,
 } from "@/ui/vibe/vibe-field";
 import {
   formatShanghaiDateTime,
@@ -50,6 +49,7 @@ import {
   formatShanghaiShortDateTime,
 } from "@/ui/shanghai-date-time";
 import { signedAmount } from "@/ui/signed-amount";
+import { CURRENCY_OPTIONS } from "@/ui/reporting-currency-options";
 import {
   useWorkbenchDisplayPreferences,
 } from "@/ui/workbench-display-preferences";
@@ -64,12 +64,6 @@ type SourceComparison =
   | { state: "changed"; change: string; previousAmount: string }
   | { state: "scope-change" }
   | { state: "unavailable" };
-
-const CURRENCY_OPTIONS: readonly VibeSelectOption<ReportingCurrency>[] = [
-  { value: "USD", label: "USD" },
-  { value: "CNY", label: "CNY" },
-  { value: "HKD", label: "HKD" },
-];
 
 function amount(value: string): string {
   const [integer, fraction] = decimalToFixed(value, 2).split(".");

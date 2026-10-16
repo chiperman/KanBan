@@ -57,6 +57,7 @@ import {
 import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
 import { AssetGlobalRefreshControl } from "@/ui/asset-refresh-controls";
 import { lockOnUnauthorizedResponse, OWNER_SESSION_EXPIRED_MESSAGE, readJsonResult } from "@/ui/owner-request-lock";
+import { CURRENCY_OPTIONS, INTERVAL_OPTIONS } from "@/ui/reporting-currency-options";
 import { signedAmount } from "@/ui/signed-amount";
 
 type CurrentTotals = Record<ReportingCurrency, PortfolioObservation | null>;
@@ -74,22 +75,6 @@ type CashflowDraft = {
   note: string;
   occurredAt: string;
 };
-
-const CURRENCY_OPTIONS: readonly VibeSelectOption<ReportingCurrency>[] = [
-  { value: "USD", label: "USD" },
-  { value: "CNY", label: "CNY" },
-  { value: "HKD", label: "HKD" },
-];
-
-const INTERVAL_OPTIONS: readonly VibeSelectOption<InvestmentPerformanceIntervalPreset>[] = [
-  { value: "month-to-date", label: "本月" },
-  { value: "1m", label: "近 1 月" },
-  { value: "6m", label: "近 6 月" },
-  { value: "year-to-date", label: "本年" },
-  { value: "1y", label: "近 1 年" },
-  { value: "all", label: "全部" },
-  { value: "custom", label: "自定义" },
-];
 
 const CASHFLOW_KIND_OPTIONS: readonly VibeSelectOption<InvestmentCashflowKind>[] = [
   { value: "initial-investment", label: "初始投入" },
