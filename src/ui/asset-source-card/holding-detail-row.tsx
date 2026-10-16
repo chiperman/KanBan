@@ -3,16 +3,8 @@ import type { AssetHolding } from "@/server/ports";
 import { assetHoldingKey, assetHoldingDisplayName, AssetHoldingPositionStatus } from "@/ui/asset-product-coverage";
 import type { ProfitColorScheme } from "@/ui/profit-color-scheme";
 import { VibeButton } from "@/ui/vibe/vibe-button";
+import { signedAmount, signedDisplayAmount } from "@/ui/signed-amount";
 import { amount, holdingProfit, holdingTodayProfit, holdingQuoteSessionText, holdingValuationDetail } from "./holding-detail-model";
-
-function signedAmount(value: string, format: (value: string) => string): string {
-  const formatted = format(value);
-  return decimalCompare(value, "0") > 0 ? `+${formatted}` : formatted;
-}
-
-function signedDisplayAmount(value: string, formatted: string): string {
-  return decimalCompare(value, "0") > 0 ? `+${formatted}` : formatted;
-}
 
 function profitDirection(
   value: string,

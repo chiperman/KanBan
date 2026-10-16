@@ -49,6 +49,7 @@ import {
   formatShanghaiDayLabel,
   formatShanghaiShortDateTime,
 } from "@/ui/shanghai-date-time";
+import { signedAmount } from "@/ui/signed-amount";
 import {
   useWorkbenchDisplayPreferences,
 } from "@/ui/workbench-display-preferences";
@@ -73,10 +74,6 @@ const CURRENCY_OPTIONS: readonly VibeSelectOption<ReportingCurrency>[] = [
 function amount(value: string): string {
   const [integer, fraction] = decimalToFixed(value, 2).split(".");
   return `${integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.${fraction}`;
-}
-
-function signedAmount(value: string): string {
-  return `${decimalCompare(value, "0") >= 0 ? "+" : ""}${amount(value)}`;
 }
 
 function profitDirection(
@@ -140,7 +137,7 @@ function MetricValue({
         profitColorScheme ? profitDirection(value) : undefined
       }
       unit={currency}
-      value={signed ? signedAmount(value) : amount(value)}
+      value={signed ? signedAmount(value, amount, { signZero: true }) : amount(value)}
     />
   );
 }
@@ -704,7 +701,7 @@ export function DailyOverviewWorkspace({
                               data-profit-color-scheme={profitColorScheme}
                               data-profit-direction={profitDirection(comparison.change)}
                               unit={currency}
-                              value={signedAmount(comparison.change)}
+                              value={signedAmount(comparison.change, amount, { signZero: true })}
                             />
                           </div>
                           <small>

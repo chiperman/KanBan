@@ -57,6 +57,7 @@ import {
 import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
 import { AssetGlobalRefreshControl } from "@/ui/asset-refresh-controls";
 import { lockOnUnauthorizedResponse, OWNER_SESSION_EXPIRED_MESSAGE, readJsonResult } from "@/ui/owner-request-lock";
+import { signedAmount } from "@/ui/signed-amount";
 
 type CurrentTotals = Record<ReportingCurrency, PortfolioObservation | null>;
 
@@ -102,10 +103,6 @@ const CASHFLOW_CURRENCY_OPTIONS: readonly VibeSelectOption<InvestmentCashflowCur
 function amount(value: string): string {
   const [integer, fraction] = decimalToFixed(value, 2).split(".");
   return `${integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.${fraction}`;
-}
-
-function signedAmount(value: string): string {
-  return `${decimalCompare(value, "0") > 0 ? "+" : ""}${amount(value)}`;
 }
 
 function cashflowKindLabel(kind: InvestmentCashflowKind): string {
@@ -245,7 +242,7 @@ function MetricValue({
 }) {
   if (hidden) return <span className="investment-performance__private">••••••</span>;
   if (value === null) return <span className="investment-performance__unavailable">数据不足</span>;
-  return <VibeMetric unit={currency} value={signed ? signedAmount(value) : amount(value)} />;
+  return <VibeMetric unit={currency} value={signed ? signedAmount(value, amount) : amount(value)} />;
 }
 
 function CashflowEditor({
@@ -867,6 +864,7 @@ export function InvestmentPerformanceWorkspace({
                 unit="%"
                 value={signedAmount(
                   decimalMultiply(analysis.interval.investmentProfitRatio, "100"),
+                  amount,
                 )}
               />
             )}
