@@ -305,7 +305,8 @@ function CashflowEditor({
           </VibeButton>
         </>
       }
-      description="仅记录外部资金进出。保存后立即计入累计净投入，并影响组合投资盈亏；它记录的是本金进出，与业绩表现无关。"
+      className="investment-performance__editor"
+      description="记录外部本金进出，保存后计入累计净投入，并用于计算组合投资盈亏。"
       eyebrow="INVESTMENT / CASHFLOW"
       onClose={onClose}
       onSubmit={submit}
@@ -313,32 +314,6 @@ function CashflowEditor({
       titleId="cashflow-editor-title"
     >
       <div className="investment-performance__editor-fields">
-        <VibeSelect
-          fieldId="cashflow-kind"
-          label="资金类型"
-          onValueChange={(kind) => setCurrent((value) => ({ ...value, kind }))}
-          options={kindOptions}
-          value={current.kind}
-        />
-        <div className="investment-performance__editor-field">
-          <VibeField
-            fieldId="cashflow-occurred-at"
-            label="发生时间"
-            max={toInputDateTime(new Date().toISOString())}
-            onChange={(event) =>
-              setCurrent((value) => ({ ...value, occurredAt: event.target.value }))}
-            required
-            type="datetime-local"
-            value={current.occurredAt}
-          />
-          {/* 原生控件按浏览器区域显示，列表只显示上海时间：先把落库值说出来，错才不会只在保存后暴露。
-              必须放在 label 之外，否则会被算进字段的可访问名。 */}
-          {occurredAtIso === "" ? null : (
-            <p className="investment-performance__editor-hint">
-              按上海时间将记录为 {formatShanghaiDateTime(occurredAtIso)}
-            </p>
-          )}
-        </div>
         <VibeField
           fieldId="cashflow-amount"
           inputMode="decimal"
@@ -357,15 +332,50 @@ function CashflowEditor({
           options={CASHFLOW_CURRENCY_OPTIONS}
           value={current.currency}
         />
+        <VibeSelect
+          fieldId="cashflow-kind"
+          label="资金类型"
+          onValueChange={(kind) => setCurrent((value) => ({ ...value, kind }))}
+          options={kindOptions}
+          value={current.kind}
+        />
+        <div className="investment-performance__editor-field">
+          <VibeField
+            aria-describedby="cashflow-time-hint"
+            fieldId="cashflow-occurred-at"
+            label="发生时间"
+            max={toInputDateTime(new Date().toISOString())}
+            onChange={(event) =>
+              setCurrent((value) => ({ ...value, occurredAt: event.target.value }))}
+            required
+            type="datetime-local"
+            value={current.occurredAt}
+          />
+          <p className="investment-performance__editor-hint" id="cashflow-time-hint">
+            {occurredAtIso === "" ? "按设备本地时间填写，列表以上海时间显示。" : (
+              <>上海时间 <time dateTime={occurredAtIso}>{formatShanghaiDateTime(occurredAtIso)}</time></>
+            )}
+          </p>
+        </div>
+      </div>
+      <div className="investment-performance__editor-note">
         <VibeTextAreaField
+          aria-describedby="cashflow-note-hint"
           fieldId="cashflow-note"
           label="备注"
           maxLength={500}
           onChange={(event) =>
             setCurrent((value) => ({ ...value, note: event.target.value }))}
-          placeholder="备注（可选）"
+          placeholder="例如资金来源、账户或补充说明"
+          rows={3}
           value={current.note}
         />
+        <div className="investment-performance__editor-note-meta">
+          <p className="investment-performance__editor-hint" id="cashflow-note-hint">
+            可选，最多 500 字
+          </p>
+          <span aria-hidden="true">{current.note.length} / 500</span>
+        </div>
       </div>
       <p className="investment-performance__editor-required-hint">
         除备注外均为必填。
@@ -937,7 +947,7 @@ export function InvestmentPerformanceWorkspace({
           <div className="investment-performance__ledger-table">
             <div aria-hidden="true" className="investment-performance__cashflow-head">
               <span>金额 / 时间</span>
-              <span>换算证据</span>
+              <span>换算 / 备注</span>
               <span>操作</span>
             </div>
             <ol className="investment-performance__cashflow-list" role="list">
@@ -982,7 +992,7 @@ export function InvestmentPerformanceWorkspace({
                           <VibeStatusTag tone="muted">
                             {cashflowKindLabel(cashflow.kind)}
                           </VibeStatusTag>
-                          <span>{occurredAtLabel}</span>
+                          <time dateTime={cashflow.occurredAt}>{occurredAtLabel}</time>
                         </div>
                       </div>
                       <div className="investment-performance__cashflow-evidence">

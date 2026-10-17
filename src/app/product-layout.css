@@ -143,7 +143,9 @@ html {
 
 .investment-performance__current .vibe-metric {
   margin-top: var(--vibe-space-5);
-  font-size: clamp(32px, 3.2vw, 52px);
+  font-size: clamp(var(--vibe-type-display-md), 3.2vw, var(--vibe-type-display-lg));
+  line-height: 1.1;
+  overflow-wrap: anywhere;
 }
 
 .investment-performance__current > article > p:last-child,
@@ -326,7 +328,9 @@ html {
 .investment-performance__interval-grid .vibe-metric {
   min-width: 0;
   margin-top: var(--vibe-space-3);
-  font-size: clamp(24px, 2.4vw, 38px);
+  font-size: clamp(var(--vibe-type-heading), 2.4vw, var(--vibe-type-display-md));
+  line-height: 1.15;
+  overflow-wrap: anywhere;
 }
 
 .investment-performance__private,
@@ -352,6 +356,12 @@ html {
 .investment-performance__ledger {
   display: grid;
   gap: var(--vibe-space-5);
+}
+
+.investment-performance__ledger > header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
 }
 
 /* 卡头右侧：计数在上、排序说明在下，共用一个右对齐容器 */
@@ -398,7 +408,10 @@ html {
 }
 
 .investment-performance__ledger-table {
+  /* 固定操作列宽，避免表头与每行各自测量 auto 列而错位。 */
+  --cashflow-columns: minmax(0, 1fr) minmax(0, 1.4fr) calc(var(--vibe-control-height) * 2 + var(--vibe-space-3));
   display: grid;
+  min-width: 0;
 }
 
 .investment-performance__cashflow-list {
@@ -422,7 +435,7 @@ html {
 
 .investment-performance__cashflow-list > li > article {
   display: grid;
-  grid-template-columns: minmax(200px, 1.1fr) minmax(0, 1.4fr) auto;
+  grid-template-columns: var(--cashflow-columns);
   align-items: start;
   gap: var(--vibe-space-5);
   padding: var(--vibe-space-5) 0;
@@ -447,6 +460,7 @@ html {
   font-weight: 400;
   letter-spacing: -0.03em;
   line-height: 1.1;
+  overflow-wrap: anywhere;
 }
 
 /* 币种单位不点阵化：数字是读数，单位是注解 */
@@ -470,7 +484,7 @@ html {
   width: max-content;
 }
 
-.investment-performance__cashflow-meta > span {
+.investment-performance__cashflow-meta > time {
   color: var(--secondary);
   font-family: var(--f-mono);
   font-size: var(--vibe-type-caption);
@@ -502,19 +516,22 @@ html {
   color: var(--warning);
 }
 
-/* 编辑 / 删除两个直连按钮：间距 16px 拉开误触距离；删除不染红——
-   一屏 0–2 个红色元素的预算，账本行数不定，N 行 N 个红删除会把红色变成装饰；
-   破坏性由「永久删除资金记录」确认弹窗承担。 */
 .investment-performance__cashflow-actions {
   display: flex;
+  align-self: center;
   align-items: center;
-  gap: var(--vibe-space-4);
+  justify-content: end;
+  gap: var(--vibe-space-3);
+}
+
+.investment-performance__cashflow-actions > .vibe-button {
+  min-width: var(--vibe-control-height);
 }
 
 /* 表头：给有视力用户的扫描辅助，读屏由每行自释，故整行 aria-hidden */
 .investment-performance__cashflow-head {
   display: grid;
-  grid-template-columns: minmax(200px, 1.1fr) minmax(0, 1.4fr) auto;
+  grid-template-columns: var(--cashflow-columns);
   column-gap: var(--vibe-space-5);
   padding-bottom: var(--vibe-space-2);
   border-bottom: 1px solid var(--line-2);
@@ -526,7 +543,7 @@ html {
 }
 
 .investment-performance__cashflow-head > :last-child {
-  text-align: right;
+  text-align: end;
 }
 
 /* 表尾小计：与上方「累计净投入」同源，是账目对得上的核验点，不是第二个头条 */
@@ -553,6 +570,7 @@ html {
   font-size: var(--vibe-type-title);
   font-variant-numeric: tabular-nums;
   font-weight: 400;
+  overflow-wrap: anywhere;
 }
 
 /* 隐藏值与「数据不足」在账本里要跟着行内读数走，不沿用大卡片那套尺寸 */
@@ -598,10 +616,75 @@ html {
   margin-top: var(--vibe-space-2);
 }
 
+.investment-performance__editor.vibe-dialog {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(100%, 640px);
+  overflow: hidden;
+}
+
+.investment-performance__editor > .vibe-dialog__header,
+.investment-performance__editor > .vibe-dialog__footer {
+  padding: var(--vibe-space-5) var(--vibe-space-6);
+}
+
+.investment-performance__editor > .vibe-dialog__body {
+  display: grid;
+  min-height: 0;
+  gap: var(--vibe-space-6);
+  padding: var(--vibe-space-6);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.investment-performance__editor .vibe-dialog__copy {
+  max-width: 58ch;
+}
+
 .investment-performance__editor-fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--vibe-space-4);
+  align-items: start;
+  gap: var(--vibe-space-6) var(--vibe-space-4);
+}
+
+.investment-performance__editor .vibe-field {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+.investment-performance__editor .vibe-field__input {
+  min-width: 0;
+  letter-spacing: 0.02em;
+}
+
+.investment-performance__editor input.vibe-field__input {
+  min-height: var(--vibe-control-height);
+}
+
+.investment-performance__editor input[type="datetime-local"] {
+  font-size: var(--vibe-type-body-sm);
+}
+
+.investment-performance__editor textarea {
+  display: block;
+  min-height: calc(var(--vibe-control-height) * 2);
+  line-height: 1.6;
+}
+
+.investment-performance__editor-note {
+  display: grid;
+  gap: var(--vibe-space-2);
+}
+
+.investment-performance__editor-note-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--vibe-space-3);
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
 }
 
 .investment-performance__custom-range-fields {
@@ -615,28 +698,33 @@ html {
   margin: 0;
 }
 
-.investment-performance__editor-fields > :last-child {
-  grid-column: 1 / -1;
-}
-
-/* 「发生时间」与它的解析结果行绑成同一个网格单元 */
 .investment-performance__editor-field {
   display: grid;
-  margin-top: var(--vibe-space-4);
-  gap: var(--vibe-space-1);
-}
-
-.investment-performance__editor-field > .vibe-field {
-  margin: 0;
+  min-width: 0;
+  gap: var(--vibe-space-2);
 }
 
 .investment-performance__editor-hint,
 .investment-performance__editor-required-hint {
   margin: 0;
-  color: var(--muted);
+  color: var(--secondary);
   font-family: var(--f-mono);
   font-size: var(--vibe-type-caption);
   line-height: 1.5;
+}
+
+.investment-performance__editor-hint > time {
+  white-space: nowrap;
+}
+
+.investment-performance__editor-required-hint {
+  padding-block-start: var(--vibe-space-4);
+  border-block-start: 1px solid var(--line);
+}
+
+.investment-performance__editor .vibe-notice {
+  max-width: none;
+  margin: 0;
 }
 
 @media (max-width: 1199px) {
@@ -671,8 +759,7 @@ html {
   .workbench-page-header,
   .investment-performance__trend > header,
   .investment-performance__benchmark-heading,
-  .investment-performance__interval > header,
-  .investment-performance__ledger > header {
+  .investment-performance__interval > header {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     align-items: start;
@@ -689,10 +776,9 @@ html {
   .workbench-page-header__actions > .vibe-button,
   .workbench-page-header__actions > .vibe-select {
     flex: 1 1 160px;
-  }
+}
 
   .investment-performance__current,
-  .investment-performance__editor-fields,
   .investment-performance__custom-range-fields {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -705,9 +791,10 @@ html {
 
   .investment-performance__range-option.vibe-button,
   .investment-performance__scope-option.vibe-button {
+
     width: 100%;
     min-width: 0;
-  }
+}
 
   .investment-performance__benchmark-controls {
     display: grid;
@@ -715,12 +802,12 @@ html {
   }
 
   .investment-performance__benchmark-toggle.vibe-button {
+
     width: 100%;
     min-width: 0;
-  }
+}
 
-  .investment-performance__current > article:first-child,
-  .investment-performance__editor-fields > :last-child {
+  .investment-performance__current > article:first-child {
     grid-column: auto;
   }
 
@@ -772,6 +859,37 @@ html {
   .investment-performance__ledger-total {
     flex-wrap: wrap;
     row-gap: var(--vibe-space-2);
+  }
+}
+
+@media (max-width: 639px) {
+  .investment-performance__editor > .vibe-dialog__header,
+  .investment-performance__editor > .vibe-dialog__body,
+  .investment-performance__editor > .vibe-dialog__footer {
+    padding: var(--vibe-space-4);
+  }
+
+  .investment-performance__editor-fields {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--vibe-space-4);
+  }
+
+  .investment-performance__editor > .vibe-dialog__body {
+    gap: var(--vibe-space-5);
+  }
+
+  .investment-performance__editor > .vibe-dialog__footer {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--vibe-space-4);
+  }
+
+  .investment-performance__current .vibe-metric {
+    font-size: var(--vibe-type-display-md);
+  }
+
+  .investment-performance__ledger .card-label {
+    overflow-wrap: anywhere;
   }
 }
 
