@@ -7603,14 +7603,12 @@ body {
   white-space: nowrap;
 }
 
-/* 每个服务一行：字段名与运行状态同行，状态右端与输入框右端对齐，
-   服务名不再在上方摘要与下方表单里各出现一次。 */
+/* 窄屏按服务逐行排列；宽屏在下方媒体查询中改为三列，避免整卡右侧留空。 */
 .external-service-statuses {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--vibe-space-6);
-  /* 与 .vibe-field 的 500px 字段宽度一致，状态右端才能和输入框对齐 */
-  width: min(100%, 500px);
+  width: 100%;
   margin: 0;
   padding: var(--vibe-space-5) 0 0;
   border: 0;
@@ -7640,9 +7638,10 @@ body {
 
 .external-service-statuses__state {
   justify-self: end;
-  color: var(--secondary);
+  color: var(--muted);
   font-family: var(--f-mono);
   font-size: var(--vibe-type-caption);
+  letter-spacing: 0.04em;
   text-align: right;
 }
 
@@ -7660,12 +7659,12 @@ body {
 
 .external-service-statuses__input .vibe-field__input {
   max-width: 500px;
+  font-size: var(--vibe-type-body-sm);
 }
 
 .external-service-form {
   display: grid;
   gap: var(--vibe-space-5);
-  max-width: 720px;
   margin-top: var(--vibe-space-5);
 }
 
@@ -7680,6 +7679,43 @@ body {
   color: var(--secondary);
   font-size: var(--vibe-type-caption);
   line-height: 1.5;
+}
+
+@media (min-width: 1024px) {
+  .external-service-statuses {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .external-service-statuses__row {
+    align-content: start;
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--vibe-space-1);
+  }
+
+  .external-service-statuses__state {
+    justify-self: start;
+    text-align: left;
+  }
+
+  .external-service-statuses__input {
+    margin-top: var(--vibe-space-2);
+  }
+
+  .external-service-statuses__input .vibe-field__input {
+    max-width: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  .external-service-statuses__row {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--vibe-space-1);
+  }
+
+  .external-service-statuses__state {
+    justify-self: start;
+    text-align: left;
+  }
 }
 
 .evm-token-settings__head,
@@ -10094,7 +10130,7 @@ body {
 .workbench-shell .settings-main {
   display: grid;
   gap: var(--vibe-space-6);
-  align-items: start;
+  align-items: stretch;
 }
 
 .workbench-shell .settings-section,

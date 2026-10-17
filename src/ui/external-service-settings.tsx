@@ -131,7 +131,7 @@ export function ExternalServiceSettings({
                     name={field.name}
                     placeholder={
                       service.configured
-                        ? "已配置；留空则保持不变"
+                        ? "输入新值可替换"
                         : field.placeholderEmpty
                     }
                     required={!service.configured}
