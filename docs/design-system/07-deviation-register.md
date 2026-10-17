@@ -121,7 +121,7 @@
 - **实测（整改前）**：原写法 `linear-gradient(var(--surface), var(--surface)) padding-box, repeating-linear-gradient(...)` 上层为**不透明**实色 `--surface`，把下层网格线完全盖住，实际渲染为纯实色面板——**网格线从未显示**，属失效写法。
 - **判定**：`--surface` 在本系统为不透明实色（暗 `#0c0c0c` / 亮 `#ffffff`，见 `design-tokens.css:64/88`），双层渐变在现有 token 下无法露出网格线；同时它不触发任何机械守门规则（用的是 `--surface`/`--line` token，无裸 hex / 圆角 / 阴影 / `!important`），归"无法机械判定"一类。
 - **整改（已执行）**：将上层改为 `linear-gradient(color-mix(in srgb, var(--surface) 62%, transparent), …) padding-box`，使半透明 surface 压在 `repeating-linear-gradient`（每 20% 一根 `var(--line)` 竖线）之上，网格线得以显示，成为"已隐藏走势"的遮罩质感。全程使用 `--surface`/`--line` token，明暗主题自动解析；`color-mix` 不触发 `raw-color-fn`（`rgba(`）守门规则，基线仍为 76 处不变。代码内已加注释标注此为 D-07 有意效果、非装饰渐变。
-- **复核**：`pnpm design:lint` 通过（新增 0 处）；沙箱无 chromium，未跑真实浏览器回归，但机制已按 token 推导确认网格线可见（预览页见 `tmp/d07-preview.html`）。
+- **复核**：`pnpm design:lint` 通过（新增 0 处）；沙箱无 chromium，未跑真实浏览器回归，但机制已按 token 推导确认网格线可见（预览页原位于 `tmp/d07-preview.html`，现见[本地临时证据归档说明](../audits/README.md#本地临时证据)）。
 
 ### D-08 · `box-shadow` 的六处使用
 
