@@ -6,6 +6,7 @@ import {
   VibeIcon,
   type VibeIconName,
 } from "@/ui/vibe/vibe-icon";
+import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeTooltip } from "@/ui/vibe/vibe-tooltip";
 
 type ThemeChoice = "light" | "dark" | "system";
@@ -115,7 +116,7 @@ export function ThemeSwitcher({
 
   return (
     <VibeTooltip align="end" label={tooltipLabel} side={tooltipSide}>
-      <button
+      <VibeButton
         type="button"
         className={showLabel ? "theme-toggle theme-toggle--labeled" : "theme-toggle"}
         aria-label={`当前主题：${THEME_LABELS[choice]}；点击切换为${THEME_LABELS[nextChoice]}`}
@@ -123,7 +124,7 @@ export function ThemeSwitcher({
       >
         <ThemeIcon choice={choice} />
         {showLabel ? <span className="workbench-control-label">主题</span> : null}
-      </button>
+      </VibeButton>
     </VibeTooltip>
   );
 }

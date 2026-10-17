@@ -109,7 +109,7 @@ export function MarketBenchmarkControls({
               key={benchmark.symbol}
               onClick={() => toggle(benchmark.symbol)}
               type="button"
-              variant={selected ? "primary" : "outline"}
+              variant="outline"
             >
               {benchmark.label}
             </VibeButton>

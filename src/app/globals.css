@@ -58,8 +58,6 @@ body {
   text-transform: uppercase;
 }
 
-
-
 .header-side {
   display: flex;
   flex-wrap: wrap;
@@ -81,23 +79,7 @@ body {
 }
 
 .theme-switcher button {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: var(--secondary);
-  font: inherit;
-  font-size: 12px;
   padding: 6px 12px;
-  cursor: pointer;
-}
-
-.theme-switcher button + button {
-  border-left: 1px solid var(--line);
-}
-
-.theme-switcher button[aria-pressed="true"] {
-  background: var(--display);
-  color: var(--bg);
 }
 
 .card-grid {
@@ -203,8 +185,6 @@ body {
   background: var(--raised);
 }
 
-
-
 .links-list{
   margin: 10px 0 0;
   padding-left: 20px;
@@ -214,12 +194,6 @@ body {
   color: var(--primary);
   text-underline-offset: 3px;
 }
-
-
-
-
-
-
 
 .owner-toolbar {
   display: flex;
@@ -235,18 +209,8 @@ body {
 .owner-toolbar button,
 .asset-refresh-controls button,
 .secondary-button{
-  appearance: none;
-  border: 1px solid var(--line-2);
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--primary);
-  font: inherit;
-  font-size: 12px;
   padding: 6px 12px;
-  cursor: pointer;
 }
-
-
 
 .layout-editing .card {
   cursor: grab;
@@ -262,12 +226,6 @@ body {
   opacity: 0.5;
 }
 
-
-
-
-
-
-
 .source-status {
   display: block;
   margin-top: 14px;
@@ -276,20 +234,10 @@ body {
   color: var(--secondary);
 }
 
-
-
-.danger-button {
-  color: #b3402e;
-}
-
 .content-error {
   margin: 0 0 16px;
   color: #b3402e;
 }
-
-
-
-
 
 .field-label {
   display: grid;
@@ -329,6 +277,7 @@ body {
 }
 
 .links-editor .secondary-button {
+
   justify-self: start;
   margin-top: 8px;
 }
@@ -349,8 +298,6 @@ body {
   gap: 12px;
   margin-top: 14px;
 }
-
-
 
 .source-preview-list {
   margin: 18px 0 0;
@@ -402,10 +349,6 @@ body {
   gap: 24px;
 }
 
-
-
-
-
 .total-status,
 .conversion-observation {
   margin: 8px 0 0;
@@ -425,11 +368,6 @@ body {
   align-items: center;
   gap: 12px;
   margin: -4px 0 16px;
-}
-
-.asset-refresh-controls button:disabled {
-  cursor: wait;
-  opacity: 0.55;
 }
 
 .asset-refresh-controls p,
@@ -495,9 +433,6 @@ body {
   padding-top: 14px;
   border-top: 1px solid var(--line);
 }
-
-
-
 
 .trend-empty {
   color: var(--secondary);
@@ -583,13 +518,15 @@ body {
 }
 
 .asset-source-card .asset-holdings-detail-toggle.vibe-button {
+
   display: flex;
+
   width: 100%;
+
   min-height: 52px;
+
   justify-content: space-between;
   padding-inline: 2px;
-  border-radius: 0;
-  color: var(--secondary);
 }
 
 .asset-holdings-detail-toggle__title {
@@ -750,8 +687,6 @@ body {
   }
 }
 
-
-
 .editor-actions {
   display: flex;
   gap: 10px;
@@ -799,8 +734,6 @@ body {
   font-size: clamp(24px, 5vw, 38px);
 }
 
-
-
 .login-error {
   margin: 10px 0 0;
   font-size: var(--vibe-type-body-xs);
@@ -833,13 +766,7 @@ body {
 .login-primary,
 .login-cancel,
 .logout-button {
-  appearance: none;
-  border: 1px solid var(--line-2);
-  border-radius: 999px;
-  font: inherit;
-  font-size: 12px;
   padding: 6px 14px;
-  cursor: pointer;
 }
 
 .login-primary {
@@ -851,12 +778,6 @@ body {
 .login-primary:disabled {
   opacity: 0.6;
   cursor: default;
-}
-
-.login-cancel,
-.logout-button {
-  background: transparent;
-  color: var(--primary);
 }
 
 .setup-panel {

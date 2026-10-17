@@ -85,7 +85,7 @@ pnpm design:styleguide:verify
 pnpm design:lint   # 已接入 pnpm test，改动 CSS 后会随开发门禁自动运行
 ```
 
-扫描 `src/app/*.css` 与 `src/ui/**/*.{ts,tsx}`，按 9 条机械规则判定违反视觉契约的裸值：
+扫描 `src/app/*.css` 与 `src/ui/**/*.{ts,tsx}`，按 10 条机械规则判定违反视觉契约的裸值：
 
 | 规则 | 判定 | 应改为 |
 |---|---|---|
@@ -98,8 +98,9 @@ pnpm design:lint   # 已接入 pnpm test，改动 CSS 后会随开发门禁自�
 | `box-shadow` | 出现 `box-shadow`（`none` 除外） | 细线 + z-index |
 | `important` | 出现 `!important` | 提高选择器特异性 |
 | `undefined-design-token` | `var(--x)` 找不到任何定义处 | 改用已定义的 token，或补上定义 |
+| `page-button-override` | 页面 CSS 覆盖共享按钮的视觉属性 | `VibeButton` / `VibeLink` 的封闭属性；页面 CSS 只保留布局 |
 
-**存量走基线豁免，新增直接失败。** 基线是 `scripts/design-system/token-lint-baseline.json`，按 `<规则>|<文件>|<规范化声明文本>` 的内容签名记录，不含行号——因此挪动或重排代码不会误报，只有真正多出来一处才会拦下。当前基线 90 处。修掉存量后重建基线：
+**存量走基线豁免，新增直接失败。** 基线是 `scripts/design-system/token-lint-baseline.json`，按 `<规则>|<文件>|<规范化声明文本>` 的内容签名记录，不含行号——因此挪动或重排代码不会误报，只有真正多出来一处才会拦下。当前基线 68 处。修掉存量后重建基线：
 
 ```bash
 pnpm design:lint -- --update

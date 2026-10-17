@@ -15,7 +15,7 @@ export function LogoutButton({ showLabel = false, tooltipSide = "bottom" }: { sh
     <VibeTooltip align="end" label="立即锁定敏感内容" side={tooltipSide}>
       <VibeButton
         type="button"
-        className={showLabel ? "header-action-button header-lock-button header-lock-button--labeled" : "header-action-button header-lock-button"}
+        className={showLabel ? "header-lock-button--labeled" : "header-lock-button"}
         aria-label="立即锁定（退出登录）"
         onClick={lock}
         variant="outline"

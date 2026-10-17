@@ -154,7 +154,7 @@ pnpm design:lint            # 校验，出现基线外新增即失败
 pnpm design:lint -- --update  # 存量减少后重建基线
 ```
 
-脚本是 `scripts/lint-design-tokens.mjs`，基线是 `scripts/design-system/token-lint-baseline.json`。9 条规则、当前 90 处存量豁免，明细见 [`README.md`](README.md) §4.2 与 [`07-deviation-register.md`](07-deviation-register.md) §0。
+脚本是 `scripts/lint-design-tokens.mjs`，基线是 `scripts/design-system/token-lint-baseline.json`。10 条规则、当前 68 处存量豁免，明细见 [`README.md`](README.md) §4.2 与 [`07-deviation-register.md`](07-deviation-register.md) §0。
 
 三条使用纪律：
 
@@ -165,6 +165,8 @@ pnpm design:lint -- --update  # 存量减少后重建基线
 **按设计豁免只写进规则，不写进基线。** SVG 用户坐标系里的字号（`SVG_TEXT_SELECTORS`）不是欠账，基线只该记录待偿还的存量。这条界限要守住，否则基线会变成"什么都允许"的清单。
 
 **`undefined-design-token` 是回报最高的一条规则。** 它跨文件比对 `var(--x)` 的引用与定义，第一次运行就抓出 11 处静默失效的声明（D-21）——不报错、不留痕，靠读代码几乎不可能发现。改动 token 命名后务必跑一次。
+
+**`page-button-override` 阻止按钮语言再次分裂。** 它禁止页面级 CSS 覆盖 `.vibe-button` / `VibeButton` / `VibeLink` 的视觉属性，只保留布局属性；认证页与首次供给页按 D-22 范围豁免。新增 React 页面按钮时先选 `VibeButton` / `VibeLink` 的封闭属性，不要另写按钮类名。
 
 > 本脚本已接入 `pnpm test`，作为 `test:design` 步骤在类型检查之后运行。
 

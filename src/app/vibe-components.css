@@ -464,7 +464,8 @@ textarea.vibe-field__input {
   justify-content: center;
   gap: 8px;
   padding: 9px var(--vibe-control-padding-inline);
-  border: 0;
+  /* 基础边框透明，outline 只改 border-color，避免尺寸跳动。 */
+  border: 1px solid transparent;
   border-radius: var(--r-sm);
   background: transparent;
   color: var(--primary);
@@ -483,6 +484,10 @@ textarea.vibe-field__input {
   opacity: 0.8;
 }
 
+.vibe-button:not(:disabled):active {
+  opacity: 0.6;
+}
+
 .vibe-button:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 3px;
@@ -493,17 +498,65 @@ textarea.vibe-field__input {
   opacity: 0.3;
 }
 
+.vibe-button[aria-busy="true"] {
+  cursor: wait;
+}
+
+.vibe-button--compact {
+  min-height: var(--vibe-control-height-compact);
+  padding-block: 7px;
+}
+
+.vibe-button--square {
+  width: var(--vibe-control-height);
+  padding-inline: 0;
+}
+
+.vibe-button--compact.vibe-button--square {
+  width: var(--vibe-control-height-compact);
+}
+
 .vibe-button--primary {
   background: var(--display);
   color: var(--bg);
 }
 
 .vibe-button--outline {
-  border: 1px solid var(--line-2);
+  border-color: var(--line-2);
 }
 
 .vibe-button--text {
   padding-inline: 4px;
+}
+
+/* 破坏性操作：仅改前景色，不染红底红边，避免红色装饰化。 */
+.vibe-button--danger,
+.vibe-button--danger.vibe-button--text {
+  color: var(--accent-text);
+}
+
+@media (hover: hover) {
+  .vibe-button--danger:not(:disabled):hover {
+    color: var(--accent-text);
+  }
+}
+
+/* 共享激活态：统一黑白反转，不依赖调用方各自写样式。 */
+.vibe-button[aria-pressed="true"],
+.vibe-button[aria-selected="true"],
+.vibe-button[data-active="true"],
+.vibe-button[aria-current="page"] {
+  background: var(--display);
+  color: var(--bg);
+}
+
+/* 共享 kbd 视觉（命令菜单等），仅字体与间距，不覆盖按钮颜色。 */
+.vibe-button kbd {
+  margin-left: 6px;
+  color: inherit;
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-micro);
+  letter-spacing: 0;
 }
 
 .vibe-dot-icon {
@@ -759,12 +812,6 @@ textarea.vibe-field__input {
   position: relative;
 }
 
-.vibe-menu__trigger.vibe-button {
-  min-height: var(--vibe-control-height-compact);
-  padding-inline: 8px;
-  color: var(--secondary);
-}
-
 .vibe-menu__panel {
   position: absolute;
   z-index: 30;
@@ -806,11 +853,9 @@ textarea.vibe-field__input {
 }
 
 @media (hover: hover) {
-  .vibe-menu__trigger.vibe-button:hover,
   .vibe-menu__item:hover {
     background: var(--raised);
     color: var(--display);
-    opacity: 1;
   }
 
   .vibe-menu__item--danger:hover {
@@ -1095,49 +1140,6 @@ body::before {
   background: transparent;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
-}
-
-.owner-toolbar .vibe-button,
-.asset-refresh-controls .vibe-button {
-  min-height: var(--vibe-control-height);
-  padding: 9px var(--vibe-control-padding-inline);
-  border-radius: var(--r-sm);
-  font-family: var(--f-mono);
-  font-size: var(--vibe-type-label);
-  font-weight: 400;
-  letter-spacing: 0.04em;
-  text-transform: none;
-}
-
-.owner-toolbar .vibe-button::after,
-.asset-refresh-controls .vibe-button::before {
-  content: none;
-}
-
-.owner-toolbar .vibe-button {
-  background: transparent;
-}
-
-.asset-refresh-controls .vibe-button {
-  border-color: transparent;
-  background: var(--display);
-  color: var(--bg);
-}
-
-.workbench-page-header__actions
-  .asset-refresh-controls
-  .vibe-button.vibe-button--outline {
-  border-color: var(--line-2);
-  background: var(--surface);
-  color: var(--secondary);
-}
-
-.workbench-page-header__actions
-  .asset-refresh-controls
-  .vibe-button.vibe-button--outline:not(:disabled):hover {
-  border-color: var(--primary);
-  background: var(--raised);
-  color: var(--primary);
 }
 
 .asset-refresh-controls .asset-refresh-status {

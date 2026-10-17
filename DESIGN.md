@@ -43,6 +43,7 @@ These rules adapt the upstream system without changing its visual contract:
 - `src/app/vibe-components.css` owns shared visual recipes.
 - `src/app/product-layout.css` owns KanBan-specific layout and interaction adaptation.
 - `src/ui/vibe/` is the React interface consumed by product pages.
+- Product pages consume `VibeButton` / `VibeLink` for shared buttons. Page CSS may set placement, sizing, spacing, stretching, and responsive visibility only; button color, background, border, radius, typography, padding, shadow, opacity, and transition belong to `vibe-components.css`.
 - `public/fonts/nothing-open/` contains required runtime fonts and their OFL licenses.
 - `docs/design-system/` expands this contract into the normative specification set, a generated
   `styleguide.html` living styleguide, and a register of known deviations. It is governed by

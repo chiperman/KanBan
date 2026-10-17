@@ -96,7 +96,6 @@ export function RecoverySetup({ configured }: RecoverySetupProps) {
   return (
     <>
       <VibeButton
-        className="header-action-button"
         type="button"
         onClick={openDialog}
         variant="outline"

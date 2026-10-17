@@ -391,7 +391,8 @@ export function HoldingCandlestickChart({
               key={item.value}
               onClick={() => setPeriod(item.value)}
               type="button"
-              variant="text"
+              variant="outline"
+              size="compact"
             >
               {item.label}
             </VibeButton>

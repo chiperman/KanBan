@@ -22,11 +22,20 @@
 
 ---
 
-## 2. 按钮 · `.vibe-button`
+## 2. 按钮 · `.vibe-button` / `VibeButton` / `VibeLink`
 
 ```
 <button class="vibe-button vibe-button--primary|outline|text" data-vibe-component="button">
 ```
+
+React 页面必须消费 `src/ui/vibe/vibe-button.tsx` 的 `VibeButton` / `VibeLink`，不得手写同款按钮类名或用页面 CSS 重建按钮外观。组件 API 的封闭语义是：
+
+| 属性 | 取值 | 用途 |
+|---|---|---|
+| `variant` | `primary` / `outline` / `text` | 主操作 / 次级操作 / 轻量操作 |
+| `size` | `regular` / `compact` | 标准高度 / 紧凑芯片与工具条 |
+| `shape` | `default` / `square` | 常规按钮 / 图标按钮 |
+| `tone` | `default` / `danger` | 常规语义 / 危险操作；危险仍是描边，不是红色填充 |
 
 | 变体 | 视觉 | 用于 |
 |---|---|---|
@@ -40,6 +49,8 @@
 - 焦点环：`outline: 2px solid var(--primary)`，`offset 3px`。
 
 **禁止**：红色按钮。主按钮不是红色——红色是信号位，不是操作位。
+
+**禁止**：页面级选择器覆盖按钮的 `display`、背景、文字色、边框、圆角、字号、行高、内边距、阴影、透明度或过渡。页面 CSS 只能负责按钮的放置、宽高伸缩、间距和响应式显隐；视觉语义由 `vibe-components.css` 唯一拥有。新增页面覆盖会被 `pnpm design:lint` 的 `page-button-override` 规则拦截。
 
 ---
 

@@ -63,8 +63,8 @@ export function SourceInvestmentPerformance({ history, sourceId, sourceName, rec
     </div>
     <div className="source-performance__chart-toolbar">
       <div className="source-performance__curve-options" role="group" aria-label="收益曲线类型">
-        <VibeButton type="button" variant="text" aria-pressed={curve === "return"} onClick={() => setCurve("return")}>收益率曲线</VibeButton>
-        <VibeButton type="button" variant="text" aria-pressed={curve === "profit"} onClick={() => setCurve("profit")}>累计收益曲线</VibeButton>
+        <VibeButton type="button" variant="outline" size="compact" aria-pressed={curve === "return"} onClick={() => setCurve("return")}>收益率曲线</VibeButton>
+        <VibeButton type="button" variant="outline" size="compact" aria-pressed={curve === "profit"} onClick={() => setCurve("profit")}>累计收益曲线</VibeButton>
       </div>
       {rangeControls}
     </div>
@@ -101,7 +101,7 @@ export function SourceInvestmentPerformance({ history, sourceId, sourceName, rec
           <strong>{money(record.amount)} {record.currency}</strong>
           <div className="source-performance__record-actions">
             <VibeButton type="button" variant="text" onClick={()=>onEdit(record)} aria-label={`编辑 ${record.day} ${record.amount} ${record.currency} 记录`}>编辑</VibeButton>
-            <VibeButton type="button" variant="text" onClick={()=>onDelete(record)} aria-label={`删除 ${record.day} ${record.amount} ${record.currency} 记录`}>删除</VibeButton>
+            <VibeButton type="button" variant="text" tone="danger" onClick={()=>onDelete(record)} aria-label={`删除 ${record.day} ${record.amount} ${record.currency} 记录`}>删除</VibeButton>
           </div>
         </li>)}
       </ol>

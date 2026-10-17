@@ -53,6 +53,122 @@ const BREAKPOINTS = {
  */
 const SVG_TEXT_SELECTORS = [".locked-flow-screen text", ".locked-flow-dashboard-label"];
 
+/**
+ * 页面级样式不得覆盖共享按钮的视觉属性：统一规范后，颜色 / 背景 / 边框 /
+ * 圆角 / 字体 / 高度 / 透明度 / 过渡 / 变换 / outline / box-shadow 只能来自
+ * `src/app/vibe-components.css`。本规则扫描 `src/app/*.css`，排除共享组件文件，
+ * 命中标准按钮选择器时，只允许布局声明，其余一律报错且不可基线化。
+ */
+const BUTTON_OVERRIDE_SELECTORS = [
+  /\.vibe-button\b/,
+  /\[data-vibe-component="button"\]/,
+  /\[data-vibe-component="link"\]/,
+  /\bbutton\b/,
+  /\.danger-button\b/,
+  /\.header-action-button\b/,
+  /\.command-menu-trigger\b/,
+  /\.command-menu-close\b/,
+  /\.command-menu-item\b/,
+  /\.theme-toggle\b/,
+  /\.workbench-navigation-link\b/,
+  /\.secondary-button\b/,
+];
+
+/** 命中按钮选择器时允许出现的布局属性白名单；其余视觉属性应回到共享组件。 */
+const BUTTON_LAYOUT_PROPERTIES = new Set([
+  "display",
+  "position",
+  "top",
+  "right",
+  "bottom",
+  "left",
+  "inset",
+  "z-index",
+  "flex",
+  "flex-direction",
+  "flex-wrap",
+  "flex-grow",
+  "flex-shrink",
+  "flex-basis",
+  "align-items",
+  "align-self",
+  "justify-content",
+  "justify-self",
+  "place-items",
+  "gap",
+  "row-gap",
+  "column-gap",
+  "margin",
+  "margin-top",
+  "margin-right",
+  "margin-bottom",
+  "margin-left",
+  "padding",
+  "padding-top",
+  "padding-right",
+  "padding-bottom",
+  "padding-left",
+  "padding-inline",
+  "padding-block",
+  "min-width",
+  "max-width",
+  "width",
+  "min-height",
+  "max-height",
+  "height",
+  "aspect-ratio",
+  "grid-template-columns",
+  "grid-template-rows",
+  "grid-column",
+  "grid-row",
+  "grid-area",
+  "overflow",
+  "overflow-x",
+  "overflow-y",
+  "overflow-wrap",
+  "white-space",
+  "box-sizing",
+  "text-align",
+  "text-transform",
+  "visibility",
+  "content",
+]);
+
+/** 命中按钮选择器且属于视觉覆盖的属性名。 */
+const BUTTON_VISUAL_PROPERTIES = [
+  "color",
+  "background",
+  "background-color",
+  "border",
+  "border-color",
+  "border-top",
+  "border-top-width",
+  "border-top-style",
+  "border-top-color",
+  "border-radius",
+  "border-top-left-radius",
+  "border-top-right-radius",
+  "border-bottom-left-radius",
+  "border-bottom-right-radius",
+  "font",
+  "font-family",
+  "font-size",
+  "font-weight",
+  "letter-spacing",
+  "line-height",
+  "opacity",
+  "transition",
+  "transition-property",
+  "transition-duration",
+  "transform",
+  "outline",
+  "outline-offset",
+  "box-shadow",
+  "appearance",
+  "cursor",
+];
+
+
 const RULE_LABEL = {
   "raw-hex": "硬编码色值",
   "raw-color-fn": "硬编码颜色函数",
@@ -63,6 +179,7 @@ const RULE_LABEL = {
   "box-shadow": "box-shadow",
   important: "!important",
   "undefined-design-token": "引用了不存在的 token",
+  "page-button-override": "页面样式覆盖共享按钮视觉属性",
 };
 
 // ---------------------------------------------------------------------------
@@ -101,9 +218,19 @@ const violation = (rule, file, key, line, message) => ({ rule, file, key, line, 
 function walkDeclarations(source, visit) {
   for (const match of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
     const selector = collapse(match[1]);
-    const line = lineAt(source, match.index);
+    // 块起始行只用于回退；实际声明行按其在块内文本中的换行数推算，
+    // 这样报错能精确定位到具体声明，而不是整条规则第一行。
+    const blockStartLine = lineAt(source, match.index);
+    const blockText = match[2];
+    let cursor = 0;
+    let line = blockStartLine;
     for (const declaration of match[2].split(";")) {
       const text = collapse(declaration);
+      // 推进到本条声明之后的换行，得到下一条声明的起始行。
+      const segment = blockText.slice(cursor, cursor + declaration.length);
+      const newlines = (segment.match(/\n/g) ?? []).length;
+      line = blockStartLine + newlines;
+      cursor += declaration.length + 1;
       if (text) visit(selector, text, line);
     }
   }
@@ -124,6 +251,8 @@ function lintCss(file, source) {
   const found = [];
   // design-tokens.css 是 token 的定义处，裸色值在那里是合法的。
   const isTokenFile = file === TOKENS_FILE;
+  // 共享组件文件是唯一允许定义按钮视觉属性的地方；其余页面 CSS 只许布局。
+  const isSharedComponentFile = file === "src/app/vibe-components.css";
 
   if (!isTokenFile) {
     for (const match of source.matchAll(/#[0-9a-fA-F]{3,8}\b/g)) {
@@ -139,6 +268,30 @@ function lintCss(file, source) {
   }
 
   walkDeclarations(source, (selector, declaration, line) => {
+    // 页面级规则不得覆盖共享按钮视觉属性；共享组件文件与全局焦点规则放行。
+    if (!isSharedComponentFile && !selector.includes(":focus-visible")) {
+      const hitsButton = BUTTON_OVERRIDE_SELECTORS.some((pattern) => pattern.test(selector));
+      if (hitsButton) {
+        const propertyName = declaration.split(":")[0]?.trim();
+        const visual = propertyName
+          ? BUTTON_VISUAL_PROPERTIES.find((prop) =>
+              propertyName === prop || propertyName.startsWith(`${prop}-`),
+            )
+          : null;
+        if (visual && !BUTTON_LAYOUT_PROPERTIES.has(visual)) {
+          found.push(
+            violation(
+              "page-button-override",
+              file,
+              `${selector} → ${declaration}`,
+              line,
+              `${selector} → 页面样式覆盖按钮视觉属性「${visual}」，应回到 src/app/vibe-components.css，见 D-22`,
+            ),
+          );
+        }
+      }
+    }
+
     const radius = declaration.match(/^border-radius:\s*(.+)$/);
     if (radius && /[\d.]+px/.test(radius[1])) {
       found.push(violation("px-radius", file, declaration, line, `${selector} → ${declaration}；圆角请用 var(--r-sm-\\-md-\\-pill)`));

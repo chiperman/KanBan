@@ -201,7 +201,7 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
       <VibeButton
         ref={triggerRef}
         type="button"
-        className="header-action-button command-menu-trigger"
+        className="command-menu-trigger"
         aria-label="打开快捷命令"
         onClick={show}
         variant="outline"
@@ -230,7 +230,6 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
               </div>
               <VibeButton
                 type="button"
-                className="command-menu-close"
                 onClick={() => close()}
                 variant="text"
               >
@@ -258,7 +257,6 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
                   <VibeButton
                     key={command.id}
                     type="button"
-                    className="command-menu-item"
                     data-active={index === activeIndex ? "true" : "false"}
                     aria-label={command.label}
                     onMouseMove={() => setActiveIndex(index)}

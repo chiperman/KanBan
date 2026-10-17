@@ -10,7 +10,7 @@
 
 **如果你想复现**：在 `tmp/` 下建一个 HTML 按上述顺序 `<link>` 这五个文件，放入目标元素，用浏览器读计算样式即可。切勿直接凭源码里的声明下结论——本仓库里大量声明是被后续文件覆盖的。
 
-**其中机械可判定的部分已经固化为脚本**：`pnpm design:lint`（`scripts/lint-design-tokens.mjs`）按 9 条规则扫描 `src/app/*.css` 与 `src/**/*.{ts,tsx}`，出现基线之外的新增即失败；存量基线在 `scripts/design-system/token-lint-baseline.json`，按内容签名而非行号记录，因此重排代码不会误报。
+**其中机械可判定的部分已经固化为脚本**：`pnpm design:lint`（`scripts/lint-design-tokens.mjs`）按 10 条规则扫描 `src/app/*.css` 与 `src/**/*.{ts,tsx}`，出现基线之外的新增即失败；存量基线在 `scripts/design-system/token-lint-baseline.json`，按内容签名而非行号记录，因此重排代码不会误报。
 
 守门规则与本表的对应关系：
 
@@ -25,6 +25,7 @@
 | `box-shadow` | D-08 | 6 |
 | `important` | D-19 | 16 |
 | `undefined-design-token` | D-21 | **0**（存量已清空） |
+| `page-button-override` | D-22 | **0**（认证页与首次供给页豁免） |
 
 以下条目**无法机械判定**，只能靠评审与探针：D-03（语义冲突）、D-07（渐变机制）、D-12（卡片材质分级）、D-13（死代码）、D-14（token 与 `DESIGN.md` 表述冲突）、D-15（空态配方）、D-16（减弱动效规则缺失）。
 
@@ -56,6 +57,7 @@
 | D-18 | 字号未收敛到级差表（微标签 40 处 + 其余表外 36 处） | **已整改**（另 2 处按设计豁免） | — |
 | D-19 | 16 处 `!important` 集中在 `product-layout.css` | 生效（用途分三类） | 低 |
 | D-21 | 10 处 `var(--dur, 0.2s)` / `var(--r-technical)` 引用未定义 token | **已整改** | 低（但属静默失效） |
+| D-22 | 按钮实现分散在共享组件、页面类名和页面 CSS 覆盖三层 | **已整改** | 高 |
 
 ---
 
@@ -316,7 +318,7 @@
 
 ## 3. 处理优先级
 
-1. **保持守门脚本常绿（已就位）**——`pnpm design:lint` 把 9 条机械规则锁住，90 处存量走基线豁免，新增即失败。这是唯一一条**已经生效**的闸门，其余各项都在它的保护下慢慢还。新增的 `undefined-design-token` 规则第一次运行就抓出了 D-21 那 11 处静默失效的声明。
+1. **保持守门脚本常绿（已就位）**——`pnpm design:lint` 把 10 条机械规则锁住，68 处存量走基线豁免，新增即失败。这是唯一一条**已经生效**的闸门，其余各项都在它的保护下慢慢还。新增的 `undefined-design-token` 规则第一次运行就抓出了 D-21 那 11 处静默失效的声明。
 2. **删除死代码**（D-13，以及 D-05、D-08 中的死代码项；探针新确认的 15 处不生效字体栈、3 处不生效 hex，以及承载了 14 处字号声明的 11 个已死选择器，一并纳入）——零视觉风险，直接降低维护成本。
 3. **统一冲突语义**（D-01、D-02、D-03）——有视觉影响但范围可控，需要一次聚焦的视觉验收。
 4. **分类并清理 `!important`**（D-19）——先确认 12 处可疑项的承重对象，再决定删除或重构。
@@ -324,3 +326,11 @@
 6. **逐条替换裸值**（D-04、D-06、D-07、D-09、D-16、D-17）——收尾工作。**每修掉一处就重建一次基线**（`pnpm design:lint -- --update`），否则存量数字会虚高。
 
 每一项整改完成后，请更新本表对应条目的判定列，并在提交信息中引用编号。
+
+### D-22 · 按钮语言分散在组件、页面类名和页面 CSS 三层 — **已整改**
+
+- **位置**：`command-menu.tsx`、`logout-button.tsx`、`recovery-setup.tsx`、`theme-switcher.tsx`、`asset-source-detail.tsx`、`market-benchmark-controls.tsx`、`holding-candlestick-chart.tsx`、`source-investment-performance.tsx`，以及 `globals.css`、`command-menu.css`、`product-layout.css` 中的按钮选择器。
+- **现象**：同一页面里既有 `VibeButton`，也有手写按钮类名；页面 CSS 还会在组件层之上覆盖背景、文字色、边框、圆角、字号、内边距和透明度，造成刷新、记账、危险操作、周期切换等按钮视觉不一致。暗色和亮色下的激活态尤其容易随加载顺序漂移。
+- **整改（已执行）**：React 按钮统一收敛到 `VibeButton` / `VibeLink` 的 `variant` + `size` + `shape` + `tone` 封闭属性；删除页面类名中的视觉意图；页面级按钮 CSS 只保留放置、伸缩、间距和响应式显隐。危险操作保留描边并交给 `tone="danger"`，不使用红色填充。
+- **豁免**：登录页与首次供给页的既有按钮不纳入本次统一；其页面选择器显式写在守门豁免里。
+- **配套规则**：`pnpm design:lint` 新增 `page-button-override`。按钮选择器命中视觉属性时直接失败；`display`、尺寸、定位、间距、伸缩、响应式显隐等布局属性仍允许页面层处理。

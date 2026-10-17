@@ -230,7 +230,7 @@ function ManualRecordDeleteDialog({
           <VibeButton disabled={pending} onClick={onClose} type="button" variant="text">
             取消
           </VibeButton>
-          <VibeButton className="danger-button" disabled={pending} onClick={() => void remove()} type="button" variant="outline">
+          <VibeButton tone="danger" disabled={pending} onClick={() => void remove()} type="button" variant="outline">
             删除数据
           </VibeButton>
         </>
@@ -381,7 +381,6 @@ function SourceLifecycleActions({
             </VibeButton>
           ) : (
             <VibeButton
-              className="danger-button"
               disabled={pending}
               onClick={() => setConfirmDisconnect(true)}
               type="button"
@@ -392,7 +391,6 @@ function SourceLifecycleActions({
           )
         ) : null}
         <VibeButton
-          className="danger-button"
           disabled={pending}
           onClick={() => setDeleteStep(1)}
           type="button"
@@ -412,7 +410,7 @@ function SourceLifecycleActions({
               <VibeButton disabled={pending} onClick={() => setConfirmDisconnect(false)} type="button" variant="text">
                 取消
               </VibeButton>
-              <VibeButton className="danger-button" disabled={pending} onClick={() => void run("disconnect")} type="button" variant="outline">
+              <VibeButton tone="danger" disabled={pending} onClick={() => void run("disconnect")} type="button" variant="outline">
                 确认断开
               </VibeButton>
             </>
@@ -432,7 +430,7 @@ function SourceLifecycleActions({
               <VibeButton disabled={pending} onClick={() => setDeleteStep(null)} type="button" variant="text">
                 取消
               </VibeButton>
-              <VibeButton className="danger-button" disabled={pending} onClick={() => setDeleteStep(2)} type="button" variant="outline">
+              <VibeButton tone="danger" disabled={pending} onClick={() => setDeleteStep(2)} type="button" variant="outline">
                 继续删除
               </VibeButton>
             </>
@@ -452,7 +450,7 @@ function SourceLifecycleActions({
               <VibeButton disabled={pending} onClick={() => setDeleteStep(null)} type="button" variant="text">
                 取消
               </VibeButton>
-              <VibeButton className="danger-button" disabled={pending} onClick={() => void run("delete")} type="button" variant="outline">
+              <VibeButton tone="danger" disabled={pending} onClick={() => void run("delete")} type="button" variant="outline">
                 确认永久删除
               </VibeButton>
             </>
