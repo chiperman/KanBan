@@ -32,7 +32,7 @@
 - 33 个 `route.ts` 共 9,566 行（含 `node:sqlite`、`worker_threads`、完整生产持久化栈）会被 `next build` 编译进生产构建并随部署分发，唯一门禁是运行时 `testGuard()`（`APP_ENV === "test"`，`composition.ts:25-27`）。
 - 已核实 `next.config.ts` 无任何排除配置，无 middleware。
 - 误配置后果是实质性的：`/test-doubles/reset` 清空全部会话，`/test-doubles/owner-session` 可伪造所有者 cookie，`sqlite-business-data-persistence` 可在服务器文件系统写临时库。
-- `.scratch/.../01-public-homepage-foundation.md:27` 记录这是历史决策（知道 `_` 前缀目录可构建期排除，但选了运行时 guard）。
+- 当时的基础页面记录将其记为历史决策（知道 `_` 前缀目录可构建期排除，但选了运行时 guard）；历史定位：`git show dda468c:.scratch/active/personal-asset-dashboard/issues/01-public-homepage-foundation.md`。原行号不作为当前源码位置。
 - **建议**：目录改名 `_test-doubles`（App Router 下划线目录不参与路由，构建期即排除），同步更新 `route-support.test.ts` 的枚举方式与文档；这是本次审查中唯一的安全性问题，优先级最高。
 
 ### P0-2 SQLite 读路径缺二级索引 + 全表加载，随数据量线性劣化

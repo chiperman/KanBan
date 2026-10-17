@@ -1,48 +1,18 @@
 # 领域文档
 
-以下规则说明工程技能在探索代码库时应如何使用本仓库的领域文档。
+先读 [文档入口与维护规则](../README.md)。本仓库采用 single-context 布局，现行领域合同保存在根目录 [CONTEXT](../../CONTEXT.md) 和有效 [ADR](../adr/) 中，当前页面职责与源码入口见 [当前能力与源码导航](../current-baseline.md)。历史规格与验收不能替代这些合同；存在冲突时先核实当前要求和实现。
 
 ## 探索前阅读
 
-- 仓库根目录的 **`CONTEXT.md`**；或
-- 如果根目录存在 **`CONTEXT-MAP.md`**，则按其指向读取各上下文的 `CONTEXT.md`，只需阅读与当前主题相关的文件。
-- **`docs/adr/`**：阅读与即将处理区域相关的 ADR。在 multi-context 仓库中，还需检查 `src/<context>/docs/adr/` 中该上下文专属的决策。
-
-如果这些文件不存在，**静默继续**。不要提示缺失，也不要预先建议创建。`/domain-modeling` 技能（可通过 `/grill-with-docs` 和 `/improve-codebase-architecture` 使用）会在术语或决策真正明确后按需创建这些文件。
-
-## 文件结构
-
-Single-context 仓库（适用于绝大多数仓库）：
-
-```text
-/
-├── CONTEXT.md
-├── docs/adr/
-│   ├── 0001-event-sourced-orders.md
-│   └── 0002-postgres-for-write-model.md
-└── src/
-```
-
-Multi-context 仓库（根目录存在 `CONTEXT-MAP.md`）：
-
-```text
-/
-├── CONTEXT-MAP.md
-├── docs/adr/                          ← 系统级决策
-└── src/
-    ├── ordering/
-    │   ├── CONTEXT.md
-    │   └── docs/adr/                  ← 上下文专属决策
-    └── billing/
-        ├── CONTEXT.md
-        └── docs/adr/
-```
+- 阅读 `CONTEXT.md` 中与本次主题相关的术语和约束。
+- 阅读相关 ADR，先核对其状态与替代说明，再沿源码和测试确认实现。
+- 生效的业务规则改变时更新所属文档；只有长期决策需要记录取舍时才按需新增 ADR，不要求每次修改都新建文档。
 
 ## 使用术语表中的词汇
 
-输出中命名领域概念时（例如 Issue 标题、重构提案、假设或测试名称），使用 `CONTEXT.md` 定义的术语。不要改用术语表明确避免的同义词。
+命名领域概念时（例如重构提案、假设或测试名称），使用 `CONTEXT.md` 定义的术语。不要改用术语表明确避免的同义词。
 
-如果术语表中没有所需概念，这通常意味着：你正在创造项目未使用的说法，应重新考虑；或这里确实存在缺口，应记录并交由 `/domain-modeling` 处理。
+术语缺失时先确认是否已有同义概念；确有新业务概念时，与用户明确含义后更新所属文档。
 
 ## 标记 ADR 冲突
 

@@ -244,7 +244,7 @@
 2. 保留“mock HTTP 边界 + 真生产类”的替身体系；若分离构建，替身源码仍保留在仓库内。
 3. 保留各交易所签名、分页、时钟纠偏和重试差异，只抽已确认一致的部分。
 4. 保留 SQLite `synchronous=FULL`、WAL、文件权限加固与事务边界；耐久性或权限调整需专门证据与评估。
-5. `--experimental-transform-types` 与 ESM 提示是 `docs/current-baseline.md` 记录的现有取舍，不为消警告改变运行方式。
+5. `--experimental-transform-types` 与 ESM 提示是 `docs/audits/baseline-2026-10-02.md` 保留的当时取舍，不为消警告改变运行方式。
 6. 实施改动按组拆分原子提交，未推送、未部署、未清理数据库；P3 未实施。
 
 ## 后续实施的验证方式

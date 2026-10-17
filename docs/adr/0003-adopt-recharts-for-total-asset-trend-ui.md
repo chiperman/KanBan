@@ -23,4 +23,4 @@
 
 ## 验收
 
-`e2e/daily-snapshots-asset-change.spec.ts` 与 `e2e/rebuild-return-analysis.spec.ts` 覆盖昨日比较、缺失日连续连接但不补值、隐私隐藏、来源趋势、收益分析趋势、移动端无横向溢出，以及键盘焦点和方向键 tooltip。
+[昨日比较与资产变化测试](../../e2e/smoke/daily-snapshots-asset-change.spec.ts) 与 [收益分析测试](../../e2e/archive/rebuild-return-analysis.spec.ts) 覆盖昨日比较、缺失日连续连接但不补值、隐私隐藏、来源趋势、收益分析趋势、移动端无横向溢出，以及键盘焦点和方向键 tooltip。路径于 2026-10-18 校正，本次未重跑验收。

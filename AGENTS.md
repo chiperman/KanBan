@@ -1,12 +1,15 @@
-## Agent 技能
+## Agent 工作约定
 
-### Issue 跟踪器
+### 现行规则与历史资料
 
-Issue 以本地 Markdown 文件形式保存在 `.scratch/active/`，历史功能整体保存在 `.scratch/archive/`。目录入口见 `.scratch/README.md`，完整约定见 `docs/agents/issue-tracker.md`。
+开始任务先读 `docs/README.md`，按主题读取现行合同与 `docs/current-baseline.md`，并沿源码入口核对实现。历史讨论从 Git 查询；旧规格、验收记录和历史授权不能替代现行合同或本次授权。
 
-### Triage 标签
+### 轻量开发流程
 
-使用默认的五类 triage 标签词汇。详见 `docs/agents/triage-labels.md`。
+- 不再维护 `.scratch/`，不强制创建 spec、本地 Ticket、任务地图或 triage 状态。小改直接按当前要求实施；复杂改动先在会话中明确范围与验收。
+- 跨会话仍需跟进的事项只维护在 `docs/backlog.md`；执行前复核当前源码，完成后移除，不复制历史任务树。
+- 临时计划和一次性调查放已忽略的 `tmp/<topic>/`；生效规则更新所属现行文档，不另建一套规格。
+- 有提交授权时，在提交正文记录原因、行为变化、实际验证和未验证范围；未获授权时在交付回复中说明，不自动提交。历史过程由 Git 保存。
 
 ### 领域文档
 

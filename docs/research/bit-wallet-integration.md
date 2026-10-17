@@ -1,6 +1,6 @@
 # BIT / Matrixport 钱包资产来源接入调研
 
-调研日期：2026-08-04。范围为 BIT 官方文档及其同一文档站内的 DCP、Fixed Income、Balance+、Trade 页面；没有登录真实账户，也没有使用真实 API Key。本文保留接入时的历史调研结论；当前刷新生命周期以 [资产数据刷新生命周期](asset-refresh-lifecycle.md) 为准。
+调研日期：2026-08-04。范围为 BIT 官方文档及其同一文档站内的 DCP、Fixed Income、Balance+、Trade 页面；没有登录真实账户，也没有使用真实 API Key。本文保留接入时的历史调研结论；当前职责与刷新源码入口见 [当前能力与源码导航](../current-baseline.md)，[资产数据刷新生命周期](asset-refresh-lifecycle.md) 仅为 2026-08-26 的历史实现观察。
 
 ## 结论
 
