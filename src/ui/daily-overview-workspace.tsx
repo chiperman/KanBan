@@ -787,7 +787,12 @@ export function DailyOverviewWorkspace({
                       <strong className="daily-overview__source-total">
                         {sourceAmount === null
                           ? "无法折算"
-                          : <><VibeLiveCounter value={amount(sourceAmount)} resetKey={currency} /> {currency}</>}
+                          : (
+                            <>
+                              <VibeLiveCounter value={amount(sourceAmount)} resetKey={currency} />{" "}
+                              <span className="vibe-metric__unit">{currency}</span>
+                            </>
+                          )}
                       </strong>
                       <div
                         className="daily-overview__source-change"
@@ -821,7 +826,7 @@ export function DailyOverviewWorkspace({
                             <span className="daily-overview__source-yesterday-amount">
                               {amount(comparison.previousAmount)}
                             </span>{" "}
-                            <span className="daily-overview__source-yesterday-unit">
+                            <span className="vibe-metric__unit">
                               {currency}
                             </span>
                           </small>

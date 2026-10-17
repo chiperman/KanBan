@@ -1179,24 +1179,21 @@ html {
   font-family: var(--f-display);
   font-size: var(--vibe-type-body-sm);
   font-variant-numeric: tabular-nums;
+  font-weight: 400;
   line-height: 1.2;
   white-space: nowrap;
-}
-
-.daily-overview__source-yesterday-unit {
-  font-size: inherit;
-  line-height: inherit;
 }
 
 .daily-overview__source-yesterday-amount {
   font-family: var(--f-display);
   font-size: var(--vibe-type-body-sm);
   font-variant-numeric: tabular-nums;
+  font-weight: 400;
   line-height: 1.2;
 }
 
 .daily-overview__source-change .vibe-metric__unit {
-  font-size: inherit;
+  font-size: var(--vibe-type-label);
   line-height: inherit;
 }
 
