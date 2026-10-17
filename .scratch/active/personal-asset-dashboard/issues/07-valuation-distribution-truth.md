@@ -1,0 +1,19 @@
+# 07 — 估值与资产分布真实性
+
+**What to build:** 在第一个资产来源之上形成可信的总资产概览。所有者可以切换计价货币和分布维度，同时清楚识别来源原生价格、稳定币实际价格及无法可靠估值的资产。
+
+**Blocked by:** 06 — 长桥首个资产来源闭环
+
+**Status:** resolved
+
+**Adjusted by:** `.scratch/archive/personal-asset-dashboard-rebuild/issues/04-overview-confidence-and-today-judgment.md`, `.scratch/archive/personal-asset-dashboard-rebuild/issues/05-assets-holdings-and-source-observation.md`
+
+- [x] 总资产概览默认使用 USD，并允许切换为 CNY 后保持选择。
+- [x] 每项持仓保留原始币种、原始价值和估值来源，计价货币切换不覆盖源数据。
+- [x] 总资产使用来源原生定价，同一种资产在不同来源允许出现可解释的小幅价格差异。
+- [x] 稳定币优先使用来源原生实际市场价格，缺失时按独立参考价格降级；两者均不可用时，USDT 使用明确标注的 `1:1` 固定兜底。
+- [x] 有数量但无可靠价格的持仓显示为未估值资产，不按零计入数值总额。
+- [x] 存在未估值资产时，总资产概览明确标明汇总不完整。
+- [x] 资产分布默认按证券和加密资产展示，并可切换为按资产来源或币种展示。
+- [x] 价格、汇率、金额合计和舍入使用十进制安全计算，测试覆盖不同币种及极小数量。
+- [x] 浏览器级测试从持仓输入一直验证到总资产、分布和详情显示，而不是只测试计算函数。

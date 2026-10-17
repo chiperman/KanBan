@@ -2,7 +2,7 @@
 
 Last verified: 2026-08-26
 
-本文件描述当前实际运行行为。目标方案与开发验收见 [资产刷新机制重设计](../../.scratch/asset-refresh-redesign/spec.md)。
+本文件描述当前实际运行行为。目标方案与开发验收见 [资产刷新机制重设计](../../.scratch/archive/asset-refresh-redesign/spec.md)。
 
 ## 当前结论
 

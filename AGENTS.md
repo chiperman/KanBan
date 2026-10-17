@@ -2,7 +2,7 @@
 
 ### Issue 跟踪器
 
-Issue 以本地 Markdown 文件形式保存在 `.scratch/` 下。详见 `docs/agents/issue-tracker.md`。
+Issue 以本地 Markdown 文件形式保存在 `.scratch/active/`，历史功能整体保存在 `.scratch/archive/`。目录入口见 `.scratch/README.md`，完整约定见 `docs/agents/issue-tracker.md`。
 
 ### Triage 标签
 

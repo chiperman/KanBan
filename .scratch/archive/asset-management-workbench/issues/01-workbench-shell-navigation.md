@@ -1,0 +1,20 @@
+# 01 — 工作台应用壳与主导航
+
+**What to build:** 将已认证个人资产看板放入资产管理工作台应用壳。所有者可通过桌面左侧导航和移动底部导航进入总览、资产来源、数据健康、设置与安全；锁定状态仍只显示登录入口和不含资产数据的页面。
+
+**Blocked by:** None — can start immediately.
+
+**Status:** resolved
+
+**Adjusted by:** `.scratch/archive/personal-asset-dashboard-rebuild/issues/03-five-destination-app-shell.md`
+
+- [x] 已认证所有者在桌面与手机宽度都能通过可访问的显式导航到达四个一级入口，Command-K 保持为补充快捷方式。
+- [x] 未认证、主动锁定、会话超时和浏览器会话结束时，不渲染工作台导航、资产、来源、快照或凭证信息。
+- [x] 已认证根入口进入总览；路由切换保留现有所有者会话与安全边界。
+- [x] 工作台继续复用既有 Vibe/Nothing 视觉语言，不引入第二套后台主题。
+
+## 评论
+
+- 2026-08-07：完成工作台应用壳、受保护的四个一级入口与桌面左侧/移动底部导航；Command-K 保留并可跳转工作台入口。主动锁定即时移除应用壳。新增 `e2e/workbench-shell-navigation.spec.ts` 覆盖锁定隐私、桌面/移动导航、键盘焦点和 Command-K。
+- 验证：`pnpm typecheck`、`pnpm build`、Ticket 01 聚焦 Playwright 通过。2026-08-07 复核的 `pnpm test` 为 275 条中 241 条通过；34 条失败位于来源、估值、卡片交互及旧视觉断言套件，未在本 Ticket 中修改这些业务语义。
+- 2026-08-07：手机总览的快捷命令改为工作台底部导航上方的显式入口，页头“本机设置”不再重复渲染该入口；手机不显示 `⌘K` 键盘提示。`pnpm typecheck`、`pnpm build` 与 Ticket 01 聚焦 Playwright 4/4 通过。

@@ -48,11 +48,11 @@ pnpm exec playwright test e2e/smoke/asset-refresh-workbench.spec.ts \
 
 ## 待处理事项
 
-1. [手工来源资产类别页面入口](../.scratch/workbench-migration-cleanup/issues/01-restore-manual-source-class-control.md)：接口与持久化存在，旧来源管理弹窗退役后缺少现役编辑入口。
-2. [正式日结新增市场发现](../.scratch/formal-settlement-market-discovery/issues/01-refresh-scheduling-market-evidence.md)：旧快照可能让后续定时执行错过新增市场窗口；本轮未修复，也未重新执行其隔离复现。
-3. 剩余浏览器测试迁移：部分平台接入、旧总览趋势与旧管理弹窗断言仍在其他文件中。全量历史失败见 [2026-09-19 对照](../.scratch/project-health-hardening-delivery/regression-baseline.md)，不能据本轮定向回归宣称全部解决。
+1. [手工来源资产类别页面入口](../.scratch/active/workbench-migration-cleanup/issues/01-restore-manual-source-class-control.md)：接口与持久化存在，旧来源管理弹窗退役后缺少现役编辑入口。
+2. [正式日结新增市场发现](../.scratch/active/formal-settlement-market-discovery/issues/01-refresh-scheduling-market-evidence.md)：旧快照可能让后续定时执行错过新增市场窗口；本轮未修复，也未重新执行其隔离复现。
+3. 剩余浏览器测试迁移：部分平台接入、旧总览趋势与旧管理弹窗断言仍在其他文件中。全量历史失败见 [2026-09-19 对照](../.scratch/active/project-health-hardening-delivery/regression-baseline.md)，不能据本轮定向回归宣称全部解决。
 4. CSS 多轮覆盖与来源账本接口收敛属于后续局部重构；本轮不修改 CSS、数据库 schema 或金融计算。
-5. [执行记录 17](../.scratch/project-health-hardening-delivery/issues/17-repair-integration-protection-and-p2-boundary.md) 是独立的旧集成保护记录，仍需核对历史现场，不随父级健康主题批量关闭。
+5. [执行记录 17](../.scratch/active/project-health-hardening-delivery/issues/17-repair-integration-protection-and-p2-boundary.md) 是独立的旧集成保护记录，仍需核对历史现场，不随父级健康主题批量关闭。
 6. 真实来源失败恢复/断开、真实设置页与调度运行、远程 CI、部署和完整人工视觉均不在本轮验收范围。
 
 ## 文档与 Ticket 导航
@@ -61,10 +61,10 @@ pnpm exec playwright test e2e/smoke/asset-refresh-workbench.spec.ts \
 | --- | --- |
 | [CONTEXT](../CONTEXT.md) / [ADR](adr/) | 领域词汇、财务口径与不可突破的产品约束 |
 | [DESIGN](../DESIGN.md) | 固定上游视觉契约及运行时集成 |
-| [工作台重构规格](../.scratch/personal-asset-dashboard-rebuild/spec.md) | 当前工作台范围与重构 Ticket |
-| [健康优化执行索引](../.scratch/project-health-hardening-delivery/spec.md) | 16 项已交付工作的单一执行状态，保留验收限制 |
-| [健康优化原规格](../.scratch/project-health-hardening/spec.md) | 2026-09-10 审查背景；11 个父级主题已映射归档，不重复实施 |
-| [真实来源验收 Ticket](../.scratch/personal-asset-dashboard/issues/18-cross-source-release-acceptance.md) | 后续真实只读账户与跨来源验收的待确认项 |
+| [工作台重构规格](../.scratch/archive/personal-asset-dashboard-rebuild/spec.md) | 当前工作台范围与重构 Ticket |
+| [健康优化执行索引](../.scratch/active/project-health-hardening-delivery/spec.md) | 16 项已交付工作的单一执行状态，保留验收限制 |
+| [健康优化原规格](../.scratch/archive/project-health-hardening/spec.md) | 2026-09-10 审查背景；11 个父级主题已映射归档，不重复实施 |
+| [真实来源验收 Ticket](../.scratch/active/personal-asset-dashboard/issues/18-cross-source-release-acceptance.md) | 后续真实只读账户与跨来源验收的待确认项 |
 | [工具链](operations/toolchain.md) / [服务生命周期](operations/service-composition.md) | 安装、构建、启动与持久化生命周期 |
 
 代码与文档冲突时先核实当前实现和业务合同，不用历史 UI 或测试断言恢复已退役功能。历史事实保留原日期，新故障独立记录，不重新打开已完成的父级优化主题。
@@ -74,7 +74,7 @@ pnpm exec playwright test e2e/smoke/asset-refresh-workbench.spec.ts \
 - 2026-08-06 旧基线记录所有者确认：长桥、Binance、OKX、Bitget、Ethereum/BNB Smart Chain 已完成连接、持仓查看与单来源刷新；真实硬件 Passkey 已完成登录、退出与刷新后锁定验收。未记录认证材料。跨来源失败恢复与断开仍待确认，本轮未重新核验这些真实平台事实。
 - 2026-08-20 所有者恢复零落盘演示模式，取代更早“完全移除演示入口”的阶段方案。
 - 2026-09-10 集成记录：单元测试 83/83；105 项组合浏览器首轮 103 通过、2 失败，修正后仅定向复跑，两次结果未拼成全量全绿。原记录还包含日结汇率和旧界面断言失败，后续处理以相应 Ticket 为准。
-- 2026-09-19 健康优化 16 项范围内交付完成。单元测试 155/155；全仓浏览器当时仍有失败，参见 [交付报告](../.scratch/project-health-hardening-delivery/delivery-report.md)。其中依赖公告归零是当日审计快照，不是当前安全保证；本轮未重新访问漏洞数据库。
+- 2026-09-19 健康优化 16 项范围内交付完成。单元测试 155/155；全仓浏览器当时仍有失败，参见 [交付报告](../.scratch/active/project-health-hardening-delivery/delivery-report.md)。其中依赖公告归零是当日审计快照，不是当前安全保证；本轮未重新访问漏洞数据库。
 
 ## 更新条件
 
