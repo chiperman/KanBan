@@ -34,7 +34,7 @@ import type {
 import { AssetGlobalRefreshControl } from "@/ui/asset-refresh-controls";
 import { sourceSyncStatus } from "@/ui/asset-source-status";
 import { AssetTrendChart } from "@/ui/asset-trend-chart";
-import type { ProfitColorScheme } from "@/ui/profit-color-scheme";
+import { profitDirection, type ProfitColorScheme } from "@/ui/profit-color-scheme";
 import {
   VibeMetric,
   VibeStatusTag,
@@ -68,13 +68,6 @@ type SourceComparison =
 function amount(value: string): string {
   const [integer, fraction] = decimalToFixed(value, 2).split(".");
   return `${integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.${fraction}`;
-}
-
-function profitDirection(
-  value: string,
-): "positive" | "negative" | "neutral" {
-  const comparison = decimalCompare(value, "0");
-  return comparison > 0 ? "positive" : comparison < 0 ? "negative" : "neutral";
 }
 
 function sourceHealth(source: OverviewSource): {
@@ -449,6 +442,11 @@ export function DailyOverviewWorkspace({
     : usdValuation.exchangeRateObservations.find(
       (rate) => rate.quoteCurrency === currency,
     ) ?? null;
+  // 本金与收益都不可用时，整块降级为一行，避免首屏中段重复显示「数据不足」。
+  const summaryCompact =
+    analysis.cumulativeNetInvestment === null &&
+    analysis.investmentProfit === null;
+  const overviewEmpty = !demoMode && recordedSources.length === 0;
   return (
     <div
       className="daily-overview"
@@ -473,6 +471,53 @@ export function DailyOverviewWorkspace({
         }
       />
 
+      {/* 尚未接入来源时给出下一步路径；金额卡片仍保留，缺数据继续显示「数据不足」 */}
+      {overviewEmpty ? (
+        <section
+          aria-labelledby="overview-getting-started-title"
+          className="daily-overview__getting-started"
+        >
+          <p className="card-label">GETTING STARTED</p>
+          <h2 id="overview-getting-started-title">
+            接入第一个资产来源，看板会自动开始工作
+          </h2>
+          <p className="daily-overview__getting-started-desc">
+            总资产、趋势与收益分析在数据接入后自动生成，无需手动录入每日金额。
+          </p>
+          <ol className="daily-overview__getting-started-steps">
+            <li>
+              <span className="daily-overview__getting-started-index">01</span>
+              <strong>新增资产来源</strong>
+              <span>
+                长桥 / 交易所 / 观察钱包 / 手工记录，只需只读凭证。
+              </span>
+            </li>
+            <li>
+              <span className="daily-overview__getting-started-index">02</span>
+              <strong>等待首次同步</strong>
+              <span>
+                同步成功即形成当日基准，趋势图从第一天开始积累。
+              </span>
+            </li>
+            <li>
+              <span className="daily-overview__getting-started-index">03</span>
+              <strong>记录初始投入</strong>
+              <span>
+                录入本金事实后，累计净投入与组合投资盈亏才会亮起。
+              </span>
+            </li>
+          </ol>
+          <div className="daily-overview__getting-started-actions">
+            <VibeLink href="/asset-sources/new" variant="primary">
+              新增资产来源
+            </VibeLink>
+            <VibeLink href="/?mode=demo" variant="text">
+              先看演示模式
+            </VibeLink>
+          </div>
+        </section>
+      ) : null}
+
       <section className="daily-overview__current" aria-labelledby="overview-total-title">
         <article data-testid="overview-current-total">
           <p className="card-label">CURRENT / CONSOLIDATED</p>
@@ -490,6 +535,24 @@ export function DailyOverviewWorkspace({
               {formatShanghaiShortDateTime(reportingRate.observedAt)}
             </p>
           )}
+          {/* 数据完整性并入总资产卡，避免与下方提示重复表达同一事实 */}
+          <article
+            className="daily-overview__confidence"
+            data-testid="overview-confidence"
+          >
+            <p className="card-label">CONFIDENCE / DATA</p>
+            <h2>{currentValuationComplete ? "总额完整" : "数据不完整"}</h2>
+            <p>
+              {currentReason ??
+                `已覆盖 ${recordedSources.length} 个来源`}
+            </p>
+            {!current?.complete ? (
+              <p>
+                未估值 {usdValuation.unvaluedCount} 项 · 过期来源{" "}
+                {usdValuation.expiredCount} 个
+              </p>
+            ) : null}
+          </article>
         </article>
 
         <article>
@@ -513,6 +576,10 @@ export function DailyOverviewWorkspace({
                 : `较 ${formatShanghaiDayLabel(priorObservation.day)}`}
             </p>
           )}
+          {/* 自释：今日资产变化含资金进出与估值修正，不能当作投资收益阅读 */}
+          <p className="daily-overview__note">
+            含资金进出与估值修正，不是组合投资盈亏
+          </p>
           {usesRecordedTodayObservation ? (
             <p>
               当前刷新有失败 · 资产变化截至 {formatShanghaiShortDateTime(changeEndpoint.observedAt)}
@@ -552,41 +619,65 @@ export function DailyOverviewWorkspace({
             </div>
           ) : null}
         </article>
-        <article className="daily-overview__confidence" data-testid="overview-confidence">
-          <p className="card-label">CONFIDENCE / DATA</p>
-          <h2>{currentValuationComplete ? "总额完整" : "数据不完整"}</h2>
-          <p>
-            {currentReason ??
-              `已覆盖 ${recordedSources.length} 个来源`}
-          </p>
-          {!current?.complete ? (
-            <p>
-              未估值 {usdValuation.unvaluedCount} 项 · 过期来源 {usdValuation.expiredCount} 个
-            </p>
-          ) : null}
-        </article>
       </section>
 
-      <section className="daily-overview__summary" aria-label="本金与收益摘要">
-        <article data-testid="overview-net-investment">
-          <p>累计净投入</p>
-          <MetricValue
-            currency={currency}
-            hidden={!showSensitiveInfo}
-            value={analysis.cumulativeNetInvestment}
-          />
-          {currency !== "USD" ? <span>按当前汇率折算</span> : null}
-        </article>
-        <article data-testid="overview-investment-profit">
-          <p>组合投资盈亏</p>
-          <MetricValue
-            currency={currency}
-            hidden={!showSensitiveInfo}
-            signed
-            value={analysis.investmentProfit}
-          />
-          {currency !== "USD" ? <span>按当前汇率折算</span> : null}
-        </article>
+      <section
+        className="daily-overview__summary"
+        data-compact={summaryCompact ? "true" : undefined}
+        aria-label="本金与收益摘要"
+      >
+        {summaryCompact ? (
+          /* 两个指标都不可用时压缩为一行，避免读屏与视觉上重复播报「数据不足」 */
+          <>
+            <p className="daily-overview__summary-label">本金与收益</p>
+            <span
+              className="daily-overview__summary-item"
+              data-testid="overview-net-investment"
+            >
+              <span>累计净投入</span>
+              <MetricValue
+                currency={currency}
+                hidden={!showSensitiveInfo}
+                value={analysis.cumulativeNetInvestment}
+              />
+            </span>
+            <span
+              className="daily-overview__summary-item"
+              data-testid="overview-investment-profit"
+            >
+              <span>组合投资盈亏</span>
+              <MetricValue
+                currency={currency}
+                hidden={!showSensitiveInfo}
+                signed
+                value={analysis.investmentProfit}
+              />
+            </span>
+          </>
+        ) : null}
+        {summaryCompact ? null : (
+          <article data-testid="overview-net-investment">
+            <p>累计净投入</p>
+            <MetricValue
+              currency={currency}
+              hidden={!showSensitiveInfo}
+              value={analysis.cumulativeNetInvestment}
+            />
+            {currency !== "USD" ? <span>按当前汇率折算</span> : null}
+          </article>
+        )}
+        {summaryCompact ? null : (
+          <article data-testid="overview-investment-profit">
+            <p>组合投资盈亏</p>
+            <MetricValue
+              currency={currency}
+              hidden={!showSensitiveInfo}
+              signed
+              value={analysis.investmentProfit}
+            />
+            {currency !== "USD" ? <span>按当前汇率折算</span> : null}
+          </article>
+        )}
         {demoMode ? null : (
           <div className="daily-overview__summary-actions">
             <VibeLink href="/performance" variant="primary">
@@ -663,33 +754,50 @@ export function DailyOverviewWorkspace({
             </VibeLink>
           </div>
         ) : (
-          <ul className="daily-overview__source-list">
-            {sourceSummaries.map(({
-              amount: sourceAmount,
-              comparison,
-              health,
-              source,
-            }) => (
-              <li key={source.id}>
-                <article>
-                  <div className="daily-overview__source-identity">
-                    <p>{assetSourceDisplayName(source)}</p>
-                    <VibeStatusTag tone={health.tone}>{health.label}</VibeStatusTag>
-                  </div>
-                  <div className="daily-overview__source-value">
-                    <strong className="daily-overview__source-total">
-                      {sourceAmount === null
-                        ? "无法折算"
-                        : <><VibeLiveCounter value={amount(sourceAmount)} resetKey={currency} /> {currency}</>}
-                    </strong>
-                    <div
-                      className="daily-overview__source-change"
-                      data-comparison-state={comparison.state}
-                    >
-                      {comparison.state === "changed" ? (
-                        <>
+          <>
+            {/* 列头：让总额 / 今日变化 / 昨日成为可跨行比较的列 */}
+            <div aria-hidden="true" className="daily-overview__source-head">
+              <span>来源</span>
+              <span>总额</span>
+              <span>今日变化</span>
+              <span>昨日</span>
+              <span />
+            </div>
+            <ul className="daily-overview__source-list">
+              {sourceSummaries.map(({
+                amount: sourceAmount,
+                comparison,
+                health,
+                source,
+              }) => (
+                <li key={source.id}>
+                  <article>
+                    <div className="daily-overview__source-identity">
+                      <p>{assetSourceDisplayName(source)}</p>
+                      {/* 健康来源不挂彩色标签，只留一行静默说明；只有异常来源才需要被看见 */}
+                      {health.tone === "success" ? (
+                        <span className="daily-overview__source-state">
+                          {health.label}
+                        </span>
+                      ) : (
+                        <VibeStatusTag tone={health.tone}>{health.label}</VibeStatusTag>
+                      )}
+                    </div>
+                    <div className="daily-overview__source-value">
+                      <strong className="daily-overview__source-total">
+                        {sourceAmount === null
+                          ? "无法折算"
+                          : <><VibeLiveCounter value={amount(sourceAmount)} resetKey={currency} /> {currency}</>}
+                      </strong>
+                      <div
+                        className="daily-overview__source-change"
+                        data-comparison-state={comparison.state}
+                      >
+                        {comparison.state === "changed" ? (
                           <div className="daily-overview__source-change-today">
-                            <span>今日变化</span>
+                            <span className="daily-overview__source-column-label">
+                              今日变化
+                            </span>
                             <VibeMetric
                               className="profit-color-value"
                               data-profit-color-scheme={profitColorScheme}
@@ -698,8 +806,18 @@ export function DailyOverviewWorkspace({
                               value={signedAmount(comparison.change, amount, { signZero: true })}
                             />
                           </div>
+                        ) : comparison.state === "scope-change" ? (
+                          <span>新增纳入</span>
+                        ) : (
+                          <span>暂无法比较</span>
+                        )}
+                      </div>
+                      <div className="daily-overview__source-yesterday">
+                        {comparison.state === "changed" ? (
                           <small>
-                            昨日{" "}
+                            <span className="daily-overview__source-column-label">
+                              昨日
+                            </span>{" "}
                             <span className="daily-overview__source-yesterday-amount">
                               {amount(comparison.previousAmount)}
                             </span>{" "}
@@ -707,32 +825,36 @@ export function DailyOverviewWorkspace({
                               {currency}
                             </span>
                           </small>
-                        </>
-                      ) : comparison.state === "scope-change" ? (
-                        <>
-                          <span>新增纳入</span>
-                          <small>昨日未纳入</small>
-                        </>
-                      ) : (
-                        <span>暂无法比较</span>
+                        ) : comparison.state === "scope-change" ? (
+                          /* 昨日确实没有这个来源，说清楚而不是留空白 */
+                          <small>
+                            <span className="daily-overview__source-column-label">
+                              昨日
+                            </span>{" "}
+                            未纳入
+                          </small>
+                        ) : (
+                          /* 缺失值保留行位，保证各行结构恒定、行高一致 */
+                          <small>—</small>
+                        )}
+                      </div>
+                      {demoMode ? null : (
+                        <VibeLink
+                          aria-label={`查看 ${assetSourceDisplayName(source)} 的资产明细`}
+                          className="daily-overview__source-detail-link"
+                          href={`/asset-sources/${encodeURIComponent(source.id)}`}
+                          variant="text"
+                        >
+                          明细
+                          <SourceDetailArrowIcon />
+                        </VibeLink>
                       )}
                     </div>
-                    {demoMode ? null : (
-                      <VibeLink
-                        aria-label={`查看 ${assetSourceDisplayName(source)} 的资产明细`}
-                        className="daily-overview__source-detail-link"
-                        href={`/asset-sources/${encodeURIComponent(source.id)}`}
-                        variant="text"
-                      >
-                        明细
-                        <SourceDetailArrowIcon />
-                      </VibeLink>
-                    )}
-                  </div>
-                </article>
-              </li>
-            ))}
-          </ul>
+                  </article>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
       </section>
 

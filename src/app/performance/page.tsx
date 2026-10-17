@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 
 import {
   redirectLoopbackIpToLocalhost,
@@ -11,6 +12,11 @@ import {
   longbridgeReferenceRates,
 } from "@/domain/investment-performance";
 import { InvestmentPerformanceWorkspace } from "@/ui/investment-performance-workspace";
+import {
+  DEFAULT_PROFIT_COLOR_SCHEME,
+  isProfitColorScheme,
+  PROFIT_COLOR_SCHEME_COOKIE_KEY,
+} from "@/ui/profit-color-scheme";
 import { SessionGuard } from "@/ui/session-guard";
 import { WorkbenchShell } from "@/ui/workbench-shell";
 
@@ -39,6 +45,11 @@ export default async function PerformancePage({
     readAssetRefreshState(services),
   ]);
   const longbridgeRates = longbridgeReferenceRates(sources);
+  const savedProfitColorScheme =
+    (await cookies()).get(PROFIT_COLOR_SCHEME_COOKIE_KEY)?.value ?? null;
+  const profitColorScheme = isProfitColorScheme(savedProfitColorScheme)
+    ? savedProfitColorScheme
+    : DEFAULT_PROFIT_COLOR_SCHEME;
 
   return (
     <SessionGuard>
@@ -63,6 +74,7 @@ export default async function PerformancePage({
               cashflows={cashflows}
               currentDay={shanghaiDay(now)}
               currentObservedAt={now.toISOString()}
+              profitColorScheme={profitColorScheme}
               sources={sources.map(({ credentialReference: _credential, permissions: _permissions, ...source }) => source)}
               currentExchangeRates={longbridgeRates}
               importedSourceHistoryObservations={importedSourceHistoryObservations}

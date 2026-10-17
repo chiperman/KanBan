@@ -20,8 +20,22 @@ export function AutomaticDailySettlementSettings({ execution, scheduler }: {
           {execution.reason ? <div><dt>原因</dt><dd>{settlementReasonLabel[execution.reason]}</dd></div> : null}
         </> : null}
       </dl>
-      <p className="formal-daily-settlement-note">仅检查本机 launchd 任务，外部调度状态未知。已加载或过去执行成功不代表当前采集正常；暂无记录不代表未启用。</p>
-      <p className="formal-daily-settlement-note">独立于实时刷新：证券按官方收盘价，加密资产按采集窗口市价。执行日志不纳入备份。</p>
+      {/* 两段口径说明按「探测范围 / 计价口径」分列，避免糊成一段灰色墙。
+          这两句是读法边界，不是告警，所以留在正文层级而不升级为提示条。 */}
+      <div className="formal-daily-settlement-notes">
+        <p className="formal-daily-settlement-note">
+          <span className="formal-daily-settlement-note__label">探测范围</span>
+          <span>
+            仅检查本机 launchd 任务，外部调度状态未知。已加载或过去执行成功不代表当前采集正常；暂无记录不代表未启用。
+          </span>
+        </p>
+        <p className="formal-daily-settlement-note">
+          <span className="formal-daily-settlement-note__label">计价口径</span>
+          <span>
+            独立于实时刷新：证券按官方收盘价，加密资产按采集窗口市价。执行日志不纳入备份。
+          </span>
+        </p>
+      </div>
     </section>
   );
 }

@@ -147,9 +147,17 @@ html {
 }
 
 .investment-performance__current > article > p:last-child,
-.investment-performance__ledger header > div > p:last-child,
-.investment-performance__interval-formula {
+.investment-performance__ledger header > div > p:last-child {
   margin: var(--vibe-space-4) 0 0;
+  color: var(--secondary);
+  font-size: var(--vibe-type-caption);
+  line-height: 1.6;
+}
+
+/* 读法脚注：属于说明而非告警，因此用正文脚注而不是提示条。
+   趋势区与区间结论都是带 gap 的网格，这里不能再叠外边距。 */
+.investment-performance__note {
+  margin: 0;
   color: var(--secondary);
   font-size: var(--vibe-type-caption);
   line-height: 1.6;
@@ -346,18 +354,59 @@ html {
   gap: var(--vibe-space-5);
 }
 
-.investment-performance__ledger > header > span {
+/* 卡头右侧：计数在上、排序说明在下，共用一个右对齐容器 */
+.investment-performance__ledger-heading-meta {
+  display: grid;
+  justify-items: end;
+  gap: var(--vibe-space-1);
+}
+
+.investment-performance__ledger-count {
+  margin: 0;
   color: var(--secondary);
-  font-family: var(--f-display);
-  font-size: var(--vibe-type-subheading);
+  font-family: var(--f-display); /* 计数沿用点阵数字，字族不动 */
+  font-size: var(--vibe-type-title);
   font-variant-numeric: tabular-nums;
+}
+
+.investment-performance__ledger-count-unit {
+  margin-left: var(--vibe-space-1);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-label);
+}
+
+/* 排序说明是事实描述，必须看起来不像控件：无 hover、无指针、无箭头 */
+.investment-performance__ledger-sort {
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-micro);
+  letter-spacing: 0.08em;
+}
+
+/* 只播报给读屏，不制造第二行可见文案 */
+.investment-performance__ledger-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.investment-performance__ledger-table {
+  display: grid;
 }
 
 .investment-performance__cashflow-list {
   display: grid;
   margin: 0;
   padding: 0;
-  border-top: 1px solid var(--line);
+  /* 分隔线由上方列头的 border-bottom（--line-2）承担；
+     列头在 ≤720px 是 display:none，那里改由列表自己的 border-top 兜住。 */
   list-style: none;
 }
 
@@ -366,9 +415,14 @@ html {
   border-bottom: 1px solid var(--line);
 }
 
+/* 最后一行不再画线，让表尾小计的上界线单独成立 */
+.investment-performance__cashflow-list > li:last-child {
+  border-bottom: 0;
+}
+
 .investment-performance__cashflow-list > li > article {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(0, 1.3fr) auto;
+  grid-template-columns: minmax(200px, 1.1fr) minmax(0, 1.4fr) auto;
   align-items: start;
   gap: var(--vibe-space-5);
   padding: var(--vibe-space-5) 0;
@@ -378,37 +432,170 @@ html {
 .investment-performance__cashflow-evidence {
   display: grid;
   gap: var(--vibe-space-2);
+  align-content: start;
   min-width: 0;
 }
 
+/* 金额是行内第一视觉。26px 而非 18px：Doto 的光学尺寸小于 Geist，
+   18px 点阵数字会比 18px 标题还小。方向色不在这里写死，由 .profit-color-value 承担。
+   字重固定 400：账本内所有 Doto 读数（行金额、表尾小计、计数）统一 400，不动字重轴。 */
 .investment-performance__cashflow-main > strong {
   color: var(--display);
   font-family: var(--f-display);
-  font-size: var(--vibe-type-subheading);
+  font-size: var(--vibe-type-display-sm);
   font-variant-numeric: tabular-nums;
   font-weight: 400;
   letter-spacing: -0.03em;
+  line-height: 1.1;
 }
 
-.investment-performance__cashflow-main > span,
+/* 币种单位不点阵化：数字是读数，单位是注解 */
+.investment-performance__cashflow-unit {
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-label);
+  letter-spacing: 0;
+}
+
+/* 元信息行：类型标签与时间并排。标签移出 grid 拉伸语境才会回到胶囊宽度 */
+.investment-performance__cashflow-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--vibe-space-3);
+}
+
+.investment-performance__cashflow-list .vibe-status-tag {
+  align-self: start;
+  width: max-content;
+}
+
+.investment-performance__cashflow-meta > span {
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.investment-performance__cashflow-evidence {
+  gap: var(--vibe-space-1);
+}
+
 .investment-performance__cashflow-evidence > span,
 .investment-performance__cashflow-evidence > p {
   margin: 0;
-  color: var(--secondary);
+  color: var(--muted);
   font-family: var(--f-mono);
   font-size: var(--vibe-type-caption);
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
 
+/* 备注是人给的上下文，比机器证据强一级 */
 .investment-performance__cashflow-evidence > p {
-  color: var(--primary);
+  color: var(--secondary);
 }
 
+/* 只有真的缺汇率证据时才出现，且是信号不是装饰 */
+.investment-performance__cashflow-evidence > span[data-evidence="missing"] {
+  color: var(--warning);
+}
+
+/* 编辑 / 删除两个直连按钮：间距 16px 拉开误触距离；删除不染红——
+   一屏 0–2 个红色元素的预算，账本行数不定，N 行 N 个红删除会把红色变成装饰；
+   破坏性由「永久删除资金记录」确认弹窗承担。 */
 .investment-performance__cashflow-actions {
   display: flex;
   align-items: center;
-  gap: var(--vibe-space-2);
+  gap: var(--vibe-space-4);
+}
+
+/* 表头：给有视力用户的扫描辅助，读屏由每行自释，故整行 aria-hidden */
+.investment-performance__cashflow-head {
+  display: grid;
+  grid-template-columns: minmax(200px, 1.1fr) minmax(0, 1.4fr) auto;
+  column-gap: var(--vibe-space-5);
+  padding-bottom: var(--vibe-space-2);
+  border-bottom: 1px solid var(--line-2);
+  color: var(--muted);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-micro);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.investment-performance__cashflow-head > :last-child {
+  text-align: right;
+}
+
+/* 表尾小计：与上方「累计净投入」同源，是账目对得上的核验点，不是第二个头条 */
+.investment-performance__ledger-total {
+  display: flex;
+  margin: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--vibe-space-4);
+  padding-top: var(--vibe-space-4);
+  border-top: 1px solid var(--line-2);
+}
+
+.investment-performance__ledger-total-label {
+  color: var(--muted);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-micro);
+  letter-spacing: 0.1em;
+}
+
+.investment-performance__ledger-total > strong {
+  color: var(--display);
+  font-family: var(--f-display);
+  font-size: var(--vibe-type-title);
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+}
+
+/* 隐藏值与「数据不足」在账本里要跟着行内读数走，不沿用大卡片那套尺寸 */
+.investment-performance__ledger .investment-performance__private,
+.investment-performance__ledger .investment-performance__unavailable {
+  margin-top: 0;
+  font-size: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+}
+
+.investment-performance__ledger-total .investment-performance__private,
+.investment-performance__ledger-total .investment-performance__unavailable {
+  font-size: var(--vibe-type-title);
+}
+
+/* 空状态：卡片内部的就地入口，留白比整页空态收敛。
+   基类在文件后段把上下内边距写成 --vibe-space-24（96px），卡内要显式压回来。 */
+.investment-performance__ledger .empty-state {
+  display: grid;
+  justify-items: center;
+  gap: var(--vibe-space-3);
+  padding: var(--vibe-space-12) var(--vibe-space-6);
+}
+
+/* 空状态标题不能比卡片标题还大：卡内 h2 是 18px/600，全局空态标题是 24px，
+   不压回来层级就倒挂。 */
+.investment-performance__ledger .empty-title {
+  color: var(--secondary);
+  font-family: var(--f-head);
+  font-size: var(--vibe-type-subheading);
+  font-weight: 600;
+}
+
+.investment-performance__ledger .empty-hint {
+  margin: 0;
+  max-width: 44ch;
+  color: var(--secondary);
+  font-size: var(--vibe-type-body-xs);
+}
+
+.investment-performance__ledger .empty-state > .vibe-button {
+  margin-top: var(--vibe-space-2);
 }
 
 .investment-performance__editor-fields {
@@ -430,6 +617,26 @@ html {
 
 .investment-performance__editor-fields > :last-child {
   grid-column: 1 / -1;
+}
+
+/* 「发生时间」与它的解析结果行绑成同一个网格单元 */
+.investment-performance__editor-field {
+  display: grid;
+  margin-top: var(--vibe-space-4);
+  gap: var(--vibe-space-1);
+}
+
+.investment-performance__editor-field > .vibe-field {
+  margin: 0;
+}
+
+.investment-performance__editor-hint,
+.investment-performance__editor-required-hint {
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
+  line-height: 1.5;
 }
 
 @media (max-width: 1199px) {
@@ -545,6 +752,26 @@ html {
     justify-content: end;
     padding-top: var(--vibe-space-3);
     border-top: 1px solid var(--line);
+  }
+
+  /* 窄屏不摆列头（靠行内元信息自释），分隔线回到列表自己身上 */
+  .investment-performance__cashflow-head {
+    display: none;
+  }
+
+  .investment-performance__cashflow-list {
+    border-top: 1px solid var(--line);
+  }
+
+  /* 26px 在 390px 视口会抢位，金额回落一档 */
+  .investment-performance__cashflow-main > strong {
+    font-size: var(--vibe-type-title);
+  }
+
+  /* 长数值不能把「累计净投入」挤出视口 */
+  .investment-performance__ledger-total {
+    flex-wrap: wrap;
+    row-gap: var(--vibe-space-2);
   }
 }
 
@@ -793,6 +1020,14 @@ html {
   display: grid;
   gap: var(--vibe-space-5);
   padding: var(--vibe-space-6);
+  /* 列头与数据行必须共用同一套列宽与列间距，否则右侧三列会按 gap 差累积错位：
+     列头 gap 12 而数据行 gap 8 时，总额 / 今日变化 / 昨日 分别偏 12 / 8 / 4px。
+     末列给「明细 →」留够宽度，原来 40px 装不下 43px 的链接。
+     总额列 176px：该列用点阵字体，实测「1,234,567.89 USD」宽 173px，
+     原 160px 会向左溢出并吃掉列间距；今日变化与昨日列在同等量级下分别是
+     106px / 115px，现有 130px / 160px 仍有富余。 */
+  --source-value-columns: 176px 130px 160px 48px;
+  --source-value-gap: var(--vibe-space-2);
 }
 
 .daily-overview__trend {
@@ -856,7 +1091,11 @@ html {
 .daily-overview__source-list > li > article {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(300px, auto);
-  align-items: center;
+  /* 按基线对齐而不是盒子居中：名称 16px、总额 18px Doto、今日变化 14px、
+     昨日 10px、明细 12px，字号各不相同，盒子居中会让五条基线散开
+     （实测总额 / 今日变化 / 昨日 / 明细分别差 0 / -0.9 / -1.7 / -5.5px，
+     名称因为下面还压着一行副标题，差到 -12.9px）。改为基线对齐后共用一条线。 */
+  align-items: baseline;
   gap: var(--vibe-space-6);
   padding: var(--vibe-space-5) 0;
 }
@@ -878,6 +1117,15 @@ html {
 
 .daily-overview__source-list .vibe-status-tag {
   justify-self: start;
+}
+
+/* 健康来源的状态是背景信息，用静默文字而非彩色标签，避免整列都是同一枚胶囊 */
+.daily-overview__source-state {
+  justify-self: start;
+  color: var(--muted);
+  font-family: var(--f-ui);
+  font-size: var(--vibe-type-caption);
+  line-height: 1.4;
 }
 
 .daily-overview__source-value {
@@ -998,6 +1246,175 @@ html {
 
 .daily-overview__sources .empty-state {
   margin: 0;
+}
+
+/* 自释文案：今日资产变化不等同投资收益，跟随数值说明口径 */
+.daily-overview__note {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--vibe-type-caption);
+  line-height: 1.6;
+}
+
+/* 来源摘要列头：把总额 / 今日变化 / 昨日变成可跨行比较的列。
+   列宽与列间距必须和数据行完全一致（共用 --source-value-columns / --source-value-gap），
+   首列 1fr 自动吸收差额，因此三列右缘与行内数字逐像素对齐。 */
+.daily-overview__source-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--source-value-columns);
+  gap: var(--vibe-space-2) var(--source-value-gap);
+  justify-items: end;
+  padding-bottom: var(--vibe-space-2);
+  /* 分隔线由紧随其后的 .daily-overview__source-list 的 border-top 承担。
+     这里再加 border-bottom 会与之叠成两条线；而移动端列头是 display:none，
+     只有列表那条能同时服务两个断点。 */
+  color: var(--muted);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-micro);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.daily-overview__source-head > span:first-child {
+  justify-self: start;
+}
+
+.daily-overview__source-list > li > article {
+  /* 第二列不再写死 514px：交给数据网格自身的固有宽度，列宽变了也不会与列头脱钩 */
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.daily-overview__source-value {
+  grid-template-columns: var(--source-value-columns);
+  column-gap: var(--source-value-gap);
+  /* 与上方 article 同理：四格字号不同，必须共用一条基线，不能各自居中 */
+  align-items: baseline;
+  justify-items: end;
+}
+
+.daily-overview__source-yesterday {
+  min-width: 0;
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
+  line-height: 1.2;
+}
+
+.daily-overview__source-yesterday .daily-overview__source-yesterday-amount {
+  font-family: var(--f-display);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 列头已说明列名，行内标签仅保留给读屏，避免列内拥挤 */
+.daily-overview__source-column-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* 本金与收益都不可用时，整块压缩为一行 */
+.daily-overview__summary[data-compact="true"] {
+  display: flex;
+  /* 窄屏允许换行，否则操作区会把整页顶出横向滚动 */
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--vibe-space-3) var(--vibe-space-5);
+  padding: var(--vibe-space-4) var(--vibe-space-6);
+}
+
+.daily-overview__summary[data-compact="true"] .daily-overview__summary-label {
+  margin: 0;
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-label);
+  letter-spacing: 0.08em;
+}
+
+.daily-overview__summary[data-compact="true"] .daily-overview__summary-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--vibe-space-2);
+}
+
+.daily-overview__summary[data-compact="true"]
+  .daily-overview__summary-item
+  > span {
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
+}
+
+.daily-overview__summary[data-compact="true"] .daily-overview__summary-actions {
+  margin-left: auto;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* 首次使用：给出下一步路径，金额卡片仍按语义显示「数据不足」 */
+.daily-overview__getting-started {
+  border-radius: var(--r-md);
+  background: var(--glass);
+  backdrop-filter: blur(12px);
+  padding: var(--vibe-space-6);
+}
+
+.daily-overview__getting-started h2 {
+  margin: var(--vibe-space-2) 0 var(--vibe-space-1);
+  color: var(--display);
+  font-family: var(--f-head);
+  font-size: var(--vibe-type-title);
+  font-weight: 600;
+}
+
+.daily-overview__getting-started-desc {
+  margin: 0 0 var(--vibe-space-5);
+  color: var(--secondary);
+  font-size: var(--vibe-type-body-sm);
+}
+
+.daily-overview__getting-started-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--vibe-space-3);
+  margin: 0 0 var(--vibe-space-5);
+  padding: 0;
+  list-style: none;
+}
+
+.daily-overview__getting-started-steps > li {
+  display: grid;
+  align-content: start;
+  gap: var(--vibe-space-1);
+  padding: var(--vibe-space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.daily-overview__getting-started-index {
+  color: var(--muted);
+  font-family: var(--f-display);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.daily-overview__getting-started-steps strong {
+  font-size: var(--vibe-type-body-sm);
+  font-weight: 600;
+}
+
+.daily-overview__getting-started-steps > li > span:last-child {
+  color: var(--secondary);
+  font-size: var(--vibe-type-caption);
+  line-height: 1.55;
+}
+
+.daily-overview__getting-started-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--vibe-space-4);
 }
 
 .daily-overview__refresh {
@@ -1122,6 +1539,56 @@ html {
 
   .daily-overview__source-total {
     font-size: var(--vibe-type-body);
+  }
+
+  /* 移动端来源行：两行紧凑布局，名称与昨日信息一列、金额与今日变化一列 */
+  .daily-overview__source-head {
+    display: none;
+  }
+
+  .daily-overview__source-list > li > article {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--vibe-space-3);
+  }
+
+  .daily-overview__source-value {
+    grid-template-columns: minmax(0, auto);
+    justify-items: end;
+    gap: var(--vibe-space-1);
+  }
+
+  .daily-overview__source-yesterday {
+    display: none;
+  }
+
+  .daily-overview__source-yesterday .daily-overview__source-column-label {
+    display: none;
+  }
+
+  .daily-overview__source-change-today {
+    gap: var(--vibe-space-2);
+  }
+
+  /* 首次使用引导：窄屏单列，操作区撑满，避免 320px 顶出横向滚动 */
+  .daily-overview__getting-started {
+    padding: var(--vibe-space-5);
+  }
+
+  .daily-overview__getting-started-steps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .daily-overview__getting-started-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .daily-overview__summary[data-compact="true"] .daily-overview__summary-actions {
+    margin-left: 0;
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .daily-overview__refresh {
@@ -4553,6 +5020,30 @@ body {
   line-height: 1.55;
 }
 
+/* 两段口径说明按标签分列，避免糊成一整段灰色文字墙。 */
+.formal-daily-settlement-notes {
+  display: grid;
+  gap: var(--vibe-space-3);
+  margin-top: var(--vibe-space-5);
+  padding-top: var(--vibe-space-4);
+  border-top: 1px solid var(--line);
+}
+
+.formal-daily-settlement-notes .formal-daily-settlement-note {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: var(--vibe-space-1) var(--vibe-space-4);
+  align-items: baseline;
+}
+
+.formal-daily-settlement-note__label {
+  color: var(--muted);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-micro);
+  letter-spacing: 0.08em;
+}
+
+
 .formal-daily-settlement-diagnostic {
   color: var(--warning);
 }
@@ -6909,6 +7400,39 @@ body {
   font-size: var(--vibe-type-subheading);
 }
 
+/* 导出与恢复方向相反，分成两组：分隔线落在组上，
+   组标题先于分隔内容出现，不再让「备份文件名」紧贴导出按钮。 */
+.business-data-backup-settings__group {
+  margin-top: var(--vibe-space-6);
+  padding-top: var(--vibe-space-5);
+  border-top: 1px solid var(--line);
+}
+
+.business-data-backup-settings__group:first-of-type {
+  margin-top: var(--vibe-space-5);
+  padding-top: 0;
+  border-top: 0;
+}
+
+.business-data-backup-settings__group-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--vibe-space-2) var(--vibe-space-3);
+  margin: 0;
+  color: var(--display);
+  font-family: var(--f-head);
+  font-size: var(--vibe-type-body-sm);
+  font-weight: 600;
+}
+
+.business-data-backup-settings__group-caveat {
+  color: var(--warning);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
+  font-weight: 400;
+}
+
 .business-data-backup-settings__actions {
   display: flex;
   flex-wrap: wrap;
@@ -6916,14 +7440,16 @@ body {
   margin-top: var(--vibe-space-6);
 }
 
+.business-data-backup-settings__group .business-data-backup-settings__actions {
+  margin-top: var(--vibe-space-4);
+}
+
 .business-data-restore {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
   gap: var(--vibe-space-3);
-  margin-top: var(--vibe-space-8);
-  padding-top: var(--vibe-space-6);
-  border-top: 1px solid var(--line);
+  margin-top: var(--vibe-space-4);
 }
 
 .business-data-restore__preview {
@@ -6962,16 +7488,25 @@ body {
   white-space: nowrap;
 }
 
+/* 每个服务一行：字段名与运行状态同行，状态右端与输入框右端对齐，
+   服务名不再在上方摘要与下方表单里各出现一次。 */
 .external-service-statuses {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--vibe-space-6);
-  margin: var(--vibe-space-5) 0 0;
-  padding-block: var(--vibe-space-5);
-  border-block: 1px solid var(--line);
+  /* 与 .vibe-field 的 500px 字段宽度一致，状态右端才能和输入框对齐 */
+  width: min(100%, 500px);
+  margin: 0;
+  padding: var(--vibe-space-5) 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
 }
 
-.external-service-statuses > div {
+.external-service-statuses__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--vibe-space-1) var(--vibe-space-4);
   min-width: 0;
 }
 
@@ -6980,31 +7515,41 @@ body {
   margin: 0;
 }
 
-.external-service-statuses dt {
-  color: var(--secondary);
-  font-family: var(--f-mono);
-  font-size: var(--vibe-type-label);
-  letter-spacing: 0.08em;
+.external-service-statuses__term {
+  min-width: 0;
 }
 
-.external-service-statuses dd {
-  margin-top: var(--vibe-space-2);
+.external-service-statuses__term .vibe-field__label {
+  margin: 0;
+}
+
+.external-service-statuses__state {
+  justify-self: end;
   color: var(--secondary);
   font-family: var(--f-mono);
   font-size: var(--vibe-type-caption);
+  text-align: right;
 }
 
-.external-service-statuses dd[data-vibe-tone="success"] {
+.external-service-statuses__state[data-vibe-tone="success"] {
   color: var(--success);
 }
 
-.external-service-statuses dd[data-vibe-tone="warning"] {
+.external-service-statuses__state[data-vibe-tone="warning"] {
   color: var(--warning);
+}
+
+.external-service-statuses__input {
+  grid-column: 1 / -1;
+}
+
+.external-service-statuses__input .vibe-field__input {
+  max-width: 500px;
 }
 
 .external-service-form {
   display: grid;
-  gap: var(--vibe-space-4);
+  gap: var(--vibe-space-5);
   max-width: 720px;
   margin-top: var(--vibe-space-5);
 }
@@ -9323,13 +9868,17 @@ body {
   gap: var(--vibe-space-3);
 }
 
-.daily-overview__current > article.daily-overview__confidence {
+/* 数据完整性现在位于总资产卡内部，作为一行元信息，不再单独成卡。 */
+.daily-overview__current .daily-overview__confidence {
   display: flex;
-  grid-column: 1 / -1;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--vibe-space-2) var(--vibe-space-4);
-  padding: var(--vibe-space-3) var(--vibe-space-5);
+  margin-top: var(--vibe-space-2);
+  padding-top: var(--vibe-space-3);
+  border-top: 1px solid var(--line);
+  background: transparent;
+  backdrop-filter: none;
 }
 
 .daily-overview__confidence > .card-label {

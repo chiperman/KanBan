@@ -1,18 +1,16 @@
-import { decimalCompare } from "@/domain/decimal";
 import type { AssetHolding } from "@/server/ports";
 import { assetHoldingKey, assetHoldingDisplayName, AssetHoldingPositionStatus } from "@/ui/asset-product-coverage";
-import type { ProfitColorScheme } from "@/ui/profit-color-scheme";
+import { profitDirection, type ProfitColorScheme } from "@/ui/profit-color-scheme";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { signedAmount, signedDisplayAmount } from "@/ui/signed-amount";
 import { amount, holdingProfit, holdingTodayProfit, holdingQuoteSessionText, holdingValuationDetail } from "./holding-detail-model";
 
-function profitDirection(
+function displayDirection(
   value: string,
   showSensitiveInfo: boolean,
 ): "positive" | "negative" | "neutral" {
   if (!showSensitiveInfo) return "neutral";
-  const comparison = decimalCompare(value, "0");
-  return comparison > 0 ? "positive" : comparison < 0 ? "negative" : "neutral";
+  return profitDirection(value);
 }
 
 function HoldingProfitSummaryCell({
@@ -41,7 +39,7 @@ function HoldingProfitSummaryCell({
       data-profit-direction={
         profit === null
           ? "neutral"
-          : profitDirection(profit.amount, showSensitiveInfo)
+          : displayDirection(profit.amount, showSensitiveInfo)
       }
     >
       <strong>
@@ -322,7 +320,7 @@ export function HoldingDetailRow({
             data-profit-direction={
               profit === null
                 ? "neutral"
-                : profitDirection(profit.amount, showSensitiveInfo)
+                : displayDirection(profit.amount, showSensitiveInfo)
             }
           >
             {profit === null
@@ -342,7 +340,7 @@ export function HoldingDetailRow({
             data-profit-direction={
               profit === null
                 ? "neutral"
-                : profitDirection(profit.percent, showSensitiveInfo)
+                : displayDirection(profit.percent, showSensitiveInfo)
             }
           >
             {profit === null

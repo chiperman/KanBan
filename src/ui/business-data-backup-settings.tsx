@@ -138,63 +138,75 @@ export function BusinessDataBackupSettings() {
       <p className="settings-description">
         备份业务数据与资金账本。恢复会替换当前数据；不含凭证、令牌和密钥。
       </p>
-      <div className="business-data-backup-settings__actions">
-        <VibeButton
-          disabled={pending !== null}
-          onClick={() => void exportBackup()}
-          type="button"
-          variant="primary"
-        >
-          {pending === "export" ? "正在导出…" : "导出业务数据备份"}
-        </VibeButton>
-      </div>
-      {exported && !restored ? (
-        <VibeNotice role="status" tone="success">
-          已导出本机备份 {exported.fileName}。{exported.warning}
-        </VibeNotice>
-      ) : null}
-      <div className="business-data-restore">
-        <VibeField
-          fieldId="business-data-backup-file-name"
-          label="备份文件名"
-          name="fileName"
-          onChange={(event) => {
-            setFileName(event.currentTarget.value);
-            setPreview(null);
-            setRestored(null);
-          }}
-          placeholder="asset-dashboard-….json"
-          ref={restoreFieldRef}
-          value={fileName}
-        />
-        <VibeButton
-          disabled={pending !== null}
-          onClick={() => void previewRestore()}
-          type="button"
-          variant="outline"
-        >
-          {pending === "preview" ? "正在预演…" : "预演恢复"}
-        </VibeButton>
-      </div>
-      {preview ? (
-        <div className="business-data-restore__preview">
-          <p>{previewSummary(preview)}</p>
-          <VibeNotice tone="info">{preview.warning}</VibeNotice>
+      {/* 导出与恢复方向相反：分成两组，避免把「备份文件名」误读成导出目标 */}
+      <div className="business-data-backup-settings__group">
+        <p className="business-data-backup-settings__group-label">导出</p>
+        <div className="business-data-backup-settings__actions">
           <VibeButton
             disabled={pending !== null}
-            onClick={() => setConfirmOpen(true)}
+            onClick={() => void exportBackup()}
+            type="button"
+            variant="primary"
+          >
+            {pending === "export" ? "正在导出…" : "导出业务数据备份"}
+          </VibeButton>
+        </div>
+        {exported && !restored ? (
+          <VibeNotice role="status" tone="success">
+            已导出本机备份 {exported.fileName}。{exported.warning}
+          </VibeNotice>
+        ) : null}
+      </div>
+      <div className="business-data-backup-settings__group business-data-backup-settings__group--restore">
+        <p className="business-data-backup-settings__group-label">
+          从本机备份恢复
+          <span className="business-data-backup-settings__group-caveat">
+            会替换当前业务数据
+          </span>
+        </p>
+        <div className="business-data-restore">
+          <VibeField
+            fieldId="business-data-backup-file-name"
+            label="备份文件名"
+            name="fileName"
+            onChange={(event) => {
+              setFileName(event.currentTarget.value);
+              setPreview(null);
+              setRestored(null);
+            }}
+            placeholder="asset-dashboard-….json"
+            ref={restoreFieldRef}
+            value={fileName}
+          />
+          <VibeButton
+            disabled={pending !== null}
+            onClick={() => void previewRestore()}
             type="button"
             variant="outline"
           >
-            恢复此业务数据备份
+            {pending === "preview" ? "正在预演…" : "预演恢复"}
           </VibeButton>
         </div>
-      ) : null}
-      {restored ? (
-        <VibeNotice role="status" tone="success">
-          已恢复。自动来源需重新授权。
-        </VibeNotice>
-      ) : null}
+        {preview ? (
+          <div className="business-data-restore__preview">
+            <p>{previewSummary(preview)}</p>
+            <VibeNotice tone="info">{preview.warning}</VibeNotice>
+            <VibeButton
+              disabled={pending !== null}
+              onClick={() => setConfirmOpen(true)}
+              type="button"
+              variant="outline"
+            >
+              恢复此业务数据备份
+            </VibeButton>
+          </div>
+        ) : null}
+        {restored ? (
+          <VibeNotice role="status" tone="success">
+            已恢复。自动来源需重新授权。
+          </VibeNotice>
+        ) : null}
+      </div>
       {error ? (
         <VibeNotice role="alert" tone="error">
           {error}

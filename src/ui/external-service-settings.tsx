@@ -6,7 +6,6 @@ import type {
   ExternalServiceConfigurationStatus,
 } from "@/server/ports";
 import { VibeButton } from "@/ui/vibe/vibe-button";
-import { VibeField } from "@/ui/vibe/vibe-field";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
 import { lockOnUnauthorizedResponse, OWNER_SESSION_EXPIRED_MESSAGE, readJsonResult } from "@/ui/owner-request-lock";
 
@@ -15,6 +14,29 @@ const FIELD_LABELS = {
   ethereumRpc: "Ethereum RPC URL",
   bscRpc: "BNB Smart Chain RPC URL",
 } as const;
+
+/* 服务名只在此处声明一次：状态与输入框共用同一行组，
+   不再让三个服务名在上方摘要和下方表单里各出现一次。 */
+const SERVICE_FIELDS = [
+  {
+    fieldId: "coingecko-demo-api-key",
+    id: "coinGecko",
+    name: "coinGeckoDemoApiKey",
+    placeholderEmpty: "粘贴 Demo API Key",
+  },
+  {
+    fieldId: "ethereum-rpc-url",
+    id: "ethereumRpc",
+    name: "ethereumRpcUrl",
+    placeholderEmpty: "https://…",
+  },
+  {
+    fieldId: "bsc-rpc-url",
+    id: "bscRpc",
+    name: "bscRpcUrl",
+    placeholderEmpty: "https://…",
+  },
+] as const;
 
 function stateText(configured: boolean, verifiedAt: string | null): string {
   if (!configured) return "未配置";
@@ -83,48 +105,43 @@ export function ExternalServiceSettings({
         </div>
         <span className="external-service-settings__scope">GLOBAL / EVM</span>
       </div>
-      <dl className="external-service-statuses" data-testid="external-service-statuses">
-        {([
-          ["coinGecko", status.coinGecko],
-          ["ethereumRpc", status.ethereumRpc],
-          ["bscRpc", status.bscRpc],
-        ] as const).map(([id, service]) => (
-          <div key={id}>
-            <dt>{FIELD_LABELS[id]}</dt>
-            <dd data-vibe-tone={service.configured ? "success" : "warning"}>
-              {stateText(service.configured, service.verifiedAt)}
-            </dd>
-          </div>
-        ))}
-      </dl>
       <form className="external-service-form" onSubmit={save}>
-        <VibeField
-          autoComplete="off"
-          fieldId="coingecko-demo-api-key"
-          label={FIELD_LABELS.coinGecko}
-          name="coinGeckoDemoApiKey"
-          placeholder={status.coinGecko.configured ? "已配置；留空则保持不变" : "粘贴 Demo API Key"}
-          required={!status.coinGecko.configured}
-          type="password"
-        />
-        <VibeField
-          autoComplete="off"
-          fieldId="ethereum-rpc-url"
-          label={FIELD_LABELS.ethereumRpc}
-          name="ethereumRpcUrl"
-          placeholder={status.ethereumRpc.configured ? "已配置；留空则保持不变" : "https://…"}
-          required={!status.ethereumRpc.configured}
-          type="password"
-        />
-        <VibeField
-          autoComplete="off"
-          fieldId="bsc-rpc-url"
-          label={FIELD_LABELS.bscRpc}
-          name="bscRpcUrl"
-          placeholder={status.bscRpc.configured ? "已配置；留空则保持不变" : "https://…"}
-          required={!status.bscRpc.configured}
-          type="password"
-        />
+        <dl className="external-service-statuses" data-testid="external-service-statuses">
+          {SERVICE_FIELDS.map((field) => {
+            const service = status[field.id];
+            return (
+              <div className="external-service-statuses__row" key={field.id}>
+                <dt className="external-service-statuses__term">
+                  <label className="vibe-field__label" htmlFor={field.fieldId}>
+                    {FIELD_LABELS[field.id]}
+                  </label>
+                </dt>
+                {/* 状态与字段同处一行，读作「这个字段现在是什么状态」 */}
+                <dd
+                  className="external-service-statuses__state"
+                  data-vibe-tone={service.configured ? "success" : "warning"}
+                >
+                  {stateText(service.configured, service.verifiedAt)}
+                </dd>
+                <dd className="external-service-statuses__input">
+                  <input
+                    autoComplete="off"
+                    className="vibe-field__input"
+                    id={field.fieldId}
+                    name={field.name}
+                    placeholder={
+                      service.configured
+                        ? "已配置；留空则保持不变"
+                        : field.placeholderEmpty
+                    }
+                    required={!service.configured}
+                    type="password"
+                  />
+                </dd>
+              </div>
+            );
+          })}
+        </dl>
         <div className="external-service-form__actions">
           <VibeButton disabled={pending} type="submit" variant="primary">
             {pending ? "正在保存…" : "保存并验证"}

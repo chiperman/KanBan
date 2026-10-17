@@ -55,8 +55,11 @@ export function MarketBenchmarkControls({
 
   let state: ReactNode = null;
   if (dataState.kind === "unavailable") {
+    // 只说「未连接」会让人以为功能坏了；补一句成因与下一步，避免误判为故障。
     state = (
-      <BenchmarkState title="未连接长桥" />
+      <BenchmarkState title="未连接长桥">
+        未接入长桥行情，指数对比不可用；接入后自动出现。
+      </BenchmarkState>
     );
   } else if (dataState.kind === "failed") {
     state = (

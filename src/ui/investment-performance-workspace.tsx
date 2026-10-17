@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import {
   analyzeCurrentInvestmentPerformance,
@@ -58,6 +58,7 @@ import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
 import { AssetGlobalRefreshControl } from "@/ui/asset-refresh-controls";
 import { lockOnUnauthorizedResponse, OWNER_SESSION_EXPIRED_MESSAGE, readJsonResult } from "@/ui/owner-request-lock";
 import { CURRENCY_OPTIONS, INTERVAL_OPTIONS } from "@/ui/reporting-currency-options";
+import { profitDirection, type ProfitColorScheme } from "@/ui/profit-color-scheme";
 import { signedAmount } from "@/ui/signed-amount";
 
 type CurrentTotals = Record<ReportingCurrency, PortfolioObservation | null>;
@@ -253,6 +254,7 @@ function CashflowEditor({
   const kindOptions = CASHFLOW_KIND_OPTIONS.filter(
     (option) => option.value !== "initial-investment" || !hasOtherInitial,
   );
+  const occurredAtIso = toIso(current.occurredAt);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -303,7 +305,7 @@ function CashflowEditor({
           </VibeButton>
         </>
       }
-      description="仅记录外部资金进出。"
+      description="仅记录外部资金进出。保存后立即计入累计净投入，并影响组合投资盈亏；它记录的是本金进出，与业绩表现无关。"
       eyebrow="INVESTMENT / CASHFLOW"
       onClose={onClose}
       onSubmit={submit}
@@ -318,16 +320,25 @@ function CashflowEditor({
           options={kindOptions}
           value={current.kind}
         />
-        <VibeField
-          fieldId="cashflow-occurred-at"
-          label="发生时间"
-          max={toInputDateTime(new Date().toISOString())}
-          onChange={(event) =>
-            setCurrent((value) => ({ ...value, occurredAt: event.target.value }))}
-          required
-          type="datetime-local"
-          value={current.occurredAt}
-        />
+        <div className="investment-performance__editor-field">
+          <VibeField
+            fieldId="cashflow-occurred-at"
+            label="发生时间"
+            max={toInputDateTime(new Date().toISOString())}
+            onChange={(event) =>
+              setCurrent((value) => ({ ...value, occurredAt: event.target.value }))}
+            required
+            type="datetime-local"
+            value={current.occurredAt}
+          />
+          {/* 原生控件按浏览器区域显示，列表只显示上海时间：先把落库值说出来，错才不会只在保存后暴露。
+              必须放在 label 之外，否则会被算进字段的可访问名。 */}
+          {occurredAtIso === "" ? null : (
+            <p className="investment-performance__editor-hint">
+              按上海时间将记录为 {formatShanghaiDateTime(occurredAtIso)}
+            </p>
+          )}
+        </div>
         <VibeField
           fieldId="cashflow-amount"
           inputMode="decimal"
@@ -356,6 +367,9 @@ function CashflowEditor({
           value={current.note}
         />
       </div>
+      <p className="investment-performance__editor-required-hint">
+        除备注外均为必填。
+      </p>
       {error ? <VibeNotice tone="error">{error}</VibeNotice> : null}
     </VibeDialog>
   );
@@ -418,6 +432,7 @@ export function InvestmentPerformanceWorkspace({
   cashflows: initialCashflows,
   currentDay,
   currentObservedAt,
+  profitColorScheme,
   sources,
   currentExchangeRates,
   importedSourceHistoryObservations,
@@ -426,6 +441,7 @@ export function InvestmentPerformanceWorkspace({
   cashflows: InvestmentCashflow[];
   currentDay: string;
   currentObservedAt: string;
+  profitColorScheme: ProfitColorScheme;
   sources: Omit<AssetSourceSummary, "credentialReference" | "permissions">[];
   currentExchangeRates: AssetExchangeRate[];
   importedSourceHistoryObservations: ImportedAssetSourceHistoryObservation[];
@@ -466,6 +482,18 @@ export function InvestmentPerformanceWorkspace({
     undefined,
   );
   const [deleting, setDeleting] = useState<InvestmentCashflow | null>(null);
+  const [cashflowStatus, setCashflowStatus] = useState("");
+  const [focusLedgerAfterDelete, setFocusLedgerAfterDelete] = useState(false);
+  const ledgerHeadingRef = useRef<HTMLHeadingElement>(null);
+
+  /* 删除后那一行连同触发按钮一起消失，弹窗的焦点归还会落空。
+     把焦点交到账本标题，读屏上下文才不断。 */
+  useEffect(() => {
+    if (!focusLedgerAfterDelete) return;
+    ledgerHeadingRef.current?.focus();
+    setFocusLedgerAfterDelete(false);
+  }, [focusLedgerAfterDelete]);
+
   const importedSource = useMemo(
     () => earliestImportedSource(importedSourceHistoryObservations),
     [importedSourceHistoryObservations],
@@ -622,6 +650,11 @@ export function InvestmentPerformanceWorkspace({
         ...existing.filter((item) => item.id !== cashflow.id),
         cashflow,
       ]));
+    setCashflowStatus(
+      cashflows.some((item) => item.id === cashflow.id)
+        ? "资金记录已更新"
+        : "资金记录已保存",
+    );
   }
 
   function openCustomRangeDialog() {
@@ -717,7 +750,9 @@ export function InvestmentPerformanceWorkspace({
             <h2>我的资产走势</h2>
           </div>
           {chartStartDay && chartEndDay ? (
-            <VibeStatusTag tone={hasEarlyHistory || portfolioTrend.missingCount > 0 ? "warning" : "success"}>
+            /* 日期区间是事实描述而非告警：覆盖不足由下方脚注与「完整 N / M 天」承担，
+               避免读数前先被一枚橙色标签定性。 */
+            <VibeStatusTag tone="muted">
               {formatShanghaiDayLabel(chartStartDay)} 至 {formatShanghaiDayLabel(chartEndDay)}
             </VibeStatusTag>
           ) : (
@@ -753,19 +788,19 @@ export function InvestmentPerformanceWorkspace({
             </span>
           ) : null}
         </div>
-        {hasEarlyHistory ? (
-          <VibeNotice tone="info">
-            虚线为{importedSource?.label}早期记录；结论仅基于完整总资产。
-          </VibeNotice>
-        ) : (
-          <VibeNotice tone="info">
-            结论仅基于完整总资产。
-          </VibeNotice>
-        )}
+        {/* 读法说明属于脚注而不是告警：整块提示条会压过图表本身，
+            降为安静脚注，与总览「含资金进出与估值修正」保持同一层级。 */}
+        <p className="investment-performance__note">
+          {hasEarlyHistory ? (
+            <>虚线为{importedSource?.label}早期记录；结论仅基于完整总资产。</>
+          ) : (
+            "结论仅基于完整总资产。"
+          )}
+        </p>
         {hasEarlyHistory && sourceHistoryTrend && sourceHistoryTrend.missingCount > 0 ? (
-          <VibeNotice tone="info">
+          <p className="investment-performance__note">
             早期记录缺 {sourceHistoryTrend.missingCount} 天。
-          </VibeNotice>
+          </p>
         ) : null}
         {benchmarkVisible ? (
           <MarketBenchmarkControls
@@ -855,6 +890,10 @@ export function InvestmentPerformanceWorkspace({
             )}
           </article>
         </div>
+        {/* 自释：四个数字之间的换算关系必须写出来，否则「资产变化 0」会被读成「没有盈亏」 */}
+        <p className="investment-performance__note">
+          区间投资盈亏 = 区间资产变化 − 区间净外部投入
+        </p>
         {intervalReason ? <VibeNotice tone="info">{intervalReason}</VibeNotice> : null}
       </section>
 
@@ -862,79 +901,159 @@ export function InvestmentPerformanceWorkspace({
         <header>
           <div>
             <p className="card-label">LEDGER / INVESTMENT BOUNDARY</p>
-            <h2>投资资金进出</h2>
+            {/* tabIndex=-1 只为承接「删除后的焦点」，不进入 Tab 序列 */}
+            <h2 ref={ledgerHeadingRef} tabIndex={-1}>投资资金进出</h2>
           </div>
-          <span>{cashflows.length} 笔</span>
+          {cashflows.length > 0 ? (
+            <div className="investment-performance__ledger-heading-meta">
+              <p className="investment-performance__ledger-count">
+                {cashflows.length}
+                <span className="investment-performance__ledger-count-unit">笔</span>
+              </p>
+              {/* 时间倒序是账本的自然秩序，不是可切换的偏好，所以写说明字而不是控件 */}
+              <p className="investment-performance__ledger-sort">按发生时间倒序</p>
+            </div>
+          ) : null}
         </header>
+        <p
+          aria-live="polite"
+          className="investment-performance__ledger-status"
+          role="status"
+        >
+          {cashflowStatus}
+        </p>
         {cashflows.length === 0 ? (
           <div className="empty-state">
             <p className="empty-title">无资金记录</p>
+            {/* 空状态给出下一步：没有本金事实时，净投入与投资盈亏无法成立 */}
+            <p className="empty-hint">
+              记录第一笔本金，累计净投入与组合投资盈亏才有基准。
+            </p>
+            <VibeButton onClick={() => setEditing(null)} type="button" variant="primary">
+              记录第一笔资金
+            </VibeButton>
           </div>
         ) : (
-          <ol className="investment-performance__cashflow-list">
-            {cashflows.map((cashflow) => {
-              const convertedAmount = cashflow.amounts[currency];
-              const conversionEvidence = cashflow.exchangeRates.find(
-                (rate) =>
-                  (rate.baseCurrency === "USD" && rate.quoteCurrency === currency) ||
-                  (rate.baseCurrency === currency && rate.quoteCurrency === "USD"),
-              );
-              return (
-                <li key={cashflow.id}>
-                  <article>
-                    <div className="investment-performance__cashflow-main">
-                      <VibeStatusTag
-                        tone={cashflow.kind === "external-withdrawal" ? "warning" : "success"}
-                      >
-                        {cashflowKindLabel(cashflow.kind)}
-                      </VibeStatusTag>
-                      <strong>
-                        {showSensitiveInfo
-                          ? `${cashflowSign(cashflow.kind)}${amount(cashflow.amount)} ${cashflow.currency}`
-                          : "••••••"}
-                      </strong>
-                      <span>{formatShanghaiDateTime(cashflow.occurredAt)}</span>
-                    </div>
-                    <div className="investment-performance__cashflow-evidence">
-                      <span>
-                        {showSensitiveInfo
-                          ? convertedAmount === null
-                            ? `缺 ${currency} 汇率`
-                            : `${currency} 计价 ${cashflowSign(cashflow.kind)}${amount(convertedAmount)}`
-                          : "换算与汇率已隐藏"}
-                      </span>
-                      <span>
-                        {showSensitiveInfo
-                          ? conversionEvidence === undefined
-                            ? "缺参考汇率证据"
-                            : `${conversionEvidence.source} · ${conversionEvidence.observedAt}`
-                          : "汇率证据已隐藏"}
-                      </span>
-                      {showSensitiveInfo && cashflow.note ? <p>{cashflow.note}</p> : null}
-                    </div>
-                    <div className="investment-performance__cashflow-actions">
-                      <VibeButton
-                        aria-label={`编辑资金记录：${cashflow.note ?? formatShanghaiDateTime(cashflow.occurredAt)}`}
-                        onClick={() => setEditing(cashflow)}
-                        type="button"
-                        variant="text"
-                      >
-                        编辑
-                      </VibeButton>
-                      <VibeButton
-                        aria-label={`删除资金记录：${cashflow.note ?? formatShanghaiDateTime(cashflow.occurredAt)}`}
-                        onClick={() => setDeleting(cashflow)}
-                        type="button"
-                        variant="text"
-                      >
-                        删除
-                      </VibeButton>
-                    </div>
-                  </article>
-                </li>
-              );
-            })}
-          </ol>
+          <div className="investment-performance__ledger-table">
+            <div aria-hidden="true" className="investment-performance__cashflow-head">
+              <span>金额 / 时间</span>
+              <span>换算证据</span>
+              <span>操作</span>
+            </div>
+            <ol className="investment-performance__cashflow-list" role="list">
+              {cashflows.map((cashflow) => {
+                const convertedAmount = cashflow.amounts[currency];
+                const needsConversion = cashflow.currency !== currency;
+                const conversionEvidence = cashflow.exchangeRates.find(
+                  (rate) =>
+                    (rate.baseCurrency === "USD" && rate.quoteCurrency === currency) ||
+                    (rate.baseCurrency === currency && rate.quoteCurrency === "USD"),
+                );
+                const sign = cashflowSign(cashflow.kind);
+                /* 隐藏判定统一写 `=== false`（与上方卡片 MetricValue、表尾小计一致），
+                   真值判断会让 true/false/undefined 三态在行与合计之间分叉。
+                   隐藏模式下可访问名必须回落到时间，否则读屏会把备注念出来。 */
+                const hidden = showSensitiveInfo === false;
+                const occurredAtLabel = formatShanghaiDateTime(cashflow.occurredAt);
+                const rowLabel = hidden ? occurredAtLabel : cashflow.note ?? occurredAtLabel;
+                return (
+                  <li key={cashflow.id}>
+                    <article>
+                      <div className="investment-performance__cashflow-main">
+                        <strong
+                          className="profit-color-value"
+                          data-profit-color-scheme={profitColorScheme}
+                          data-profit-direction={hidden
+                            ? "neutral"
+                            : profitDirection(`${sign}${cashflow.amount}`)}
+                        >
+                          {hidden ? (
+                            "••••••"
+                          ) : (
+                            <>
+                              {sign}{amount(cashflow.amount)}{" "}
+                              <span className="investment-performance__cashflow-unit">
+                                {cashflow.currency}
+                              </span>
+                            </>
+                          )}
+                        </strong>
+                        <div className="investment-performance__cashflow-meta">
+                          <VibeStatusTag tone="muted">
+                            {cashflowKindLabel(cashflow.kind)}
+                          </VibeStatusTag>
+                          <span>{occurredAtLabel}</span>
+                        </div>
+                      </div>
+                      <div className="investment-performance__cashflow-evidence">
+                        {needsConversion ? (
+                          hidden ? (
+                            /* 需要换算但处于隐藏模式：两行合并成一行，避免「已隐藏」刷屏 */
+                            <span>金额与汇率已隐藏</span>
+                          ) : (
+                            convertedAmount === null ? (
+                              /* 缺汇率是事实缺口，不是 0；用 warning 标出，绝不回落成数值 */
+                              <span data-evidence="missing">缺 {currency} 汇率证据</span>
+                            ) : (
+                              <>
+                                <span>
+                                  {currency} 计价 {sign}{amount(convertedAmount)}
+                                </span>
+                                {conversionEvidence === undefined ? null : (
+                                  <span>
+                                    {`${conversionEvidence.source} · ${conversionEvidence.observedAt}`}
+                                  </span>
+                                )}
+                              </>
+                            )
+                          )
+                        ) : null}
+                        {hidden || cashflow.note === null ? null : <p>{cashflow.note}</p>}
+                      </div>
+                      <div className="investment-performance__cashflow-actions">
+                        <VibeButton
+                          aria-label={`编辑资金记录：${rowLabel}`}
+                          onClick={() => setEditing(cashflow)}
+                          type="button"
+                          variant="text"
+                        >
+                          编辑
+                        </VibeButton>
+                        <VibeButton
+                          aria-label={`删除资金记录：${rowLabel}`}
+                          onClick={() => setDeleting(cashflow)}
+                          type="button"
+                          variant="text"
+                        >
+                          删除
+                        </VibeButton>
+                      </div>
+                    </article>
+                  </li>
+                );
+              })}
+            </ol>
+            {/* 表尾小计：与上方「累计净投入」同源同值，是「账目对得上」的核验点 */}
+            <p className="investment-performance__ledger-total">
+              <span className="investment-performance__ledger-total-label">累计净投入</span>
+              {showSensitiveInfo === false ? (
+                <span className="investment-performance__private">••••••</span>
+              ) : currentAnalysis.cumulativeNetInvestment === null ? (
+                <span className="investment-performance__unavailable">数据不足</span>
+              ) : (
+                <strong
+                  className="profit-color-value"
+                  data-profit-color-scheme={profitColorScheme}
+                  data-profit-direction={profitDirection(
+                    currentAnalysis.cumulativeNetInvestment,
+                  )}
+                >
+                  {signedAmount(currentAnalysis.cumulativeNetInvestment, amount)}{" "}
+                  <span className="investment-performance__cashflow-unit">{currency}</span>
+                </strong>
+              )}
+            </p>
+          </div>
         )}
       </section>
 
@@ -951,8 +1070,11 @@ export function InvestmentPerformanceWorkspace({
         <CashflowDeleteDialog
           cashflow={deleting}
           onClose={() => setDeleting(null)}
-          onDeleted={(id) =>
-            setCashflows((existing) => existing.filter((cashflow) => cashflow.id !== id))}
+          onDeleted={(id) => {
+            setCashflows((existing) => existing.filter((cashflow) => cashflow.id !== id));
+            setCashflowStatus("资金记录已删除");
+            setFocusLedgerAfterDelete(true);
+          }}
         />
       ) : null}
       {customRangeDialogOpen ? (
