@@ -349,6 +349,12 @@ export function AssetsHoldingsWorkspace({
     () => longbridgeReferenceRates(recordedSources),
     [recordedSources],
   );
+  const totalOnlySources = useMemo(
+    () => liveSources.filter(
+      (source) => source.kind === "manual" || activeSourceHoldings(source).length === 0,
+    ),
+    [liveSources],
+  );
   const sourceOptions = useMemo<readonly VibeSelectOption<string>[]>(
     () => [
       { value: "all", label: "全部来源" },
@@ -445,50 +451,6 @@ export function AssetsHoldingsWorkspace({
       <LongbridgeRealtimeNotice state={realtimeState} retry={retry} />
 
       <section
-        className="assets-holdings__source-totals"
-        aria-labelledby="assets-source-totals-title"
-      >
-        <header>
-          <div>
-            <p className="card-label">SOURCE / TRUTH</p>
-            <h2 id="assets-source-totals-title">来源账户与平台总额</h2>
-          </div>
-        </header>
-        {liveSources.length === 0 ? (
-          <div className="empty-state">
-            <p className="empty-title">尚未接入资产来源</p>
-            <VibeLink href="/asset-sources/new" variant="outline">
-              新增来源
-            </VibeLink>
-          </div>
-        ) : (
-          <div
-            className="assets-holdings__source-list"
-            data-testid="assets-source-totals"
-          >
-            <div
-              aria-hidden="true"
-              className="assets-holdings__source-columns"
-            >
-              <span>来源</span>
-              <span>来源总额</span>
-            </div>
-            <ol>
-              {liveSources.map((source) => (
-                <AssetSourceTotalRow
-                  currency={currency}
-                  key={source.id}
-                  reportingRates={reportingRates}
-                  showSensitiveInfo={showSensitiveInfo}
-                  source={source}
-                />
-              ))}
-            </ol>
-          </div>
-        )}
-      </section>
-
-      <section
         className="assets-holdings__observations"
         aria-labelledby="holding-observations-title"
       >
@@ -498,7 +460,7 @@ export function AssetsHoldingsWorkspace({
             <h2 id="holding-observations-title">持仓价格与市值观察</h2>
           </div>
           <VibeLink href="/asset-sources" variant="text">
-            管理资产来源
+            来源管理
           </VibeLink>
         </header>
 
@@ -667,6 +629,43 @@ export function AssetsHoldingsWorkspace({
           价格变化采用来源可用行情；平台盈亏沿用平台原生口径。
         </VibeNotice>
       </section>
+
+      {totalOnlySources.length > 0 ? (
+        <section
+          className="assets-holdings__source-totals"
+          aria-labelledby="assets-source-totals-title"
+        >
+          <header>
+            <div>
+              <p className="card-label">ASSETS / TOTALS</p>
+              <h2 id="assets-source-totals-title">按总额记录的资产</h2>
+            </div>
+          </header>
+          <div
+            className="assets-holdings__source-list"
+            data-testid="assets-source-totals"
+          >
+            <div
+              aria-hidden="true"
+              className="assets-holdings__source-columns"
+            >
+              <span>资产与来源</span>
+              <span>金额</span>
+            </div>
+            <ol>
+              {totalOnlySources.map((source) => (
+                <AssetSourceTotalRow
+                  currency={currency}
+                  key={source.id}
+                  reportingRates={reportingRates}
+                  showSensitiveInfo={showSensitiveInfo}
+                  source={source}
+                />
+              ))}
+            </ol>
+          </div>
+        </section>
+      ) : null}
     </section>
   );
 }

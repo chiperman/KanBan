@@ -35,7 +35,7 @@ const PRIMARY_DESTINATIONS = [
   { label: "总览", path: "/", heading: null },
   { label: "资产与持仓", path: "/assets", heading: "资产与持仓" },
   { label: "收益分析", path: "/performance", heading: "收益分析" },
-  { label: "资产来源", path: "/asset-sources", heading: "资产来源" },
+  { label: "来源管理", path: "/asset-sources", heading: "来源管理" },
   { label: "设置与安全", path: "/settings", heading: "设置与安全" },
 ] as const;
 

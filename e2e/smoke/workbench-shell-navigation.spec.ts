@@ -14,7 +14,7 @@ const PRIMARY_DESTINATIONS = [
   { label: "总览", shortLabel: "总览", path: "/" },
   { label: "资产与持仓", shortLabel: "持仓", path: "/assets" },
   { label: "收益分析", shortLabel: "收益", path: "/performance" },
-  { label: "资产来源", shortLabel: "来源", path: "/asset-sources" },
+  { label: "来源管理", shortLabel: "来源", path: "/asset-sources" },
   { label: "设置与安全", shortLabel: "设置", path: "/settings" },
 ] as const;
 
@@ -242,7 +242,7 @@ test("五个工作台页面共享统一的页面抬头", async ({ page }) => {
     {
       label: "PORTFOLIO / SOURCES",
       path: "/asset-sources",
-      title: "资产来源",
+      title: "来源管理",
     },
     {
       label: "LOCAL / SETTINGS",
@@ -307,10 +307,10 @@ test("已认证所有者在手机可通过底部主导航和 Command-K 到达入
   }
 
   await commandTrigger.click();
-  await page.getByRole("searchbox", { name: "搜索命令" }).fill("资产来源");
+  await page.getByRole("searchbox", { name: "搜索命令" }).fill("来源管理");
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/asset-sources$/);
   await expect(
-    page.getByRole("heading", { name: "资产来源" }),
+    page.getByRole("heading", { name: "来源管理" }),
   ).toBeVisible();
 });

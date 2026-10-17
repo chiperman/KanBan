@@ -57,12 +57,8 @@ test("来源总额、严格长桥汇率与未估值明细在新工作区分层�
 
   await page.goto("/assets");
   const assets = page.getByTestId("assets-holdings-workspace");
-  await expect(assets.getByTestId("assets-source-total-source-alpha")).toContainText(
-    "Alpha Securities",
-  );
-  await expect(assets.getByTestId("assets-source-total-source-beta")).toContainText(
-    "Beta Crypto",
-  );
+  await expect(assets.getByTestId("assets-source-totals")).toHaveCount(0);
+  await expect(assets.getByRole("heading", { name: "来源账户与平台总额" })).toHaveCount(0);
   const holdings = assets.getByTestId("assets-holdings-table");
   await expect(holdings).toContainText("Apple Cross-source");
   await expect(holdings).toContainText("Tether");
@@ -73,6 +69,69 @@ test("来源总额、严格长桥汇率与未估值明细在新工作区分层�
   await evidence.click();
   await expect(evidence).toHaveAttribute("aria-expanded", "true");
   await expect(holdings).toContainText("来源没有可靠价格");
+});
+
+test("资产页保留手工与仅有总额的资产，缺少首条记录不显示为零", async ({
+  page,
+  request,
+}, testInfo) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  expect((await request.post("/test-doubles/valuation?scenario=total-only")).ok()).toBeTruthy();
+  await loginAsOwner(page);
+  for (const label of ["手工资产", "待记录资产"]) {
+    expect((await page.request.post("/api/asset-sources/manual", {
+      data: { label },
+    })).ok()).toBeTruthy();
+  }
+  const state = await page.request.get("/test-doubles/manual-assets");
+  const { sources } = await state.json() as {
+    sources: Array<{ id: string; label: string }>;
+  };
+  const manual = sources.find(({ label }) => label === "手工资产")!;
+  const pending = sources.find(({ label }) => label === "待记录资产")!;
+  expect((await page.request.patch(`/api/asset-sources/${manual.id}`, {
+    data: {
+      action: "manual-record",
+      day: "2026-01-01",
+      amount: "500",
+      currency: "USD",
+    },
+  })).ok()).toBeTruthy();
+  await page.route("**/api/asset-sources/refresh", (route) => route.fulfill({
+    json: { successCount: 0, failureCount: 0, skipped: "not-due" },
+  }));
+  await page.goto("/assets");
+  const holdings = page.getByTestId("assets-holdings-table");
+  const totals = page.getByTestId("assets-source-totals");
+  await expect(holdings).toContainText("Beta Crypto");
+  await expect(totals.getByRole("listitem")).toHaveCount(3);
+  await expect(totals.getByTestId("assets-source-total-source-alpha"))
+    .toContainText("264.01 USD");
+  await expect(totals.getByTestId("assets-source-total-source-beta")).toHaveCount(0);
+  await expect(totals.getByTestId(`assets-source-total-${manual.id}`))
+    .toContainText("500.00 USD");
+  const pendingRow = totals.getByTestId(`assets-source-total-${pending.id}`);
+  await expect(pendingRow).toContainText("尚无记录");
+  await expect(pendingRow).not.toContainText("0.00");
+  const [holdingsBox, totalsBox] = await Promise.all([
+    holdings.boundingBox(), totals.boundingBox(),
+  ]);
+  expect(totalsBox!.y).toBeGreaterThan(holdingsBox!.y + holdingsBox!.height);
+
+  for (const width of [1440, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect.poll(() => page.evaluate(() =>
+      document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    )).toBeLessThanOrEqual(0);
+    await page.screenshot({
+      fullPage: true,
+      path: testInfo.outputPath(`total-only-assets-${width}.png`),
+    });
+  }
+  await page.getByRole("button", { name: "隐藏关键信息" }).click();
+  await expect(totals.getByTestId(`assets-source-total-${manual.id}`))
+    .toContainText("金额已隐藏");
+  await expect(totals).not.toContainText("500.00");
 });
 
 test("未认证首页只显示登录入口，不含估值、来源或持仓信息", async ({

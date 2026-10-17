@@ -26,7 +26,7 @@ const PRIMARY_DESTINATIONS = [
   { href: "/", label: "总览", shortLabel: "总览", icon: "overview" },
   { href: "/assets", label: "资产与持仓", shortLabel: "持仓", icon: "holdings" },
   { href: "/performance", label: "收益分析", shortLabel: "收益", icon: "performance" },
-  { href: "/asset-sources", label: "资产来源", shortLabel: "来源", icon: "sources" },
+  { href: "/asset-sources", label: "来源管理", shortLabel: "来源", icon: "sources" },
   { href: "/settings", label: "设置与安全", shortLabel: "设置", icon: "security" },
 ] as const;
 

@@ -47,7 +47,7 @@ export default async function AssetSourcesPage({
                 </VibeLink>
               }
               eyebrow="PORTFOLIO / SOURCES"
-              title="资产来源"
+              title="来源管理"
             />
             <AssetSourceDirectory
               cards={cards}

@@ -16,7 +16,7 @@ async function configureWorkspace(page: Page) {
 test("隐藏金额后整页刷新，在客户端脚本加载前仍保持隐藏", async ({ page }) => {
   await configureWorkspace(page);
   await page.goto("/assets");
-  const value = page.getByTestId("assets-source-total-source-beta")
+  const value = page.getByTestId("assets-source-total-source-a-shares")
     .locator(".assets-holdings__source-value");
   await expect(value).toContainText("USD");
   const visibleValue = await value.innerText();

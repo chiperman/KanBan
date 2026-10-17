@@ -135,7 +135,7 @@ test("全量刷新跨路由保持共享状态且完成后只重读当前路由�
   );
   await expect(page.getByTestId("asset-refresh-status")).toHaveCount(0);
   await expect(
-    page.getByTestId("assets-source-total-source-alpha"),
+    page.getByTestId("assets-holdings-table").getByRole("row").filter({ hasText: "Alpha Securities" }),
   ).toContainText("100.00 USD");
   await expect.poll(async () => {
     const response = await request.get("/test-doubles/refresh");
@@ -156,7 +156,7 @@ test("全量刷新跨路由保持共享状态且完成后只重读当前路由�
 
   await expect(page.getByTestId("asset-refresh-status")).toHaveText("刷新完成");
   await expect(
-    page.getByTestId("assets-source-total-source-alpha"),
+    page.getByTestId("assets-holdings-table").getByRole("row").filter({ hasText: "Alpha Securities" }),
   ).toContainText("101.00 USD");
   await expect.poll(() => routeReads.length).toBe(1);
   await page.waitForTimeout(300);
@@ -196,7 +196,7 @@ test("来源详情只刷新当前来源，离开页面不取消且完成后只�
     return (await response.json()) as { sourceIds: Array<string | null> };
   }).toMatchObject({ sourceIds: ["source-alpha"] });
 
-  await page.getByRole("link", { name: "返回资产来源" }).click();
+  await page.getByRole("link", { name: "返回来源管理" }).click();
   await expect(page).toHaveURL(/\/asset-sources$/);
   const routeReads: string[] = [];
   const observeRead = (observed: import("@playwright/test").Request) => {
@@ -234,7 +234,7 @@ test("单来源 A 完成不会提前结束 B，B 失败固定显示刷新失败"
 
   await page.getByRole("button", { name: "刷新 Alpha Securities" }).click();
   await expect.poll(() => pending.length).toBe(1);
-  await page.getByRole("link", { name: "返回资产来源" }).click();
+  await page.getByRole("link", { name: "返回来源管理" }).click();
   await page.getByRole("link", { name: /Beta Crypto.*自动账户/ }).click();
   const betaRefresh = page.getByRole("button", { name: "刷新 Beta Crypto" });
   await betaRefresh.click();
@@ -300,7 +300,7 @@ test("在途全量覆盖当前来源且来源按钮不产生额外请求", async
   await page.getByRole("button", { name: "立即刷新资产" }).click();
   await expect.poll(() => pending.length).toBe(1);
 
-  await page.getByRole("link", { name: "资产来源" }).first().click();
+  await page.getByRole("link", { name: "来源管理" }).first().click();
   await page.getByRole("link", { name: /Alpha Securities.*自动账户/ }).click();
   const sourceRefresh = page.getByRole("button", {
     name: "刷新 Alpha Securities",
@@ -338,7 +338,7 @@ test("旧全量终态不会遮住随后提交的单来源刷新", async ({ page 
     "刷新完成",
   );
 
-  await page.getByRole("link", { name: "资产来源" }).first().click();
+  await page.getByRole("link", { name: "来源管理" }).first().click();
   await page.getByRole("link", { name: /Alpha Securities.*自动账户/ }).click();
   const sourceRefresh = page.getByRole("button", {
     name: "刷新 Alpha Securities",
@@ -376,7 +376,7 @@ test("三个核心页面一致呈现手动成功、部分失败与全部失败�
       pathname: "/assets",
       scenario: "partial-failure",
       status: "部分来源刷新失败",
-      retainedTestId: "assets-source-total-source-beta",
+      retainedTestId: "assets-holdings-table",
       retainedAmount: "200.00 USD",
     },
     {
@@ -419,7 +419,7 @@ test("无可刷新来源时隐藏页面与命令入口，恢复首个来源后�
     await expect(
       page.getByRole("button", { name: "立即刷新资产" }),
     ).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "资产来源" }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: "来源管理" }).first()).toBeVisible();
     await page.getByRole("button", { name: "打开快捷命令" }).click();
     await expect(
       page.getByRole("dialog").getByRole("button", { name: "立即刷新资产" }),

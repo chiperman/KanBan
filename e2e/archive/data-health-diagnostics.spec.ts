@@ -49,7 +49,7 @@ test("资产来源统一列出账户、优先显示异常并按需展开诊断",
 
   await expect(page).toHaveURL(/\/asset-sources#history-coverage$/);
   await page.goto("/asset-sources");
-  await expect(page.getByRole("heading", { name: "资产来源" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "来源管理" })).toBeVisible();
   const diagnostics = page.getByTestId("data-health-diagnostics");
   const sourceRows = diagnostics.locator('[data-testid^="data-health-source-"]');
   await expect(sourceRows).toHaveCount(5);

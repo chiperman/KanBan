@@ -35,7 +35,7 @@ test("收起侧栏释放内容空间，全部入口和工具仍可用，并记�
   await page.reload();
   await expect(sidebar).toHaveCSS("width", "72px");
 
-  for (const label of ["总览", "资产与持仓", "收益分析", "资产来源", "设置与安全"]) {
+  for (const label of ["总览", "资产与持仓", "收益分析", "来源管理", "设置与安全"]) {
     const link = navigation.getByRole("link", { name: label, exact: true });
     await expect(link).toBeVisible();
     expect((await link.boundingBox())!.width).toBeGreaterThanOrEqual(40);

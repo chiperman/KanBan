@@ -659,6 +659,24 @@ export async function POST(request: Request) {
                 ? "-0.16"
               : undefined,
       });
+  if (scenario === "total-only") {
+    sources[0].snapshot = {
+      ...sources[0].snapshot,
+      holdings: [],
+      coverage: {
+        status: "complete",
+        totalIsAuthoritative: true,
+        products: [{
+          product: "account-total",
+          capability: "aggregate-only",
+          freshness: "current",
+          message: "来源仅提供账户总额",
+        }],
+        unexplainedValue: null,
+        excludedPositiveAccounts: [],
+      },
+    };
+  }
   const cards: Card[] = sources.map((source, index) => ({
     id: `asset-${source.id}`,
     kind: "asset",

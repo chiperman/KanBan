@@ -51,7 +51,7 @@ test("总览与来源刷新统一尺寸，次级控件保持不透明", async ({
   const sourceRefresh = page.getByRole("button", { name: "刷新 Beta Crypto" });
   await expect(sourceRefresh).toHaveCount(1);
   await expect(header.getByRole("button", { name: "刷新 Beta Crypto" })).toBeVisible();
-  await expect(header.locator(".workbench-page-header__copy").getByRole("link", { name: "返回资产来源" })).toBeVisible();
+  await expect(header.locator(".workbench-page-header__copy").getByRole("link", { name: "返回来源管理" })).toBeVisible();
   const sourceStyle = await sourceRefresh.evaluate(style);
   expect(sourceStyle).toEqual(globalStyle);
   expect(sourceStyle.height).toBeGreaterThanOrEqual(40);
@@ -64,7 +64,7 @@ test("来源总额隐藏时使用明确文案，并与来源名称保留间距",
 
   await page.getByRole("button", { name: "隐藏关键信息" }).click();
 
-  const source = page.getByTestId("assets-source-total-source-beta");
+  const source = page.getByTestId("assets-source-total-source-a-shares");
   await expect(source).toContainText("金额已隐藏");
   await expect(source).not.toContainText("••••••");
 

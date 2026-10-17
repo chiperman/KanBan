@@ -1044,7 +1044,7 @@ test("移动端可查看历史观测覆盖与真实缺口且不横向溢出", as
   await expectNoHorizontalOverflow(page);
 });
 
-test("移动端来源摘要将变化置于当前金额下方且不横向溢出", async ({
+test("移动端资产分布保留昨日金额和较昨日变化且不横向溢出", async ({
   page,
   request,
 }) => {
@@ -1064,6 +1064,11 @@ test("移动端来源摘要将变化置于当前金额下方且不横向溢出",
   await expectAnimatedAmount(alpha, "102.00");
   const total = alpha.locator(".daily-overview__source-total");
   const sourceChange = alpha.locator(".daily-overview__source-change");
+  await expect(page.getByRole("heading", { name: "资产分布", exact: true })).toBeVisible();
+  await expect(sourceChange).toContainText("较昨日变化");
+  await expect(sourceChange).toContainText("+2.00");
+  await expect(alpha.locator(".daily-overview__source-yesterday")).toContainText("昨日金额");
+  await expect(alpha.locator(".daily-overview__source-yesterday-amount")).toHaveText("100.00");
   const detail = alpha.getByRole("link", { name: "查看 长桥账户 的资产明细" });
   const [totalBox, changeBox, detailBox] = await Promise.all([
     total.boundingBox(),

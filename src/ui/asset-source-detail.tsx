@@ -573,7 +573,7 @@ export function AssetSourceDetail({
           description={realtimeActive ? <LongbridgeRealtimeStatus state={realtimeState} /> : undefined}
           eyebrow="SOURCE / DETAIL"
           title="来源详情"
-          backLink={{ href: "/asset-sources", label: "返回资产来源" }}
+          backLink={{ href: "/asset-sources", label: "返回来源管理" }}
           actionsLabel="来源详情快捷操作"
           actions={<>
             <VibeSelect

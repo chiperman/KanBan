@@ -15,7 +15,7 @@ test.beforeEach(async ({ request }) => {
   expect(configured.ok()).toBeTruthy();
 });
 
-test("资产与持仓把来源总额与明细观察分层，不用持仓差额改写总额", async ({
+test("资产与持仓保留明细观察，不重复列出已有持仓的来源总额", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
@@ -31,17 +31,7 @@ test("资产与持仓把来源总额与明细观察分层，不用持仓差额�
   await expect(workspace).not.toContainText("来源总额是组合汇总真相");
   await expect(workspace).not.toContainText("持仓明细不会取代这一列");
 
-  const sourceTotals = workspace.getByTestId("assets-source-totals");
-  await expect(sourceTotals.getByText("来源总额", { exact: true })).toBeVisible();
-  await expect(sourceTotals).toContainText("Alpha Securities");
-  await expect(sourceTotals).toContainText("Beta Crypto");
-  await expect(workspace.getByTestId("assets-source-total-source-alpha"))
-    .not.toContainText("总额有效");
-  await expect(
-    sourceTotals.getByRole("link", {
-      name: "查看 Alpha Securities 来源详情",
-    }),
-  ).toBeVisible();
+  await expect(workspace.getByTestId("assets-source-totals")).toHaveCount(0);
   const holdings = workspace.getByTestId("assets-holdings-table");
   for (const heading of [
     "资产与来源",
@@ -75,7 +65,7 @@ test("资产与持仓把来源总额与明细观察分层，不用持仓差额�
   await expect(apple.getByText(/Beta 原生行情/)).toHaveCount(0);
 });
 
-test("来源、类别与估值筛选只收缩观察列表，不混淆上方来源总额", async ({
+test("来源、类别与估值筛选只收缩持仓，不将筛选掉的来源误判为仅有总额", async ({
   page,
 }) => {
   await loginAsOwner(page);
@@ -92,15 +82,10 @@ test("来源、类别与估值筛选只收缩观察列表，不混淆上方来�
   await expect(workspace.getByTestId("assets-holdings-count")).toContainText(
     "显示 1 项观察",
   );
-  await expect(
-    workspace.getByTestId("assets-source-total-source-alpha"),
-  ).toBeVisible();
-  await expect(
-    workspace.getByTestId("assets-source-total-source-beta"),
-  ).toBeVisible();
+  await expect(workspace.getByTestId("assets-source-totals")).toHaveCount(0);
 });
 
-test("长桥实时 SSE 行情只在页面内更新价格、市值与来源总额", async ({
+test("长桥实时 SSE 行情在资产页更新持仓价格与市值", async ({
   page,
   request,
 }) => {
@@ -135,7 +120,7 @@ test("长桥实时 SSE 行情只在页面内更新价格、市值与来源总额
   await expect(row).toContainText("123.00 USD");
   await expect(
     workspace.getByTestId("assets-source-total-source-longbridge-cash"),
-  ).toContainText("805.82 USD");
+  ).toHaveCount(0);
 });
 
 // 保留真实页面订阅与投影，只替换外部行情传输。
@@ -184,14 +169,14 @@ async function emitQuote(page: Page, price: string, timestamp: string | number =
   }, { price, timestamp, trade_session });
 }
 
-for (const path of ["/assets", "/asset-sources/source-longbridge-cash"]) {
+for (const path of ["/", "/asset-sources/source-longbridge-cash"]) {
   test("长桥首次从零计数、完整刷新和后续行情平滑过渡：" + path, async ({ page, request }) => {
     await request.post("/test-doubles/valuation?scenario=longbridge-cash&refreshable=true");
     await installQuoteStream(page);
     await loginAsOwner(page);
     await page.goto(path);
-    const counter = page.getByTestId(path === "/assets"
-      ? "assets-source-total-source-longbridge-cash" : "asset-source-total")
+    const counter = page.getByTestId(path === "/"
+      ? "overview-current-total" : "asset-source-total")
       .locator('[data-vibe-component="live-counter"]');
     await counter.scrollIntoViewIfNeeded();
     await expect(counter).toHaveAttribute("data-counter-state", "running");
@@ -209,7 +194,7 @@ for (const path of ["/assets", "/asset-sources/source-longbridge-cash"]) {
 
     // 使用测试来源刷新器，走真实按钮、刷新协调器和路由重新取数。
     await request.post("/test-doubles/refresh", { data: { action: "reset-schedule" } });
-    await page.getByRole("button", { name: path === "/assets"
+    await page.getByRole("button", { name: path === "/"
       ? "立即刷新资产" : "刷新 长桥账户", exact: true }).click();
     await counter.scrollIntoViewIfNeeded();
     await expect(counter).toHaveAttribute("data-counter-state", "running");
@@ -237,15 +222,15 @@ test("完整刷新动画期间收到行情，完成当前目标后平滑追上�
   await request.post("/test-doubles/valuation?scenario=longbridge-cash&refreshable=true");
   await installQuoteStream(page);
   await loginAsOwner(page);
-  await page.goto("/assets");
-  const counter = page.getByTestId("assets-source-total-source-longbridge-cash")
+  await page.goto("/asset-sources/source-longbridge-cash");
+  const counter = page.getByTestId("asset-source-total")
     .locator('[data-vibe-component="live-counter"]');
   await counter.scrollIntoViewIfNeeded();
   await expect(counter).toHaveAttribute("data-counter-state", "complete");
   await request.post("/test-doubles/refresh", { data: { action: "reset-schedule" } });
   await emitQuote(page, "123");
   await page.waitForTimeout(1_300);
-  await page.getByRole("button", { name: "立即刷新资产", exact: true }).click();
+  await page.getByRole("button", { name: "刷新 长桥账户", exact: true }).click();
   await counter.scrollIntoViewIfNeeded();
   await expect(counter).toHaveAttribute("data-counter-target", "201.00");
   await expect(counter).toHaveAttribute("data-counter-state", "running");
@@ -265,8 +250,8 @@ test("高频行情每两秒合并，动画完成后从旧值过渡且相同金�
   await request.post("/test-doubles/valuation?scenario=longbridge-cash");
   await installQuoteStream(page);
   await loginAsOwner(page);
-  await page.goto("/assets");
-  const counter = page.getByTestId("assets-source-total-source-longbridge-cash")
+  await page.goto("/");
+  const counter = page.getByTestId("overview-current-total")
     .locator('[data-vibe-component="live-counter"]');
   await counter.scrollIntoViewIfNeeded();
   await expect(counter).toHaveAttribute("data-counter-state", "complete");
@@ -301,7 +286,7 @@ test("高频行情每两秒合并，动画完成后从旧值过渡且相同金�
   await emitQuote(page, "172", 1790038900);
   await page.waitForTimeout(2_200);
   expect(await starts()).toEqual(before);
-  await page.getByTestId("assets-source-totals").screenshot({ path: testInfo.outputPath("realtime-totals.png") });
+  await page.getByTestId("overview-current-total").screenshot({ path: testInfo.outputPath("realtime-totals.png") });
 });
 
 test("来源详情持续接收行情且乱序消息不回退价格", async ({ page, request }, testInfo) => {
@@ -327,7 +312,8 @@ test("来源详情持续接收行情且乱序消息不回退价格", async ({ pa
     (window as unknown as { activeQuoteStreams(): number }).activeQuoteStreams(),
   )).toBe(1);
   await emitQuote(page, "125", 1790038803);
-  await expect(page.getByTestId("assets-source-total-source-longbridge-cash")).toContainText("807.82", { timeout: 5_000 });
+  await expect(page.getByTestId("assets-holdings-table").getByRole("row").filter({ hasText: "AAPL.US" }))
+    .toContainText("125.00 USD", { timeout: 5_000 });
 });
 
 for (const path of ["/", "/performance", "/assets", "/asset-sources/source-longbridge-cash"]) {
@@ -374,7 +360,7 @@ for (const path of ["/", "/performance", "/assets", "/asset-sources/source-longb
   });
 }
 
-test("资产摘要保留来源总额，产品覆盖可从来源详情按需查看", async ({
+test("总览保留来源总额，产品覆盖可从来源详情按需查看", async ({
   page,
   request,
 }) => {
@@ -384,9 +370,10 @@ test("资产摘要保留来源总额，产品覆盖可从来源详情按需查�
   expect(configured.ok()).toBeTruthy();
   await page.setViewportSize({ width: 1920, height: 1080 });
   await loginAsOwner(page);
-  await page.goto("/assets");
+  await page.goto("/");
 
-  const source = page.getByTestId("assets-source-total-source-binance-partial");
+  const source = page.getByTestId("overview-source-summary").getByRole("listitem")
+    .filter({ has: page.locator('a[href="/asset-sources/source-binance-partial"]') });
   await expect(source).toContainText("17,165.10 USD");
   await expect(source.getByText("产品覆盖", { exact: true })).toHaveCount(0);
   await source.getByRole("link").click();
@@ -420,7 +407,7 @@ test("资产观察在 390px 可键盘筛选、切换币种且没有横向页面�
 
   await chooseOption(page, "计价货币", "CNY");
   await expect(
-    workspace.getByTestId("assets-source-total-source-beta"),
+    workspace.getByTestId("assets-holdings-table"),
   ).not.toContainText("0.00 CNY");
   await expect(
     workspace.getByTestId("assets-holdings-table").locator("td").first(),

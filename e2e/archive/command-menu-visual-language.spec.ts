@@ -130,7 +130,7 @@ test("未认证状态无命令菜单，所有者可用 Command-K 与 Ctrl-K 前�
   await expect(menu).toHaveCount(0);
 
   await page.keyboard.press("Control+K");
-  await page.getByRole("searchbox", { name: "搜索命令" }).fill("资产来源");
+  await page.getByRole("searchbox", { name: "搜索命令" }).fill("来源管理");
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL("/asset-sources");
 
@@ -183,7 +183,7 @@ test("键盘焦点决定关闭和执行目标且保留输入法事件", async ({
   await expect(trigger).toBeFocused();
   await trigger.click();
   await expect(search).toBeFocused();
-  const sourceCommand = menu.getByRole("button", { name: "前往资产来源" });
+  const sourceCommand = menu.getByRole("button", { name: "前往来源管理" });
   await sourceCommand.focus();
   await expect(sourceCommand).toBeFocused();
   await page.keyboard.press("Enter");

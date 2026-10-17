@@ -40,7 +40,7 @@ test("资产来源统一列出自动账户、观察钱包和手工资产，并�
   await expect(page).toHaveURL(/\/asset-sources\/[^/]+$/);
 
   await page.goto("/asset-sources");
-  await expect(page.getByRole("heading", { name: "资产来源" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "来源管理" })).toBeVisible();
   await expect(
     page.getByRole("link", { name: /长桥账户.*自动账户.*已连接/ }),
   ).toBeVisible();

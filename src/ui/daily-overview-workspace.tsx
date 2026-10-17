@@ -680,7 +680,7 @@ export function DailyOverviewWorkspace({
         )}
         {demoMode ? null : (
           <div className="daily-overview__summary-actions">
-            <VibeLink href="/performance" variant="primary">
+            <VibeLink href="/performance" variant="outline">
               记录资金
             </VibeLink>
             <VibeLink href="/performance" variant="text">
@@ -735,8 +735,8 @@ export function DailyOverviewWorkspace({
       <section className="daily-overview__sources" data-testid="overview-source-summary">
         <header>
           <div>
-            <p className="card-label">SOURCES / SUMMARY</p>
-            <h2>来源摘要</h2>
+            <p className="card-label">ASSETS / DISTRIBUTION</p>
+            <h2>资产分布</h2>
           </div>
           {demoMode ? null : (
             <VibeLink aria-label="查看全部资产与持仓" href="/assets" variant="outline">
@@ -755,12 +755,12 @@ export function DailyOverviewWorkspace({
           </div>
         ) : (
           <>
-            {/* 列头：让总额 / 今日变化 / 昨日成为可跨行比较的列 */}
+            {/* 列头保留当前总额、较昨日变化和昨日金额的跨行对比。 */}
             <div aria-hidden="true" className="daily-overview__source-head">
               <span>来源</span>
               <span>总额</span>
-              <span>今日变化</span>
-              <span>昨日</span>
+              <span>较昨日变化</span>
+              <span>昨日金额</span>
               <span />
             </div>
             <ul className="daily-overview__source-list">
@@ -801,7 +801,7 @@ export function DailyOverviewWorkspace({
                         {comparison.state === "changed" ? (
                           <div className="daily-overview__source-change-today">
                             <span className="daily-overview__source-column-label">
-                              今日变化
+                              较昨日变化
                             </span>
                             <VibeMetric
                               className="profit-color-value"
@@ -821,7 +821,7 @@ export function DailyOverviewWorkspace({
                         {comparison.state === "changed" ? (
                           <small>
                             <span className="daily-overview__source-column-label">
-                              昨日
+                              昨日金额
                             </span>{" "}
                             <span className="daily-overview__source-yesterday-amount">
                               {amount(comparison.previousAmount)}
@@ -834,7 +834,7 @@ export function DailyOverviewWorkspace({
                           /* 昨日确实没有这个来源，说清楚而不是留空白 */
                           <small>
                             <span className="daily-overview__source-column-label">
-                              昨日
+                              昨日金额
                             </span>{" "}
                             未纳入
                           </small>

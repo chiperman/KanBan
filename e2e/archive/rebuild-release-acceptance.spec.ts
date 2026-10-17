@@ -4,8 +4,8 @@ const WORKBENCH_DESTINATIONS = [
   { heading: "总览", path: "/" },
   { heading: "资产与持仓", path: "/assets" },
   { heading: "收益分析", path: "/performance" },
-  { heading: "资产来源", path: "/asset-sources" },
-  { heading: "资产来源", path: "/data-health" },
+  { heading: "来源管理", path: "/asset-sources" },
+  { heading: "来源管理", path: "/data-health" },
   { heading: "设置与安全", path: "/settings" },
 ] as const;
 
@@ -103,7 +103,7 @@ test("全产品核心路径在三种宽度、浅深色与减少动态下保持�
     );
     await expect(navigation).toBeVisible();
     await expect(
-      navigation.getByRole("link", { name: "资产来源", exact: true }),
+      navigation.getByRole("link", { name: "来源管理", exact: true }),
     ).toHaveAttribute("href", "/asset-sources");
 
     for (const destination of WORKBENCH_DESTINATIONS) {

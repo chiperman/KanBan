@@ -6302,8 +6302,7 @@ body {
   font-weight: 700;
 }
 
-.login-primary::before,
-.asset-refresh-controls button::before {
+.login-primary::before {
 
   content: "→";
   margin-right: var(--vibe-space-2);

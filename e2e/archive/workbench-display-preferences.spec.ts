@@ -55,7 +55,7 @@ test("总览的计价货币与隐私显示会持续到资产、收益分析和�
     "CNY",
   );
   await expect(
-    page.getByTestId("assets-source-total-source-beta"),
+    page.getByTestId("assets-source-total-source-a-shares"),
   ).toContainText("金额已隐藏");
 
   await navigateInWorkbench(page, "收益分析", "/performance");
@@ -67,8 +67,8 @@ test("总览的计价货币与隐私显示会持续到资产、收益分析和�
   ).toContainText("••••••");
 
   await page.getByRole("link", { name: "资产与持仓", exact: true }).click();
-  await page.getByRole("link", { name: /查看 Beta Crypto 来源详情/ }).click();
-  await expect(page).toHaveURL(/\/asset-sources\/source-beta$/);
+  await page.getByRole("link", { name: /查看 A股 来源详情/ }).click();
+  await expect(page).toHaveURL(/\/asset-sources\/source-a-shares$/);
   await expect(page.getByTestId("asset-source-total")).toContainText("••••••");
 
   await navigateInWorkbench(page, "总览", "/");
@@ -87,7 +87,7 @@ test("总览的计价货币与隐私显示会持续到资产、收益分析和�
   ).not.toContainText("••••••");
 });
 
-test("同一来源同步失败在总览、资产和来源管理中保留最后成功数据口径", async ({
+test("来源同步失败时资产页保留持仓金额，总览与来源管理保留失败状态", async ({
   page,
 }) => {
   await configureDataHealth(page);
@@ -99,8 +99,8 @@ test("同一来源同步失败在总览、资产和来源管理中保留最后�
 
   await page.goto("/assets");
   await expect(
-    page.getByTestId("assets-source-total-source-beta"),
-  ).toContainText(RETAINED_SYNC_FAILURE);
+    page.getByTestId("assets-holdings-table").getByRole("row").filter({ hasText: "Beta Crypto" }),
+  ).toContainText("200.00 USD");
 
   await page.goto("/asset-sources");
   const sourceLink = page.getByRole("link", { name: /Beta Crypto.*同步失败/ });
