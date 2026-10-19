@@ -271,25 +271,28 @@ function SourceDisplayNameForm({ source }: { source: DetailSource }) {
   }
 
   return (
-    <form onSubmit={(event) => { event.preventDefault(); void save(); }}>
-      <VibeField
-        autoComplete="off"
-        disabled={pending}
-        fieldId="source-display-name"
-        label="自定义名称"
-        onChange={(event) => setDisplayName(event.target.value)}
-        placeholder={assetSourceDefaultDisplayName(source)}
-        value={displayName}
-      />
-      <p>仅修改本看板中的显示名称。清空后恢复默认名称。</p>
+    <form className="asset-source-detail__form" onSubmit={(event) => { event.preventDefault(); void save(); }}>
+      <div className="asset-source-detail__form-row">
+        <VibeField
+          aria-describedby="source-display-name-hint"
+          autoComplete="off"
+          disabled={pending}
+          fieldId="source-display-name"
+          label="自定义名称"
+          onChange={(event) => setDisplayName(event.target.value)}
+          placeholder={assetSourceDefaultDisplayName(source)}
+          value={displayName}
+        />
+        <VibeButton
+          disabled={pending || displayName.trim() === (source.displayName ?? "")}
+          type="submit"
+          variant="outline"
+        >
+          {pending ? "正在保存…" : "保存名称"}
+        </VibeButton>
+      </div>
+      <p className="trend-note" id="source-display-name-hint">仅修改本看板中的显示名称。清空后恢复默认名称。</p>
       {error ? <VibeNotice role="alert" tone="error">{error}</VibeNotice> : null}
-      <VibeButton
-        disabled={pending || displayName.trim() === (source.displayName ?? "")}
-        type="submit"
-        variant="outline"
-      >
-        {pending ? "正在保存…" : "保存名称"}
-      </VibeButton>
     </form>
   );
 }
@@ -687,16 +690,18 @@ export function AssetSourceDetail({
       <div className="asset-source-detail__account-info">
         <section aria-label="来源身份" className="asset-source-detail__metadata">
           <h2>来源身份</h2>
-          <SourceDisplayNameForm key={`${source.id}:${source.displayName ?? ""}`} source={source} />
-          {manual ? (
-            <Suspense fallback={null}>
-              <SourceManualAssetClassForm
-                key={`${source.id}:${source.manualAssetClass ?? ""}`}
-                manualAssetClass={source.manualAssetClass ?? null}
-                sourceId={source.id}
-              />
-            </Suspense>
-          ) : null}
+          <div className="asset-source-detail__forms">
+            <SourceDisplayNameForm key={`${source.id}:${source.displayName ?? ""}`} source={source} />
+            {manual ? (
+              <Suspense fallback={null}>
+                <SourceManualAssetClassForm
+                  key={`${source.id}:${source.manualAssetClass ?? ""}`}
+                  manualAssetClass={source.manualAssetClass ?? null}
+                  sourceId={source.id}
+                />
+              </Suspense>
+            ) : null}
+          </div>
           <dl>
             <div>
               <dt>来源名称</dt>

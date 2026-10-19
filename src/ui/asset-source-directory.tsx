@@ -55,25 +55,28 @@ function SourceDirectoryRow({ diagnostic, card }: { diagnostic: DiagnosticSource
           </span>
         </VibeLink>
         <div className="asset-source-directory__meta">
-          <span data-tone={reasons.length > 0 ? "issue" : "current"}>
-            {visibleStatus}
-          </span>
+          <div className="asset-source-directory__status">
+            <span data-tone={reasons.length > 0 ? "issue" : "current"}>
+              {visibleStatus}
+            </span>
+            {reasons.length > 0 ? (
+              <VibeButton
+                aria-controls={detailsId}
+                aria-expanded={expanded}
+                aria-label={`${expanded ? "收起" : "查看"} ${name} 异常`}
+                onClick={() => setExpanded((current) => !current)}
+                size="compact"
+                type="button"
+                variant="text"
+              >
+                {expanded ? "收起异常" : "查看异常"}
+              </VibeButton>
+            ) : null}
+          </div>
           <span>{source.kind === "manual" ? "最近记录" : "最后成功"} · {manualWithoutRecord
             ? "尚无记录" : formatShanghaiDateTime(source.sync.lastSuccessfulAt)}</span>
           {card?.hidden ? <span>已隐藏</span> : null}
         </div>
-        {reasons.length > 0 ? (
-          <VibeButton
-            aria-controls={detailsId}
-            aria-expanded={expanded}
-            aria-label={`${expanded ? "收起" : "查看"} ${name} 异常`}
-            onClick={() => setExpanded((current) => !current)}
-            type="button"
-            variant="outline"
-          >
-            {expanded ? "收起异常" : "查看异常"}
-          </VibeButton>
-        ) : null}
         {expanded ? (
           <div className="asset-source-directory__diagnostic" id={detailsId}>
             <p>{valuation.label}</p>

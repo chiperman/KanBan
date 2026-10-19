@@ -63,23 +63,25 @@ export function SourceManualAssetClassForm({
   }
 
   return (
-    <form onSubmit={(event) => { event.preventDefault(); void save(); }}>
-      <VibeSelectField<ManualAssetClass | "">
-        disabled={pending}
-        fieldId="source-manual-asset-class"
-        label="资产类别"
-        onValueChange={setAssetClass}
-        options={MANUAL_ASSET_CLASS_OPTIONS}
-        value={assetClass}
-      />
+    <form className="asset-source-detail__form" onSubmit={(event) => { event.preventDefault(); void save(); }}>
+      <div className="asset-source-detail__form-row">
+        <VibeSelectField<ManualAssetClass | "">
+          disabled={pending}
+          fieldId="source-manual-asset-class"
+          label="资产类别"
+          onValueChange={setAssetClass}
+          options={MANUAL_ASSET_CLASS_OPTIONS}
+          value={assetClass}
+        />
+        <VibeButton
+          disabled={pending || assetClass === (manualAssetClass ?? "")}
+          type="submit"
+          variant="outline"
+        >
+          {pending ? "正在保存…" : "保存类别"}
+        </VibeButton>
+      </div>
       {error ? <VibeNotice role="alert" tone="error">{error}</VibeNotice> : null}
-      <VibeButton
-        disabled={pending || assetClass === (manualAssetClass ?? "")}
-        type="submit"
-        variant="outline"
-      >
-        {pending ? "正在保存…" : "保存类别"}
-      </VibeButton>
     </form>
   );
 }
