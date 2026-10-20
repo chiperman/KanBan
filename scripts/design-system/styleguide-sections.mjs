@@ -1080,7 +1080,7 @@ function renderGovernance(ctx) {
       <li>不引入任何第二套 CSS 框架、reset 或字体。</li>
       <li>改动 token 或组件配方后，重新生成本页：<code>pnpm design:styleguide</code>。</li>
       <li>同时验证暗色与亮色两套主题；产品工作台必须保持暗色。</li>
-      <li>提交前跑 <code>pnpm test</code>（依次包含 <code>typecheck</code>、<code>design:lint</code>、单元测试与冒烟测试）；改动过 token 或组件配方时，另外跑一次 <code>pnpm design:styleguide:verify</code>（本页渲染验收），再过一遍本文末尾的检查清单。</li>
+      <li>提交前跑 <code>pnpm test</code>（依次包含 <code>typecheck</code>、<code>design:lint</code>、单元测试）；改动过 token 或组件配方时，另外跑一次 <code>pnpm design:styleguide:verify</code>（本页渲染验收），再过一遍本文末尾的检查清单。</li>
     </ol>`;
 
   return `<section class="sg-section">

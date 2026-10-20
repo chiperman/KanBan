@@ -2,6 +2,8 @@
 
 本地优先、单所有者的只读个人资产看板。
 
+项目主页：[chiperman.github.io/KanBan](https://chiperman.github.io/KanBan/)
+
 ## 开发入口
 
 使用 Node 24.15.0、pnpm 11.25.0；编译原生扩展另需 Rust。完整约束见 [工具链](docs/operations/toolchain.md)。
@@ -36,19 +38,23 @@ pnpm exec tsc --noEmit --incremental false
 | `src/shared/` | 确实需要跨层共用的基础定义 |
 | `native/` | 原生扩展源码、Cargo 锁文件与必需的本地依赖补丁 |
 | `public/` | 应用运行时使用的静态资源 |
+| `landing/` | 独立 GitHub Pages 介绍页，不参与应用构建 |
 | `scripts/` | 持续维护的开发、构建和运维脚本及其测试 |
-| `e2e/` | 浏览器测试、共享助手；`smoke/` 为默认范围，`archive/` 仍由完整回归命令使用 |
 | `docs/` | 现行合同与源码导航，另设调研和历史审查区，见 [文档入口](docs/README.md) |
 | `data/` | 本机业务数据、凭证和备份，已忽略，不作为临时目录清理 |
 
 根目录保留工程配置及 `README.md`、`AGENTS.md`、`CONTEXT.md`、`DESIGN.md` 四类入口；历史报告和一次性脚本不散放根目录。单测与对应模块同目录保存，不为归类统一搬迁。
+
+GitHub Pages 由 `.github/workflows/pages.yml` 发布 `landing/`。首次启用时，在仓库
+`Settings > Pages` 的 `Build and deployment` 中选择 `GitHub Actions`；工作流只在 `main`
+分支推送或手动触发时运行。
 
 ## 临时文件与清理规范
 
 - 临时计划、一次性脚本、预览和调研副本放 `tmp/<topic>/`。
 - 截图、日志、测试证据放 `output/<topic>/`；需要长期引用且已脱敏的报告归入 `docs/audits/`，同步更新引用。
 - 不再维护 `.scratch/` 或强制 spec／本地 Ticket 流程；未完成事项见 [待办清单](docs/backlog.md)，需求讨论和修改过程从 Git 历史查询。
-- `.next/`、`.next-*/`、两个 Rust `target/`、`test-results/`、`playwright-report/`、`.playwright-cli/`、`*.tsbuildinfo` 是生成物，停止使用它们的服务或构建后可清理。下次开发、构建或测试会按需再生成。
+- `.next/`、`.next-*/`、两个 Rust `target/`、`*.tsbuildinfo` 是生成物，停止使用它们的服务或构建后可清理。下次开发、构建或测试会按需再生成。
 - `next-env.d.ts` 由 Next.js 管理；清理后用 `pnpm exec next typegen` 恢复，避免保留指向旧隔离构建目录的类型引用。
 - `node_modules/` 是开发依赖；原生扩展的 `.node` 与 `artifact.json` 是本机启动所需产物；`vendor/longbridge-oauth/` 是实际使用的补丁源码，均不能混同为过期缓存。
 - `.env.local`、`data/`、数据库 WAL/SHM 与锁文件不纳入生成物清理。清理旧证据前先核对引用并做仓库外可校验备份，不依赖废纸篓恢复。

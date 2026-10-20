@@ -126,7 +126,7 @@
 - [ ] 浏览器控制台无应用错误
 - [ ] 改动 token / 配方后已运行 `pnpm design:styleguide`
 - [ ] `pnpm design:styleguide:verify` 通过（样式指南本身的渲染验收）
-- [ ] `pnpm test` 通过（`typecheck` → `design:lint` → `test:unit` → `test:smoke`）
+- [ ] `pnpm test` 通过（`typecheck` → `design:lint` → `test:unit`）
 
 ---
 

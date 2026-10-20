@@ -16,7 +16,7 @@ function fixture(t) {
 
 test('自动发现嵌套离线测试，排除浏览器和非测试文件', (t) => {
   const root = fixture(t);
-  for (const file of ['src/nested/new.test.ts', 'scripts/new.test.mjs', 'src/helper.ts', 'e2e/live.test.ts']) writeFileSync(path.join(root, file), '');
+  for (const file of ['src/nested/new.test.ts', 'scripts/new.test.mjs', 'src/helper.ts', 'src/ignored.test.other']) writeFileSync(path.join(root, file), '');
   assert.deepEqual(discoverUnitTests(root), ['scripts/new.test.mjs', 'src/nested/new.test.ts']);
 });
 
