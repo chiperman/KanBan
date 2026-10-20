@@ -77,8 +77,8 @@
             你的资产，<span>不必散落。</span>
           </h1>
           <p class="hero__lede">
-            KanBan 是一个本地优先、单所有者、只读的个人投资资产看板。把美股、A
-            股与虚拟货币放进三本清晰的投资账，在一个地方看清资产全貌。
+            把美股、A 股与虚拟货币放进同一个看板。
+            三本投资账，保留各自的本金、盈亏与原币种。
           </p>
           <div class="hero__actions">
             <a class="button button--primary" href="#start">
@@ -94,11 +94,9 @@
             </a>
             <a
               class="button button--outline"
-              href="https://github.com/chiperman/KanBan"
-              target="_blank"
-              rel="noreferrer"
+              href="#preview"
             >
-              <span>查看源码</span>
+              <span>先看功能</span>
             </a>
           </div>
           <ul class="hero__facts" aria-label="产品关键事实">
@@ -138,7 +136,7 @@
                     <p class="mock-label">TOTAL ASSETS / 2026.10.19</p>
                     <p class="mock-title">今日总览</p>
                   </div>
-                  <span class="mock-status"><i></i>HEADER // LOCAL</span>
+                  <span class="mock-status"><i></i>STATUS // LOCAL</span>
                 </div>
                 <div class="mock-dashboard__main">
                   <article class="mock-total">
@@ -206,35 +204,12 @@
         </div>
       </section>
 
-      <section class="ticker" aria-label="产品特征">
-        <div class="ticker__track">
-          <div class="ticker__set">
-            <span class="sr-only"
-              >READ ONLY / LOCAL DATA / PASSKEY / THREE LEDGERS / NO
-              TRADING</span
-            >
-            <span class="ticker__unit" aria-hidden="true">
-              <span>READ ONLY</span><i></i><span>LOCAL DATA</span><i></i
-              ><span>PASSKEY</span><i></i><span>THREE LEDGERS</span><i></i
-              ><span>NO TRADING</span><i></i>
-            </span>
-          </div>
-          <div class="ticker__set" aria-hidden="true">
-            <span class="ticker__unit">
-              <span>READ ONLY</span><i></i><span>LOCAL DATA</span><i></i
-              ><span>PASSKEY</span><i></i><span>THREE LEDGERS</span><i></i
-              ><span>NO TRADING</span><i></i>
-            </span>
-          </div>
-        </div>
-      </section>
-
       <section class="section shell" id="preview" aria-labelledby="preview-title">
         <div class="section__intro">
           <p class="eyebrow">01 / WHAT YOU SEE</p>
-          <h2 id="preview-title">先看懂资产，再决定下一步。</h2>
+          <h2 id="preview-title">资产全貌，一眼清楚。</h2>
           <p>
-            KanBan 不替你交易，也不把不同口径揉成一个模糊数字。它把来源总额、历史趋势与投资账分开表达，让每个数字都有出处。
+            总览看全貌，投资账看本金与盈亏，历史趋势看变化。每个数字都能追溯来源，缺失的数据也清楚标明。
           </p>
         </div>
 
@@ -311,10 +286,10 @@
         <div class="section__intro section__intro--split">
           <div>
             <p class="eyebrow">02 / CAPABILITIES</p>
-            <h2 id="capabilities-title">一套完整的资产工作流。</h2>
+            <h2 id="capabilities-title">从接入到复盘，清楚有序。</h2>
           </div>
           <p>
-            从接入来源到日常查看，从历史覆盖到备份恢复，所有能力都围绕“看见并理解自己的资产”展开。
+            从接入来源到日常查看，从历史覆盖到备份恢复，只做一件事：让你看见并理解自己的资产。
           </p>
         </div>
         <div class="capability-list">
@@ -333,13 +308,13 @@
           <article>
             <span class="capability-list__index">03</span>
             <h3>历史趋势</h3>
-            <p>支持近 7 日、本月、近 1 月、近半年、本年、近 1 年、全部及自定义区间。</p>
+            <p>按近期、月度、年度或自定义区间查看变化，也可展开全部历史。</p>
             <span class="capability-list__code">TREND</span>
           </article>
           <article>
             <span class="capability-list__index">04</span>
             <h3>本金与收益</h3>
-            <p>围绕资金流与资产观测计算收益，数据不完整时保留证据边界。</p>
+            <p>结合资金流与资产记录计算收益，数据不完整时明确标注。</p>
             <span class="capability-list__code">PERFORMANCE</span>
           </article>
           <article>
@@ -351,7 +326,7 @@
           <article>
             <span class="capability-list__index">06</span>
             <h3>私有访问</h3>
-            <p>Passkey 预置，TOTP 作为备用登录；没有公开注册入口。</p>
+            <p>使用 Passkey 登录，可配置 TOTP 备用认证；没有公开注册入口。</p>
             <span class="capability-list__code">SECURITY</span>
           </article>
         </div>
@@ -361,9 +336,9 @@
         <div class="sources-panel">
           <div class="sources-panel__intro">
             <p class="eyebrow">03 / SUPPORTED SOURCES</p>
-            <h2 id="sources-title">把已经拥有的账户接进来。</h2>
+            <h2 id="sources-title">已有账户，接进来看。</h2>
             <p>
-              支持自动读取与手动记录。不同来源保留各自的身份、权限和同步状态，不混成一个不可追溯的“总数”。
+              连接证券、数字货币账户与观察钱包，也能手动记录资产。每个来源的权限、同步状态和金额都可单独查看。
             </p>
             <a
               class="text-link"
@@ -433,7 +408,7 @@
             <p class="eyebrow">04 / GET STARTED</p>
             <h2 id="start-title">在自己的机器上，<br />跑起来。</h2>
             <p>
-              KanBan 目前面向本地运行。首次启动需要 Node.js、pnpm 与 Rust；当前验收基线是
+              KanBan 面向本地运行。首次启动需要 Node.js、pnpm 与 Rust；当前验收基线是
               macOS arm64。
             </p>
             <div class="start-meta">
@@ -471,11 +446,12 @@
                 <span>复制</span>
               </button>
             </div>
-            <pre id="setup-command"><code><span class="terminal__prompt">$</span> git clone https://github.com/chiperman/KanBan.git
+            <pre id="setup-command" tabindex="0" aria-label="部署命令，可横向滚动"><code><span class="terminal__prompt">$</span> git clone https://github.com/chiperman/KanBan.git
 <span class="terminal__prompt">$</span> cd KanBan
 <span class="terminal__prompt">$</span> pnpm install --frozen-lockfile
 <span class="terminal__prompt">$</span> pnpm native:longbridge:build
 <span class="terminal__prompt">$</span> pnpm dev</code></pre>
+            <p class="terminal__hint">命令可横向滚动，也可一键复制。</p>
             <div class="terminal__next">
               <span class="mono-label">THEN</span>
               <p>
@@ -560,13 +536,13 @@
           <details>
             <summary><span>数据会上传到云端吗？</span><i aria-hidden="true"></i></summary>
             <p>
-              所有资产与账目数据仅保存在你的本机。应用仅在拉取公开行情或查询链上状态时直连对应节点，绝无中心化服务器归集你的个人数据。
+              资产与账目数据保存在运行 KanBan 的本机。同步时会请求你配置的账户供应商、行情或链上服务；KanBan 不提供集中归集个人数据的云端服务。
             </p>
           </details>
           <details>
             <summary><span>为什么采用 Passkey 登录？</span><i aria-hidden="true"></i></summary>
             <p>
-              KanBan 为单一所有者专属设计，不设公开注册。首次启动时即与你的硬件 Passkey 绑定，兼顾生物识别的便捷与高强度本地安全，亦支持 TOTP 备用认证。
+              首次启动在 /setup 注册所有者 Passkey，之后使用设备或密码管理器中的 Passkey 登录。可配置 TOTP 备用登录，没有公开注册入口。
             </p>
           </details>
           <details>
@@ -576,9 +552,9 @@
             </p>
           </details>
           <details>
-            <summary><span>可以直接在网页端使用完整功能吗？</span><i aria-hidden="true"></i></summary>
+            <summary><span>这个网页可以直接查看我的资产吗？</span><i aria-hidden="true"></i></summary>
             <p>
-              不能。当前静态网页仅作产品展示。完整的看板服务运行在本地，由本地 SQLite 与加密环境守护你的全部资产凭证。
+              当前网页仅作产品展示，图中的数据是虚构示例。先在本机启动 KanBan 服务，再通过浏览器访问本地地址，即可登录并接入自己的资产来源。
             </p>
           </details>
         </div>
@@ -589,7 +565,7 @@
           <div>
             <p class="eyebrow">READY WHEN YOU ARE</p>
             <h2 id="final-title">把资产看板留在自己手里。</h2>
-            <p>克隆仓库，完成一次本地部署，然后开始接入你的资产来源。</p>
+            <p>克隆仓库，完成一次本地部署，再开始接入你的资产来源。</p>
           </div>
           <div class="final-cta__actions">
             <a
