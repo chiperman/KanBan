@@ -107,10 +107,10 @@ test("备份编码保持现有字段顺序与校验和，移除凭证引用且�
     sourceInvestmentHistories: state.sourceInvestmentHistories,
     sourceInvestmentRecords: state.sourceInvestmentRecords,
   };
-  const expected = JSON.parse(signedDocument(7, expectedPayload));
+  const expected = JSON.parse(signedDocument(8, expectedPayload));
   assert.equal(encoded.checksum, expected.checksum.value);
   assert.equal(encoded.contents, JSON.stringify({
-    format: expected.format, formatVersion: 7, createdAt: at, payload: expectedPayload,
+    format: expected.format, formatVersion: 8, createdAt: at, payload: expectedPayload,
     warning: SENSITIVE_ASSET_DATA_WARNING, checksum: expected.checksum,
   }, null, 2) + "\n");
   assert.ok(!encoded.contents.includes("fixture-private-reference"));
@@ -126,7 +126,7 @@ test("备份解码保留零值与来源独立历史，仅自动来源要求重�
   expected.assetSources[0].lifecycle = "disconnected";
   expected.assetSources[0].sync.status = "expired";
   expected.assetSources[0].sync.error = "已从备份恢复，需重新授权后才能同步";
-  assert.equal(formatVersion, 7);
+  assert.equal(formatVersion, 8);
   assert.deepEqual(restored, expected);
   assert.deepEqual(state, businessState());
 });
@@ -196,7 +196,7 @@ test("备份编解码拒绝深层和变体凭证字段，包括有效校验和�
 
 test("备份解码拒绝损坏 JSON、未知版本、错误校验和和当前版本缺失集合", () => {
   assert.throws(() => decodeBackupDocument("{invalid"), /JSON 已损坏/);
-  assert.throws(() => decodeBackupDocument(signedDocument(8, payload())), /不支持的备份格式版本/);
+  assert.throws(() => decodeBackupDocument(signedDocument(9, payload())), /不支持的备份格式版本/);
   const tampered = JSON.parse(encodeBackupDocument(businessState(), at).contents);
   tampered.payload.assetCards[0].title = "被修改";
   assert.throws(() => decodeBackupDocument(JSON.stringify(tampered)), /校验和不匹配/);

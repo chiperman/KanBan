@@ -1,11 +1,12 @@
 "use client";
 
 import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
-import { sourceTrendObservationStatus, type TrendRange } from "@/domain/daily-trend-observations";
+import { sourceTrendObservationStatus } from "@/domain/daily-trend-observations";
 import type { MarketBenchmarkComparison, MarketBenchmarkSymbol } from "@/domain/market-benchmark";
 import type { ReportingCurrency } from "@/domain/valuation";
 import type { DailyAssetTrendObservation } from "@/server/ports";
-import { AssetTrendChart } from "@/ui/asset-trend-chart";
+import { AssetTrendPanel, useAssetTrendRange, type AssetTrendRange } from "@/ui/asset-trend-panel";
+import { rangeDays } from "@/domain/investment-performance-trend";
 import { formatShanghaiDayLabel } from "@/ui/shanghai-date-time";
 import { assetSourceTrendModel } from "./source-trend-model";
 import type { AssetSourceView } from "./types";
@@ -25,8 +26,7 @@ export function AssetSourceTrend({
   history,
   reportingCurrency,
   currentDay,
-  trendDays,
-  trendRange,
+  range,
   trendBenchmark,
   hasTrendContent,
   showSensitiveInfo,
@@ -36,8 +36,7 @@ export function AssetSourceTrend({
   history: DailyAssetTrendObservation[];
   reportingCurrency: ReportingCurrency;
   currentDay: string;
-  trendDays?: readonly string[];
-  trendRange: TrendRange;
+  range?: AssetTrendRange;
   trendBenchmark?: {
     comparison: MarketBenchmarkComparison | null;
     enabledSymbols: MarketBenchmarkSymbol[];
@@ -48,6 +47,13 @@ export function AssetSourceTrend({
 }) {
   const isManual = source.kind === "manual";
   const heading = { title: assetSourceDisplayName(source) };
+  const localRange = useAssetTrendRange();
+  const firstDay = [
+    ...history.filter(day => day.sources.some(item => item.sourceId === source.id)).map(day => day.day),
+    ...(source.manualRecords ?? []).map(record => record.day),
+  ].toSorted()[0];
+  const selection = range ?? { ...localRange, currentDay, firstDay };
+  const trendDays = rangeDays(selection.preset, currentDay, selection.firstDay, selection.customRange);
   const sourceTrend = assetSourceTrendModel({
     currentDay,
     history,
@@ -56,7 +62,7 @@ export function AssetSourceTrend({
     reportingCurrency,
     sourceId: source.id,
     trendDays,
-    trendRange,
+    trendRange: "all",
   });
   return (
     <section
@@ -65,40 +71,25 @@ export function AssetSourceTrend({
     >
       <p className="card-label">资产金额趋势</p>
       {hasTrendContent ? <p className="trend-note">资产金额变化包含资金进出，不能作为收益率。</p> : null}
-      {!showSensitiveInfo ? (
-        <AssetTrendChart
-          ariaLabel={`${heading.title}来源总额趋势已隐藏`}
-          currency={reportingCurrency}
-          formatAmount={formatAmount}
-          formatDay={formatShanghaiDayLabel}
-          incompleteCount={0}
-          isSensitiveHidden
-          points={[]}
-          unavailableCount={0}
-          variant="source"
-        />
-      ) : sourceTrend.sourceHistory.length === 0 ? (
-        <p className="trend-empty">
-          {isManual ? "等待首条记录" : "等待首次同步"}
-        </p>
-      ) : (
+      <AssetTrendPanel
+        range={selection}
+        ariaLabel={`${heading.title}来源总额趋势`}
+        benchmark={trendBenchmark === null || trendBenchmark === undefined ? null : {
+          assetScopeLabel: "来源",
+          comparison: trendBenchmark.comparison,
+          enabledSymbols: trendBenchmark.enabledSymbols,
+        }}
+        currency={reportingCurrency}
+        formatAmount={formatAmount}
+        formatDay={formatShanghaiDayLabel}
+        isSensitiveHidden={!showSensitiveInfo}
+        lineType={isManual ? "stepAfter" : "linear"}
+        points={sourceTrend.points}
+        emptyMessage={selection.firstDay === undefined ? (isManual ? "等待首条记录" : "等待首次同步") : "所选区间无可用趋势"}
+        variant="source"
+      />
+      {showSensitiveInfo && sourceTrend.sourceHistory.length > 0 ? (
         <>
-          <AssetTrendChart
-            ariaLabel={`${heading.title}来源总额趋势`}
-            benchmark={trendBenchmark === null || trendBenchmark === undefined ? null : {
-              assetScopeLabel: "来源",
-              comparison: trendBenchmark.comparison,
-              enabledSymbols: trendBenchmark.enabledSymbols,
-            }}
-            currency={reportingCurrency}
-            formatAmount={formatAmount}
-            formatDay={formatShanghaiDayLabel}
-            incompleteCount={sourceTrend.abnormalPoints.length}
-            lineType={isManual ? "stepAfter" : "linear"}
-            points={sourceTrend.points}
-            unavailableCount={sourceTrend.unavailablePoints.length}
-            variant="source"
-          />
           {!isManual ? (
             <details
               className="daily-trend-details source-daily-trend-details"
@@ -143,7 +134,7 @@ export function AssetSourceTrend({
             </details>
           ) : null}
         </>
-      )}
+      ) : null}
       {showSensitiveInfo && sourceTrend.notice ? (
         <p className="trend-note">{sourceTrend.notice}</p>
       ) : null}

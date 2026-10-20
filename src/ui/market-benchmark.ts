@@ -11,6 +11,8 @@ import {
   type MarketBenchmarkSymbol,
 } from "@/domain/market-benchmark";
 import { lockOnUnauthorizedResponse } from "@/ui/owner-request-lock";
+import { buildInvestmentBookBenchmarkComparison } from "@/domain/investment-book-benchmark";
+import type { BookPoint, BookRecord } from "@/domain/investment-books";
 
 export type MarketBenchmarkCandles = Record<
   MarketBenchmarkSymbol,
@@ -113,4 +115,25 @@ export function useMarketBenchmarkComparison(input: {
       kind: "ready",
     };
   }, [candlesState, input.enabledSymbols, input.points]);
+}
+
+export function useInvestmentBookBenchmarkComparison(input: {
+  enabledSymbols: MarketBenchmarkSymbol[];
+  points: BookPoint[];
+  records: BookRecord[];
+  visible: boolean;
+}): MarketBenchmarkDataState {
+  const candlesState = useMarketBenchmarkCandles(input.visible && input.enabledSymbols.length > 0);
+  return useMemo(() => {
+    if (candlesState.kind !== "ready") return candlesState;
+    return {
+      kind: "ready",
+      comparison: buildInvestmentBookBenchmarkComparison({
+        candles: candlesState.candles,
+        enabledSymbols: input.enabledSymbols,
+        points: input.points,
+        records: input.records,
+      }),
+    };
+  }, [candlesState, input.enabledSymbols, input.points, input.records]);
 }

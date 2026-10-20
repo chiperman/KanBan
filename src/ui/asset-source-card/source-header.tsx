@@ -35,7 +35,7 @@ export function AssetSourceHeader({
   const isManual = source.kind === "manual";
   const heading = sourceHeading(source);
   const sourceState = isManual
-    ? { label: "MANUAL", tone: "muted" as const }
+    ? { label: null, tone: "muted" as const }
     : source.lifecycle === "disconnected"
     ? { label: "OFFLINE", tone: "muted" as const }
     : source.sync.error
@@ -52,7 +52,9 @@ export function AssetSourceHeader({
             className={`source-live-state ${source.sync.status}`}
             tone={sourceState.tone}
           >
-            {providerCode(source)} / {sourceState.label}
+            {sourceState.label
+              ? `${providerCode(source)} / ${sourceState.label}`
+              : providerCode(source)}
           </VibeStatusTag>
           {showRefreshControl && !isManual && source.lifecycle !== "disconnected" ? (
             <AssetSourceRefreshButton

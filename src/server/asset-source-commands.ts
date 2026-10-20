@@ -42,7 +42,7 @@ export function parseAssetSourceCommandBody(
 type SourceCommandServices = Pick<
   AssetServices,
   "assetSourceLifecycle" | "manualAssetRecords" | "assetSourceDetails" | "assetSourceOnboarding"
-> & Pick<AppServices, "clock">;
+> & Pick<AppServices, "clock" | "investmentBooks">;
 
 type SourceCommandContext = {
   id: string;
@@ -89,13 +89,27 @@ export async function executeAssetSourcePatch(
     if (context.source.kind !== "manual") {
       throw new AssetSourceCommandError("只有手工资产记录可以编辑今日总额");
     }
+    const input = parseManualAssetRecordInput(body);
+    if (context.services.investmentBooks) {
+      const state = await context.services.investmentBooks.readInvestmentBooks();
+      const member = state.members.find(row => row.sourceId === context.id);
+      if (member?.bookId === "a-shares") {
+        const cutoff = state.historyThroughDay[member.bookId];
+        if (cutoff && input.day <= cutoff) throw new AssetSourceCommandError("该日期已由导入历史覆盖，请到投资记账更正历史资产记录");
+        if (input.currency !== "CNY") throw new AssetSourceCommandError("A股账本使用 CNY 记账");
+      }
+    }
     await context.services.manualAssetRecords.record(
       context.id,
-      parseManualAssetRecordInput(body),
+      input,
     );
     return true;
   }
   if (body?.action === "investment-record") {
+    if (context.services.investmentBooks) throw new AssetSourceCommandError("资金记账已统一到三本账，请到收益分析中选择账本操作");
+    if (context.source.kind !== "manual") {
+      throw new AssetSourceCommandError("只有手工资产来源可以维护手动记账记录");
+    }
     const capturedAt = context.services.clock.now().toISOString();
     await requireDetails(context.services).saveSourceInvestmentRecord(
       context.id,
@@ -170,6 +184,10 @@ export async function executeAssetSourceDelete(
     return "handled";
   }
   if (body?.action === "investment-record") {
+    if (context.services.investmentBooks) throw new AssetSourceCommandError("资金记账已统一到三本账，旧原件保留只读");
+    if (context.source.kind !== "manual") {
+      throw new AssetSourceCommandError("只有手工资产来源可以维护手动记账记录");
+    }
     if (typeof body.recordId !== "string") {
       throw new InvalidSourceInvestmentRecordError("记录 ID 无效");
     }

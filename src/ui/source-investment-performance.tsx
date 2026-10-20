@@ -1,13 +1,14 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import { decimalMultiply, decimalToFixed } from "@/domain/decimal";
-import { rangeDays, type InvestmentPerformanceCustomRange, type InvestmentPerformanceIntervalPreset } from "@/domain/investment-performance-trend";
+import { rangeDays } from "@/domain/investment-performance-trend";
 import { analyzeSourceInvestmentAccount, type SourceInvestmentHistory } from "@/domain/source-investment-history";
 import type { ValuationSource } from "@/domain/valuation";
 import type { SourceInvestmentRecord } from "@/domain/source-investment-records";
 import type { DailyAssetTrendObservation, ManualAssetRecord } from "@/server/ports";
-import { AssetTrendChart } from "@/ui/asset-trend-chart";
+import { AssetTrendPanel, type AssetTrendRange } from "@/ui/asset-trend-panel";
+import { formatShanghaiDayLabel } from "@/ui/shanghai-date-time";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeMetric } from "@/ui/vibe/vibe-data-instrument";
 
@@ -17,7 +18,7 @@ function money(value: string): string {
   return `${integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.${fraction}`;
 }
 
-export function SourceInvestmentPerformance({ history, sourceId, sourceName, records, observations, source, manualRecords, currentDay, preset, customRange, showSensitiveInfo, rangeControls, onEdit, onDelete }: {
+export function SourceInvestmentPerformance({ history, sourceId, sourceName, records, observations, source, manualRecords, currentDay, range, showSensitiveInfo, onEdit, onDelete }: {
   history: SourceInvestmentHistory | null;
   sourceId: string;
   sourceName: string;
@@ -26,21 +27,19 @@ export function SourceInvestmentPerformance({ history, sourceId, sourceName, rec
   source?: ValuationSource;
   manualRecords: ManualAssetRecord[];
   currentDay: string;
-  preset: InvestmentPerformanceIntervalPreset;
-  customRange: InvestmentPerformanceCustomRange | null;
+  range: AssetTrendRange;
   showSensitiveInfo: boolean;
-  rangeControls?: ReactNode;
-  onEdit(record: SourceInvestmentRecord): void;
-  onDelete(record: SourceInvestmentRecord): void;
+  onEdit?(record: SourceInvestmentRecord): void;
+  onDelete?(record: SourceInvestmentRecord): void;
 }) {
-  const [curve, setCurve] = useState<"return" | "profit">("return");
+  const [curve, setCurve] = useState<"return" | "profit" | "total">("return");
   const analysis = useMemo(() => analyzeSourceInvestmentAccount({history, sourceId, records, observations, source, manualRecords, currentDay}), [history, sourceId, records, observations, source, manualRecords, currentDay]);
-  const days = rangeDays(preset, currentDay, analysis.opening?.day, customRange);
+  const days = rangeDays(range.preset, currentDay, analysis.points[0]?.day, range.customRange);
   const byDay = new Map(analysis.points.map(point => [point.day, point]));
   const firstObservation = analysis.points[0]?.day;
   const points = days.filter(day => !firstObservation || day >= firstObservation).map(day => {
     const point = byDay.get(day);
-    const value = curve === "profit" ? point?.profit ?? null : point?.returnRatio == null ? null : decimalMultiply(point.returnRatio, "100");
+    const value = curve === "total" ? point?.total ?? null : curve === "profit" ? point?.profit ?? null : point?.returnRatio == null ? null : decimalMultiply(point.returnRatio, "100");
     return { day, amount: value, observed: point !== undefined, status: value === null ? "incomplete" as const : "complete" as const };
   });
   const current = analysis.current;
@@ -61,29 +60,27 @@ export function SourceInvestmentPerformance({ history, sourceId, sourceName, rec
         <VibeMetric animate={false} className={showSensitiveInfo && metric.amount === null ? "source-performance__unavailable" : undefined} unit={metric.unit} value={!showSensitiveInfo ? "••••••" : metric.amount === null ? "数据不足" : money(metric.amount)} />
       </article>)}
     </div>
-    <div className="source-performance__chart-toolbar">
-      <div className="source-performance__curve-options" role="group" aria-label="收益曲线类型">
-        <VibeButton type="button" variant="outline" size="compact" aria-pressed={curve === "return"} onClick={() => setCurve("return")}>收益率曲线</VibeButton>
-        <VibeButton type="button" variant="outline" size="compact" aria-pressed={curve === "profit"} onClick={() => setCurve("profit")}>累计收益曲线</VibeButton>
-      </div>
-      {rangeControls}
-    </div>
-    <div className="source-performance__chart-caption">
-      <span>{curve === "return" ? "累计资金加权收益率 · %" : `累计收益 · ${analysis.currency ?? "账户原币"}`}</span>
-      <span>{curve === "return" ? "Modified Dietz · 不年化" : "资产金额 − 累计净投入"}</span>
-    </div>
-    {showSensitiveInfo && analysis.missingReason ? <div className="source-performance__empty" role="status"><h4>补全记录查看收益</h4><p>{analysis.missingReason}</p><p>可在上方「手动记录」添加。</p></div> : <AssetTrendChart
-      ariaLabel={`${sourceName}${curve === "return" ? "收益率曲线" : "累计收益曲线"}`}
+    <AssetTrendPanel
+      range={{ ...range, firstDay: analysis.points[0]?.day ?? range.firstDay }}
+      metricControls={<div className="source-performance__curve-options" role="group" aria-label="趋势指标">
+        {(["total", "profit", "return"] as const).map(value => <VibeButton key={value} type="button" variant={curve === value ? "primary" : "outline"} size="compact" aria-pressed={curve === value} onClick={() => setCurve(value)}>{value === "total" ? "资产总额" : value === "profit" ? "累计收益" : "收益率"}</VibeButton>)}
+      </div>}
+      ariaLabel={`${sourceName}${curve === "return" ? "收益率曲线" : curve === "profit" ? "累计收益曲线" : "资产总额趋势"}`}
       currency={curve === "return" ? "%" : analysis.currency ?? "USD"}
       formatAmount={curve === "return" ? value => decimalToFixed(value, 2) : money}
-      formatDay={day => day.slice(2).replaceAll("-", "/")}
+      formatDay={formatShanghaiDayLabel}
       chartHeight={256}
-      points={showSensitiveInfo ? points : []}
+      points={points}
       isSensitiveHidden={!showSensitiveInfo}
-      incompleteCount={0}
-      unavailableCount={0}
+      emptyMessage={analysis.missingReason ?? "所选区间无可用趋势"}
       variant="source"
-    />}
+    >
+      <div className="source-performance__chart-caption">
+        <span>{curve === "return" ? "累计资金加权收益率 · %" : `${curve === "total" ? "资产总额" : "累计收益"} · ${analysis.currency ?? "账户原币"}`}</span>
+        <span>{curve === "return" ? "Modified Dietz · 不年化" : curve === "total" ? "含资金进出与估值变化" : "资产金额 − 累计净投入"}</span>
+      </div>
+      {showSensitiveInfo && analysis.missingReason && curve !== "total" ? <p className="trend-note" role="status">{analysis.missingReason}</p> : null}
+    </AssetTrendPanel>
     <div className="source-performance__details">
     <details className="daily-trend-details source-performance__method">
       <summary>计算口径与数据规则</summary>
@@ -99,10 +96,10 @@ export function SourceInvestmentPerformance({ history, sourceId, sourceName, rec
         {records.toSorted((a,b)=>b.day.localeCompare(a.day)||b.recordedAt.localeCompare(a.recordedAt)).map(record=><li key={record.id}>
           <span>{record.day}</span><span>{{opening:"期初本金",deposit:"投入",withdrawal:"取出",valuation:"当天资产金额"}[record.kind]}</span>
           <strong>{money(record.amount)} {record.currency}</strong>
-          <div className="source-performance__record-actions">
+          {onEdit && onDelete ? <div className="source-performance__record-actions">
             <VibeButton type="button" variant="text" onClick={()=>onEdit(record)} aria-label={`编辑 ${record.day} ${record.amount} ${record.currency} 记录`}>编辑</VibeButton>
             <VibeButton type="button" variant="text" tone="danger" onClick={()=>onDelete(record)} aria-label={`删除 ${record.day} ${record.amount} ${record.currency} 记录`}>删除</VibeButton>
-          </div>
+          </div> : null}
         </li>)}
       </ol>
     </details> : null}

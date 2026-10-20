@@ -627,6 +627,13 @@ function renderComponents(ctx) {
     { rule: "契约：.vibe-button + .vibe-button--primary|outline|text，命中区 ≥44px。" },
   );
 
+  const entityLinks = specimen(
+    "名称与详情入口",
+    `<a class="vibe-entity-link" data-vibe-component="entity-link" href="#sg-components"><span>Alpha Securities</span><svg aria-hidden="true" class="vibe-icon" fill="none" focusable="false" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewBox="0 0 24 24">${lineIcons.find(([name]) => name === "arrow-right")[1]}</svg></a>
+      <p class="sg-body">账户与来源名称始终带下划线及右箭头；长名称可换行，键盘聚焦有清晰焦点环。</p>`,
+    { rule: "契约：VibeEntityLink / .vibe-entity-link；命中区至少 40px。" },
+  );
+
   const fields = specimen(
     "输入字段",
     `<div class="vibe-field">
@@ -898,6 +905,7 @@ function renderComponents(ctx) {
       ${sectionHeader("sg-components", "06", "Components", "组件", "每个组件都给出真实 class 契约、状态与使用边界。所有样张都由仓库真实样式渲染，不是重绘的示意图。")}
       <div class="sg-grid sg-grid--2">
         ${buttons}${tags}
+        ${entityLinks}
         ${fields}${textarea}
         ${select}${choice}
         ${metric}${notices}

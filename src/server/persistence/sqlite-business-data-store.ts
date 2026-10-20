@@ -9,6 +9,7 @@ import type { SqliteSourceInvestmentStore } from "./sqlite-source-investment-sto
 import type { SqliteAssetCardStore } from "./sqlite-asset-card-store";
 import type { SqliteManualAssetRecordStore } from "./sqlite-manual-asset-record-store";
 import type { SqliteAssetSourceDataStore } from "./sqlite-asset-source-data-store";
+import { validateBookLegacyCoverage, validateInvestmentBookState } from "@/domain/investment-books";
 
 /**
  * 完整业务状态的 SQLite 写入模块；调用方负责事务、完整性校验与提交/回滚。
@@ -28,6 +29,7 @@ export class SqliteBusinessDataStore {
 
   replace(state: DashboardState | BusinessDataState): void {
     this.database.exec(`
+      DELETE FROM investment_book_state;
       DELETE FROM investment_cashflows;
       DELETE FROM imported_asset_source_history_observations;
       DELETE FROM daily_asset_source_trend_observations;
@@ -86,6 +88,10 @@ export class SqliteBusinessDataStore {
       if (!this.formalSettlements.insert(settlement)) {
         throw new Error("正式日结锚点重复");
       }
+    }
+    if ("investmentBooks" in state && state.investmentBooks) {
+      validateBookLegacyCoverage(state.investmentBooks, investmentCashflows);
+      this.database.prepare("INSERT INTO investment_book_state (id, payload_json) VALUES (1, ?)").run(JSON.stringify(validateInvestmentBookState(state.investmentBooks)));
     }
   }
 }

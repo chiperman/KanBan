@@ -21,10 +21,11 @@ import {
 } from "@/domain/investment-performance";
 import { decimalCompare } from "@/domain/decimal";
 import { convertCurrencyAmount } from "@/domain/valuation";
+import { validateBookLegacyCoverage, validateInvestmentBookState, type InvestmentBookState } from "@/domain/investment-books";
 
 const BACKUP_FORMAT = "personal-asset-dashboard-business-data";
-export const BACKUP_FORMAT_VERSION = 7;
-const SUPPORTED_BACKUP_VERSIONS = new Set([1, 2, 3, 4, 5, 6, BACKUP_FORMAT_VERSION]);
+export const BACKUP_FORMAT_VERSION = 8;
+const SUPPORTED_BACKUP_VERSIONS = new Set([1, 2, 3, 4, 5, 6, 7, BACKUP_FORMAT_VERSION]);
 
 export const SENSITIVE_ASSET_DATA_WARNING =
   "备份仍包含敏感资产数据，请仅存放在受保护的位置。";
@@ -54,6 +55,7 @@ const FORBIDDEN_FIELD_NAMES = new Set([
 ]);
 
 export interface BusinessDataState {
+  investmentBooks?: InvestmentBookState;
   sourceInvestmentHistories?: SourceInvestmentHistory[];
   sourceInvestmentRecords?: SourceInvestmentRecord[];
   assetCards: Card[];
@@ -69,7 +71,7 @@ export interface BusinessDataState {
 export interface BackupRestorePreview {
   /** Explicit loss consent binds to this file and current omitted facts. */
   discardConfirmation?: string;
-  omittedHistory?: { manualAssetRecords: number; formalDailySettlements: number; sourceInvestmentHistories?: number; sourceInvestmentRecords?: number };
+  omittedHistory?: { manualAssetRecords: number; formalDailySettlements: number; sourceInvestmentHistories?: number; sourceInvestmentRecords?: number; investmentBookRecords?: number };
   sourceCount: number;
   cardCount: number;
   snapshotRange: { from: string | null; to: string | null };
@@ -92,6 +94,7 @@ export interface BusinessDataBackup {
 }
 
 export interface BusinessDataBackupStore {
+  readStoredInvestmentBooks?(): Promise<InvestmentBookState | undefined>;
   listSourceInvestmentHistories?(): Promise<SourceInvestmentHistory[]>;
   listSourceInvestmentRecords?(sourceId?: string): Promise<SourceInvestmentRecord[]>;
   listAssetCards(): Promise<Card[]>;
@@ -109,6 +112,7 @@ export interface BusinessDataBackupStore {
 }
 
 type BackupPayload = {
+  investmentBooks?: InvestmentBookState;
   sourceInvestmentHistories?: SourceInvestmentHistory[];
   sourceInvestmentRecords?: SourceInvestmentRecord[];
   assetCards: Card[];
@@ -673,6 +677,10 @@ function validateReferences(state: BusinessDataState): void {
     "资金记录 ID 重复",
   );
   assertInvestmentCashflowSequence(state.investmentCashflows);
+  if (state.investmentBooks) {
+    validateInvestmentBookState(state.investmentBooks);
+    validateBookLegacyCoverage(state.investmentBooks, state.investmentCashflows);
+  }
 }
 
 function parseDocument(contents: string): BackupDocument {
@@ -728,6 +736,7 @@ function parseDocument(contents: string): BackupDocument {
   assertArray(value.payload.assetSources, "payload.assetSources");
   assertArray(value.payload.dailyAssetSnapshots, "payload.dailyAssetSnapshots");
   const document = value as unknown as BackupDocument;
+  if (document.formatVersion >= 8 && document.payload.investmentBooks !== undefined) validateInvestmentBookState(document.payload.investmentBooks);
   if (document.formatVersion >= 6) assertArray(document.payload.sourceInvestmentHistories, "payload.sourceInvestmentHistories");
   else document.payload.sourceInvestmentHistories = [];
   if (document.formatVersion >= 7) assertArray(document.payload.sourceInvestmentRecords, "payload.sourceInvestmentRecords");
@@ -789,6 +798,7 @@ function restoredState(document: BackupDocument): BusinessDataState {
     };
   });
   const state = {
+    ...(document.payload.investmentBooks ? { investmentBooks: validateInvestmentBookState(document.payload.investmentBooks) } : {}),
     sourceInvestmentHistories: (document.payload.sourceInvestmentHistories ?? []).map(parseSourceInvestmentHistory),
     sourceInvestmentRecords: (document.payload.sourceInvestmentRecords ?? []).map(record => {
       if (!isRecord(record) || typeof record.sourceId !== "string" || typeof record.recordedAt !== "string" ||
@@ -835,6 +845,7 @@ export function encodeBackupDocument(
       formalDailySettlements: state.formalDailySettlements,
       sourceInvestmentHistories: state.sourceInvestmentHistories ?? [],
       sourceInvestmentRecords: state.sourceInvestmentRecords ?? [],
+      ...(state.investmentBooks ? { investmentBooks: validateInvestmentBookState(state.investmentBooks) } : {}),
     },
   } satisfies Pick<BackupDocument, "format" | "formatVersion" | "createdAt" | "payload">;
   const checksum = checksumFor(base);

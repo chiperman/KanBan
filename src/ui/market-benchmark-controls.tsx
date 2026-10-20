@@ -36,12 +36,14 @@ export function MarketBenchmarkControls({
   enabledSymbols,
   formatDay,
   onEnabledSymbolsChange,
+  returnComparison = false,
 }: {
   assetScopeLabel: string;
   dataState: MarketBenchmarkDataState;
   enabledSymbols: MarketBenchmarkSymbol[];
   formatDay(day: string): string;
   onEnabledSymbolsChange(symbols: MarketBenchmarkSymbol[]): void;
+  returnComparison?: boolean;
 }) {
   const assetsLabel = assetLabel(assetScopeLabel);
 
@@ -54,7 +56,9 @@ export function MarketBenchmarkControls({
   }
 
   let state: ReactNode = null;
-  if (dataState.kind === "unavailable") {
+  if (enabledSymbols.length === 0) {
+    state = <BenchmarkState title="未选指数" />;
+  } else if (dataState.kind === "unavailable") {
     // 只说「未连接」会让人以为功能坏了；补一句成因与下一步，避免误判为故障。
     state = (
       <BenchmarkState title="未连接长桥">
@@ -64,10 +68,6 @@ export function MarketBenchmarkControls({
   } else if (dataState.kind === "failed") {
     state = (
       <BenchmarkState title="指数读取失败" />
-    );
-  } else if (dataState.kind === "ready" && enabledSymbols.length === 0) {
-    state = (
-      <BenchmarkState title="未选指数" />
     );
   } else if (dataState.kind === "ready" && dataState.comparison.reason !== null) {
     state = (
@@ -88,7 +88,7 @@ export function MarketBenchmarkControls({
           className="investment-performance__benchmark-baseline"
           role="status"
         >
-          {dataState.kind === "loading"
+          {enabledSymbols.length === 0 ? "\u00a0" : dataState.kind === "loading"
             ? "行情加载中"
             : dataState.kind === "ready" && dataState.comparison.baselineDay !== null
               ? `基准起点 ${formatDay(dataState.comparison.baselineDay)}`
@@ -117,6 +117,12 @@ export function MarketBenchmarkControls({
         })}
       </div>
       {state}
+      {returnComparison ? <p className="trend-note">
+        {dataState.kind === "ready" && dataState.comparison.reason === null && enabledSymbols.length > 0
+          ? "对比图：共同起点以来的区间收益率，Modified Dietz 扣除入出金影响，不年化；顶部仍为累计指标。"
+          : "当前展示记账以来累计收益率；指数可用且选中后切换为共同起点的区间收益率。"}
+        指数为价格收益，不含分红；各自本币、不折算汇率。指数采用上海当日零点前已收盘日 K，休市沿用前收盘。
+      </p> : null}
     </div>
   );
 }

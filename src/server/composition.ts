@@ -38,6 +38,7 @@ function hasCurrentServices(
     typeof details?.saveSourceInvestmentRecord === "function" &&
     typeof details?.deleteSourceInvestmentRecord === "function";
   return (
+    (isTestEnv() || typeof services.investmentBooks?.readInvestmentBooks === "function") &&
     (hasDetails || (isTestEnv() && details === undefined)) &&
     services.externalServices !== undefined &&
     typeof services.formalSettlementExecutions?.latest === "function" &&

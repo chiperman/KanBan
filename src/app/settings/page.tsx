@@ -1,3 +1,4 @@
+import { WorkspaceViewNavigation } from "@/ui/workspace-view-navigation";
 import { AutomaticDailySettlementSettings } from "@/ui/automatic-daily-settlement-settings";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
@@ -28,6 +29,8 @@ export default async function SettingsPage({
 }) {
   await redirectLoopbackIpToLocalhost("/settings", searchParams);
 
+  const query = await searchParams;
+  const view = query?.view === "security" ? "security" : query?.view === "data" ? "data" : "preferences";
   const services = getServices();
   if ((await services.auth.currentSession()) === null) redirect("/");
   const ownerPasskeyConfigured = (await services.ownerCredentials.get()) !== null;
@@ -51,11 +54,25 @@ export default async function SettingsPage({
           <a className="skip-link" href="#main-content">
             跳到主要内容
           </a>
-          <main className="settings-main" id="main-content">
+          <main className={`settings-main settings-main--${view}`} id="main-content">
             <WorkbenchPageHeader
               eyebrow="LOCAL / SETTINGS"
-              title="设置与安全"
+              title="设置"
             />
+            <WorkspaceViewNavigation label="设置分类" current={view === "preferences" ? "/settings" : `/settings?view=${view}`} items={[
+              { href: "/settings", label: "偏好" },
+              { href: "/settings?view=security", label: "安全" },
+              { href: "/settings?view=data", label: "数据与维护" },
+            ]} />
+            {view === "preferences" ? <>
+            <section
+              className="settings-section"
+              aria-labelledby="default-preferences-title"
+            >
+              <h2 id="default-preferences-title">默认偏好</h2>
+              <ProfitColorSettings initialScheme={initialProfitColorScheme} />
+            </section>
+            </> : view === "security" ? <>
             <section
               className="settings-section security-settings"
               aria-labelledby="owner-security-title"
@@ -76,16 +93,11 @@ export default async function SettingsPage({
                 <RecoverySetup configured={recoveryConfigured} />
               </div>
             </section>
-            <AutomaticDailySettlementSettings execution={execution} scheduler={scheduler} />
-            <BusinessDataBackupSettings />
-            <section
-              className="settings-section"
-              aria-labelledby="default-preferences-title"
-            >
-              <h2 id="default-preferences-title">默认偏好</h2>
-              <ProfitColorSettings initialScheme={initialProfitColorScheme} />
-            </section>
-            <ExternalServiceSettings initialStatus={externalServiceStatus} />
+            </> : <>
+              <AutomaticDailySettlementSettings execution={execution} scheduler={scheduler} />
+              <BusinessDataBackupSettings />
+              <ExternalServiceSettings initialStatus={externalServiceStatus} />
+            </>}
           </main>
         </div>
       </WorkbenchShell>

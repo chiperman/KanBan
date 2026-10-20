@@ -14,6 +14,7 @@ import {
   type ReportingCurrency,
 } from "@/domain/valuation";
 import type { TrendRange } from "@/domain/daily-trend-observations";
+import type { AssetTrendRange } from "@/ui/asset-trend-panel";
 import type {
   AssetExchangeRate,
   AssetHolding,
@@ -50,8 +51,7 @@ export function AssetSourceCard({
   reportingExchangeRates,
   reportingCurrency,
   trendBenchmark,
-  trendDays,
-  trendRange,
+  trendRangeSelection,
   currentDay,
   holdingsSearchQuery,
   onManualAssetRecord,
@@ -75,7 +75,8 @@ export function AssetSourceCard({
     enabledSymbols: MarketBenchmarkSymbol[];
   } | null;
   trendDays?: readonly string[];
-  trendRange: TrendRange;
+  trendRange?: TrendRange;
+  trendRangeSelection?: AssetTrendRange;
   currentDay: string;
   holdingsSearchQuery: string;
   onManualAssetRecord?: (source: AssetSourceView, record?: ManualAssetRecord) => void;
@@ -179,8 +180,7 @@ export function AssetSourceCard({
             history={history}
             reportingCurrency={reportingCurrency}
             currentDay={currentDay}
-            trendDays={trendDays}
-            trendRange={trendRange}
+            range={trendRangeSelection}
             trendBenchmark={trendBenchmark}
             hasTrendContent={Boolean(trendContent)}
             showSensitiveInfo={showSensitiveInfo}

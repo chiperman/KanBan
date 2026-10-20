@@ -57,3 +57,21 @@ test("缺少可选详情能力时拒绝来源记账，其他来源状态不变",
   assert.deepEqual(await all.assetSources.list(), before);
   assert.deepEqual(await all.manualAssetRecords.list(), []);
 });
+
+test("自动来源拒绝手动余额与投资记录的保存和删除，不调用写入服务", async () => {
+  const { all, context } = await sourceContext();
+  const before = await all.assetSources.list();
+  for (const kind of ["binance", "longbridge", "okx", "bitget", "bit", "evm-watch-ethereum", "evm-watch-bsc"] as const) {
+    const automatic = { ...context, source: { ...context.source, kind } };
+    for (const action of ["manual-record", "investment-record"]) {
+      await assert.rejects(executeAssetSourcePatch(automatic, {
+        action, amount: "100", currency: "USD", day: "2026-01-01",
+      }), /只有手工资产/);
+      await assert.rejects(executeAssetSourceDelete(automatic, {
+        action, recordId: "existing", day: "2026-01-01",
+      }), /只有手工资产/);
+    }
+  }
+  assert.deepEqual(await all.assetSources.list(), before);
+  assert.deepEqual(await all.manualAssetRecords.list(), []);
+});

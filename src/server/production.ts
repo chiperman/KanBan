@@ -119,6 +119,7 @@ export function createProductionServices(
     assetCards: new DatabaseAssetCardStore(database),
     assetSources,
     assetSourceDetails: database,
+    investmentBooks: database,
     manualAssetRecords,
     investmentCashflows,
     assetSourceLifecycle: new DatabaseAssetSourceLifecycle(

@@ -1,4 +1,5 @@
 import { parseSourceInvestmentHistory, type SourceInvestmentHistory } from "@/domain/source-investment-history";
+import type { InvestmentBookId, InvestmentBookStore } from "@/domain/investment-books";
 import { InvalidSourceInvestmentRecordError, parseSourceInvestmentRecordInput, type SourceInvestmentRecord, type SourceInvestmentRecordInput } from "@/domain/source-investment-records";
 import type { DatabaseSync } from "node:sqlite";
 import { openSqliteDashboard, type SqliteDashboardComposition } from "./sqlite-database-composition";
@@ -11,7 +12,7 @@ import type { AssetSourceSummary, BinanceAuthorizationResult, BitAuthorizationRe
 
 /** SQLite 业务适配器；装配与启动交由组合根，跨表事务仍在此编排。 */
 export class SqliteDashboardDatabase
-  implements DashboardDatabase, InvestmentCashflowStore,
+  implements DashboardDatabase, InvestmentCashflowStore, InvestmentBookStore,
     AssetFullRefreshStateDatabase, FormalDailySettlementDatabase, FormalSettlementExecutionDatabase
 {
   private readonly database: DatabaseSync;
@@ -26,6 +27,31 @@ export class SqliteDashboardDatabase
 
   close(): void {
     this.database.close();
+  }
+
+  async readInvestmentBooks() {
+    return this.transaction(() => this.stores.investmentBooks.read());
+  }
+  async readStoredInvestmentBooks() {
+    return this.stores.investmentBooks.stored();
+  }
+  async saveBookRecord(bookId: InvestmentBookId, value: unknown, capturedAt: string): Promise<void> {
+    this.transaction(() => this.stores.investmentBooks.save(bookId, value, capturedAt));
+  }
+  async voidBookRecord(bookId: InvestmentBookId, id: string, capturedAt: string): Promise<void> {
+    this.transaction(() => this.stores.investmentBooks.void(bookId, id, capturedAt));
+  }
+  async importBookHistory(bookId: InvestmentBookId, value: unknown): Promise<void> {
+    this.transaction(() => this.stores.investmentBooks.import(bookId, value));
+  }
+  async confirmBookMember(sourceId: string, fromDay: string, toDay: string | null): Promise<void> {
+    this.transaction(() => this.stores.investmentBooks.confirmMember(sourceId, fromDay, toDay));
+  }
+  async resolveLegacyCashflow(bookId: InvestmentBookId, cashflowId: string, recordId: string | null): Promise<void> {
+    this.transaction(() => this.stores.investmentBooks.resolveLegacy(bookId, cashflowId, recordId));
+  }
+  private requireLegacyInvestmentWrites(): void {
+    if (this.database.prepare("SELECT 1 FROM investment_book_state WHERE id = 1").get()) throw new Error("资金记账已统一到三本账，请到投资账本中选择账本操作");
   }
 
   async readAssetFullRefreshState(): Promise<{
@@ -73,11 +99,13 @@ export class SqliteDashboardDatabase
   }
 
   async saveSourceInvestmentRecord(sourceId: string, input: SourceInvestmentRecordInput, capturedAt: string): Promise<void> {
+    this.requireLegacyInvestmentWrites();
     const record = parseSourceInvestmentRecordInput(input, capturedAt);
     this.transaction(() => this.stores.sourceInvestments.saveRecord(sourceId, record, capturedAt));
   }
 
   async deleteSourceInvestmentRecord(sourceId: string, id: string): Promise<void> {
+    this.requireLegacyInvestmentWrites();
     if (!id.trim()) throw new InvalidSourceInvestmentRecordError("记录 ID 无效");
     this.transaction(() => this.stores.sourceInvestments.deleteRecord(sourceId, id));
   }
@@ -87,6 +115,7 @@ export class SqliteDashboardDatabase
   }
 
   async importSourceInvestmentHistory(input: unknown): Promise<{ imported: boolean; records: number }> {
+    this.requireLegacyInvestmentWrites();
     const history = parseSourceInvestmentHistory(input);
     return this.transaction(() => this.stores.sourceInvestments.importHistory(history));
   }
@@ -136,6 +165,7 @@ export class SqliteDashboardDatabase
   async createInvestmentCashflow(
     cashflow: InvestmentCashflow,
   ): Promise<void> {
+    this.requireLegacyInvestmentWrites();
     this.transaction(() => {
       this.stores.investmentCashflows.insert(cashflow);
     });
@@ -144,12 +174,14 @@ export class SqliteDashboardDatabase
   async updateInvestmentCashflow(
     cashflow: InvestmentCashflow,
   ): Promise<void> {
+    this.requireLegacyInvestmentWrites();
     this.transaction(() => {
       this.stores.investmentCashflows.update(cashflow);
     });
   }
 
   async deleteInvestmentCashflow(id: string): Promise<void> {
+    this.requireLegacyInvestmentWrites();
     this.transaction(() => {
       this.stores.investmentCashflows.delete(id);
     });

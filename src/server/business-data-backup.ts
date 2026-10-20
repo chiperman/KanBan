@@ -51,7 +51,7 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
   }
 
   private async previewFor(state: BusinessDataState, formatVersion = BACKUP_FORMAT_VERSION): Promise<BackupRestorePreview> {
-    const [currentSources, currentCards, currentSnapshots, manualRecords, settlements, sourceHistories, sourceRecords] = await Promise.all([
+    const [currentSources, currentCards, currentSnapshots, manualRecords, settlements, sourceHistories, sourceRecords, investmentBooks] = await Promise.all([
       this.store.listSources(),
       this.store.listAssetCards(),
       this.store.listDailyAssetSnapshots(),
@@ -59,12 +59,15 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
       this.store.listFormalDailySettlements(),
       this.store.listSourceInvestmentHistories?.() ?? Promise.resolve([]),
       this.store.listSourceInvestmentRecords?.() ?? Promise.resolve([]),
+      this.store.readStoredInvestmentBooks?.() ?? Promise.resolve(undefined),
     ]);
-    const dropsHistory = (formatVersion < 5 && (manualRecords.length > 0 || settlements.length > 0)) || (formatVersion < 6 && sourceHistories.length > 0) || (formatVersion < 7 && sourceRecords.length > 0);
+    const bookFacts = investmentBooks ? investmentBooks.records.length + investmentBooks.members.length : 0;
+    const dropsBooks = !state.investmentBooks && bookFacts > 0;
+    const dropsHistory = (formatVersion < 5 && (manualRecords.length > 0 || settlements.length > 0)) || (formatVersion < 6 && sourceHistories.length > 0) || (formatVersion < 7 && sourceRecords.length > 0) || dropsBooks;
     const days = state.dailyAssetSnapshots.map(({ day }) => day).sort();
     return {
-      ...(formatVersion < BACKUP_FORMAT_VERSION ? { omittedHistory: { manualAssetRecords: formatVersion < 5 ? manualRecords.length : 0, formalDailySettlements: formatVersion < 5 ? settlements.length : 0, ...(formatVersion < 6 && sourceHistories.length ? { sourceInvestmentHistories: sourceHistories.length } : {}), ...(formatVersion < 7 && sourceRecords.length ? { sourceInvestmentRecords: sourceRecords.length } : {}) } } : {}),
-      ...(dropsHistory ? { discardConfirmation: createHash("sha256").update(JSON.stringify({state, manualRecords, settlements, sourceHistories, sourceRecords})).digest("hex") } : {}),
+      ...(formatVersion < BACKUP_FORMAT_VERSION || dropsBooks ? { omittedHistory: { manualAssetRecords: formatVersion < 5 ? manualRecords.length : 0, formalDailySettlements: formatVersion < 5 ? settlements.length : 0, ...(formatVersion < 6 && sourceHistories.length ? { sourceInvestmentHistories: sourceHistories.length } : {}), ...(formatVersion < 7 && sourceRecords.length ? { sourceInvestmentRecords: sourceRecords.length } : {}), ...(dropsBooks ? { investmentBookRecords: bookFacts } : {}) } } : {}),
+      ...(dropsHistory ? { discardConfirmation: createHash("sha256").update(JSON.stringify({state, manualRecords, settlements, sourceHistories, sourceRecords, investmentBooks})).digest("hex") } : {}),
       sourceCount: state.assetSources.length,
       cardCount: state.assetCards.length,
       snapshotRange: {
@@ -76,8 +79,8 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
         cardCount: currentCards.length,
         snapshotCount: currentSnapshots.length,
       },
-      warning: formatVersion < BACKUP_FORMAT_VERSION
-        ? `${SENSITIVE_ASSET_DATA_WARNING}${formatVersion < 5 ? LEGACY_HISTORY_WARNING : ""}${formatVersion < 6 ? "旧版备份不包含来源投资历史。" : ""}旧版备份不包含来源手工投资记录。`
+      warning: formatVersion < BACKUP_FORMAT_VERSION || dropsBooks
+        ? `${SENSITIVE_ASSET_DATA_WARNING}${formatVersion < 5 ? LEGACY_HISTORY_WARNING : ""}${formatVersion < 6 ? "旧版备份不包含来源投资历史。" : ""}${formatVersion < 7 ? "旧版备份不包含来源手工投资记录。" : ""}${dropsBooks ? "此备份不包含三本账的记录、更正与来源范围。" : ""}`
         : SENSITIVE_ASSET_DATA_WARNING,
     };
   }
@@ -96,6 +99,7 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
       formalDailySettlements,
       sourceInvestmentHistories,
       sourceInvestmentRecords,
+      investmentBooks,
     ] = await Promise.all([
       this.store.listAssetCards(),
       this.store.listSources(),
@@ -107,6 +111,7 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
       this.store.listFormalDailySettlements(),
       this.store.listSourceInvestmentHistories?.() ?? Promise.resolve([]),
       this.store.listSourceInvestmentRecords?.() ?? Promise.resolve([]),
+      this.store.readStoredInvestmentBooks?.() ?? Promise.resolve(undefined),
     ]);
     const { contents, checksum } = encodeBackupDocument({
       assetCards,
@@ -119,6 +124,7 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
       formalDailySettlements,
       sourceInvestmentHistories,
       sourceInvestmentRecords,
+      investmentBooks,
     }, createdAt);
     await ensurePrivateDirectory(this.backupDirectory);
     await atomicWritePrivateFile(

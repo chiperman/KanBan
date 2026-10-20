@@ -44,7 +44,7 @@ export default async function SetupPage({
         className="setup-panel vibe-auth-surface"
         data-vibe-surface="auth-panel"
       >
-        <p className="card-label">OWNER PROVISION / 00</p>
+        <p className="card-label">OWNER PROVISION</p>
         <h1 className="setup-title">预置唯一所有者的 Passkey</h1>
         <p className="setup-copy">
           仅可预置一次

@@ -49,6 +49,19 @@ test("投资记录 API 身份与来源隔离、跨站拒绝、保存编辑删除
     assert.equal((await call("DELETE", a.id, { action: "investment-record", recordId: "flow" }, { origin: "https://attacker.example" })).status, 403);
     assert.deepEqual(await db.listSourceInvestmentRecords(), []);
     assert.equal((await call("PATCH", "missing", payload)).status, 404);
+    for (const kind of ["binance", "longbridge"] as const) {
+      const source = { ...a, id: kind, kind, accountId: kind + "-account" };
+      await db.replaceSources([...(await db.listSources()), source]);
+      for (const action of ["manual-record", "investment-record"]) {
+        const save = await call("PATCH", source.id, { ...payload, action });
+        assert.equal(save.status, 400);
+        assert.match((await save.json()).error, /只有手工资产/);
+        assert.equal((await call("DELETE", source.id, {
+          action, recordId: "flow", day: payload.day,
+        })).status, 400);
+      }
+    }
+    assert.deepEqual(await db.listSourceInvestmentRecords(), []);
     assert.equal((await call("PATCH", a.id, payload, { origin: "http://localhost:3101" })).status, 200);
     assert.equal((await call("PATCH", a.id, payload)).status, 200);
     assert.equal((await db.listSourceInvestmentRecords(a.id)).length, 1);

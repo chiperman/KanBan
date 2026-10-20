@@ -1,6 +1,8 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
+import { WorkspaceViewNavigation } from "@/ui/workspace-view-navigation";
+import { ASSET_VIEWS } from "@/ui/workbench-navigation";
+import { Fragment, useId, useMemo, useState } from "react";
 
 import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
 import { longbridgeReferenceRates } from "@/domain/investment-performance";
@@ -8,7 +10,7 @@ import {
   decimalCompare,
   decimalToFixed,
 } from "@/domain/decimal";
-import { activeSourceHoldings, portfolioSourceTotal } from "@/domain/evm-token-preferences";
+import { activeSourceHoldings } from "@/domain/evm-token-preferences";
 import {
   convertCurrencyAmount,
   sourceReportingConversionRates,
@@ -28,13 +30,14 @@ import { formatAssetUnitPrice } from "@/ui/asset-price-display";
 import { sourceSyncStatus } from "@/ui/asset-source-status";
 import { formatShanghaiDateTime } from "@/ui/shanghai-date-time";
 import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
+import { VibeEntityLink } from "@/ui/vibe/vibe-entity-link";
 import {
   VibeField,
   VibeSelect,
   type VibeSelectOption,
 } from "@/ui/vibe/vibe-field";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
-import { VibeMetric, VibeStatusTag } from "@/ui/vibe/vibe-data-instrument";
+import { VibeStatusTag } from "@/ui/vibe/vibe-data-instrument";
 import {
   useWorkbenchDisplayPreferences,
 } from "@/ui/workbench-display-preferences";
@@ -226,102 +229,6 @@ function priceEvidence(holding: AssetHolding): string {
     .join(" · ");
 }
 
-function HoldingPriceEvidence({ holding }: { holding: AssetHolding }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const evidenceId = useId();
-  return (
-    <div className="assets-holdings__price-evidence">
-      <VibeButton
-        aria-controls={evidenceId}
-        aria-expanded={isOpen}
-        aria-label={`查看 ${assetHoldingDisplayName(holding)} 行情依据`}
-        onClick={() => setIsOpen(!isOpen)}
-        type="button"
-        variant="text"
-      >
-        {isOpen ? "收起行情依据" : "行情依据"}
-      </VibeButton>
-      {isOpen ? <small id={evidenceId}>{priceEvidence(holding)}</small> : null}
-    </div>
-  );
-}
-
-function sourceTotal(
-  source: WorkspaceSource,
-  currency: ReportingCurrency,
-  rates: WorkspaceSource["snapshot"]["exchangeRates"],
-): string | null {
-  const total = portfolioSourceTotal(source);
-  return convertCurrencyAmount(total.amount, total.currency, currency, rates);
-}
-
-function AssetSourceTotalRow({
-  currency,
-  reportingRates,
-  showSensitiveInfo,
-  source,
-}: {
-  currency: ReportingCurrency;
-  reportingRates: WorkspaceSource["snapshot"]["exchangeRates"];
-  showSensitiveInfo: boolean;
-  source: WorkspaceSource;
-}) {
-  const sourceRates = sourceReportingConversionRates(source, reportingRates);
-  const total = sourceTotal(source, currency, sourceRates);
-  const statuses = sourceStatuses(source);
-  const manualWithoutRecord =
-    source.kind === "manual" && source.hasManualRecord === false;
-
-  return (
-    <li
-      data-testid={`assets-source-total-${source.id}`}
-    >
-      <article>
-        <div>
-          <VibeLink
-            aria-label={`查看 ${assetSourceDisplayName(source)} 来源详情`}
-            className="assets-holdings__source-name"
-            href={`/asset-sources/${encodeURIComponent(source.id)}`}
-            variant="text"
-          >
-            <strong>{assetSourceDisplayName(source)}</strong>
-          </VibeLink>
-          {statuses.length > 0 ? (
-            <div className="assets-holdings__source-state">
-              {statuses.map((status) => (
-                <VibeStatusTag key={status.label} tone={status.tone}>
-                  {status.label}
-                </VibeStatusTag>
-              ))}
-            </div>
-          ) : null}
-        </div>
-        <div className="assets-holdings__source-value">
-          {showSensitiveInfo && total !== null && !manualWithoutRecord ? (
-            <VibeMetric
-              animationKey={source.kind === "longbridge" ? source.snapshot.syncedAt : undefined}
-              unit={currency}
-              value={money(total)}
-            />
-          ) : (
-            <strong
-              className={
-                showSensitiveInfo
-                  ? undefined
-                  : "assets-holdings__source-value-hidden"
-              }
-            >
-              {showSensitiveInfo
-                ? manualWithoutRecord ? "尚无记录" : "无法折算"
-                : "金额已隐藏"}
-            </strong>
-          )}
-        </div>
-      </article>
-    </li>
-  );
-}
-
 export function AssetsHoldingsWorkspace({
   sources,
 }: {
@@ -336,6 +243,8 @@ export function AssetsHoldingsWorkspace({
   const [searchQuery, setSearchQuery] = useState("");
   const [assetClass, setAssetClass] = useState<AssetClassFilter>("all");
   const [valuation, setValuation] = useState<ValuationFilter>("all");
+  const [expandedEvidenceKeys, setExpandedEvidenceKeys] = useState<string[]>([]);
+  const evidencePrefix = useId();
   const { active: realtimeActive, liveSources, state: realtimeState, retry } = useLongbridgeRealtime(sources);
 
   const recordedSources = useMemo(
@@ -349,12 +258,7 @@ export function AssetsHoldingsWorkspace({
     () => longbridgeReferenceRates(recordedSources),
     [recordedSources],
   );
-  const totalOnlySources = useMemo(
-    () => liveSources.filter(
-      (source) => source.kind === "manual" || activeSourceHoldings(source).length === 0,
-    ),
-    [liveSources],
-  );
+
   const sourceOptions = useMemo<readonly VibeSelectOption<string>[]>(
     () => [
       { value: "all", label: "全部来源" },
@@ -441,13 +345,15 @@ export function AssetsHoldingsWorkspace({
             variant="compact"
           />
           <AssetGlobalRefreshControl />
+          <VibeLink href="/asset-sources/new" variant="primary">新增来源</VibeLink>
           </>
         }
         eyebrow="PORTFOLIO / HOLDINGS"
-        title="资产与持仓"
+        title="资产"
         titleId="assets-holdings-title"
       />
 
+      <WorkspaceViewNavigation label="资产视角" items={ASSET_VIEWS} current="/assets" />
       <LongbridgeRealtimeNotice state={realtimeState} retry={retry} />
 
       <section
@@ -459,9 +365,9 @@ export function AssetsHoldingsWorkspace({
             <p className="card-label">HOLDINGS / OBSERVATION</p>
             <h2 id="holding-observations-title">持仓价格与市值观察</h2>
           </div>
-          <VibeLink href="/asset-sources" variant="text">
-            来源管理
-          </VibeLink>
+          <p className="assets-holdings__count" data-testid="assets-holdings-count">
+            显示 {filteredObservations.length} 项观察
+          </p>
         </header>
 
         <div className="assets-holdings__filters" aria-label="持仓筛选">
@@ -496,9 +402,6 @@ export function AssetsHoldingsWorkspace({
             value={valuation}
             variant="compact"
           />
-          <p data-testid="assets-holdings-count">
-            显示 {filteredObservations.length} 项观察
-          </p>
         </div>
 
         {filteredObservations.length === 0 ? (
@@ -544,80 +447,116 @@ export function AssetsHoldingsWorkspace({
                     sourceRates,
                     !showSensitiveInfo,
                   );
+                  const observationKey = `${source.id}:${assetHoldingKey(holding)}`;
+                  const evidenceId = `${evidencePrefix}-${encodeURIComponent(observationKey)}`;
+                  const isEvidenceOpen = expandedEvidenceKeys.includes(observationKey);
                   return (
-                    <tr
-                      key={`${source.id}:${assetHoldingKey(holding)}`}
-                      className={
-                        holding.valuation.status === "unvalued"
-                          ? "is-unvalued"
-                          : undefined
-                      }
-                    >
-                      <td data-label="资产与来源">
-                        <strong>{assetHoldingDisplayName(holding)}</strong>
-                        <AssetHoldingPositionStatus holding={holding} />
-                        <span>{assetSourceDisplayName(source)}</span>
-                        <small>{holding.sourceProduct ?? holding.assetClass}</small>
-                      </td>
-                      <td data-label="市值">
-                        <strong>
-                          {showSensitiveInfo
-                            ? marketValue === null
-                              ? holding.valuation.status === "unvalued"
-                                ? "未估值"
-                                : "数据不足"
-                              : `${money(marketValue)} ${currency}`
-                            : "••••••"}
-                        </strong>
-                        {showSourceMarketValue && holding.sourceMarketValue ? (
-                          <span>
-                            原币 {money(holding.sourceMarketValue.amount)} {holding.sourceMarketValue.currency}
-                          </span>
-                        ) : holding.sourceMarketValue ? null : (
-                          <span>原市值缺失</span>
-                        )}
-                      </td>
-                      <td data-label="现价 / 数量">
-                        <strong>
-                          {showSensitiveInfo
-                            ? holding.currentPrice
-                              ? displayPrice(
-                                holding.currentPrice.amount,
-                                holding.currentPrice.currency,
-                                currency,
-                                sourceRates,
-                                holding.assetClass,
-                              )
-                              : "现价不可用"
-                            : "••••••"}
-                        </strong>
-                        <span>
-                          {showSensitiveInfo
-                            ? `${holding.quantity} ${holding.symbol}`
-                            : "••••••"}
-                        </span>
-                        <HoldingPriceEvidence holding={holding} />
-                      </td>
-                      <td data-label="价格变化">
-                        <strong>
-                          {holding.changePercent === null
-                            ? "数据不足"
-                            : showSensitiveInfo
-                              ? signedPercent(holding.changePercent)
+                    <Fragment key={observationKey}>
+                      <tr
+                        className={
+                          holding.valuation.status === "unvalued"
+                            ? "is-unvalued"
+                            : undefined
+                        }
+                      >
+                        <td data-label="资产与来源">
+                          <strong>{assetHoldingDisplayName(holding)}</strong>
+                          <AssetHoldingPositionStatus holding={holding} />
+                          <div className="assets-holdings__asset-meta">
+                            <VibeEntityLink href={`/asset-sources/${encodeURIComponent(source.id)}`} aria-label={`查看 ${assetSourceDisplayName(source)} 来源详情`}>
+                              {assetSourceDisplayName(source)}
+                            </VibeEntityLink>
+                            <small>{holding.sourceProduct ?? ASSET_CLASS_OPTIONS.find(({ value }) => value === holding.assetClass)?.label ?? holding.assetClass}</small>
+                          </div>
+                        </td>
+                        <td data-label="市值">
+                          <strong>
+                            {showSensitiveInfo
+                              ? marketValue === null
+                                ? holding.valuation.status === "unvalued"
+                                  ? "未估值"
+                                  : "数据不足"
+                                : `${money(marketValue)} ${currency}`
                               : "••••••"}
-                        </strong>
-                      </td>
-                      <td data-label="平台盈亏">
-                        <strong>
-                          {showSensitiveInfo && holding.platformProfit === null
-                            ? "平台未提供"
-                            : platformProfit}
-                        </strong>
-                      </td>
-                      <td data-label="数据状态">
-                        <VibeStatusTag tone={status.tone}>{status.label}</VibeStatusTag>
-                      </td>
-                    </tr>
+                          </strong>
+                          {showSourceMarketValue && holding.sourceMarketValue ? (
+                            <span>
+                              原币 {money(holding.sourceMarketValue.amount)} {holding.sourceMarketValue.currency}
+                            </span>
+                          ) : holding.sourceMarketValue ? null : (
+                            <span>原市值缺失</span>
+                          )}
+                        </td>
+                        <td data-label="现价 / 数量">
+                          <strong>
+                            {showSensitiveInfo
+                              ? holding.currentPrice
+                                ? displayPrice(
+                                  holding.currentPrice.amount,
+                                  holding.currentPrice.currency,
+                                  currency,
+                                  sourceRates,
+                                  holding.assetClass,
+                                )
+                                : "现价不可用"
+                              : "••••••"}
+                          </strong>
+                          <div className="assets-holdings__price-meta">
+                            <span>
+                              {showSensitiveInfo
+                                ? `${holding.quantity} ${holding.symbol}`
+                                : "••••••"}
+                            </span>
+                          </div>
+                        </td>
+                        <td data-label="价格变化">
+                          <strong>
+                            {holding.changePercent === null
+                              ? "数据不足"
+                              : showSensitiveInfo
+                                ? signedPercent(holding.changePercent)
+                                : "••••••"}
+                          </strong>
+                        </td>
+                        <td data-label="平台盈亏">
+                          <strong>
+                            {showSensitiveInfo && holding.platformProfit === null
+                              ? "平台未提供"
+                              : platformProfit}
+                          </strong>
+                        </td>
+                        <td data-label="数据状态">
+                          <div className="assets-holdings__status">
+                            <VibeStatusTag tone={status.tone}>{status.label}</VibeStatusTag>
+                            <VibeButton
+                              aria-controls={evidenceId}
+                              aria-expanded={isEvidenceOpen}
+                              aria-label={`${isEvidenceOpen ? "收起" : "查看"} ${assetHoldingDisplayName(holding)} 行情依据`}
+                              onClick={() => setExpandedEvidenceKeys((keys) =>
+                                keys.includes(observationKey)
+                                  ? keys.filter((key) => key !== observationKey)
+                                  : [...keys, observationKey]
+                              )}
+                              type="button"
+                              variant="text"
+                              size="compact"
+                            >
+                              {isEvidenceOpen ? "收起依据" : "行情依据"}
+                            </VibeButton>
+                          </div>
+                        </td>
+                      </tr>
+                      {isEvidenceOpen ? (
+                        <tr className="assets-holdings__evidence-row">
+                          <td colSpan={6}>
+                            <div className="assets-holdings__price-evidence" id={evidenceId}>
+                              <span>{assetHoldingDisplayName(holding)} · 行情依据</span>
+                              <p>{priceEvidence(holding)}</p>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
                   );
                 })}
               </tbody>
@@ -630,42 +569,6 @@ export function AssetsHoldingsWorkspace({
         </VibeNotice>
       </section>
 
-      {totalOnlySources.length > 0 ? (
-        <section
-          className="assets-holdings__source-totals"
-          aria-labelledby="assets-source-totals-title"
-        >
-          <header>
-            <div>
-              <p className="card-label">ASSETS / TOTALS</p>
-              <h2 id="assets-source-totals-title">按总额记录的资产</h2>
-            </div>
-          </header>
-          <div
-            className="assets-holdings__source-list"
-            data-testid="assets-source-totals"
-          >
-            <div
-              aria-hidden="true"
-              className="assets-holdings__source-columns"
-            >
-              <span>资产与来源</span>
-              <span>金额</span>
-            </div>
-            <ol>
-              {totalOnlySources.map((source) => (
-                <AssetSourceTotalRow
-                  currency={currency}
-                  key={source.id}
-                  reportingRates={reportingRates}
-                  showSensitiveInfo={showSensitiveInfo}
-                  source={source}
-                />
-              ))}
-            </ol>
-          </div>
-        </section>
-      ) : null}
     </section>
   );
 }

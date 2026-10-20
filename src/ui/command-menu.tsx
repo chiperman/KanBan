@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 
+import { WORKBENCH_DESTINATIONS, ASSET_VIEWS } from "@/ui/workbench-navigation";
 import { OWNER_LOCK_EVENT } from "@/shared/session-policy";
 import { useAssetRefresh } from "@/ui/asset-refresh-provider";
 import { VibeButton } from "@/ui/vibe/vibe-button";
@@ -14,14 +15,6 @@ interface NavigationTarget {
   id: string;
   label: string;
 }
-
-const WORKBENCH_DESTINATIONS = [
-  { href: "/", label: "总览" },
-  { href: "/assets", label: "资产与持仓" },
-  { href: "/performance", label: "收益分析" },
-  { href: "/asset-sources", label: "来源管理" },
-  { href: "/settings", label: "设置与安全" },
-] as const;
 
 interface Command {
   id: string;
@@ -92,7 +85,7 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
 
   const commands = useMemo<Command[]>(() => {
     const navigation = [
-      ...WORKBENCH_DESTINATIONS.map(({ href, label }) => ({
+      ...[...WORKBENCH_DESTINATIONS, ASSET_VIEWS[1]].map(({ href, label }) => ({
         id: `workbench:${href}`,
         label: `前往${label}`,
         keywords: `${label} 前往 跳转 导航 工作台`,

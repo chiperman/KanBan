@@ -15,8 +15,14 @@ export class SqliteSourceInvestmentStore {
       .run(record.id, record.sourceId, record.day, record.kind, record.amount, record.currency, record.recordedAt);
   }
 
+  private requireManualSource(sourceId: string): void {
+    const source = this.database.prepare("SELECT kind FROM asset_sources WHERE id = ?").get(sourceId) as { kind: string } | undefined;
+    if (!source) throw new InvalidSourceInvestmentRecordError("资产来源不存在");
+    if (source.kind !== "manual") throw new InvalidSourceInvestmentRecordError("只有手工资产来源可以维护手动记账记录");
+  }
+
   saveRecord(sourceId: string, record: SourceInvestmentRecordInput, capturedAt: string): void {
-    if (!this.database.prepare("SELECT id FROM asset_sources WHERE id = ?").get(sourceId)) throw new InvalidSourceInvestmentRecordError("资产来源不存在");
+    this.requireManualSource(sourceId);
     const existing = this.readModel.listSourceInvestmentRecordsSync(sourceId);
     const other = this.database.prepare("SELECT source_id FROM source_investment_records WHERE id = ?").get(record.id) as { source_id: string } | undefined;
     if (other && other.source_id !== sourceId) throw new InvalidSourceInvestmentRecordError("记录 ID 属于其他来源");
@@ -40,7 +46,7 @@ export class SqliteSourceInvestmentStore {
   }
 
   deleteRecord(sourceId: string, id: string): void {
-    if (!this.database.prepare("SELECT id FROM asset_sources WHERE id = ?").get(sourceId)) throw new InvalidSourceInvestmentRecordError("资产来源不存在");
+    this.requireManualSource(sourceId);
     const result = this.database.prepare("DELETE FROM source_investment_records WHERE source_id = ? AND id = ?").run(sourceId, id);
     if (!result.changes) throw new InvalidSourceInvestmentRecordError("来源投资记录不存在");
   }

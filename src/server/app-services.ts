@@ -88,5 +88,6 @@ export interface AppServices extends
 }
 
 export interface ProductionAppServices extends AppServices {
+  investmentBooks: InvestmentBookStore;
   assetSourceDetails: AssetSourceDetails;
 }

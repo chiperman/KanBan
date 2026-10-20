@@ -15,5 +15,5 @@ export default async function DataHealthPage({
 }) {
   await redirectLoopbackIpToLocalhost("/data-health", searchParams);
   if ((await getServices().auth.currentSession()) === null) redirect("/");
-  redirect("/asset-sources#history-coverage");
+  redirect("/assets?view=sources#history-coverage");
 }

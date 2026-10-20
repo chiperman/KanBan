@@ -9,6 +9,7 @@ import { SqliteDatabaseInitializationStore } from "./sqlite-database-initializat
 import { SqliteFormalSettlementExecutionStore } from "./sqlite-formal-settlement-execution-store";
 import { SqliteFormalSettlementStore } from "./sqlite-formal-settlements";
 import { SqliteInvestmentCashflowStore } from "./sqlite-investment-cashflow-store";
+import { SqliteInvestmentBookStore } from "./sqlite-investment-book-store";
 import { SqliteManualAssetRecordStore } from "./sqlite-manual-asset-record-store";
 import { SqliteManualAssetSourceStore } from "./sqlite-manual-asset-source-store";
 import { SqliteMetadataStore } from "./sqlite-metadata-store";
@@ -48,6 +49,7 @@ export function openSqliteDashboard(
       database, sourceData, readModel, observations, cards,
     );
     const investmentCashflows = new SqliteInvestmentCashflowStore(database);
+    const investmentBooks = new SqliteInvestmentBookStore(database, readModel);
     const formalSettlementExecutions = new SqliteFormalSettlementExecutionStore(database);
     const refreshState = new SqliteRefreshStateStore(metadata);
     const businessData = new SqliteBusinessDataStore(
@@ -82,6 +84,7 @@ export function openSqliteDashboard(
       manualSources,
       sourceConnections,
       investmentCashflows,
+      investmentBooks,
       formalSettlementExecutions,
       refreshState,
       businessData,

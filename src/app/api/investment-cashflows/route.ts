@@ -44,6 +44,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const services = await ownerServices();
   if (!services) return Response.json({ error: "需要所有者身份" }, { status: 401 });
+  if (services.investmentBooks) return Response.json({ error: "资金记账已统一到三本账，请到投资账本中选择账本操作" }, { status: 409 });
   const input = createInput(await request.json().catch(() => null));
   if (!input) return Response.json({ error: "资金记录格式无效" }, { status: 400 });
   try {

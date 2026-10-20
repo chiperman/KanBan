@@ -48,6 +48,7 @@ type AssetTrendBenchmark = {
   assetScopeLabel: string;
   comparison: MarketBenchmarkComparison | null;
   enabledSymbols: MarketBenchmarkSymbol[];
+  returnComparison?: boolean;
 };
 
 export function AssetTrendDateTick({ x, y, index, visibleTicksCount, payload, tickFormatter }: XAxisTickContentProps) {
@@ -254,16 +255,18 @@ function BenchmarkTrendTooltip({
   formatAmount,
   formatDay,
   payload,
+  returnComparison,
 }: TooltipContentProps & {
   assetScopeLabel: string;
   currency: string;
   enabledSymbols: MarketBenchmarkSymbol[];
   formatAmount(value: string): string;
   formatDay(day: string): string;
+  returnComparison?: boolean;
 }) {
   const point = payload?.[0]?.payload as BenchmarkChartDatum | undefined;
   if (!active || point === undefined) return null;
-  const assetsLabel = assetLabel(assetScopeLabel);
+  const assetsLabel = returnComparison ? `${assetScopeLabel}收益率` : assetLabel(assetScopeLabel);
 
   return (
     <div className="asset-trend-tooltip">
@@ -271,7 +274,7 @@ function BenchmarkTrendTooltip({
       <strong>
         我的{assetsLabel} {point.assets === null ? "数据不足" : percentage(point.assets, true)}
       </strong>
-      {point.amount === null ? (
+      {returnComparison ? null : point.amount === null ? (
         <small>资产金额未估值</small>
       ) : (
         <small>{formatAmount(point.amount)} {currency}</small>
@@ -398,7 +401,7 @@ export function AssetTrendChart({
     total={points.length}
     unavailableCount={unavailableCount}
   />;
-  const comparisonHeader = variant === "source" && coverageNote === undefined && coveragePresentation === "default" ? null : coveragePresentation === "disclosure" ? (
+  const comparisonHeader = coveragePresentation === "disclosure" ? (
     <details className="asset-trend-coverage">
       <summary>数据覆盖{missingCount + incompleteCount + unavailableCount > 0 ? " · 存在缺测或不完整记录" : ""}</summary>
       {coverageNote ? <p className="asset-trend-coverage-note">{coverageNote}</p> : null}
@@ -436,7 +439,7 @@ export function AssetTrendChart({
       className="investment-performance__benchmark-series"
     >
       <span className="investment-performance__benchmark-series--assets">
-        我的{assetLabel(benchmark.assetScopeLabel)}
+        我的{benchmark.returnComparison ? `${benchmark.assetScopeLabel}收益率` : assetLabel(benchmark.assetScopeLabel)}
       </span>
       {benchmark.enabledSymbols.includes(".SPX.US") ? (
         <span className="investment-performance__benchmark-series--spx">
@@ -485,7 +488,7 @@ export function AssetTrendChart({
     const benchmarkPadding = benchmarkMaximum === benchmarkMinimum
       ? Math.max(Math.abs(benchmarkMaximum) * 0.1, 0.01)
       : (benchmarkMaximum - benchmarkMinimum) * 0.08;
-    const assetsLabel = assetLabel(benchmark.assetScopeLabel);
+    const assetsLabel = benchmark.returnComparison ? `${benchmark.assetScopeLabel}收益率` : assetLabel(benchmark.assetScopeLabel);
 
     return (
       <div className={`asset-trend-comparison asset-trend-comparison--${variant}`}>
@@ -536,6 +539,7 @@ export function AssetTrendChart({
                     enabledSymbols={benchmark.enabledSymbols}
                     formatAmount={formatAmount}
                     formatDay={formatShanghaiFullDayLabel}
+                    returnComparison={benchmark.returnComparison}
                   />
                 )}
                 cursor={{ stroke: "var(--line-2)", strokeWidth: 1 }}

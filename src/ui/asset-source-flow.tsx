@@ -208,7 +208,7 @@ export function AssetSourceFlow({
   }
 
   function backToDirectory() {
-    router.push("/asset-sources");
+    router.push("/assets?view=sources");
   }
 
   function backToChoice() {
@@ -360,7 +360,7 @@ export function AssetSourceFlow({
       setError(body?.error ?? "手工资产记录保存失败");
       return;
     }
-    router.push("/asset-sources");
+    router.push("/assets?view=sources");
     router.refresh();
   }
 
@@ -387,7 +387,7 @@ export function AssetSourceFlow({
     }
     router.push(
       reauthorization === undefined
-        ? "/asset-sources"
+        ? "/assets?view=sources"
         : `/asset-sources/${encodeURIComponent(reauthorization.sourceId)}`,
     );
     router.refresh();
@@ -421,7 +421,7 @@ export function AssetSourceFlow({
     }
     router.push(
       reauthorization === undefined
-        ? "/asset-sources"
+        ? "/assets?view=sources"
         : `/asset-sources/${encodeURIComponent(reauthorization.sourceId)}`,
     );
     router.refresh();
@@ -561,7 +561,7 @@ export function AssetSourceFlow({
                 !evmServiceStatus.bscRpc.configured) ? (
                 <VibeNotice role="status" tone="info">
                   EVM 钱包依赖全局 CoinGecko、Ethereum RPC 与 BSC RPC 配置。
-                  <VibeLink href="/settings" variant="text">前往本机设置</VibeLink>
+                  <VibeLink href="/settings?view=data" variant="text">配置行情与链上服务</VibeLink>
                 </VibeNotice>
               ) : null}
               {selectedProvider.fields.map((field) =>

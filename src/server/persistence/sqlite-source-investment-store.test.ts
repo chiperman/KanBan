@@ -78,3 +78,30 @@ test("来源投资记录与历史写入失败回滚原数据，重试仍保持�
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("持久化拒绝自动来源手动记账，已有历史记录保持只读", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "kanban-automatic-records-"));
+  const database = new SqliteDashboardDatabase(path.join(root, "data.sqlite"));
+  const sql = (database as unknown as { database: DatabaseSync }).database;
+  const capturedAt = "2026-10-01T01:00:00.000Z";
+  try {
+    await database.createManualAssetSource({ label: "历史来源" }, capturedAt);
+    const [source] = await database.listSources();
+    const record = {
+      id: "legacy", day: "2026-09-01", kind: "deposit" as const,
+      amount: "10", currency: "CNY" as const,
+    };
+    await database.saveSourceInvestmentRecord(source.id, record, capturedAt);
+    const before = await database.listSourceInvestmentRecords();
+    for (const kind of ["binance", "longbridge", "okx", "bitget", "bit", "evm-watch-ethereum", "evm-watch-bsc"]) {
+      sql.prepare("UPDATE asset_sources SET kind = ? WHERE id = ?").run(kind, source.id);
+      await assert.rejects(database.saveSourceInvestmentRecord(source.id, { ...record, id: "new" }, capturedAt), /只有手工资产/);
+      await assert.rejects(database.saveSourceInvestmentRecord(source.id, { ...record, amount: "20" }, capturedAt), /只有手工资产/);
+      await assert.rejects(database.deleteSourceInvestmentRecord(source.id, record.id), /只有手工资产/);
+      assert.deepEqual(await database.listSourceInvestmentRecords(), before);
+    }
+  } finally {
+    sql.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});

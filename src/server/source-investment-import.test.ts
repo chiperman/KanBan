@@ -37,6 +37,13 @@ test("来源历史事务导入、身份隔离、幂等与备份恢复", async ()
     await assert.rejects(database.importSourceInvestmentHistory(edited), /冲突/);
     assert.deepEqual(await database.listSourceInvestmentHistories(), [history]);
 
+    const local = { id: "local", day: "2026-01-10", kind: "valuation" as const, amount: "170", currency: "CNY" as const };
+    await assert.rejects(database.saveSourceInvestmentRecord(aShare.id, { ...local, kind: "opening" }, history.importedAt), /期初/);
+    await assert.rejects(database.saveSourceInvestmentRecord(aShare.id, { ...local, day: "2025-12-31" }, history.importedAt), /早于导入历史期初/);
+    await database.saveSourceInvestmentRecord(aShare.id, local, history.importedAt);
+    await assert.rejects(database.saveSourceInvestmentRecord(aShare.id, { ...local, day: "2025-12-31" }, history.importedAt), /早于导入历史期初/);
+    assert.equal((await database.listSourceInvestmentRecords(aShare.id))[0].day, local.day);
+
     const clock = { now: () => new Date("2026-01-12T00:00:00Z") };
     const backups = new CredentialFreeBusinessDataBackup(database, root, clock);
     await backups.exportBackup("history.json");
@@ -61,7 +68,7 @@ test("来源历史事务导入、身份隔离、幂等与备份恢复", async ()
   }
 });
 
-test("长桥导入历史允许导入及备份恢复，零期初与首次投入各计一次", async () => {
+test("长桥禁止手动记账，外部导入和旧记录备份恢复保持可用", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "kanban-longbridge-import-"));
   const make = (name: string) => new SqliteDashboardDatabase(path.join(root, name + ".sqlite"));
   const database = make("original"), restored = make("restored");
@@ -83,17 +90,21 @@ test("长桥导入历史允许导入及备份恢复，零期初与首次投入�
     await assert.rejects(database.importSourceInvestmentHistory({ ...history, sourceLabel: "别的来源" }), /身份不匹配/);
     assert.deepEqual(await database.importSourceInvestmentHistory(history), { imported: true, records: 2 });
     assert.deepEqual(await database.importSourceInvestmentHistory(history), { imported: false, records: 2 });
-    await assert.rejects(database.saveSourceInvestmentRecord(source.id, { id: "opening", day: "2024-04-20", kind: "opening", amount: "0", currency: "CNY" }, "2026-09-29T12:00:00Z"), /期初/);
-    await assert.rejects(database.saveSourceInvestmentRecord(source.id, { id: "early", day: "2024-04-19", kind: "deposit", amount: "1", currency: "CNY" }, "2026-09-29T12:00:00Z"), /早于导入历史期初/);
-    await database.saveSourceInvestmentRecord(source.id, { id: "first-local", day: "2024-04-20", kind: "deposit", amount: "2", currency: "CNY" }, "2026-09-29T12:00:00Z");
-    await database.saveSourceInvestmentRecord(source.id, { id: "local", day: "2026-09-28", kind: "valuation", amount: "1300", currency: "CNY" }, "2026-09-29T12:00:00Z");
-    await assert.rejects(database.saveSourceInvestmentRecord(source.id, { id: "local", day: "2024-04-19", kind: "valuation", amount: "1300", currency: "CNY" }, "2026-09-29T12:00:00Z"), /早于导入历史期初/);
-    assert.equal((await database.listSourceInvestmentRecords(source.id)).find(row => row.id === "local")?.day, "2026-09-28");
+    for (const kind of ["opening", "deposit", "withdrawal", "valuation"] as const) {
+      await assert.rejects(database.saveSourceInvestmentRecord(source.id, {
+        id: "new", day: "2026-09-28", kind, amount: "1", currency: "CNY",
+      }, "2026-09-29T12:00:00Z"), /只有手工资产/);
+    }
+    const sql = (database as unknown as { database: DatabaseSync }).database;
+    sql.prepare("INSERT INTO source_investment_records (id, source_id, day, kind, amount, currency, recorded_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .run("legacy", source.id, "2026-09-28", "valuation", "1300", "CNY", "2026-09-29T12:00:00Z");
     const backup = new CredentialFreeBusinessDataBackup(database, root, { now: () => new Date("2026-09-29T12:00:00Z") });
     await backup.exportBackup("longbridge.json");
     await new CredentialFreeBusinessDataBackup(restored, root, { now: () => new Date("2026-09-29T12:00:00Z") }).restore("longbridge.json");
     assert.deepEqual(await restored.listSourceInvestmentHistories(), [history]);
     assert.deepEqual(await restored.listSourceInvestmentRecords(source.id), await database.listSourceInvestmentRecords(source.id));
+    await assert.rejects(restored.deleteSourceInvestmentRecord(source.id, "legacy"), /只有手工资产/);
+    assert.equal((await restored.listSourceInvestmentRecords(source.id)).length, 1);
   } finally {
     for (const db of [database, restored]) (db as unknown as { database: DatabaseSync }).database.close();
     await rm(root, { recursive: true, force: true });

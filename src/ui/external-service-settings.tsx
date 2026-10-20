@@ -101,7 +101,7 @@ export function ExternalServiceSettings({
     >
       <div className="external-service-settings__head">
         <div>
-          <h2 id="external-service-settings-title">外部服务连接</h2>
+          <h2 id="external-service-settings-title">行情与链上服务</h2>
         </div>
         <span className="external-service-settings__scope">GLOBAL / EVM</span>
       </div>

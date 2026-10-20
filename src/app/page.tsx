@@ -49,9 +49,6 @@ export default async function AssetDashboardPage({
         <header className="page-header">
           <div className="header-title">
             <p className="header-label">
-              <span className="header-index" aria-hidden="true">
-                01
-              </span>
               <span className="header-wordmark" lang="en">
                 PERSONAL ASSET DASHBOARD
               </span>

@@ -10,8 +10,6 @@ import {
 import {
   projectAssetSourceHistoryTrend,
   projectInvestmentPerformanceTrend,
-  type InvestmentPerformanceCustomRange,
-  type InvestmentPerformanceIntervalPreset,
 } from "@/domain/investment-performance-trend";
 import {
   DEFAULT_MARKET_BENCHMARK_SYMBOLS,
@@ -36,7 +34,7 @@ import type {
   InvestmentCashflowInput,
   InvestmentCashflowKind,
 } from "@/server/ports";
-import { AssetTrendChart } from "@/ui/asset-trend-chart";
+import { AssetTrendPanel, useAssetTrendRange } from "@/ui/asset-trend-panel";
 import { MarketBenchmarkControls } from "@/ui/market-benchmark-controls";
 import { useMarketBenchmarkComparison } from "@/ui/market-benchmark";
 import { formatShanghaiDateTime, formatShanghaiDayLabel } from "@/ui/shanghai-date-time";
@@ -57,7 +55,7 @@ import {
 import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
 import { AssetGlobalRefreshControl } from "@/ui/asset-refresh-controls";
 import { lockOnUnauthorizedResponse, OWNER_SESSION_EXPIRED_MESSAGE, readJsonResult } from "@/ui/owner-request-lock";
-import { CURRENCY_OPTIONS, INTERVAL_OPTIONS } from "@/ui/reporting-currency-options";
+import { CURRENCY_OPTIONS } from "@/ui/reporting-currency-options";
 import { profitDirection, type ProfitColorScheme } from "@/ui/profit-color-scheme";
 import { signedAmount } from "@/ui/signed-amount";
 
@@ -479,12 +477,8 @@ export function InvestmentPerformanceWorkspace({
     setCurrency,
     showSensitiveInfo,
   } = useWorkbenchDisplayPreferences();
-  const [preset, setPreset] = useState<InvestmentPerformanceIntervalPreset>("month-to-date");
-  const [customRange, setCustomRange] =
-    useState<InvestmentPerformanceCustomRange | null>(null);
-  const [customRangeDialogOpen, setCustomRangeDialogOpen] = useState(false);
-  const [customStartDay, setCustomStartDay] = useState(currentDay);
-  const [customEndDay, setCustomEndDay] = useState(currentDay);
+  const trendRange = useAssetTrendRange();
+  const { preset, customRange } = trendRange;
   const [enabledBenchmarkSymbols, setEnabledBenchmarkSymbols] = useState<
     MarketBenchmarkSymbol[]
   >(() => [...DEFAULT_MARKET_BENCHMARK_SYMBOLS]);
@@ -667,33 +661,6 @@ export function InvestmentPerformanceWorkspace({
     );
   }
 
-  function openCustomRangeDialog() {
-    if (firstAvailableTrendDay === null) return;
-    const suggestedStartDay = portfolioTrend.startDay ?? firstAvailableTrendDay;
-    const suggestedEndDay = portfolioTrend.days.at(-1) ?? currentDay;
-    setCustomStartDay(customRange?.startDay ?? suggestedStartDay);
-    setCustomEndDay(customRange?.endDay ?? suggestedEndDay);
-    setCustomRangeDialogOpen(true);
-  }
-
-  function choosePreset(value: InvestmentPerformanceIntervalPreset) {
-    if (value === "custom") {
-      openCustomRangeDialog();
-      return;
-    }
-    setPreset(value);
-  }
-
-  function applyCustomRange() {
-    if (customStartDay > customEndDay) return;
-    setCustomRange({
-      startDay: customStartDay,
-      endDay: customEndDay,
-    });
-    setPreset("custom");
-    setCustomRangeDialogOpen(false);
-  }
-
   return (
     <section
       className="investment-performance"
@@ -718,7 +685,7 @@ export function InvestmentPerformanceWorkspace({
           </>
         }
         eyebrow="PORTFOLIO / PERFORMANCE"
-        title="收益分析"
+        title="投资账本"
       />
 
       <LongbridgeRealtimeNotice state={realtimeState} retry={retry} />
@@ -769,35 +736,23 @@ export function InvestmentPerformanceWorkspace({
             <VibeStatusTag tone="warning">无记录</VibeStatusTag>
           )}
         </header>
-        <div className="investment-performance__range" aria-label="分析区间" role="group">
-          <span aria-hidden="true" className="vibe-field__label">
-            分析区间
-          </span>
-          <div className="investment-performance__range-options">
-            {INTERVAL_OPTIONS.map((option) => {
-              const selected = option.value === preset;
-              return (
-                <VibeButton
-                  key={option.value}
-                  aria-pressed={selected}
-                  className="investment-performance__range-option"
-                  disabled={option.value === "custom" && firstAvailableTrendDay === null}
-                  onClick={() => choosePreset(option.value)}
-                  type="button"
-                  variant={selected ? "primary" : "outline"}
-                >
-                {option.label}
-                </VibeButton>
-              );
-            })}
-          </div>
-          {preset === "custom" && customRange !== null ? (
-            <span className="investment-performance__custom-range-label">
-              已选 {formatShanghaiDayLabel(customRange.startDay)} 至{" "}
-              {formatShanghaiDayLabel(customRange.endDay)}
-            </span>
-          ) : null}
-        </div>
+        <AssetTrendPanel
+          range={{ ...trendRange, currentDay, firstDay: firstAvailableTrendDay ?? undefined }}
+          ariaLabel={hasEarlyHistory
+            ? `我的资产走势：完整总资产与${importedSource?.label}早期实际记录`
+            : "完整总资产走势"}
+          benchmark={{
+            assetScopeLabel: "组合",
+            comparison: benchmarkDataState.kind === "ready" ? benchmarkDataState.comparison : null,
+            enabledSymbols: enabledBenchmarkSymbols,
+          }}
+          currency={currency}
+          formatAmount={amount}
+          formatDay={formatShanghaiDayLabel}
+          historicalSeries={historicalSeries}
+          isSensitiveHidden={!showSensitiveInfo}
+          points={chartPoints}
+        >
         {/* 读法说明属于脚注而不是告警：整块提示条会压过图表本身，
             降为安静脚注，与总览「含资金进出与估值修正」保持同一层级。 */}
         <p className="investment-performance__note">
@@ -821,24 +776,7 @@ export function InvestmentPerformanceWorkspace({
             onEnabledSymbolsChange={setEnabledBenchmarkSymbols}
           />
         ) : null}
-        <AssetTrendChart
-          ariaLabel={hasEarlyHistory
-            ? `我的资产走势：完整总资产与${importedSource?.label}早期实际记录`
-            : "完整总资产走势"}
-          benchmark={{
-            assetScopeLabel: "组合",
-            comparison: benchmarkDataState.kind === "ready" ? benchmarkDataState.comparison : null,
-            enabledSymbols: enabledBenchmarkSymbols,
-          }}
-          currency={currency}
-          formatAmount={amount}
-          formatDay={formatShanghaiDayLabel}
-          historicalSeries={historicalSeries}
-          incompleteCount={portfolioTrend.incompleteCount}
-          isSensitiveHidden={!showSensitiveInfo}
-          points={chartPoints}
-          unavailableCount={portfolioTrend.unavailableCount}
-        />
+        </AssetTrendPanel>
       </section>
 
       <section className="investment-performance__interval" data-testid="performance-interval">
@@ -1086,54 +1024,6 @@ export function InvestmentPerformanceWorkspace({
             setFocusLedgerAfterDelete(true);
           }}
         />
-      ) : null}
-      {customRangeDialogOpen ? (
-        <VibeDialog
-          actions={
-            <>
-              <VibeButton
-                onClick={() => setCustomRangeDialogOpen(false)}
-                type="button"
-                variant="text"
-              >
-                取消
-              </VibeButton>
-              <VibeButton
-                disabled={customStartDay > customEndDay}
-                onClick={applyCustomRange}
-                type="button"
-                variant="primary"
-              >
-                应用区间
-              </VibeButton>
-            </>
-          }
-          aria-label="自定义分析区间"
-          description="仅使用完整总资产观测。"
-          eyebrow="PERFORMANCE / RANGE"
-          onClose={() => setCustomRangeDialogOpen(false)}
-          title="自定义分析区间"
-          titleId="custom-performance-range-title"
-        >
-          <div className="investment-performance__custom-range-fields">
-            <VibeDateField
-              fieldId="custom-performance-range-start"
-              label="开始日期"
-              max={customEndDay}
-              min={firstAvailableTrendDay ?? currentDay}
-              onValueChange={setCustomStartDay}
-              value={customStartDay}
-            />
-            <VibeDateField
-              fieldId="custom-performance-range-end"
-              label="结束日期"
-              max={currentDay}
-              min={customStartDay}
-              onValueChange={setCustomEndDay}
-              value={customEndDay}
-            />
-          </div>
-        </VibeDialog>
       ) : null}
     </section>
   );

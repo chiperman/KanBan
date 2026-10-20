@@ -1,9 +1,11 @@
 "use client";
 
+import { WorkspaceViewNavigation } from "@/ui/workspace-view-navigation";
 import { lazy, Suspense, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
 import { AssetSourceRefreshButton } from "@/ui/asset-refresh-controls";
+import { type AssetTrendRange } from "@/ui/asset-trend-panel";
 import { SourceInvestmentPerformance } from "@/ui/source-investment-performance";
 import type { SourceInvestmentHistory } from "@/domain/source-investment-history";
 import type { SourceInvestmentRecord } from "@/domain/source-investment-records";
@@ -12,7 +14,6 @@ import { SourceInvestmentRecordDialog, SourceInvestmentRecordDeleteDialog } from
 import { assetSourceDefaultDisplayName, assetSourceDisplayName } from "@/domain/asset-source-display-name";
 import { defaultManualAssetRecordCurrency } from "@/domain/manual-asset-records";
 import {
-  projectAssetSourceTrend,
   type InvestmentPerformanceCustomRange,
   type InvestmentPerformanceIntervalPreset,
 } from "@/domain/investment-performance-trend";
@@ -29,20 +30,17 @@ import {
 import { LongbridgeRealtimeNotice, LongbridgeRealtimeStatus } from "@/ui/longbridge-realtime-notice";
 import { useLongbridgeRealtime } from "@/ui/use-longbridge-realtime";
 import type { ProfitColorScheme } from "@/ui/profit-color-scheme";
-import { formatShanghaiDayLabel } from "@/ui/shanghai-date-time";
 import { useWorkbenchDisplayPreferences } from "@/ui/workbench-display-preferences";
 import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
-import { VibeDateField } from "@/ui/vibe/vibe-date-field";
 import { VibeDialog } from "@/ui/vibe/vibe-dialog";
 import { VibeIcon } from "@/ui/vibe/vibe-icon";
 import {
   VibeField,
   VibeSelect,
-  VibeSelectField,
 } from "@/ui/vibe/vibe-field";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
 import { lockOnUnauthorizedResponse, OWNER_SESSION_EXPIRED_MESSAGE, readJsonResult } from "@/ui/owner-request-lock";
-import { CURRENCY_OPTIONS, INTERVAL_OPTIONS } from "@/ui/reporting-currency-options";
+import { CURRENCY_OPTIONS } from "@/ui/reporting-currency-options";
 
 type DetailSource = AssetSourceView & {
   permissions: AssetPermission[];
@@ -98,98 +96,6 @@ function formatTime(value: string): string {
     minute: "2-digit",
     hourCycle: "h23",
   }).format(new Date(value));
-}
-
-function ManualRecordDialog({
-  currentDay,
-  onClose,
-  record,
-  source,
-}: {
-  currentDay: string;
-  onClose(): void;
-  record?: ManualAssetRecord;
-  source: DetailSource;
-}) {
-  const router = useRouter();
-  const [day, setDay] = useState(record?.day ?? currentDay);
-  const [amount, setAmount] = useState(record?.amount ?? "");
-  const [currency, setCurrency] = useState<"USD" | "CNY" | "HKD">(
-    record?.currency ?? defaultManualAssetRecordCurrency(source.manualRecords),
-  );
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState("");
-  const name = assetSourceDisplayName(source);
-
-  async function save() {
-    setPending(true);
-    setError("");
-    try {
-      await sourceRequest(`/api/asset-sources/${encodeURIComponent(source.id)}`, "PATCH", {
-        action: "manual-record",
-        day,
-        amount,
-        currency,
-      });
-      router.refresh();
-      onClose();
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "保存数据失败");
-    } finally {
-      setPending(false);
-    }
-  }
-
-  return (
-    <VibeDialog
-      actions={
-        <>
-          <VibeButton disabled={pending} onClick={onClose} type="button" variant="text">
-            取消
-          </VibeButton>
-          <VibeButton disabled={pending || amount.trim() === ""} type="submit" variant="primary">
-            保存数据
-          </VibeButton>
-        </>
-      }
-      aria-label={`记录 ${name} 数据`}
-      description="每日仅记录一条总额。"
-      eyebrow="MANUAL / RECORD"
-      onClose={onClose}
-      onSubmit={(event) => {
-        event.preventDefault();
-        void save();
-      }}
-      title={`记录 ${name} 数据`}
-      titleId="manual-record-dialog-title"
-    >
-      <VibeDateField
-        disabled={record !== undefined}
-        fieldId="manual-record-day"
-        label="记录日期"
-        max={currentDay}
-        onValueChange={setDay}
-        value={day}
-      />
-      <VibeField
-        fieldId="manual-record-amount"
-        label="资产总额"
-        inputMode="decimal"
-        onChange={(event) => setAmount(event.target.value)}
-        value={amount}
-      />
-      <VibeSelectField
-        fieldId="manual-record-currency"
-        label="币种"
-        onValueChange={(value) => setCurrency(value as "USD" | "CNY" | "HKD")}
-        options={CURRENCY_OPTIONS}
-        value={currency}
-      />
-      {error ? (
-        <VibeNotice role="alert" tone="error">{error}</VibeNotice>
-      ) : null}
-    </VibeDialog>
-  );
 }
 
 function ManualRecordDeleteDialog({
@@ -324,7 +230,7 @@ function SourceLifecycleActions({
         await sourceRequest(`/api/asset-sources/${encodeURIComponent(source.id)}`, "DELETE", {
           confirmation: "DELETE_SOURCE_DATA",
         });
-        router.push("/asset-sources");
+        router.push("/assets?view=sources");
       } else {
         await sourceRequest(`/api/asset-sources/${encodeURIComponent(source.id)}`, "PATCH", {
           action,
@@ -344,6 +250,7 @@ function SourceLifecycleActions({
 
   return (
     <>
+      <div className="asset-source-detail__lifecycle-grid">
       <section aria-label="来源显示与生命周期" className="asset-source-lifecycle">
         <p className="card-label">DISPLAY / LIFECYCLE</p>
         <h2>显示与生命周期</h2>
@@ -372,6 +279,7 @@ function SourceLifecycleActions({
         ) : (
           <p>断开将停止同步；历史数据保留。</p>
         )}
+        <div className="asset-source-detail__lifecycle-actions">
         {!manual ? (
           source.lifecycle === "disconnected" ? (
             <VibeButton
@@ -388,6 +296,7 @@ function SourceLifecycleActions({
               onClick={() => setConfirmDisconnect(true)}
               type="button"
               variant="outline"
+              tone="danger"
             >
               断开来源
             </VibeButton>
@@ -397,14 +306,17 @@ function SourceLifecycleActions({
           disabled={pending}
           onClick={() => setDeleteStep(1)}
           type="button"
-          variant="text"
+          variant="outline"
+          tone="danger"
         >
           永久删除数据
         </VibeButton>
+        </div>
         {error ? (
           <VibeNotice role="alert" tone="error">{error}</VibeNotice>
         ) : null}
       </section>
+      </div>
 
       {confirmDisconnect ? (
         <VibeDialog
@@ -470,9 +382,13 @@ function SourceLifecycleActions({
 }
 
 export function AssetSourceDetail({
+  view = "overview",
+  initialUpdate = false,
+  bookId,
+  bookMode = false,
   investmentHistory = null,
   investmentRecords = [],
-  initialPreset = "month-to-date",
+  initialPreset = "all",
   initialCustomRange = null,
   firstDay,
   cardHidden,
@@ -482,6 +398,10 @@ export function AssetSourceDetail({
   reportingExchangeRates,
   source,
 }: {
+  view?: "overview" | "manage";
+  initialUpdate?: boolean;
+  bookId?: import("@/domain/investment-books").InvestmentBookId;
+  bookMode?: boolean;
   investmentHistory?: SourceInvestmentHistory | null;
   investmentRecords?: SourceInvestmentRecord[];
   initialPreset?: InvestmentPerformanceIntervalPreset;
@@ -507,21 +427,18 @@ export function AssetSourceDetail({
   const [deletingRecord, setDeletingRecord] = useState<ManualAssetRecord | null>(
     null,
   );
-  const [investmentRecord, setInvestmentRecord] = useState<SourceInvestmentRecord | null | undefined>(null);
+  const [investmentRecord, setInvestmentRecord] = useState<SourceInvestmentRecord | null | undefined>(initialUpdate && source.kind === "manual" ? undefined : null);
   const [deletingInvestmentRecord, setDeletingInvestmentRecord] = useState<SourceInvestmentRecord | null>(null);
   const preset = initialPreset;
   const customRange = initialCustomRange;
   const router = useRouter();
   const [rangePending, startRangeTransition] = useTransition();
-  function navigateRange(value: InvestmentPerformanceIntervalPreset, range?: InvestmentPerformanceCustomRange) {
+  function navigateRange(value: InvestmentPerformanceIntervalPreset, range: InvestmentPerformanceCustomRange | null) {
     const params = new URLSearchParams({interval:value});
     if (range) { params.set("from", range.startDay); params.set("to", range.endDay); }
     startRangeTransition(() => router.push("/asset-sources/" + encodeURIComponent(source.id) + "?" + params, {scroll:false}));
   }
 
-  const [customRangeDialogOpen, setCustomRangeDialogOpen] = useState(false);
-  const [customStartDay, setCustomStartDay] = useState(currentDay);
-  const [customEndDay, setCustomEndDay] = useState(currentDay);
   const name = assetSourceDisplayName(source);
   const manual = source.kind === "manual";
   const firstSourceTrendDay = useMemo(
@@ -532,42 +449,13 @@ export function AssetSourceDetail({
     ).toSorted().at(0),
     [firstDay, history, source.id],
   );
-  const hasCurrentManualRecord = source.manualRecords?.some(({ day }) => day === currentDay);
-  const sourceTrend = useMemo(
-    () => projectAssetSourceTrend({
-      currency,
-      customRange,
-      currentDay,
-      preset,
-      sourceId: source.id,
-      trendObservations: history,
-    }),
-    [currency, customRange, currentDay, history, preset, source.id],
-  );
+  const trendRange: AssetTrendRange = {
+    preset, customRange, currentDay, firstDay: firstSourceTrendDay,
+    pending: rangePending, onChange: navigateRange,
+  };
 
   const openingRecord = investmentRecords.find(record => record.kind === "opening");
   const investmentCurrency = investmentHistory?.currency ?? investmentRecords[0]?.currency ?? null;
-
-  function openCustomRangeDialog() {
-    if (firstSourceTrendDay === undefined) return;
-    setCustomStartDay(customRange?.startDay ?? sourceTrend.days[0] ?? firstSourceTrendDay);
-    setCustomEndDay(customRange?.endDay ?? sourceTrend.days.at(-1) ?? currentDay);
-    setCustomRangeDialogOpen(true);
-  }
-
-  function choosePreset(value: InvestmentPerformanceIntervalPreset) {
-    if (value === "custom") {
-      openCustomRangeDialog();
-      return;
-    }
-    navigateRange(value);
-  }
-
-  function applyCustomRange() {
-    if (customStartDay > customEndDay) return;
-    navigateRange("custom", { startDay: customStartDay, endDay: customEndDay });
-    setCustomRangeDialogOpen(false);
-  }
 
   return (
     <>
@@ -575,8 +463,8 @@ export function AssetSourceDetail({
         <WorkbenchPageHeader
           description={realtimeActive ? <LongbridgeRealtimeStatus state={realtimeState} /> : undefined}
           eyebrow="SOURCE / DETAIL"
-          title="来源详情"
-          backLink={{ href: "/asset-sources", label: "返回来源管理" }}
+          title={name}
+          backLink={{ href: "/assets", label: "返回资产" }}
           actionsLabel="来源详情快捷操作"
           actions={<>
             <VibeSelect
@@ -587,18 +475,15 @@ export function AssetSourceDetail({
             value={currency}
               variant="compact"
             />
-            <VibeButton onClick={() => setInvestmentRecord(undefined)} type="button" variant="outline">
-              <VibeIcon name="plus" /><span>手动记录</span>
-            </VibeButton>
             {manual ? (
               <VibeButton
                 className="manual-asset-record-button"
-                onClick={() => setEditingRecord(undefined)}
+                onClick={() => setInvestmentRecord(undefined)}
                 type="button"
                 variant="outline"
               >
-                <VibeIcon name={hasCurrentManualRecord ? "edit" : "plus"} />
-                <span>{hasCurrentManualRecord ? "更新今日数据" : "添加数据"}</span>
+                <VibeIcon name="plus" />
+                <span>{bookMode ? "更新资产" : "添加记录"}</span>
               </VibeButton>
             ) : source.lifecycle !== "disconnected" ? (
               <AssetSourceRefreshButton sourceId={source.id} sourceName={name} />
@@ -607,48 +492,17 @@ export function AssetSourceDetail({
         />
       </section>
 
-      <section aria-label="来源分析" className="asset-source-detail__analysis">
+      <WorkspaceViewNavigation label="来源详情视角" current={`/asset-sources/${encodeURIComponent(source.id)}?${view === "manage" ? "view=manage&" : ""}interval=${preset}${customRange ? `&from=${customRange.startDay}&to=${customRange.endDay}` : ""}`} items={[
+        { href: `/asset-sources/${encodeURIComponent(source.id)}?interval=${preset}${customRange ? `&from=${customRange.startDay}&to=${customRange.endDay}` : ""}`, label: "资产概况" },
+        { href: `/asset-sources/${encodeURIComponent(source.id)}?view=manage&interval=${preset}${customRange ? `&from=${customRange.startDay}&to=${customRange.endDay}` : ""}`, label: "连接与管理" },
+      ]} />
+      {view === "overview" ? <section aria-label="来源分析" className="asset-source-detail__analysis">
+        {bookId ? <p className="trend-note">本来源提供资产余额。<VibeLink href={`/performance?book=${bookId}`} variant="text">查看所属账本的本金与收益</VibeLink></p> : null}
         <LongbridgeRealtimeNotice state={realtimeState} retry={retry} />
         <AssetSourceCard
-          showAssetTrend={investmentHistory === null && !openingRecord}
-          trendContent={<SourceInvestmentPerformance
-            rangeControls={
-              <div className="asset-source-detail__analysis-controls">
-                <div
-                  aria-label="分析区间"
-                  className="investment-performance__range"
-                  role="group"
-                >
-                  <span aria-hidden="true" className="vibe-field__label">
-                    分析区间
-                  </span>
-                  <div className="investment-performance__range-options">
-                    {INTERVAL_OPTIONS.map((option) => {
-                      const selected = option.value === preset;
-                      return (
-                        <VibeButton
-                          key={option.value}
-                          aria-pressed={selected}
-                          className="investment-performance__range-option"
-                          disabled={rangePending || (option.value === "custom" && firstSourceTrendDay === undefined)}
-                          onClick={() => choosePreset(option.value)}
-                          type="button"
-                          variant={selected ? "primary" : "outline"}
-                        >
-                          {option.label}
-                        </VibeButton>
-                      );
-                    })}
-                  </div>
-                  {preset === "custom" && customRange !== null ? (
-                    <span className="investment-performance__custom-range-label">
-                      已选 {formatShanghaiDayLabel(customRange.startDay)} 至{" "}
-                      {formatShanghaiDayLabel(customRange.endDay)}
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-            }
+          showAssetTrend={bookMode || (investmentHistory === null && !openingRecord)}
+          trendContent={bookMode ? undefined : <SourceInvestmentPerformance
+            range={trendRange}
             history={investmentHistory}
             sourceId={source.id}
             sourceName={name}
@@ -657,11 +511,9 @@ export function AssetSourceDetail({
             source={manual ? undefined : liveSources[0]}
             manualRecords={source.manualRecords ?? []}
             currentDay={currentDay}
-            preset={preset}
-            customRange={customRange}
             showSensitiveInfo={showSensitiveInfo}
-            onEdit={setInvestmentRecord}
-            onDelete={setDeletingInvestmentRecord}
+            onEdit={manual ? setInvestmentRecord : undefined}
+            onDelete={manual ? setDeletingInvestmentRecord : undefined}
           />}
           showRefreshControl={false}
           totalAnimationKey={source.kind === "longbridge" ? source.snapshot.syncedAt : undefined}
@@ -683,10 +535,9 @@ export function AssetSourceDetail({
           showSensitiveInfo={showSensitiveInfo}
           source={liveSources[0]}
           trendBenchmark={null}
-          trendDays={sourceTrend.days}
-          trendRange="30d"
+          trendRangeSelection={trendRange}
         />
-      </section>
+      </section> : <>
       <div className="asset-source-detail__account-info">
         <section aria-label="来源身份" className="asset-source-detail__metadata">
           <h2>来源身份</h2>
@@ -756,73 +607,23 @@ export function AssetSourceDetail({
 
       </div>
       <SourceLifecycleActions cardHidden={cardHidden} source={source} />
+      </>}
 
-      {investmentRecord !== null ? <SourceInvestmentRecordDialog sourceId={source.id} sourceName={name}
+      {manual && (investmentRecord !== null || editingRecord !== null) ? <SourceInvestmentRecordDialog sourceId={source.id} sourceName={name}
+        assetOnly={bookMode}
         currentDay={currentDay} currency={investmentCurrency} hasOpening={investmentHistory !== null || !!openingRecord}
-        record={investmentRecord} onClose={() => setInvestmentRecord(null)} /> : null}
-      {deletingInvestmentRecord ? <SourceInvestmentRecordDeleteDialog sourceName={name} record={deletingInvestmentRecord}
+        defaultCurrency={defaultManualAssetRecordCurrency(source.manualRecords)}
+        record={investmentRecord ?? undefined} manualRecord={editingRecord ?? undefined}
+        onClose={() => { setInvestmentRecord(null); setEditingRecord(null); }} /> : null}
+      {manual && deletingInvestmentRecord ? <SourceInvestmentRecordDeleteDialog sourceName={name} record={deletingInvestmentRecord}
         onClose={() => setDeletingInvestmentRecord(null)} /> : null}
 
-      {editingRecord !== null ? (
-        <ManualRecordDialog
-          currentDay={currentDay}
-          onClose={() => setEditingRecord(null)}
-          record={editingRecord ?? undefined}
-          source={source}
-        />
-      ) : null}
-      {deletingRecord ? (
+      {manual && deletingRecord ? (
         <ManualRecordDeleteDialog
           onClose={() => setDeletingRecord(null)}
           record={deletingRecord}
           source={source}
         />
-      ) : null}
-      {customRangeDialogOpen ? (
-        <VibeDialog
-          actions={
-            <>
-              <VibeButton
-                onClick={() => setCustomRangeDialogOpen(false)}
-                type="button"
-                variant="text"
-              >
-                取消
-              </VibeButton>
-              <VibeButton
-                disabled={customStartDay > customEndDay}
-                onClick={applyCustomRange}
-                type="button"
-                variant="primary"
-              >
-                应用区间
-              </VibeButton>
-            </>
-          }
-          aria-label="选择来源分析区间"
-          description="仅使用完整每日观测。"
-          eyebrow="SOURCE / CUSTOM RANGE"
-          onClose={() => setCustomRangeDialogOpen(false)}
-          title="选择分析区间"
-          titleId="asset-source-analysis-range-title"
-        >
-          <VibeDateField
-            fieldId="asset-source-analysis-start-day"
-            label="开始日期"
-            max={customEndDay}
-            min={firstSourceTrendDay}
-            onValueChange={setCustomStartDay}
-            value={customStartDay}
-          />
-          <VibeDateField
-            fieldId="asset-source-analysis-end-day"
-            label="结束日期"
-            max={currentDay}
-            min={customStartDay}
-            onValueChange={setCustomEndDay}
-            value={customEndDay}
-          />
-        </VibeDialog>
       ) : null}
     </>
   );

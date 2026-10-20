@@ -7,6 +7,10 @@ export class DashboardSchema {
 
   createSchema(): void {
     this.database.exec(`
+      CREATE TABLE IF NOT EXISTS investment_book_state (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        payload_json TEXT NOT NULL CHECK (json_valid(payload_json))
+      ) STRICT;
       CREATE TABLE IF NOT EXISTS schema_metadata (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL

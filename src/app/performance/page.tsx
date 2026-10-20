@@ -12,6 +12,8 @@ import {
   longbridgeReferenceRates,
 } from "@/domain/investment-performance";
 import { InvestmentPerformanceWorkspace } from "@/ui/investment-performance-workspace";
+import { InvestmentBooksWorkspace } from "@/ui/investment-books-workspace";
+import { INVESTMENT_BOOKS } from "@/domain/investment-books";
 import {
   DEFAULT_PROFIT_COLOR_SCHEME,
   isProfitColorScheme,
@@ -37,13 +39,19 @@ export default async function PerformancePage({
     trendObservations,
     importedSourceHistoryObservations,
     fullRefreshState,
+    books,
+    manualRecords,
   ] = await Promise.all([
     services.investmentCashflows.list(),
     services.assetSources.list(),
     services.dailyAssetSnapshots.listTrendObservations(),
     services.dailyAssetSnapshots.listImportedSourceHistoryObservations(),
     readAssetRefreshState(services),
+    services.investmentBooks?.readInvestmentBooks() ?? null,
+    services.manualAssetRecords.list(),
   ]);
+  const query = await searchParams;
+  const initialBook = INVESTMENT_BOOKS.find(book => book.id === query?.book)?.id;
   const longbridgeRates = longbridgeReferenceRates(sources);
   const savedProfitColorScheme =
     (await cookies()).get(PROFIT_COLOR_SCHEME_COOKIE_KEY)?.value ?? null;
@@ -70,7 +78,17 @@ export default async function PerformancePage({
             跳到主要内容
           </a>
           <main id="main-content">
-            <InvestmentPerformanceWorkspace
+            {books ? <InvestmentBooksWorkspace
+              state={books}
+              key={initialBook ?? "us-stocks"}
+              initialBookId={initialBook}
+              view={query?.view === "records" ? "records" : query?.view === "manage" ? "manage" : "performance"}
+              sources={sources.map(({ credentialReference: _credential, permissions: _permissions, ...source }) => source)}
+              observations={trendObservations}
+              manualRecords={manualRecords}
+              cashflows={cashflows}
+              currentDay={shanghaiDay(now)}
+            /> : <InvestmentPerformanceWorkspace
               cashflows={cashflows}
               currentDay={shanghaiDay(now)}
               currentObservedAt={now.toISOString()}
@@ -79,7 +97,7 @@ export default async function PerformancePage({
               currentExchangeRates={longbridgeRates}
               importedSourceHistoryObservations={importedSourceHistoryObservations}
               trendObservations={trendObservations}
-            />
+            />}
           </main>
         </div>
       </WorkbenchShell>

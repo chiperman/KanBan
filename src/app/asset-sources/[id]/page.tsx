@@ -39,15 +39,15 @@ export default async function AssetSourceDetailPage({
   const currentDay = shanghaiDay(services.clock.now());
   const query = await searchParams;
   const value = query?.interval;
-  const preset: InvestmentPerformanceIntervalPreset = typeof value === "string" && ["month-to-date", "1m", "6m", "year-to-date", "1y", "all", "custom"].includes(value) ? value as InvestmentPerformanceIntervalPreset : "month-to-date";
+  const preset: InvestmentPerformanceIntervalPreset = typeof value === "string" && ["7d", "month-to-date", "1m", "6m", "year-to-date", "1y", "all", "custom"].includes(value) ? value as InvestmentPerformanceIntervalPreset : "all";
   function validDay(value: unknown): value is string {
     return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value && value <= currentDay;
   }
   const customRange = preset === "custom" && validDay(query?.from) && validDay(query?.to) && query.from <= query.to ? {startDay: query.from, endDay: query.to} : null;
-  const effectivePreset = preset === "custom" && !customRange ? "month-to-date" : preset;
+  const effectivePreset = preset === "custom" && !customRange ? "all" : preset;
   const days = rangeDays(effectivePreset, currentDay, undefined, customRange);
   const detailQuery = { sourceId: id, ...(effectivePreset === "all" ? {} : {from: days[0], to: days.at(-1)}) };
-  const [detail, cards, fullRefreshState] = await Promise.all([
+  const [detail, cards, fullRefreshState, books] = await Promise.all([
     services.assetSourceDetails ? services.assetSourceDetails.readSourceDetail(detailQuery) : (async () => {
       const [sources, manualRecords, allHistory] = await Promise.all([services.assetSources.list(), services.manualAssetRecords.list(), services.dailyAssetSnapshots.listTrendObservations()]);
       return { sources, manualRecords: manualRecords.filter((record) => record.sourceId === id),
@@ -56,6 +56,7 @@ export default async function AssetSourceDetailPage({
     })(),
     services.assetCards.list(),
     readAssetRefreshState(services),
+    services.investmentBooks?.readInvestmentBooks() ?? null,
   ]);
   const { sources, manualRecords, history } = detail;
   const storedSource = sources.find((source) => source.id === id);
@@ -93,6 +94,10 @@ export default async function AssetSourceDetailPage({
           </a>
           <main id="main-content">
             <AssetSourceDetail
+              view={query?.view === "manage" ? "manage" : "overview"}
+              initialUpdate={query?.action === "update"}
+              bookId={books?.members.find(member => member.sourceId === id)?.bookId}
+              bookMode={books !== null}
               investmentHistory={"investmentHistory" in detail ? detail.investmentHistory : null}
               investmentRecords={"investmentRecords" in detail ? detail.investmentRecords : []}
               initialPreset={effectivePreset}

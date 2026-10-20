@@ -52,6 +52,10 @@ React 页面必须消费 `src/ui/vibe/vibe-button.tsx` 的 `VibeButton` / `VibeL
 
 **禁止**：页面级选择器覆盖按钮的 `display`、背景、文字色、边框、圆角、字号、行高、内边距、阴影、透明度或过渡。页面 CSS 只能负责按钮的放置、宽高伸缩、间距和响应式显隐；视觉语义由 `vibe-components.css` 唯一拥有。新增页面覆盖会被 `pnpm design:lint` 的 `page-button-override` 规则拦截。
 
+### 名称链接 · `VibeEntityLink`
+
+账户、来源名称进入详情时使用 `src/ui/vibe/vibe-entity-link.tsx`，共享 `.vibe-entity-link` 配方。名称始终带下划线，末尾使用同套线形右箭头，不依赖悬停或颜色表达可点击。命中区至少 40px，键盘焦点环与按钮一致；长名称允许换行，箭头不压缩。名称使用正文排版，执行操作继续使用 `VibeButton` / `VibeLink`。
+
 ---
 
 ## 3. 输入字段 · `.vibe-field`
