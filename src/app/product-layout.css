@@ -7314,6 +7314,26 @@ body {
   color: var(--success);
 }
 
+.security-settings__bound-at {
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
+}
+
+.security-settings__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--vibe-space-3);
+  margin-top: var(--vibe-space-4);
+}
+
+.security-settings__hint {
+  max-width: 42rem;
+  margin: var(--vibe-space-3) 0 0;
+  color: var(--warning);
+  font-size: var(--vibe-type-caption);
+}
+
 .security-settings__recovery {
   margin-top: var(--vibe-space-10);
   padding-top: var(--vibe-space-6);

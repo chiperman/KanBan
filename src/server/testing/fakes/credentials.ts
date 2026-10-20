@@ -16,6 +16,10 @@ export class InMemoryOwnerCredentialStore implements OwnerCredentialStore {
   async save(credential: OwnerCredential): Promise<void> {
     this.credential = credential;
   }
+
+  async remove(): Promise<void> {
+    this.credential = null;
+  }
 }
 
 export class InMemoryOwnerRecoveryCredentialStore

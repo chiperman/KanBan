@@ -19,8 +19,14 @@ function reject(error: string, status: number) {
 export async function POST(request: Request) {
   return withOwnerCredentialLock(async () => {
     const services = getServices();
-    if ((await services.ownerCredentials.get()) !== null) {
-      return reject("注册已关闭", 404);
+    const ownerCredential = await services.ownerCredentials.get();
+    const recoveryCredential = await services.ownerRecoveryCredentials.get();
+    // 首次预置允许匿名；其余状态必须已登录，避免被他人静默替换 Passkey。
+    if (
+      (ownerCredential !== null || recoveryCredential !== null) &&
+      (await services.auth.currentSession()) === null
+    ) {
+      return reject("需要所有者身份", 401);
     }
 
     const { rpID, origin } = relyingParty(request);
@@ -53,6 +59,7 @@ export async function POST(request: Request) {
       publicKey: Buffer.from(credential.publicKey).toString("base64url"),
       counter: credential.counter,
       transports: credential.transports,
+      createdAt: services.clock.now().toISOString(),
     });
 
     return Response.json(

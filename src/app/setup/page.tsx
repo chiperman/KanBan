@@ -17,7 +17,11 @@ export default async function SetupPage({
   await redirectLoopbackIpToLocalhost("/setup", searchParams);
 
   const services = getServices();
-  if ((await services.ownerCredentials.get()) !== null) {
+  const ownerCredential = await services.ownerCredentials.get();
+  const recoveryCredential = await services.ownerRecoveryCredentials.get();
+  const firstRun = ownerCredential === null && recoveryCredential === null;
+  // 本页只负责首次预置；重新绑定与移除统一在设置与安全页完成。
+  if (!firstRun) {
     return (
       <div className="page page-setup">
         <main
@@ -25,9 +29,9 @@ export default async function SetupPage({
           data-vibe-surface="auth-panel"
         >
           <p className="card-label">OWNER PROVISION / CLOSED</p>
-          <h1 className="setup-title">已预置</h1>
+          <h1 className="setup-title">入口已关闭</h1>
           <p className="setup-copy">
-            入口已关闭
+            首次预置完成后，请登录并在设置与安全页管理 Passkey
           </p>
           <VibeLink className="provision-primary" href="/" variant="primary">
             返回所有者登录
@@ -46,9 +50,7 @@ export default async function SetupPage({
       >
         <p className="card-label">OWNER PROVISION</p>
         <h1 className="setup-title">预置唯一所有者的 Passkey</h1>
-        <p className="setup-copy">
-          仅可预置一次
-        </p>
+        <p className="setup-copy">仅可预置一次</p>
         <SetupPasskey />
       </main>
     </div>

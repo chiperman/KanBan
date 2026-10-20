@@ -7,11 +7,19 @@ import { challengeCookieHeader, readCookie, relyingParty } from "@/server/auth/c
 
 export const dynamic = "force-dynamic";
 
-/** 所有者预置：仅当系统尚无凭证时开放一次，不提供公开注册。 */
+/**
+ * 所有者 Passkey 绑定：首次预置（既无 Passkey 也无 TOTP）允许匿名初始化，
+ * 其余状态仅对已登录所有者开放，用于重新绑定或恢复，不提供公开注册。
+ */
 export async function POST(request: Request) {
   const services = getServices();
-  if ((await services.ownerCredentials.get()) !== null) {
-    return Response.json({ error: "注册已关闭" }, { status: 404 });
+  const ownerCredential = await services.ownerCredentials.get();
+  const recoveryCredential = await services.ownerRecoveryCredentials.get();
+  if (
+    (ownerCredential !== null || recoveryCredential !== null) &&
+    (await services.auth.currentSession()) === null
+  ) {
+    return Response.json({ error: "需要所有者身份" }, { status: 401 });
   }
 
   const { rpID, origin } = relyingParty(request);

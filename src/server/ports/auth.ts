@@ -9,18 +9,21 @@ export interface OwnerAuth {
   currentSession(): Promise<OwnerSession | null>;
 }
 
-/** 预置唯一所有者的 Passkey 凭证（公钥，非秘密）。 */
+/** 唯一所有者的 Passkey 凭证（公钥，非秘密）；已登录时可替换或移除。 */
 export interface OwnerCredential {
   id: string;
   publicKey: string;
   counter: number;
   transports?: string[];
+  /** 绑定时间（ISO 8601）；旧文件可能缺失。 */
+  createdAt?: string;
 }
 
-/** 所有者 Passkey 凭证存储；最多保存一个凭证，不提供公开注册。 */
+/** 所有者 Passkey 凭证存储；始终至多保存一个凭证，注册入口仅对首次预置或已登录所有者开放。 */
 export interface OwnerCredentialStore {
   get(): Promise<OwnerCredential | null>;
   save(credential: OwnerCredential): Promise<void>;
+  remove(): Promise<void>;
 }
 
 export interface OwnerRecoveryCredential {

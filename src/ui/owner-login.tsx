@@ -679,6 +679,8 @@ export function OwnerLogin({
   const [recoveryPending, setRecoveryPending] = useState(false);
   const [recoveryRateLimited, setRecoveryRateLimited] = useState(false);
   const recoveryCodeRef = useRef<HTMLInputElement>(null);
+  // 只要存在任一登录方式即为锁定态：允许仅剩 TOTP 时仍能登录与恢复。
+  const locked = ownerProvisioned || recoveryConfigured;
 
   function showRecoveryTotp() {
     setState("idle");
@@ -759,7 +761,7 @@ export function OwnerLogin({
     <section
       aria-labelledby="login-title"
       className={`login-gate vibe-auth-surface${
-        ownerProvisioned
+        locked
           ? ` login-gate--owner login-gate--owner-${mode}`
           : ""
       }`}
@@ -768,7 +770,7 @@ export function OwnerLogin({
     >
       <div className="login-auth-column">
         <div className="login-intro">
-          {ownerProvisioned ? (
+          {locked ? (
             <LockedPixelDisplay />
           ) : (
             <p className="login-display-state" aria-hidden="true">
@@ -777,12 +779,12 @@ export function OwnerLogin({
           )}
           <h1
             id="login-title"
-            className={ownerProvisioned ? "login-state-heading" : undefined}
+            className={locked ? "login-state-heading" : undefined}
           >
-            {ownerProvisioned ? "看板已锁定" : "预置唯一所有者"}
+            {locked ? "看板已锁定" : "预置唯一所有者"}
           </h1>
         </div>
-        <div className="login-flow" key={ownerProvisioned ? mode : "setup"}>
+        <div className="login-flow" key={locked ? mode : "setup"}>
         {state === "failed" ? (
           <VibeNotice className="login-error" code="ERROR" role="alert" tone="error">
             验证失败或已取消。
@@ -793,7 +795,7 @@ export function OwnerLogin({
             请先预置登录凭证。
           </VibeNotice>
         ) : null}
-        {!ownerProvisioned ? (
+        {!locked ? (
           <div className="login-actions first-run-actions">
             <VibeLink className="provision-primary" href="/setup" variant="primary">
               <span>开始首次预置</span>
@@ -803,23 +805,25 @@ export function OwnerLogin({
             </VibeLink>
           </div>
         ) : null}
-        {ownerProvisioned && mode === "choice" ? (
+        {locked && mode === "choice" ? (
           <div className="login-actions login-actions--choice">
-            <VibeButton
-              type="button"
-              disabled={state === "pending"}
-              onClick={login}
-              variant="primary"
-            >
-              {state === "pending" ? "[ VERIFYING ]" : "使用 Passkey 登录"}
-            </VibeButton>
+            {ownerProvisioned ? (
+              <VibeButton
+                type="button"
+                disabled={state === "pending"}
+                onClick={login}
+                variant="primary"
+              >
+                {state === "pending" ? "[ VERIFYING ]" : "使用 Passkey 登录"}
+              </VibeButton>
+            ) : null}
             {recoveryConfigured ? (
               <VibeButton
                 className="login-totp-entry"
                 type="button"
                 disabled={state === "pending"}
                 onClick={showRecoveryTotp}
-                variant="outline"
+                variant={ownerProvisioned ? "outline" : "primary"}
               >
                 使用 TOTP 登录
               </VibeButton>
@@ -875,7 +879,7 @@ export function OwnerLogin({
         ) : null}
         </div>
       </div>
-      {ownerProvisioned ? <LockedProductFlow /> : null}
+      {locked ? <LockedProductFlow /> : null}
     </section>
   );
 }

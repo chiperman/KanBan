@@ -13,6 +13,7 @@ import {
   PROFIT_COLOR_SCHEME_COOKIE_KEY,
 } from "@/ui/profit-color-scheme";
 import { BusinessDataBackupSettings } from "@/ui/business-data-backup-settings";
+import { OwnerPasskeySettings } from "@/ui/owner-passkey-settings";
 import { ProfitColorSettings } from "@/ui/profit-color-settings";
 import { RecoverySetup } from "@/ui/recovery-setup";
 import { ExternalServiceSettings } from "@/ui/external-service-settings";
@@ -33,7 +34,9 @@ export default async function SettingsPage({
   const view = query?.view === "security" ? "security" : query?.view === "data" ? "data" : "preferences";
   const services = getServices();
   if ((await services.auth.currentSession()) === null) redirect("/");
-  const ownerPasskeyConfigured = (await services.ownerCredentials.get()) !== null;
+  const ownerCredential = await services.ownerCredentials.get();
+  const ownerPasskeyConfigured = ownerCredential !== null;
+  const ownerPasskeyBoundAt = ownerCredential?.createdAt ?? null;
   const recoveryConfigured =
     (await services.ownerRecoveryCredentials.get()) !== null;
   const savedProfitColorScheme =
@@ -78,16 +81,11 @@ export default async function SettingsPage({
               aria-labelledby="owner-security-title"
             >
               <h2 id="owner-security-title">登录保护</h2>
-              <dl className="security-settings__statuses">
-                <div>
-                  <dt>Passkey</dt>
-                  <dd data-vibe-tone={ownerPasskeyConfigured ? "success" : "warning"}>
-                    {ownerPasskeyConfigured
-                      ? "唯一所有者 Passkey 已启用"
-                      : "尚未配置 Passkey"}
-                  </dd>
-                </div>
-              </dl>
+              <OwnerPasskeySettings
+                boundAt={ownerPasskeyBoundAt}
+                configured={ownerPasskeyConfigured}
+                recoveryConfigured={recoveryConfigured}
+              />
               <div className="security-settings__recovery">
                 <h3 id="recovery-settings-title">TOTP 登录</h3>
                 <RecoverySetup configured={recoveryConfigured} />

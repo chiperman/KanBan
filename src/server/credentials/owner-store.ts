@@ -10,7 +10,9 @@ function isOwnerCredential(value: unknown): value is OwnerCredential {
   return (
     typeof credential.id === "string" &&
     typeof credential.publicKey === "string" &&
-    typeof credential.counter === "number"
+    typeof credential.counter === "number" &&
+    (credential.createdAt === undefined ||
+      typeof credential.createdAt === "string")
   );
 }
 
@@ -37,6 +39,10 @@ export class FileOwnerCredentialStore implements OwnerCredentialStore {
       this.filePath,
       JSON.stringify(credential, null, 2),
     );
+  }
+
+  async remove(): Promise<void> {
+    await rm(this.filePath, { force: true });
   }
 }
 
