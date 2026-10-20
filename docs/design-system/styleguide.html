@@ -742,6 +742,40 @@ textarea.vibe-field__input {
   padding-inline: 4px;
 }
 
+/* Entity names remain recognisable as links without hover or color alone. */
+.vibe-entity-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 0;
+  min-height: var(--vibe-control-height-compact);
+  gap: var(--vibe-space-2);
+  color: var(--primary);
+  line-height: 1.5;
+  text-decoration: none;
+}
+
+.vibe-entity-link > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-decoration: underline;
+  text-underline-offset: var(--vibe-space-1);
+}
+
+.vibe-entity-link > .vibe-icon {
+  flex-shrink: 0;
+}
+
+.vibe-entity-link:hover > span {
+  text-decoration-thickness: 2px;
+}
+
+.vibe-entity-link:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+  border-radius: var(--r-sm);
+}
+
 /* 破坏性操作：仅改前景色，不染红底红边，避免红色装饰化。 */
 .vibe-button--danger,
 .vibe-button--danger.vibe-button--text {
@@ -1111,12 +1145,6 @@ body::before {
   border: 0;
   border-radius: var(--r-md);
   background: var(--glass);
-}
-
-.page-setup .setup-panel.vibe-auth-surface::before {
-  top: 24px;
-  right: 48px;
-  font-size: 12px;
 }
 
 .page-locked .login-gate.vibe-auth-surface {
@@ -1601,11 +1629,6 @@ body::before {
     padding: 36px 22px;
   }
 
-  .page-setup .setup-panel.vibe-auth-surface::before {
-    top: 18px;
-    right: 22px;
-  }
-
   .vibe-dialog-overlay:has(.source-dialog) {
     align-items: stretch;
     padding: 0;
@@ -1656,6 +1679,9 @@ body::before {
   .vibe-tooltip__content {
     transition: none;
   }
+}
+.page-locked .login-actions--choice .vibe-button {
+  font-size: var(--vibe-type-caption);
 }
 
 
@@ -1807,7 +1833,7 @@ body::before {
 <header class="sg-header">
   <div>
     <p class="sg-header-mark">ASSET DASHBOARD</p>
-    <p class="sg-header-meta">Design system styleguide · Upstream 46661e5 · 2026-10-17 13:44:17 UTC</p>
+    <p class="sg-header-meta">Design system styleguide · Upstream 46661e5 · 2026-10-19 10:54:37 UTC</p>
   </div>
   <div aria-label="主题" class="sg-theme-toggle" role="group">
     <button aria-pressed="true" data-sg-theme="dark" type="button">DARK</button>
@@ -2518,6 +2544,15 @@ body::before {
       </article>
         <article class="sg-panel">
         <div class="sg-panel-head">
+          <h3 class="sg-panel-title">名称与详情入口</h3>
+          
+        </div>
+        <p class="sg-rule">契约：VibeEntityLink / .vibe-entity-link；命中区至少 40px。</p>
+        <div class="sg-stage"><a class="vibe-entity-link" data-vibe-component="entity-link" href="#sg-components"><span>Alpha Securities</span><svg aria-hidden="true" class="vibe-icon" fill="none" focusable="false" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewBox="0 0 24 24"><path d="M4 12h16m-6-6 6 6-6 6" /></svg></a>
+      <p class="sg-body">账户与来源名称始终带下划线及右箭头；长名称可换行，键盘聚焦有清晰焦点环。</p></div>
+      </article>
+        <article class="sg-panel">
+        <div class="sg-panel-head">
           <h3 class="sg-panel-title">输入字段</h3>
           
         </div>
@@ -2772,6 +2807,9 @@ body::before {
       </div><div class="sg-icon-cell">
         <svg aria-hidden="true" class="vibe-icon" fill="none" focusable="false" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewBox="0 0 24 24"><path d="M20 12H4m6-6-6 6 6 6" /></svg>
         <code class="sg-code-inline">arrow-left</code>
+      </div><div class="sg-icon-cell">
+        <svg aria-hidden="true" class="vibe-icon" fill="none" focusable="false" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewBox="0 0 24 24"><path d="M4 12h16m-6-6 6 6-6 6" /></svg>
+        <code class="sg-code-inline">arrow-right</code>
       </div><div class="sg-icon-cell">
         <svg aria-hidden="true" class="vibe-icon" fill="none" focusable="false" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4.5 4.5" /></svg>
         <code class="sg-code-inline">search</code>
@@ -3045,13 +3083,13 @@ body::before {
 # 产出
 #   docs/design-system/styleguide.html
 #   docs/design-system/tokens.json
-# 生成时间 2026-10-17 13:44:17 UTC</pre></div>
+# 生成时间 2026-10-19 10:54:37 UTC</pre></div>
       </article></div>
     </section>
 <footer class="sg-footer">
   本页面由 <code>pnpm design:styleguide</code> 从仓库真实运行时源文件生成，请勿手工编辑。<br />
   上游视觉契约：wangbh030722/vibe-nothing-ui-design@46661e55ae04537215a229be49f2ac1bd37a4255（<a href="https://github.com/wangbh030722/vibe-nothing-ui-design/commit/46661e55ae04537215a229be49f2ac1bd37a4255">commit</a>）<br />
-  token src/app/design-tokens.css · 组件配方 src/app/vibe-components.css · 字形 src/ui/vibe/vibe-icon.tsx / src/ui/vibe/vibe-dot-icon.tsx · 生成于 2026-10-17 13:44:17 UTC
+  token src/app/design-tokens.css · 组件配方 src/app/vibe-components.css · 字形 src/ui/vibe/vibe-icon.tsx / src/ui/vibe/vibe-dot-icon.tsx · 生成于 2026-10-19 10:54:37 UTC
 </footer>
 </main>
 <div aria-labelledby="sg-dialog-title" aria-modal="true" class="vibe-dialog-overlay" data-vibe-component="modal" hidden id="sg-dialog-overlay" role="dialog">

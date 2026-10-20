@@ -50,7 +50,7 @@ const report = {
   sections: await page.locator(".sg-section").count(),
   panels: await page.locator(".sg-panel").count(),
   swatches: await page.locator(".sg-swatch").count(),
-  lineIcons: await page.locator(".vibe-icon").count(),
+  lineIcons: await page.locator(".sg-icon-cell .vibe-icon").count(),
   dotGlyphCells: await page.locator(".vibe-dot-icon > span").count(),
   statusTags: await page.locator(".vibe-status-tag").count(),
   loadedFaces: await page.evaluate(() => [
@@ -170,7 +170,7 @@ const expect = (condition, message) => {
 expect(report.sections === 10, `章节数 ${report.sections}，期望 10`);
 expect(report.panels > 40, `面板数偏少：${report.panels}`);
 expect(report.swatches === 25, `色板数 ${report.swatches}，期望 25`);
-expect(report.lineIcons === 12, `线形图标数 ${report.lineIcons}，期望 12`);
+expect(report.lineIcons === 13, `线形图标数 ${report.lineIcons}，期望 13`);
 expect(
   report.loadedFaceCount === report.declaredFaceCount,
   `字体面加载不全：已加载 ${report.loadedFaceCount} / 已声明 ${report.declaredFaceCount}`,
