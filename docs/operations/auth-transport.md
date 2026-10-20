@@ -6,4 +6,8 @@ HTTP 仅支持 localhost、127.0.0.1、[::1]。非本机部署使用 HTTPS；反
 
 会话 Cookie 为 HttpOnly、SameSite=Lax、浏览器会话有效期；挑战 Cookie 为 HttpOnly、SameSite=Strict、五分钟有效期。HTTPS 下设置与删除均携带 Secure。登录失败会清理挑战 Cookie；服务端单次消费独立约束重放。会话与挑战保存在单进程内存中，重启失效；不支持无共享状态的多实例认证部署。
 
-自动验收：在已构建的隔离副本执行 `node scripts/check-https-auth.mjs`，临时 TLS 代理和 Chromium 虚拟认证器验证注册、登录、失败清理及退出。证书、密钥与测试数据在临时目录生成并清理，不访问所有者凭证。HTTP 对应验收为 owner-auth 与 recovery-session-lock 浏览器测试。此检查不代表真实域名证书或反向代理配置已经验收。
+## 验证入口
+
+现有 [专项脚本](../../scripts/check-https-auth.mjs) 可在已构建的隔离副本中通过 `node scripts/check-https-auth.mjs` 运行，使用临时 TLS 代理和 Chromium 虚拟认证器检查注册、登录、失败清理及退出。证书、密钥与测试数据在临时目录生成并清理，不访问所有者凭证；它不在 `pnpm test` 中，也不代表真实域名证书或反向代理已经验收。
+
+现有离线认证单测在 [passkey-auth.test.ts](../../src/server/auth/passkey-auth.test.ts)，验证范围见 [测试纪律](../../AGENTS.md#测试纪律)。

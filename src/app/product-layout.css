@@ -3815,7 +3815,6 @@ body {
   align-items: center;
   margin: 0 0 0 auto;
   padding-left: var(--vibe-space-2);
-  border-left: 2px solid var(--accent);
   color: var(--secondary);
   font-family: var(--f-mono);
   font-size: var(--vibe-type-label);
@@ -5205,7 +5204,7 @@ body {
   min-height: 300px;
   overflow: hidden;
   border: 1px solid var(--line);
-  /* 已隐藏走势占位：半透明 surface 压在 repeating-linear-gradient 之上，露出每 20% 一根的竖向网格线（D-07 有意效果，非装饰渐变） */
+  /* 已隐藏走势占位：半透明 surface 压在 repeating-linear-gradient 之上，露出每 20% 一根的竖向网格线（隐私纹理，见 docs/design-system/foundations.md 的背景点场） */
   background:
     linear-gradient(
       color-mix(in srgb, var(--surface) 62%, transparent),
@@ -8491,7 +8490,7 @@ body {
 }
 
 /* 遮罩亮度值：white=显示 / black=隐藏。这是 SVG <mask> 的 luminance，不是可见描边；
-   切勿改成 var(--display)——亮色主题下会变为黑色使遮罩隐藏、路线揭示动画消失。D-09 有意例外。 */
+   切勿改成 var(--display)——亮色主题下会变为黑色使遮罩隐藏、路线揭示动画消失。例外见 docs/design-system/foundations.md 的点阵语言。 */
 .locked-flow-route-reveal {
   fill: none;
   stroke: #fff;

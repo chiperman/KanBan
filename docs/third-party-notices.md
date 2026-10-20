@@ -66,5 +66,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-The runtime font licenses remain beside the font files under
-`public/fonts/nothing-open/OFL-*.txt`.
+The application font licenses remain beside the font files under
+[public/fonts/nothing-open/](../public/fonts/nothing-open/). The standalone
+landing page ships its own font files and the same OFL notices under
+[landing/assets/fonts/](../landing/assets/fonts/).

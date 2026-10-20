@@ -25,47 +25,59 @@ pnpm exec next typegen
 pnpm exec tsc --noEmit --incremental false
 ```
 
-其他检查按改动范围选择：`pnpm test:unit`、`pnpm design:lint`；浏览器检查命令及范围见 `package.json`。`pnpm test` 包含构建和浏览器测试。
+`pnpm test` 依次执行类型检查、设计守门和离线单测，不包含应用构建或浏览器检查。也可按改动范围单独执行 `pnpm typecheck`、`pnpm design:lint` 或 `pnpm test:unit`；仅改文档时检查事实和引用即可。完整命令与脚本职责见 [脚本入口](scripts/README.md)，测试范围见 [Agent 测试纪律](AGENTS.md#测试纪律)。
 
 ## 目录职责
 
 | 目录 | 保存内容 |
 | --- | --- |
-| `src/app/` | Next.js 页面、路由和 HTTP 入口 |
-| `src/domain/` | 领域规则、计算与相应单测 |
-| `src/server/` | 服务装配、外部适配器、持久化和测试支持 |
-| `src/ui/` | 页面工作区、交互组件、Vibe 组件与视觉 Token |
-| `src/shared/` | 确实需要跨层共用的基础定义 |
-| `native/` | 原生扩展源码、Cargo 锁文件与必需的本地依赖补丁 |
-| `public/` | 应用运行时使用的静态资源 |
-| `landing/` | 独立 GitHub Pages 介绍页，不参与应用构建 |
-| `scripts/` | 持续维护的开发、构建和运维脚本及其测试 |
-| `docs/` | 现行合同与源码导航，另设调研和历史审查区，见 [文档入口](docs/README.md) |
+| [src/app/](src/app/) | Next.js 页面、HTTP 路由和全局 CSS；运行时 Token 与组件配方也在此处，归属见 [设计契约](DESIGN.md#源码归属) |
+| [src/domain/](src/domain/) | 领域规则、金额与收益计算及相应单测 |
+| [src/server/](src/server/) | 服务装配、来源接入与同步、外部适配器、持久化和认证 |
+| [src/ui/](src/ui/) | 页面工作区、客户端交互与展示模型；共享 React 组件在 [vibe/](src/ui/vibe/) |
+| [src/shared/](src/shared/) | 跨客户端与服务端共用的基础定义，当前为会话策略 |
+| [native/longbridge-keychain-sdk/](native/longbridge-keychain-sdk/) | 原生扩展源码、Cargo 锁文件与必需的 OAuth 本地补丁；产物说明见 [工具链](docs/operations/toolchain.md#原生产物) |
+| [public/](public/) | 应用运行时静态资源，包括字体及许可证 |
+| [landing/](landing/) | 独立 GitHub Pages 介绍页及其资源，不参与应用构建 |
+| [scripts/](scripts/README.md) | 持续维护的开发、设计与运维脚本；入口、辅助模块和检查范围见索引 |
+| [docs/](docs/README.md) | 现行规范、源码导航与唯一待办入口 |
+| [.github/workflows/](.github/workflows/) | 当前仅发布介绍页的 GitHub Actions 工作流 |
 | `data/` | 本机业务数据、凭证和备份，已忽略，不作为临时目录清理 |
+| `tmp/` / `output/` | 已忽略的临时计划、一次性脚本与检查证据 |
 
-根目录保留工程配置及 `README.md`、`AGENTS.md`、`CONTEXT.md`、`DESIGN.md` 四类入口；历史报告和一次性脚本不散放根目录。单测与对应模块同目录保存，不为归类统一搬迁。
+服务端内部按职责组织：
+
+| 入口 | 职责 |
+| --- | --- |
+| [composition.ts](src/server/composition.ts) / [production.ts](src/server/production.ts) / [app-services.ts](src/server/app-services.ts) | 进程级服务入口、生产装配与服务类型，生命周期见 [服务文档](docs/operations/service-composition.md) |
+| [ports/](src/server/ports/) | 按能力分组的端口合同；[ports.ts](src/server/ports.ts) 保留聚合导出 |
+| [asset-sources/](src/server/asset-sources/) / [asset-source-onboarding/](src/server/asset-source-onboarding/) | 供应商读取适配，以及接入预览状态与类型 |
+| [persistence/](src/server/persistence/) | SQLite、Schema、迁移、存储适配和读模型 |
+| [auth/](src/server/auth/) / [credentials/](src/server/credentials/) | 认证会话与挑战，以及所有者凭证和秘密存储 |
+| [backup/](src/server/backup/) | 业务备份文档编解码 |
+| [testing/](src/server/testing/) / [src/app/test-doubles/](src/app/test-doubles/) | 测试替身、fixture 与受环境门禁保护的 HTTP 辅助入口 |
+
+页面到工作区的具体导航在 [当前能力与源码导航](docs/current-baseline.md) 维护。根目录保留工程配置及 `README.md`、`AGENTS.md`、`CONTEXT.md`、`DESIGN.md` 四个文档入口；历史报告和一次性脚本不散放根目录。单测与对应模块同目录保存。
+
+应用和独立介绍页分别保留字体资源及许可证，使两套发布入口都能独立提供字体；共享来源与授权见 [第三方声明](docs/third-party-notices.md)。
 
 GitHub Pages 由 `.github/workflows/pages.yml` 发布 `landing/`。首次启用时，在仓库
 `Settings > Pages` 的 `Build and deployment` 中选择 `GitHub Actions`；工作流只在 `main`
 分支推送或手动触发时运行。
 
-## 临时文件与清理规范
+## 本机文件与清理
 
-- 临时计划、一次性脚本、预览和调研副本放 `tmp/<topic>/`。
-- 截图、日志、测试证据放 `output/<topic>/`；需要长期引用且已脱敏的报告归入 `docs/audits/`，同步更新引用。
-- 不再维护 `.scratch/` 或强制 spec／本地 Ticket 流程；未完成事项见 [待办清单](docs/backlog.md)，需求讨论和修改过程从 Git 历史查询。
-- `.next/`、`.next-*/`、两个 Rust `target/`、`*.tsbuildinfo` 是生成物，停止使用它们的服务或构建后可清理。下次开发、构建或测试会按需再生成。
+- 临时计划与一次性脚本放 `tmp/<topic>/`，截图和日志放 `output/<topic>/`，均不提交。长期规则更新所属文档，未完成事项只进 [backlog](docs/backlog.md)，历史从 Git 查询。
+- `.next/`、`.next-*/`、两个 Rust `target/`、`*.tsbuildinfo` 是生成物，停止使用它们的服务或构建后可清理。Next.js 产物由开发、构建或 `next typegen` 生成，Rust 产物由原生构建生成；离线单测不代替这些步骤。
 - `next-env.d.ts` 由 Next.js 管理；清理后用 `pnpm exec next typegen` 恢复，避免保留指向旧隔离构建目录的类型引用。
 - `node_modules/` 是开发依赖；原生扩展的 `.node` 与 `artifact.json` 是本机启动所需产物；`vendor/longbridge-oauth/` 是实际使用的补丁源码，均不能混同为过期缓存。
-- `.env.local`、`data/`、数据库 WAL/SHM 与锁文件不纳入生成物清理。清理旧证据前先核对引用并做仓库外可校验备份，不依赖废纸篓恢复。
-- 临时产物和本机数据不提交；源码、文档整理分别按范围审阅，不使用全量清理命令替代逐项核对。
+- `.env.local`、`data/`、数据库 WAL/SHM 与锁文件不纳入生成物清理。删除文件前核对用途与引用，保留尚需恢复的未提交内容，不使用全量清理命令。
 
 ## 文档入口
 
 - [文档入口与维护规则](docs/README.md)
 - [当前能力与源码导航](docs/current-baseline.md)
 - [领域词汇与业务边界](CONTEXT.md)
-- [设计契约](DESIGN.md) / [设计系统](docs/design-system/README.md)
-- [历史审查与验收索引](docs/audits/README.md)
-- [未完成事项](docs/backlog.md)
+- [设计契约与规范入口](DESIGN.md)
+- [路线图与未完成事项](docs/backlog.md)
 - [Agent 规则](AGENTS.md)

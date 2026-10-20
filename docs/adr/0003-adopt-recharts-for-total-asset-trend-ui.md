@@ -23,4 +23,4 @@
 
 ## 验收
 
-[昨日比较与资产变化测试](../../e2e/smoke/daily-snapshots-asset-change.spec.ts) 与 [收益分析测试](../../e2e/archive/rebuild-return-analysis.spec.ts) 覆盖昨日比较、缺失日连续连接但不补值、隐私隐藏、来源趋势、收益分析趋势、移动端无横向溢出，以及键盘焦点和方向键 tooltip。路径于 2026-10-18 校正，本次未重跑验收。
+按 [页面模式](../design-system/patterns.md#页面验收) 检查受影响的趋势入口，覆盖昨日比较、缺失日不补值、隐私隐藏、窄屏布局、键盘焦点与方向键 tooltip。执行范围遵守 [测试纪律](../../AGENTS.md#测试纪律)，历史验收从 Git 查询。

@@ -25,8 +25,8 @@
  * 5. **未定义 token 是独立一条规则。** `var(--x)` 指向不存在的变量时浏览器不报错，
  *    只是静默丢弃声明或退回 fallback —— 这是靠读代码最难发现的一类问题，必须机器判。
  *
- * 全仓库的存量偏差登记在 `docs/design-system/07-deviation-register.md`，
- * 本脚本只负责不让数字继续变大。
+ * 现行设计规则从 `DESIGN.md` 阅读，待处理差异统一见 `docs/backlog.md`。
+ * 本脚本只负责守门新增违反项，存量签名保存在基线中。
  */
 
 import { readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
@@ -48,7 +48,7 @@ const BREAKPOINTS = {
 
 /**
  * SVG 用户坐标系里的字号不是排版字号：那里的 `px` 是图纸单位，会随 viewBox 缩放，
- * 排版级差对它没有意义（见 D-18 的豁免说明）。这两条是**按设计豁免**，不是欠账，
+ * 排版级差对它没有意义（见 docs/design-system/foundations.md 的排版级差）。这两条是**按设计豁免**，不是欠账，
  * 所以写进规则里，而不是塞进基线 —— 基线只应该记录待偿还的存量。
  */
 const SVG_TEXT_SELECTORS = [".locked-flow-screen text", ".locked-flow-dashboard-label"];
@@ -285,7 +285,7 @@ function lintCss(file, source) {
               file,
               `${selector} → ${declaration}`,
               line,
-              `${selector} → 页面样式覆盖按钮视觉属性「${visual}」，应回到 src/app/vibe-components.css，见 D-22`,
+              `${selector} → 页面样式覆盖按钮视觉属性「${visual}」，应回到 src/app/vibe-components.css，见 docs/design-system/components.md#按钮与名称链接`,
             ),
           );
         }
@@ -302,7 +302,7 @@ function lintCss(file, source) {
       const inSvgCoordinateSystem = SVG_TEXT_SELECTORS.some((target) => selector.includes(target));
       if (!inSvgCoordinateSystem) {
         found.push(
-          violation("offscale-font-size", file, declaration, line, `${selector} → ${fontSize[1]}px 不在级差表内，见 D-18`),
+          violation("offscale-font-size", file, declaration, line, `${selector} → ${fontSize[1]}px 不在级差表内，见 docs/design-system/foundations.md#2-字体排版`),
         );
       }
     }
@@ -312,17 +312,17 @@ function lintCss(file, source) {
     const fontFamily = declaration.match(/^font-family:\s*(.+?)(?:\s*!important)?$/);
     if (!isTokenFile && fontFamily && !fontFamily[1].includes("var(")) {
       found.push(
-        violation("raw-font-stack", file, declaration, line, `${selector} → 硬编码字体栈，请改用 var(--f-*)，见 D-04`),
+        violation("raw-font-stack", file, declaration, line, `${selector} → 硬编码字体栈，请改用 var(--f-*)，见 docs/design-system/foundations.md#2-字体排版`),
       );
     }
 
     // `box-shadow: none` 是契约鼓励的复位写法，不算违规。
     if (declaration.startsWith("box-shadow") && !/^box-shadow:\s*none\b/.test(declaration)) {
-      found.push(violation("box-shadow", file, declaration, line, `${selector} → 视觉契约禁止 box-shadow，见 D-08`));
+      found.push(violation("box-shadow", file, declaration, line, `${selector} → box-shadow 需核定用途，见 docs/design-system/foundations.md#5-层次`));
     }
 
     if (declaration.includes("!important")) {
-      found.push(violation("important", file, declaration, line, `${selector} → !important，见 D-19`));
+      found.push(violation("important", file, declaration, line, `${selector} → !important，见 docs/design-system/foundations.md#6-动效 与 docs/backlog.md`));
     }
   });
 
@@ -334,7 +334,7 @@ function lintCss(file, source) {
           file,
           `${feature}:${value}px`,
           line,
-          `${prelude} → ${value}px 不在规范四档（0 / 640 / 1024 / 1200），见 D-11`,
+          `${prelude} → ${value}px 不在规范四档（0 / 640 / 1024 / 1200），见 docs/design-system/patterns.md#响应式`,
         ),
       );
     }
@@ -349,7 +349,7 @@ function lintSource(file, source) {
     const value = Number(match[1]);
     if (!TYPE_SCALE.has(value)) {
       found.push(
-        violation("offscale-font-size", file, `fontSize: ${value}`, lineAt(source, match.index), `内联 fontSize: ${value} 不在级差表内，见 D-18`),
+        violation("offscale-font-size", file, `fontSize: ${value}`, lineAt(source, match.index), `内联 fontSize: ${value} 不在级差表内，见 docs/design-system/foundations.md#2-字体排版`),
       );
     }
   }
@@ -386,8 +386,8 @@ const sourceFiles = SOURCE_ROOTS.flatMap(listSources).sort();
  *   - 没有回退值时，整条声明被丢弃，元素悄悄退回继承值；
  *   - 有回退值时（`var(--foo, 0.2s)`），回退值生效，token 形同虚设——
  *     等于把 0.2s 这个裸值藏在 fallback 里，仍然是绕过 token 契约。
- * 本仓库里两种都出现过：`var(--r-technical)` 从未定义且无回退（D-21），
- * `var(--dur, 0.2s)` 从未定义但靠回退值活着（D-21）。这条规则跨文件比对引用与定义。
+ * 本仓库里两种都出现过：`var(--r-technical)` 从未定义且无回退，
+ * `var(--dur, 0.2s)` 从未定义但靠回退值活着。这条规则跨文件比对引用与定义。
  *
  * 定义可以来自三处：CSS 里的 `--x:`、TSX 内联样式对象里的 `"--x":`、以及 `setProperty("--x", …)`。
  */
@@ -457,7 +457,7 @@ if (process.argv.includes("--update")) {
   const baseline = {
     $comment:
       "设计 token 守门脚本的存量基线。签名格式为 <规则>|<文件>|<规范化声明文本>，不含行号，因此挪动或重排代码不会产生误报。" +
-      "用 `pnpm design:lint -- --update` 重建。数量下降时脚本会提示可收紧。全仓库偏差的说明见 docs/design-system/07-deviation-register.md。",
+      "用 `pnpm design:lint -- --update` 重建。数量下降时脚本会提示可收紧。现行规则见 DESIGN.md，待处理差异见 docs/backlog.md。",
     $generatedBy: "scripts/lint-design-tokens.mjs",
     counts: Object.fromEntries([...current.entries()].sort(([a], [b]) => a.localeCompare(b))),
   };
@@ -538,7 +538,7 @@ if (relaxed.length) {
 console.log("");
 if (added.length) {
   console.log(`校验未通过：${newTotal} 处新增违反设计契约。`);
-  console.log("若这是有意的设计变更，请先更新 docs/design-system/ 的规范与偏差登记表，再重建基线。");
+  console.log("请先按 DESIGN.md 核对所属规范与 docs/backlog.md 中的差异；不要为通过检查放宽基线。");
   process.exit(1);
 }
 console.log("校验通过：没有出现基线之外的新增裸值。");

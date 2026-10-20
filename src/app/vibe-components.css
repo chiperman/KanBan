@@ -706,7 +706,6 @@ textarea.vibe-field__input {
   gap: 12px;
   margin: 16px 0 0;
   padding: 12px 14px;
-  border-left: 3px solid;
   border-radius: var(--r-sm);
   color: var(--secondary);
   font-family: var(--f-mono);
@@ -714,30 +713,45 @@ textarea.vibe-field__input {
   line-height: 1.55;
 }
 
+.vibe-notice__marker {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  /* Preserve content alignment after removing the 3px border. */
+  margin-inline-start: 3px;
+  place-items: center;
+}
+
+.vibe-notice__marker::before {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: currentColor;
+  content: "";
+}
+
 .vibe-notice--error {
-  border-color: var(--error);
   background: color-mix(in srgb, var(--error) 9%, transparent);
 }
 
-.vibe-notice--error > .vibe-dot-icon {
+.vibe-notice--error > .vibe-notice__marker {
   color: var(--error);
 }
 
 .vibe-notice--success {
-  border-color: var(--success);
   background: color-mix(in srgb, var(--success) 9%, transparent);
 }
 
-.vibe-notice--success > .vibe-dot-icon {
+.vibe-notice--success > .vibe-notice__marker {
   color: var(--success);
 }
 
 .vibe-notice--info {
-  border-color: var(--line-2);
   background: var(--raised);
 }
 
-.vibe-notice--info > .vibe-dot-icon {
+.vibe-notice--info > .vibe-notice__marker {
   color: var(--primary);
 }
 

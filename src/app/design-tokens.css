@@ -124,7 +124,7 @@
    *   文字族（display-* / heading / subheading / title / body* / caption / label / micro）
    *     用来排句子与标签，步长在 10–24px 之间密集。
    *   展示族（display-*）用来排「一屏一个的大数字」，步长在 26–72px 之间。
-   * 每个档位都必须有真实使用点；没有使用点的档位不写进来。见 07-deviation-register.md D-18。 */
+   * 每个档位都必须有真实使用点；没有使用点的档位不写进来。见 docs/design-system/foundations.md 的排版级差。 */
   --vibe-type-display-xl: 72px;
   --vibe-type-display-lg: 48px;
   --vibe-type-display-md: 36px;

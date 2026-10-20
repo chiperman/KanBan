@@ -1,34 +1,35 @@
-# 03 · 组件规范
+# 组件规范：接口、状态与交互
 
-组件层由 `src/app/vibe-components.css` 拥有，React 接口在 `src/ui/vibe/`。产品页面**必须**消费这些组件，不得在页面内重复配方。
+组件视觉由 [vibe-components.css](../../src/app/vibe-components.css) 拥有，React 接口在 [src/ui/vibe/](../../src/ui/vibe/)。产品页面复用这些组件，不重复配方。本文定义合同，实际差异见 [backlog](../backlog.md)。
 
-所有样张都可在 `styleguide.html` 的「组件」章节中看到真实渲染。
-
----
-
-## 1. 统一状态机
-
-全站共用五个状态名，**不得另造**。表达顺序恒为 **形状 → 标签 → 颜色**。
-
-| 状态 | 形状 | 标签色调 | 用于 |
-|---|---|---|---|
-| `idle` | 灰色静态点 | `muted` | 未开始、空闲、待分类 |
-| `running` | 白色点脉冲 | `live` | 同步中、刷新中 |
-| `needs-input` | 信号红点 | `signal` | 需要决策、需要授权 |
-| `done` | 实心点 | `success` | 已完成、已刷新 |
-| `error` | 描边点 | `error` | 失败、不可读 |
-
-颜色是**第三层**信息。色盲用户必须能在只有形状与文字的情况下完成操作。
+维护与验证范围见 [设计契约](../../DESIGN.md#变更与验证)。
 
 ---
 
-## 2. 按钮 · `.vibe-button` / `VibeButton` / `VibeLink`
+## 状态映射
+
+状态先有可辨识标记与明确文字，再用颜色增强。下表是业务状态到视觉色调的映射建议，不是组件状态枚举，也不替代领域状态机。
+
+| 业务状态 | 标签色调 | 用于 |
+|---|---|---|
+| 空闲 / 待分类 | `muted` | 未开始、无待处理信号 |
+| 运行中 | `live` | 同步中、刷新中 |
+| 需要输入 | `signal` | 需要决策、需要授权 |
+| 完成 | `success` | 已完成、已刷新 |
+| 待确认 | `warning` | 需要注意或核定 |
+| 失败 | `error` | 失败、不可读 |
+
+实际 `VibeStatusTag.tone` 为 `muted | live | signal | success | warning | error`，默认 `muted`，接口位于 [vibe-data-instrument.tsx](../../src/ui/vibe/vibe-data-instrument.tsx)。不要把色调当作供应商、同步或授权状态。
+
+---
+
+## 按钮与名称链接
 
 ```
 <button class="vibe-button vibe-button--primary|outline|text" data-vibe-component="button">
 ```
 
-React 页面必须消费 `src/ui/vibe/vibe-button.tsx` 的 `VibeButton` / `VibeLink`，不得手写同款按钮类名或用页面 CSS 重建按钮外观。组件 API 的封闭语义是：
+React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，不手写同款按钮类名或用页面 CSS 重建外观。既有登录与首次供给页的专用按钮沿用现有范围，不据此扩大共享按钮的豁免。组件 API 的封闭语义是：
 
 | 属性 | 取值 | 用途 |
 |---|---|---|
@@ -50,15 +51,17 @@ React 页面必须消费 `src/ui/vibe/vibe-button.tsx` 的 `VibeButton` / `VibeL
 
 **禁止**：红色按钮。主按钮不是红色——红色是信号位，不是操作位。
 
-**禁止**：页面级选择器覆盖按钮的 `display`、背景、文字色、边框、圆角、字号、行高、内边距、阴影、透明度或过渡。页面 CSS 只能负责按钮的放置、宽高伸缩、间距和响应式显隐；视觉语义由 `vibe-components.css` 唯一拥有。新增页面覆盖会被 `pnpm design:lint` 的 `page-button-override` 规则拦截。
+页面与组件的样式归属见 [设计契约](../../DESIGN.md#源码归属)；`display` 等布局属性允许页面处理，不借此覆盖按钮视觉。`tone="danger"` 允许语义前景色，仍不使用红色填充。
 
 ### 名称链接 · `VibeEntityLink`
 
-账户、来源名称进入详情时使用 `src/ui/vibe/vibe-entity-link.tsx`，共享 `.vibe-entity-link` 配方。名称始终带下划线，末尾使用同套线形右箭头，不依赖悬停或颜色表达可点击。命中区至少 40px，键盘焦点环与按钮一致；长名称允许换行，箭头不压缩。名称使用正文排版，执行操作继续使用 `VibeButton` / `VibeLink`。
+账户、来源名称进入详情时使用 [VibeEntityLink](../../src/ui/vibe/vibe-entity-link.tsx)，共享 `.vibe-entity-link` 配方。名称始终带下划线，末尾使用同套线形右箭头，不依赖悬停或颜色表达可点击；键盘焦点环与按钮一致，长名称可换行，箭头不压缩。名称使用正文排版，执行操作继续使用 `VibeButton` / `VibeLink`。
 
 ---
 
-## 3. 输入字段 · `.vibe-field`
+## 输入字段与下拉选择
+
+接口为 [VibeField / VibeTextareaField / VibeSelectField](../../src/ui/vibe/vibe-field.tsx)。字段标签必须关联真实输入，不能只靠 placeholder 命名；错误用文字说明并按需关联 `aria-describedby` / `aria-invalid`。
 
 ```
 <div class="vibe-field">
@@ -69,11 +72,12 @@ React 页面必须消费 `src/ui/vibe/vibe-button.tsx` 的 `VibeButton` / `VibeL
 
 - 标签：`--f-mono`、`--vibe-type-micro`（10px）、全大写、字距 `.12em`、色 `--secondary`。
 - 输入框：1px `--line-2` 边框、`--r-sm` 圆角、透明底、`--primary` 文字、`--f-mono`。
+- 当前输入配方至少 48px 高，字号 `--vibe-type-body`（16px）。
 - **聚焦只把边框色改为 `--primary`**：没有发光、没有强调色、没有阴影。
 - 占位符 `--muted`；禁用 `opacity .3`。
 - 多行变体 `textarea.vibe-field__input` 最小高 112px，字距收到 `.02em`，行高 1.55。
 
-## 4. 下拉选择 · `.vibe-select`
+### 下拉选择 · `.vibe-select`
 
 ```
 <div class="vibe-select vibe-select--compact|--wide">
@@ -84,11 +88,12 @@ React 页面必须消费 `src/ui/vibe/vibe-button.tsx` 的 `VibeButton` / `VibeL
 </div>
 ```
 
-- 触发器标准高 44px；展开时底色转 `--raised`，边框转 `--primary`；箭头旋转 180°。
-- 选中项底色 `--raised`，右侧 6×6 方块用 `--accent` 标记——**这是极少数允许用红的场合**，因为它表达"当前选择"这一信号。
+- 触发器至少 44px 高，字号 `--vibe-type-body-xs`（13px）；展开时底色转 `--raised`，边框转 `--primary`，箭头旋转 180°。输入与选择器的密度取舍见 backlog，不把二者写成已经统一。
+- 选中项底色 `--raised`，右侧 6×6 方块用 `--accent` 标记。这是沿用上游的限定例外，不扩展到按钮、标签页或整个选项填充。
 - 面板挂在 portal 中，`z-index: 101`。
+- 键盘支持 `Enter` / `Space` 展开、方向键移动、`Esc` 收起；标签、展开状态和选中状态可被读屏识别。
 
-## 5. 复选行 · `.vibe-choice`
+## 复选行 · `.vibe-choice`
 
 ```
 <label class="vibe-choice"><input type="checkbox" /><span>说明</span></label>
@@ -98,7 +103,7 @@ React 页面必须消费 `src/ui/vibe/vibe-button.tsx` 的 `VibeButton` / `VibeL
 
 ---
 
-## 6. 状态标签 · `.vibe-status-tag`
+## 状态标签 · `.vibe-status-tag`
 
 ```
 <span class="vibe-status-tag vibe-status-tag--{muted|live|signal|success|warning|error}">
@@ -114,7 +119,7 @@ React 页面必须消费 `src/ui/vibe/vibe-button.tsx` 的 `VibeButton` / `VibeL
 
 ---
 
-## 7. 分段条 · `.vibe-segmented-bar`
+## 分段条 · `.vibe-segmented-bar`
 
 ```
 <div class="vibe-segmented-bar" role="img" aria-label="…">
@@ -131,7 +136,7 @@ React 页面必须消费 `src/ui/vibe/vibe-button.tsx` 的 `VibeButton` / `VibeL
 
 ---
 
-## 8. 主数值 · `.vibe-metric`
+## 主数值 · `.vibe-metric`
 
 ```
 <div class="vibe-metric">
@@ -149,11 +154,11 @@ React 页面必须消费 `src/ui/vibe/vibe-button.tsx` 的 `VibeButton` / `VibeL
 
 ---
 
-## 9. 内联通知 · `.vibe-notice`
+## 内联通知 · `.vibe-notice`
 
 ```
 <div class="vibe-notice vibe-notice--{error|success|info}">
-  <点阵图标 />
+  <span class="vibe-notice__marker" aria-hidden="true"></span>
   <div class="vibe-notice__content">
     <strong class="vibe-notice__code">SYNC FAILED</strong>
     <div class="vibe-notice__message">说明文本</div>
@@ -161,16 +166,19 @@ React 页面必须消费 `src/ui/vibe/vibe-button.tsx` 的 `VibeButton` / `VibeL
 </div>
 ```
 
-- 这是**唯一**允许状态色填充一块区域的场合：图标 + 3px 左边界 + 约 9% 的色底（`color-mix`）。
-- `--info` 用 `--line-2` 边界 + `--raised` 底，不使用颜色。
-- 图标：`error → error`、`success → check`、`info → key`（9×9 点阵字形）。
+- [VibeNotice](../../src/ui/vibe/vibe-notice.tsx) 接口为 `tone="error" | "success" | "info"`、可选 `code` 与正文 `children`。
+- 状态标记遵守 [项目适配](../../DESIGN.md#项目适配)，边界保持中性。可保留约 9% 的局部语义底色（`color-mix`）；`info` 使用 `--raised`，不增加彩色强调。
+- 使用 6px 实心圆点配合正文或 `code` 中的明确状态文字；`error` / `success` 圆点使用对应状态色，`info` 使用 `--primary`。圆点对读屏隐藏，保留原图标占位与内容对齐。
 - `--compact` 变体用于卡片内，宽度收缩为 `max-content`。
+- 当前组件不自动声明 live region。调用者按消息紧急程度传入 `role="status"` / `aria-live`，确需即时错误播报时使用 `role="alert"`，避免重复播报。
 
-**上游明确不用浮动 toast。** 状态以内联形式常驻，而不是动画飞入后消失。
+通知使用内联形式，不以浮动 toast 飞入后消失。实际页面的人工核验见 [backlog](../backlog.md#通知状态标记人工验收)。
 
 ---
 
-## 10. 对话框 · `.vibe-dialog`
+## 对话框 · `.vibe-dialog`
+
+复用 [VibeDialog](../../src/ui/vibe/vibe-dialog.tsx)。
 
 ```
 <div class="vibe-dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="…">
@@ -190,74 +198,65 @@ React 页面必须消费 `src/ui/vibe/vibe-button.tsx` 的 `VibeButton` / `VibeL
 
 ---
 
-## 11. 下拉菜单 · `.vibe-menu`
+## 下拉菜单 · `.vibe-menu`
 
-触发器用 `.vibe-button--text` + `.vibe-menu__trigger`（紧凑高 40px）。面板 `--surface` + `--line-2` + `--r-sm`，`z-index: 30`。
+复用 [VibeMenu](../../src/ui/vibe/vibe-menu.tsx)。触发器用 `.vibe-button--text` + `.vibe-menu__trigger`（紧凑高 40px）。面板 `--surface` + `--line-2` + `--r-sm`，`z-index: 30`。
 
 - 悬停底色 `--raised`，**不是强调色**。
 - 危险项 `--vibe-menu__item--danger` 用 `--accent-text` 作为**前景色**，不是红底白字。
 - 键盘：`ArrowDown/Up` 循环、`Home/End` 首尾、`Esc` 关闭并归还焦点、失焦即关闭。
 
-## 12. 提示 · `.vibe-tooltip`
+## 提示 · `.vibe-tooltip`
+
+复用 [VibeTooltip](../../src/ui/vibe/vibe-tooltip.tsx)，提示不承载完成操作所必需的唯一信息。
 
 - 默认向下、水平居中；`data-align="end"` 靠右对齐。
 - `--floating` 变体（`side="right"`）挂到 body，`z-index: 120`，滚动/缩放/`Esc` 即消失。
 - 内容用 `--f-mono` `--vibe-type-label`（11px），底色 `--raised`，`--r-sm`。
 - 触发器必须带 `aria-describedby` 指向提示节点。
 
-## 13. 验证码分格输入 · `.vibe-verification-code`
+## 验证码分格输入 · `.vibe-verification-code`
 
 - 6 个 40×50px 槽位，用 Doto 承载数字；真实 `<input>` 透明覆盖其上，保证原生输入与无障碍。
+- 复用 [VibeVerificationCode](../../src/ui/vibe/vibe-verification-code.tsx)，输入保留数字键盘与 `autocomplete="one-time-code"`；视觉槽位不重复进入读屏。
 - 聚焦时当前槽边框转 `--primary`；`aria-invalid="true"` 时全部转 `--error`（绝不用"抖动"表达错误）。
 - 宽度不足 360px 时槽位收窄到 36px。
-- 这是本产品唯一自行组合的输入控件，其余输入统一走 `.vibe-field`。
 
-## 14. 日期字段 · `.vibe-date-field`
+## 日期字段 · `.vibe-date-field`
 
 - 触发器 48px 高、`--r-sm`、Doto 数字、字距 `.12em`。
 - 日历：`--surface` + `--line-2` + `--r-md`，日期用 Doto，**今天 = 反转填充**，已选 = `--display` 描边。
 - 服务于"按上海自然日保存"的手工记录。日历本身不写入任何数据。
 - 移动端 `max-width: calc(100vw - 24px)`。
+- 复用 [VibeDateField](../../src/ui/vibe/vibe-date-field.tsx)，月切换与日期均可键盘到达；今天与已选状态可被读屏识别。
 
-## 15. 数据表 · `.vibe-data-table`
+## 数据表 · `.vibe-data-table`
 
 - 表头 `--vibe-type-micro` 等宽大写、`--muted`、下边界 `--line-2`。
 - 单元格 `--f-mono` `--vibe-type-label`（11px）、下边界 `--line`、数值右对齐、文本左对齐。
 - **无斑马纹。** 需要区分时用更多留白或分组细线。
-- 不可读/未估值的行整体转 `--error`（`.is-unvalued`），并在文案上如实说明（"未估值"／"数据不足"）。
+- 不可读或未估值必须在文案上如实说明（“未估值”／“数据不足”），状态前景可用 `--error`，不以整行色底代替文字。使用表头与单元格语义，窄屏滚动及数值完整性见页面模式。
 
-## 16. 数据行与预览列表
+## 数据行与预览列表
 
 - `.vibe-data-row`：下边界 `--line`，最后一行自动去掉边界。
 - `.vibe-preview-list`：`dt` 用 `--vibe-type-micro` 等宽大写 `--muted`，`dd` 用 `--vibe-type-label`（11px）等宽 `--primary`。用于来源详情的授权摘要——**这里绝不回显凭证原文**，只显示授权范围与校验时间。
 
-## 17. 认证玻璃面 · `.vibe-auth-surface`
+## 认证玻璃面 · `.vibe-auth-surface`
 
 `--glass` + `backdrop-filter: blur(16px)`、`--r-md`、**无边框、无阴影**。用于锁定页与预置页的身份验证面板。
 
-## 18. 空态
+## 空态
 
-规范配方：**虚线细线边框 + 9×9 点阵字形 + `--f-head` 标题 + 一行说明 + 一个主按钮**。
+内容结构为标题、一行说明与必要时的一个主操作；无操作可执行时不放无效按钮。不用插画、emoji 或多行长文案。
 
-**不用插画、不用 emoji、不写多行长文案。**
+当前页面采用上下细线、透明底、无圆角的变体；上游为虚线边框与点阵字形。二者的采用取舍尚待设计核定，见 [backlog](../backlog.md#卡片空态与字段密度核定)。不要把未采用的上游配方写成已经实现。
 
-> 该配方目前尚未组件化，且现网实现（`product-layout.css:5349`）使用的是"上下 1px 细线 + 透明底 + 无圆角"的变体，与配方不一致。已登记为组件缺口。
+## 通用交互与无障碍
 
----
-
-## 19. 不可用组件（缺口）
-
-上游契约中存在、本产品尚未组件化的能力。**补做时必须沿用上游语义，不得另起命名。**
-
-| 缺口 | 上游契约 |
-|---|---|
-| 开关 Switch | 药丸轨道 + 圆旋钮；ON = `--display` 轨道 + `--bg` 旋钮（黑白反转，不用红） |
-| 滑块 Slider | 细轨道 + 圆旋钮，填充与旋钮用 `--display` |
-| 仪表 Gauge | 细环 + 刻度环 + 居中 Doto 数字，`%` 紧随数字不换行 |
-| 标签页 / 分页 | `.tabs` 2px `--display` 下划线；`.pager` 用 Doto 页码 |
-| 线性进度 | `.lp`：`--display` 填充 |
-| 横幅 Banner | 默认反转填充；`.sig` 红底白字**仅限需要决策的消息** |
-| 空态 | 见上一节配方 |
-| 点阵标点 / 25×25 字形 | 见 [`02-dot-matrix-and-background.md`](02-dot-matrix-and-background.md) |
-
-已有替代关系：分段条承担了进度与仪表的表达；内联通知承担了横幅；`.vibe-choice` 承担了单选项。
+- 使用原生按钮、链接与输入语义，Tab 顺序与视觉顺序一致，无键盘陷阱；所有操作均可键盘完成，拖拽提供等价的非拖拽路径。
+- 图标有相邻文字时隐藏装饰语义；纯图标按钮必须有可访问名称。装饰 SVG 使用 `aria-hidden="true"` 与 `focusable="false"`。
+- 不使用 `outline: none` 移除焦点而没有同等可见的替代。按钮焦点用 2px `--primary` 轮廓、外偏移 3px；菜单项用 2px 内轮廓，下拉选项用 1px 内轮廓；字段沿用聚焦配方。
+- 命中区按 [基础规范](foundations.md#7-控件尺寸) 执行，触控目标之间至少留出 8px；不让轻薄轮廓缩小实际可点范围。
+- 异步状态保留清楚的可见标签，按需增加读屏播报，不重复制造可见提示。错误不用抖动表达。
+- 新组件先查现有组合；分段条、复选行和内联通知可继续承担已有场景。只有真实需求无法满足时才新增，并遵守同一 Token、语义与交互合同。

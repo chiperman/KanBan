@@ -1,10 +1,5 @@
 import type { HTMLAttributes, ReactNode } from "react";
 
-import {
-  VibeDotIcon,
-  type VibeDotIconName,
-} from "@/ui/vibe/vibe-dot-icon";
-
 type VibeNoticeTone = "error" | "info" | "success";
 
 interface VibeNoticeProps extends HTMLAttributes<HTMLDivElement> {
@@ -12,12 +7,6 @@ interface VibeNoticeProps extends HTMLAttributes<HTMLDivElement> {
   code?: string;
   tone: VibeNoticeTone;
 }
-
-const ICON_BY_TONE: Record<VibeNoticeTone, VibeDotIconName> = {
-  error: "error",
-  info: "key",
-  success: "check",
-};
 
 export function VibeNotice({
   children,
@@ -37,7 +26,7 @@ export function VibeNotice({
       data-vibe-tone={tone}
       {...props}
     >
-      <VibeDotIcon name={ICON_BY_TONE[tone]} />
+      <span aria-hidden="true" className="vibe-notice__marker" />
       <div className="vibe-notice__content">
         {code ? <strong className="vibe-notice__code">{code}</strong> : null}
         <div className="vibe-notice__message">{children}</div>

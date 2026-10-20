@@ -19,8 +19,6 @@
     "test:unit": "node scripts/run-unit-tests.mjs",
     "test": "pnpm typecheck && pnpm design:lint && pnpm test:unit",
     "preinstall": "node scripts/check-toolchain.mjs",
-    "design:styleguide": "node scripts/build-styleguide.mjs",
-    "design:styleguide:verify": "node scripts/verify-styleguide.mjs",
     "design:lint": "node scripts/lint-design-tokens.mjs",
     "native:longbridge:check": "node scripts/native-artifact.mjs"
   },
