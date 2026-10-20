@@ -145,11 +145,15 @@ export default async function AssetDashboardPage({
     cashflows,
     dailyAssetTrendObservations,
     fullRefreshState,
+    investmentBooks,
+    manualRecords,
   ] = await Promise.all([
     services.assetSources.list(),
     services.investmentCashflows.list(),
     services.dailyAssetSnapshots.listTrendObservations(),
     readAssetRefreshState(services),
+    services.investmentBooks?.readInvestmentBooks() ?? null,
+    services.manualAssetRecords.list(),
   ])
   const assetSources = storedSources.map(
     ({ credentialReference: _credentialReference, permissions: _permissions, ...source }) => source,
@@ -180,6 +184,8 @@ export default async function AssetDashboardPage({
           </a>
           <main id="main-content">
             <DailyOverviewWorkspace
+              investmentBooks={investmentBooks}
+              manualRecords={manualRecords}
               cashflows={cashflows}
               currentObservedAt={now.toISOString()}
               currentDay={shanghaiDay(now)}

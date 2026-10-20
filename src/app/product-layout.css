@@ -9742,34 +9742,6 @@ body {
   gap: var(--vibe-space-3);
 }
 
-/* 数据完整性现在位于总资产卡内部，作为一行元信息，不再单独成卡。 */
-.daily-overview__current .daily-overview__confidence {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--vibe-space-2) var(--vibe-space-4);
-  margin-top: var(--vibe-space-2);
-  padding-top: var(--vibe-space-3);
-  border-top: 1px solid var(--line);
-  background: transparent;
-  backdrop-filter: none;
-}
-
-.daily-overview__confidence > .card-label {
-  display: none;
-}
-
-.daily-overview__current .daily-overview__confidence h2 {
-  margin: 0;
-  font-size: var(--vibe-type-caption);
-}
-
-.daily-overview__current .daily-overview__confidence p {
-  margin: 0;
-  color: var(--secondary);
-  font-size: var(--vibe-type-caption);
-}
-
 .daily-overview__analysis {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -10313,5 +10285,370 @@ body {
 @media (min-width: 1024px) {
   .asset-source-detail__account-info {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.asset-trend-panel {
+  display: grid;
+  min-width: 0;
+  gap: var(--vibe-space-4);
+}
+
+.asset-trend-panel .investment-performance__range {
+  gap: var(--vibe-space-2);
+}
+
+.asset-trend-panel .investment-performance__range > .vibe-field__label {
+  display: block;
+}
+
+.asset-trend-panel .investment-performance__range-options {
+  gap: var(--vibe-space-2);
+}
+
+.asset-trend-panel .source-performance__curve-options {
+  flex-wrap: wrap;
+  gap: var(--vibe-space-2);
+}
+
+.asset-trend-panel .source-performance__chart-caption {
+  margin-block-end: 0;
+}
+
+/* Homepage composition; shared controls and other workspaces retain their recipes. */
+.daily-overview > .workbench-page-header {
+  padding-block-end: var(--vibe-space-4);
+}
+
+.daily-overview__hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  min-width: 0;
+  gap: var(--vibe-space-4);
+}
+
+.daily-overview__current {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+
+.daily-overview__current > article:first-child {
+  gap: var(--vibe-space-5);
+  padding: var(--vibe-space-8);
+}
+
+.daily-overview__total-heading,
+.daily-overview__book-heading,
+.daily-overview__trend .asset-trend-panel__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--vibe-space-3);
+  min-width: 0;
+}
+
+.daily-overview__total-heading h2,
+.daily-overview__book-heading h2,
+.daily-overview__trend .asset-trend-panel__toolbar h2 {
+  margin: 0;
+  color: var(--display);
+  font-family: var(--f-head);
+  font-size: var(--vibe-type-subheading);
+  font-weight: 600;
+}
+
+.daily-overview__total-heading > span,
+.daily-overview__total-heading h2 > span,
+.daily-overview__book-heading h2 > span {
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
+  font-weight: 400;
+}
+
+.daily-overview__current > article:first-child
+  > :is(.vibe-metric, .daily-overview__private) {
+  margin: var(--vibe-space-2) 0;
+  font-size: var(--vibe-type-display-xl);
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.daily-overview__current > article:first-child > .daily-overview__unavailable {
+  font-size: var(--vibe-type-title);
+}
+
+.daily-overview [data-testid="overview-reporting-rate"] {
+  margin: 0;
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
+}
+
+.daily-overview__change {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--vibe-space-2) var(--vibe-space-4);
+  min-width: 0;
+}
+
+.daily-overview__change > :is(p, div):not(.vibe-metric) {
+  flex-basis: 100%;
+}
+
+.daily-overview__change > h2 {
+  margin: 0;
+  color: var(--secondary);
+  font-size: var(--vibe-type-body-sm);
+  font-weight: 400;
+}
+
+.daily-overview__change > .vibe-metric {
+  margin: 0;
+  font-size: var(--vibe-type-display-sm);
+}
+
+.daily-overview__change > .daily-overview__private {
+  font-size: var(--vibe-type-display-sm);
+}
+
+.daily-overview__change > .daily-overview__unavailable {
+  color: var(--secondary);
+  font-size: var(--vibe-type-body-sm);
+}
+
+.daily-overview__change > p {
+  margin: 0;
+  color: var(--secondary);
+  font-size: var(--vibe-type-caption);
+  line-height: 1.5;
+}
+
+.daily-overview__confidence {
+  min-width: 0;
+  color: var(--warning);
+  font-size: var(--vibe-type-caption);
+  line-height: 1.6;
+}
+
+.daily-overview__confidence summary {
+  width: fit-content;
+  max-width: 100%;
+  min-height: var(--vibe-control-height-compact);
+  align-content: center;
+  cursor: pointer;
+}
+
+.daily-overview__confidence summary:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.daily-overview__confidence-context,
+.daily-overview__confidence-details {
+  color: var(--secondary);
+}
+
+.daily-overview__confidence-details {
+  display: grid;
+  gap: var(--vibe-space-2);
+  padding-block-start: var(--vibe-space-2);
+}
+
+.daily-overview__confidence-details > p {
+  margin: 0;
+}
+
+.daily-overview__confidence .daily-overview__change-issues {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.daily-overview__confidence .daily-overview__change-issues li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  overflow-wrap: anywhere;
+}
+
+.daily-overview__current .daily-overview__trend {
+  gap: 0;
+  padding: var(--vibe-space-5) 0 0;
+  border-block-start: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.daily-overview__trend .asset-trend-panel__range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: end;
+  gap: var(--vibe-space-2);
+}
+
+.daily-overview__trend .asset-trend-panel__range .vibe-field__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.daily-overview__trend .asset-trend-coverage {
+  color: var(--secondary);
+  font-size: var(--vibe-type-caption);
+  line-height: 1.6;
+}
+
+.daily-overview__trend .asset-trend-coverage summary {
+  width: fit-content;
+  max-width: 100%;
+  min-height: var(--vibe-control-height-compact);
+  align-content: center;
+  cursor: pointer;
+}
+
+.daily-overview__trend .asset-trend-coverage summary:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.daily-overview__trend .asset-trend-coverage p {
+  margin: var(--vibe-space-2) 0 0;
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
+  letter-spacing: normal;
+}
+
+.daily-overview__hero .investment-books__overview {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--vibe-space-4);
+  padding: 0;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.daily-overview__hero .investment-books__overview > .daily-overview__book {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--vibe-space-4);
+  min-width: 0;
+  padding: var(--vibe-space-6);
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.daily-overview__book-heading h2 {
+  flex: 1;
+}
+
+.daily-overview__book-heading svg {
+  width: 1em;
+  height: 1em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+.daily-overview__hero .investment-books__overview > .daily-overview__book > * {
+  grid-column: 1;
+  min-width: 0;
+  margin: 0;
+  text-align: start;
+}
+
+.daily-overview__book .daily-overview__book-total
+  :is(.vibe-metric, .daily-overview__private) {
+  font-size: var(--vibe-type-display-md);
+  overflow-wrap: anywhere;
+}
+
+.daily-overview__book-metrics {
+  display: grid;
+  gap: var(--vibe-space-2);
+}
+
+.daily-overview__book-metrics > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--vibe-space-2);
+  min-width: 0;
+}
+
+.daily-overview__book-metrics dt {
+  color: var(--secondary);
+  font-size: var(--vibe-type-caption);
+}
+
+.daily-overview__book-metrics dd {
+  min-width: 0;
+  margin: 0;
+}
+
+.daily-overview__book .daily-overview__book-metrics
+  :is(.vibe-metric, .daily-overview__private) {
+  font-size: var(--vibe-type-subheading);
+  overflow-wrap: anywhere;
+}
+
+.daily-overview__book .daily-overview__unavailable {
+  font-size: var(--vibe-type-body-sm);
+}
+
+.daily-overview__hero .investment-books__overview > .daily-overview__book > p {
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
+  letter-spacing: normal;
+  line-height: 1.5;
+}
+
+.daily-overview__hero .investment-books__overview > .daily-overview__book > .daily-overview__book-warning {
+  color: var(--warning);
+}
+
+@media (min-width: 1200px) {
+  .daily-overview__hero[data-has-investment-books="true"] {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 0.52fr);
+  }
+}
+
+@media (min-width: 640px) and (max-width: 1199px) {
+  .daily-overview__hero .investment-books__overview {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .daily-overview__book .daily-overview__book-total
+    :is(.vibe-metric, .daily-overview__private) {
+    font-size: var(--vibe-type-display-sm);
+  }
+}
+
+@media (max-width: 639px) {
+  .daily-overview__current > article:first-child {
+    padding: var(--vibe-space-4);
+  }
+
+  .daily-overview__current > article:first-child
+    > :is(.vibe-metric, .daily-overview__private) {
+    font-size: var(--vibe-type-display-md);
+  }
+
+  .daily-overview__hero .investment-books__overview > .daily-overview__book {
+    padding: var(--vibe-space-4);
   }
 }

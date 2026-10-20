@@ -8,7 +8,7 @@
 
 | 页面 | 当前职责 | 源码入口 |
 | --- | --- | --- |
-| `/` 总览 | 总资产、今日变化、本金与收益、近 7 日趋势；资产分布保留各来源总额、较昨日变化与昨日金额 | [页面](../src/app/page.tsx) / [DailyOverviewWorkspace](../src/ui/daily-overview-workspace.tsx) |
+| `/` 总览 | 总资产、今日变化、本金与收益、默认全部历史的趋势；首页将数据异常和覆盖明细折叠展示，长区间按自然月标注横轴、跨年另行提示；支持注入三本账摘要，未提供账本时保留本金与收益摘要；资产分布保留各来源总额、较昨日变化与昨日金额 | [页面](../src/app/page.tsx) / [DailyOverviewWorkspace](../src/ui/daily-overview-workspace.tsx) |
 | `/assets` 资产与持仓 | 查看、筛选持仓；保留手工及无持仓明细来源的“按总额记录的资产”，不再重复完整来源总额列表 | [页面](../src/app/assets/page.tsx) / [AssetsHoldingsWorkspace](../src/ui/assets-holdings-workspace.tsx) |
 | `/performance` 收益分析 | 查看投资表现、外部资金流水与来源本金相关信息 | [页面](../src/app/performance/page.tsx) |
 | `/asset-sources` 来源管理 | 来源接入、连接与同步状态、诊断和历史覆盖 | [页面](../src/app/asset-sources/page.tsx) / [AssetSourceDirectory](../src/ui/asset-source-directory.tsx) |
@@ -23,6 +23,7 @@
 - 锁定与演示入口在 [首页路由](../src/app/page.tsx)。`/?mode=demo` 使用固定虚构数据，路由在进入所有者服务之前处理演示分支。
 - 统一刷新从 [AssetRefreshProvider](../src/ui/asset-refresh-provider.tsx)、[Coordinator](../src/ui/asset-refresh-coordinator.ts) 沿 [刷新接口](../src/app/api/asset-sources/refresh/route.ts) 追踪到 [服务端刷新状态](../src/server/asset-refresh-state.ts) 和 [SQLite 周期状态](../src/server/persistence/sqlite-refresh-state-store.ts)。客户端共享状态与服务端并发控制需一并核对，不能照历史轮询计划重建刷新逻辑。
 - 长桥生产读取与身份绑定的职责见 [服务生命周期](operations/service-composition.md)；安装与启动约束见 [工具链](operations/toolchain.md)。
+- 首页趋势使用 [AssetTrendPanel](../src/ui/asset-trend-panel.tsx) 管理预设与自定义区间、覆盖明细和图表状态，保留空缺记录、隐私隐藏与完整日期提示。账本摘要使用 [investment-books](../src/domain/investment-books.ts) 的计算模型；账本持久化、编辑入口和其他页面改造不属于此次首页提交。
 - 视觉规则维护在 [DESIGN](../DESIGN.md) 和 [设计系统](design-system/README.md)，复用现有 Vibe 组件与 Token，不从旧规格提取字号、字体或页面布局。
 
 ## 任务与验证边界

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  rangeDays,
   projectAssetSourceHistoryTrend,
   projectAssetSourceTrend,
   projectInvestmentPerformanceTrend,
@@ -236,6 +237,7 @@ test("收益分析预设区间按连续上海自然日跨月末和闰年计算",
     firstDay: string;
     length: number;
   }> = {
+    "7d": { firstDay: "2024-03-25", length: 7 },
     "month-to-date": { firstDay: "2024-03-01", length: 31 },
     "1m": { firstDay: "2024-02-29", length: 32 },
     "6m": { firstDay: "2023-09-30", length: 184 },
@@ -273,6 +275,21 @@ test("收益分析自定义区间按所选连续上海自然日投影", () => {
   assert.equal(result.startDay, "2024-03-02");
   assert.equal(result.endDay, "2024-03-04");
   assert.equal(result.intervalAssetChange, "30");
+});
+
+test("共享趋势区间保留跨月七日、完整历史与空记录边界", () => {
+  assert.deepEqual(rangeDays("7d", "2024-03-02", undefined), [
+    "2024-02-25", "2024-02-26", "2024-02-27", "2024-02-28",
+    "2024-02-29", "2024-03-01", "2024-03-02",
+  ]);
+  assert.deepEqual(rangeDays("all", "2024-03-02", undefined), []);
+  assert.deepEqual(rangeDays("all", "2024-03-02", "2024-03-02"), ["2024-03-02"]);
+  assert.deepEqual(rangeDays("custom", "2024-03-02", undefined, {
+    startDay: "2024-03-01", endDay: "2024-03-01",
+  }), ["2024-03-01"]);
+  for (const customRange of [null, { startDay: "2024-03-02", endDay: "2024-03-01" }, { startDay: "2024-03-02", endDay: "2024-03-03" }]) {
+    assert.deepEqual(rangeDays("custom", "2024-03-02", undefined, customRange), []);
+  }
 });
 
 test("趋势投影保留缺失上海自然日为空值，并在区间内选择完整端点", () => {

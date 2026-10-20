@@ -9,6 +9,7 @@ import type {
 } from "@/server/ports";
 
 export type InvestmentPerformanceIntervalPreset =
+  | "7d"
   | "month-to-date"
   | "1m"
   | "6m"
@@ -97,7 +98,9 @@ export function rangeDays(
   if (preset === "all") {
     return firstTrendDay === undefined ? [] : daysBetween(firstTrendDay, currentDay);
   }
-  const start = preset === "month-to-date"
+  const start = preset === "7d"
+    ? dayAtOffset(currentDay, -6)
+    : preset === "month-to-date"
     ? `${currentDay.slice(0, 7)}-01`
     : preset === "year-to-date"
       ? `${currentDay.slice(0, 4)}-01-01`

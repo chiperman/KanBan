@@ -32,8 +32,10 @@ import type {
 import type { AssetSourceOnboarding } from "@/server/asset-source-onboarding";
 import type { LongbridgeOAuthState } from "@/server/asset-sources/longbridge";
 import type { BusinessDataBackup } from "@/server/business-data-backup";
+import type { InvestmentBookStore } from "@/domain/investment-books";
 
 export interface AssetServices {
+  investmentBooks?: InvestmentBookStore;
   assetCards: AssetCardStore;
   assetSources: AssetSources;
   /** 测试替身可省略详情能力；提供时必须包含完整的查询和记账接口。 */

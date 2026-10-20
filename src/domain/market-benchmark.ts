@@ -33,7 +33,7 @@ export interface MarketBenchmarkComparison {
   points: Array<{
     ".NDX.US": string | null;
     ".SPX.US": string | null;
-    assets: string;
+    assets: string | null;
     day: string;
   }>;
   reason: string | null;

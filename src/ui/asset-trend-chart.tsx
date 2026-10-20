@@ -11,7 +11,9 @@ import {
   XAxis,
   YAxis,
   useIsTooltipActive,
+  usePlotArea,
   type TooltipContentProps,
+  type XAxisTickContentProps,
 } from "recharts";
 
 import {
@@ -19,6 +21,7 @@ import {
   type MarketBenchmarkComparison,
   type MarketBenchmarkSymbol,
 } from "@/domain/market-benchmark";
+import { formatShanghaiFullDayLabel } from "@/ui/shanghai-date-time";
 
 export type AssetTrendChartPoint = {
   amount: string | null;
@@ -46,6 +49,107 @@ type AssetTrendBenchmark = {
   comparison: MarketBenchmarkComparison | null;
   enabledSymbols: MarketBenchmarkSymbol[];
 };
+
+export function AssetTrendDateTick({ x, y, index, visibleTicksCount, payload, tickFormatter }: XAxisTickContentProps) {
+  return <text
+    className="recharts-cartesian-axis-tick-value"
+    x={x}
+    y={y}
+    dy="0.71em"
+    fill="var(--muted)"
+    fontFamily="var(--f-mono)"
+    fontSize={10}
+    textAnchor={visibleTicksCount === 1 ? "middle" : index === 0 ? "start" : index === visibleTicksCount - 1 ? "end" : "middle"}
+  >{tickFormatter ? tickFormatter(payload.value, index) : payload.value}</text>;
+}
+
+type CalendarDateTick = {
+  day: string;
+  label: string;
+  year: string | null;
+  textAnchor: "start" | "middle" | "end";
+};
+
+export function calendarAssetTrendTicks(days: readonly string[], plotWidth: number): CalendarDateTick[] {
+  if (days.length === 0) return [];
+  const first = days[0];
+  const last = days.at(-1)!;
+  const spanDays = (Date.parse(last) - Date.parse(first)) / 86_400_000;
+  const monthly = spanDays > 62;
+  const width = Math.max(0, plotWidth);
+  const minGap = monthly ? 44 : 56;
+  const steps = monthly ? [1, 2, 3, 6, 12, 24, 60, 120] : [1, 2, 3, 7, 14, 28, 56];
+  const position = (index: number) => days.length === 1 ? width / 2 : index / (days.length - 1) * width;
+  const candidatesForStep = (step: number) => days.flatMap((day, index) => {
+    if (index === 0) return [{ day, index }];
+    if (monthly) {
+      const month = Number(day.slice(5, 7)) - 1;
+      const monthIndex = Number(day.slice(0, 4)) * 12 + month;
+      return day.slice(0, 7) !== days[index - 1].slice(0, 7) && monthIndex % step === 0
+        ? [{ day, index }]
+        : [];
+    }
+    const offset = (Date.parse(day) - Date.parse(first)) / 86_400_000;
+    return offset % step === 0 || day.endsWith("-01-01") || index === days.length - 1
+      ? [{ day, index }]
+      : [];
+  });
+  // Measure actual calendar spacing so February does not break an otherwise monthly cadence.
+  const step = steps.find(value => {
+    if (!monthly) return spanDays / value * minGap <= width;
+    const regularTicks = candidatesForStep(value).slice(1);
+    return regularTicks.slice(1).every((tick, index) =>
+      position(tick.index) - position(regularTicks[index].index) >= minGap,
+    );
+  }) ?? steps.at(-1)!;
+  const candidates = candidatesForStep(step);
+  const selected: typeof candidates = [];
+  for (const candidate of candidates) {
+    const previous = selected.at(-1);
+    if (previous && position(candidate.index) - position(previous.index) < minGap) {
+      const entersYear = candidate.day.slice(0, 4) !== previous.day.slice(0, 4);
+      const finalDay = !monthly && candidate.day === last && selected.length > 1;
+      if (!entersYear && !finalDay) continue;
+      // Keep the year boundary (or short-range endpoint), not a nearby redundant label.
+      selected.pop();
+    }
+    selected.push(candidate);
+  }
+  return selected.map(({ day, index }, tickIndex) => ({
+    day,
+    label: monthly ? `${Number(day.slice(5, 7))}月` : day.slice(5).replace("-", "."),
+    year: tickIndex === 0 || day.slice(0, 4) !== selected[tickIndex - 1].day.slice(0, 4)
+      ? day.slice(0, 4)
+      : null,
+    textAnchor: position(index) < minGap / 2 ? "start"
+      : position(index) > width - minGap / 2 ? "end" : "middle",
+  }));
+}
+
+export function CompactAssetTrendDateTick(props: XAxisTickContentProps & { dateTicks: CalendarDateTick[] }) {
+  const dateTick = props.dateTicks.find(tick => tick.day === String(props.payload.value));
+  if (!dateTick) return null;
+  const tick = AssetTrendDateTick(props);
+  return <text {...tick.props} textAnchor={dateTick.textAnchor}>
+    <tspan x={props.x}>{dateTick.label}</tspan>
+    {dateTick.year ? <tspan x={props.x} dy="1.5em">{dateTick.year}</tspan> : null}
+  </text>;
+}
+
+export function CalendarAssetTrendXAxis({ points }: { points: AssetTrendChartPoint[] }) {
+  const plotArea = usePlotArea();
+  const dateTicks = calendarAssetTrendTicks(points.map(point => point.day), plotArea?.width ?? 0);
+  return <XAxis
+    axisLine={{ stroke: "var(--line-2)" }}
+    dataKey="day"
+    height={44}
+    interval={0}
+    ticks={dateTicks.map(tick => tick.day)}
+    tick={props => <CompactAssetTrendDateTick {...props} dateTicks={dateTicks} />}
+    tickFormatter={day => dateTicks.find(tick => tick.day === day)?.label ?? day}
+    tickLine={{ stroke: "var(--line-2)" }}
+  />;
+}
 
 function assetLabel(assetScopeLabel: string): string {
   return assetScopeLabel.endsWith("资产")
@@ -185,6 +289,7 @@ function QualitySummary({
   historicalLabel,
   historicalObserved,
   incompleteCount,
+  missingCount,
   observed,
   total,
   unavailableCount,
@@ -192,18 +297,23 @@ function QualitySummary({
   historicalLabel?: string | null;
   historicalObserved?: number;
   incompleteCount: number;
+  missingCount: number;
   observed: number;
   total: number;
   unavailableCount: number;
 }) {
   return (
-    <p className="asset-trend-quality">
+    <p
+      className="asset-trend-quality"
+      data-coverage={`${observed}/${total}`}
+    >
       完整 {observed} / {total} 天
       {historicalObserved && historicalLabel
         ? ` · ${historicalLabel} ${historicalObserved} 条`
         : ""}
       {incompleteCount > 0 ? ` · ${incompleteCount} 天不完整或过期` : ""}
       {unavailableCount > 0 ? ` · ${unavailableCount} 天未估值` : ""}
+      {missingCount > 0 ? ` · 缺少 ${missingCount} 天观测` : ""}
     </p>
   );
 }
@@ -212,12 +322,16 @@ export function AssetTrendChart({
   ariaLabel,
   benchmark,
   chartHeight,
+  coverageNote,
+  coveragePresentation = "default",
   currency,
+  dateAxisPresentation = "default",
   formatAmount,
   formatDay,
   incompleteCount,
   isSensitiveHidden = false,
   historicalSeries = null,
+  emptyMessage = "无可用趋势",
   points,
   showCurrency = true,
   lineType = "linear",
@@ -227,7 +341,10 @@ export function AssetTrendChart({
   ariaLabel: string;
   benchmark?: AssetTrendBenchmark | null;
   chartHeight?: number;
+  coverageNote?: string;
+  coveragePresentation?: "default" | "disclosure";
   currency: string;
+  dateAxisPresentation?: "default" | "compact";
   formatAmount(value: string): string;
   formatDay(day: string): string;
   incompleteCount: number;
@@ -236,6 +353,7 @@ export function AssetTrendChart({
     label: string;
     points: AssetTrendChartPoint[];
   } | null;
+  emptyMessage?: string;
   points: AssetTrendChartPoint[];
   showCurrency?: boolean;
   lineType?: "linear" | "stepAfter";
@@ -263,27 +381,54 @@ export function AssetTrendChart({
       value: point.amount === null ? null : Number(point.amount),
     };
   });
-  const observed = data.filter((point) => point.amount !== null).length;
+  const observed = data.filter((point) => (point.observed || point.manualRecordDay) && point.amount !== null && point.status === "complete").length;
+  const missingCount = data.filter((point) => !point.observed && !point.manualRecordDay && point.historicalAmount === null).length;
   const historicalObserved = data.filter((point) => point.historicalValue !== null).length;
   const today = data.at(-1);
   const values = data.flatMap((point) => [
     ...(point.value === null ? [] : [point.value]),
     ...(point.historicalValue === null ? [] : [point.historicalValue]),
   ]);
-  const comparisonHeader = variant === "total" ? (
+  const qualitySummary = <QualitySummary
+    historicalLabel={historicalSeries?.label ?? null}
+    historicalObserved={historicalObserved}
+    incompleteCount={incompleteCount}
+    missingCount={missingCount}
+    observed={observed}
+    total={points.length}
+    unavailableCount={unavailableCount}
+  />;
+  const comparisonHeader = variant === "source" && coverageNote === undefined && coveragePresentation === "default" ? null : coveragePresentation === "disclosure" ? (
+    <details className="asset-trend-coverage">
+      <summary>数据覆盖{missingCount + incompleteCount + unavailableCount > 0 ? " · 存在缺测或不完整记录" : ""}</summary>
+      {coverageNote ? <p className="asset-trend-coverage-note">{coverageNote}</p> : null}
+      {qualitySummary}
+    </details>
+  ) : (
     <header className="asset-trend-comparison-header">
-      <QualitySummary
-        historicalLabel={historicalSeries?.label ?? null}
-        historicalObserved={historicalObserved}
-        incompleteCount={incompleteCount}
-        observed={observed}
-        total={points.length}
-        unavailableCount={unavailableCount}
-      />
+      {coverageNote ? <p className="asset-trend-coverage-note">{coverageNote}</p> : null}
+      {qualitySummary}
     </header>
-  ) : null;
+  );
   const benchmarkVisible = benchmark?.comparison?.reason === null &&
     benchmark.enabledSymbols.length > 0;
+  const compactDateAxis = dateAxisPresentation === "compact";
+  const firstYear = points[0]?.day.slice(0, 4) ?? "";
+  const lastYear = points.at(-1)?.day.slice(0, 4) ?? "";
+  const formatAxisDay = firstYear !== lastYear
+    ? (day: string) => day
+    : formatDay;
+  const dateAxis = compactDateAxis ? <CalendarAssetTrendXAxis points={points} /> : (
+    <XAxis
+      axisLine={{ stroke: "var(--line-2)" }}
+      dataKey="day"
+      interval="preserveStartEnd"
+      minTickGap={40}
+      tick={AssetTrendDateTick}
+      tickFormatter={formatAxisDay}
+      tickLine={{ stroke: "var(--line-2)" }}
+    />
+  );
   const benchmarkLegend = benchmark ? (
     <div
       aria-hidden={!benchmarkVisible}
@@ -326,7 +471,7 @@ export function AssetTrendChart({
         ".SPX.US": comparisonPoint?.[".SPX.US"] === null || comparisonPoint === undefined
           ? null
           : Number(comparisonPoint[".SPX.US"]),
-        assets: comparisonPoint === undefined ? null : Number(comparisonPoint.assets),
+        assets: comparisonPoint?.assets == null ? null : Number(comparisonPoint.assets),
       };
     });
     const benchmarkValues = benchmarkData.flatMap((point) => [
@@ -344,7 +489,7 @@ export function AssetTrendChart({
 
     return (
       <div className={`asset-trend-comparison asset-trend-comparison--${variant}`}>
-        {comparisonHeader}
+        {coveragePresentation !== "disclosure" ? comparisonHeader : null}
         {benchmarkLegend}
         <div className="total-trend-chart-wrap">
           <ResponsiveContainer
@@ -369,19 +514,7 @@ export function AssetTrendChart({
                 stroke="var(--line)"
                 strokeDasharray="0"
               />
-              <XAxis
-                axisLine={{ stroke: "var(--line-2)" }}
-                dataKey="day"
-                interval="preserveStartEnd"
-                minTickGap={40}
-                tick={{
-                  fill: "var(--muted)",
-                  fontFamily: "var(--f-mono)",
-                  fontSize: 10,
-                }}
-                tickFormatter={formatDay}
-                tickLine={{ stroke: "var(--line-2)" }}
-              />
+              {dateAxis}
               <YAxis
                 axisLine={false}
                 domain={[benchmarkMinimum - benchmarkPadding, benchmarkMaximum + benchmarkPadding]}
@@ -402,7 +535,7 @@ export function AssetTrendChart({
                     currency={currency}
                     enabledSymbols={benchmark.enabledSymbols}
                     formatAmount={formatAmount}
-                    formatDay={formatDay}
+                    formatDay={formatShanghaiFullDayLabel}
                   />
                 )}
                 cursor={{ stroke: "var(--line-2)", strokeWidth: 1 }}
@@ -452,6 +585,7 @@ export function AssetTrendChart({
             </LineChart>
           </ResponsiveContainer>
         </div>
+        {coveragePresentation === "disclosure" ? comparisonHeader : null}
       </div>
     );
   }
@@ -459,8 +593,9 @@ export function AssetTrendChart({
   if (values.length === 0) {
     return (
       <div className={`asset-trend-comparison asset-trend-comparison--${variant}`}>
-        {comparisonHeader}
-        <p className="trend-empty">无可用趋势</p>
+        {coveragePresentation !== "disclosure" ? comparisonHeader : null}
+        <p className="trend-empty">{emptyMessage}</p>
+        {coveragePresentation === "disclosure" ? comparisonHeader : null}
       </div>
     );
   }
@@ -479,7 +614,7 @@ export function AssetTrendChart({
 
   return (
     <div className={`asset-trend-comparison asset-trend-comparison--${variant}`}>
-      {comparisonHeader}
+      {coveragePresentation !== "disclosure" ? comparisonHeader : null}
       {benchmarkLegend}
       <div className="total-trend-chart-wrap">
         <ResponsiveContainer
@@ -504,18 +639,7 @@ export function AssetTrendChart({
               stroke="var(--line)"
               strokeDasharray="0"
             />
-            <XAxis
-              axisLine={{ stroke: "var(--line-2)" }}
-              dataKey="day"
-              minTickGap={40}
-              tick={{
-                fill: "var(--muted)",
-                fontFamily: "var(--f-mono)",
-                fontSize: 10,
-              }}
-              tickFormatter={formatDay}
-              tickLine={{ stroke: "var(--line-2)" }}
-            />
+            {dateAxis}
             <YAxis
               axisLine={false}
               domain={[axisMinimum, axisMaximum]}
@@ -534,7 +658,7 @@ export function AssetTrendChart({
                   {...props}
                   currency={currency}
                   formatAmount={formatAmount}
-                  formatDay={formatDay}
+                  formatDay={formatShanghaiFullDayLabel}
                   showCurrency={showCurrency}
                 />
               )}
@@ -552,7 +676,7 @@ export function AssetTrendChart({
                 activeDot={false}
                 connectNulls
                 dataKey="historicalValue"
-                dot={false}
+                dot={historicalObserved === 1}
                 isAnimationActive={false}
                 name={historicalSeries?.label}
                 stroke="var(--secondary)"
@@ -566,7 +690,7 @@ export function AssetTrendChart({
               activeDot={false}
               connectNulls
               dataKey="value"
-              dot={false}
+              dot={data.filter(point => point.value !== null).length === 1}
               isAnimationActive={false}
               stroke="var(--display)"
               strokeLinecap="square"
@@ -576,6 +700,7 @@ export function AssetTrendChart({
           </LineChart>
         </ResponsiveContainer>
       </div>
+      {coveragePresentation === "disclosure" ? comparisonHeader : null}
     </div>
   );
 }

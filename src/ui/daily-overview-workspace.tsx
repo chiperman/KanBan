@@ -22,7 +22,7 @@ import {
   type ReportingCurrency,
 } from "@/domain/valuation";
 import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
-import { daysForTrendRange, totalTrendObservationStatus } from "@/domain/daily-trend-observations";
+import { totalTrendObservationStatus } from "@/domain/daily-trend-observations";
 import { portfolioSourceTotal } from "@/domain/evm-token-preferences";
 import { hasManualAssetRecord } from "@/domain/manual-asset-records";
 import type {
@@ -33,7 +33,8 @@ import type {
 } from "@/server/ports";
 import { AssetGlobalRefreshControl } from "@/ui/asset-refresh-controls";
 import { sourceSyncStatus } from "@/ui/asset-source-status";
-import { AssetTrendChart } from "@/ui/asset-trend-chart";
+import { AssetTrendPanel, useAssetTrendRange } from "@/ui/asset-trend-panel";
+import { rangeDays } from "@/domain/investment-performance-trend";
 import { profitDirection, type ProfitColorScheme } from "@/ui/profit-color-scheme";
 import {
   VibeMetric,
@@ -54,6 +55,8 @@ import {
   useWorkbenchDisplayPreferences,
 } from "@/ui/workbench-display-preferences";
 import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
+import { analyzeInvestmentBook, INVESTMENT_BOOKS, type InvestmentBookState } from "@/domain/investment-books";
+import type { ManualAssetRecord } from "@/server/ports";
 
 type OverviewSource = Omit<
   AssetSourceSummary,
@@ -102,19 +105,21 @@ function MetricValue({
   hidden,
   profitColorScheme,
   signed = false,
+  unavailableLabel = "数据不足",
   value,
 }: {
   currency: ReportingCurrency;
   hidden: boolean;
   profitColorScheme?: ProfitColorScheme;
   signed?: boolean;
+  unavailableLabel?: string;
   value: string | null;
 }) {
   if (hidden) {
     return <span className="daily-overview__private">••••••</span>;
   }
   if (value === null) {
-    return <span className="daily-overview__unavailable">数据不足</span>;
+    return <span className="daily-overview__unavailable">{unavailableLabel}</span>;
   }
   return (
     <VibeMetric
@@ -208,6 +213,8 @@ function daysBetweenShanghaiDays(startDay: string, endDay: string): number {
 }
 
 export function DailyOverviewWorkspace({
+  investmentBooks,
+  manualRecords = [],
   cashflows,
   currentDay,
   currentObservedAt,
@@ -216,6 +223,8 @@ export function DailyOverviewWorkspace({
   sources,
   trendObservations,
 }: {
+  investmentBooks?: InvestmentBookState | null;
+  manualRecords?: ManualAssetRecord[];
   cashflows: InvestmentCashflow[];
   currentDay: string;
   currentObservedAt: string;
@@ -335,12 +344,13 @@ export function DailyOverviewWorkspace({
     comparisonTotal != null
     ? decimalSubtract(changeEndpoint.amount, comparisonTotal)
     : null;
+  const trendRange = useAssetTrendRange();
   const trend = useMemo(() => {
     const firstTrendDay = trendObservations
       .map((observation) => observation.day)
       .toSorted()
       .at(0);
-    const days = daysForTrendRange("7d", currentDay, firstTrendDay);
+    const days = rangeDays(trendRange.preset, currentDay, firstTrendDay, trendRange.customRange);
     const observationsByDay = new Map(
       trendObservations.map((observation) => [observation.day, observation]),
     );
@@ -357,12 +367,10 @@ export function DailyOverviewWorkspace({
       };
     });
     return {
-      firstDay: points.find((point) => point.observed)?.day ?? null,
-      incompleteCount: points.filter((point) => point.status !== "complete").length,
+      firstDay: firstTrendDay,
       points,
-      unavailableCount: points.filter((point) => point.amount === null).length,
     };
-  }, [currency, currentDay, trendObservations]);
+  }, [currency, currentDay, trendObservations, trendRange.preset, trendRange.customRange]);
   const sourceSummaries = useMemo(
     () => {
       const priorSourcesById = new Map(
@@ -437,6 +445,11 @@ export function DailyOverviewWorkspace({
     : !current.complete
       ? "总额为最近成功值。"
       : null;
+  const dataStatusLabel = !currentValuationComplete
+    ? `数据不完整${usdValuation.unvaluedCount > 0 ? ` · 未估值 ${usdValuation.unvaluedCount} 项` : ""}`
+    : todayChangeIssueSources.length > 0
+      ? `${todayChangeIssueSources.length} 个来源待更新`
+      : "部分来源待更新";
   const reportingRate = currency === "USD"
     ? null
     : usdValuation.exchangeRateObservations.find(
@@ -518,217 +531,202 @@ export function DailyOverviewWorkspace({
         </section>
       ) : null}
 
-      <section className="daily-overview__current" aria-labelledby="overview-total-title">
-        <article data-testid="overview-current-total">
-          <p className="card-label">CURRENT / CONSOLIDATED</p>
-          <h2 id="overview-total-title">总资产</h2>
-          <MetricValue
-            currency={currency}
-            hidden={!showSensitiveInfo}
-            value={current?.amount ?? null}
-          />
-          {reportingRate === null ? null : (
-            <p data-testid="overview-reporting-rate">
-              {reportingRate.baseCurrency}/{reportingRate.quoteCurrency}{" "}
-              {decimalToFixed(reportingRate.rate, 4)}
-              {" · "}
-              {formatShanghaiShortDateTime(reportingRate.observedAt)}
-            </p>
-          )}
-          {/* 数据完整性并入总资产卡，避免与下方提示重复表达同一事实 */}
-          <article
-            className="daily-overview__confidence"
-            data-testid="overview-confidence"
-          >
-            <p className="card-label">CONFIDENCE / DATA</p>
-            <h2>{currentValuationComplete ? "总额完整" : "数据不完整"}</h2>
-            <p>
-              {currentReason ??
-                `已覆盖 ${recordedSources.length} 个来源`}
-            </p>
-            {!current?.complete ? (
-              <p>
-                未估值 {usdValuation.unvaluedCount} 项 · 过期来源{" "}
-                {usdValuation.expiredCount} 个
+      <div
+        className="daily-overview__hero"
+        data-has-investment-books={investmentBooks ? "true" : undefined}
+        data-summary-compact={
+          !investmentBooks && summaryCompact ? "true" : undefined
+        }
+      >
+        <section className="daily-overview__current" aria-labelledby="overview-total-title">
+          <article data-testid="overview-current-total">
+            <header className="daily-overview__total-heading">
+              <h2 id="overview-total-title" aria-label="总资产">总资产 <span>· {currency}</span></h2>
+              <span>更新于 {formatShanghaiShortDateTime(currentObservedAt)}</span>
+            </header>
+            <MetricValue
+              currency={currency}
+              hidden={!showSensitiveInfo}
+              value={current?.amount ?? null}
+            />
+            {reportingRate === null ? null : (
+              <p data-testid="overview-reporting-rate">
+                {reportingRate.baseCurrency}/{reportingRate.quoteCurrency}{" "}
+                {decimalToFixed(reportingRate.rate, 4)}
+                {" · "}
+                {formatShanghaiShortDateTime(reportingRate.observedAt)}
               </p>
-            ) : null}
-          </article>
-        </article>
-
-        <article>
-          <p className="card-label">
-            {intervalFallback ? "INTERVAL / ASSET CHANGE" : "TODAY / ASSET CHANGE"}
-          </p>
-          <h2>
-            {intervalFallback ? "自上次完整记录以来资产变化" : "今日资产变化"}
-          </h2>
-          <MetricValue
-            currency={currency}
-            hidden={!showSensitiveInfo}
-            profitColorScheme={profitColorScheme}
-            signed
-            value={todayChange}
-          />
-          {priorObservation === null ? null : (
-            <p>
-              {intervalFallback
-                ? `较 ${formatShanghaiDayLabel(priorObservation.day)}（${daysSincePriorObservation} 日）`
-                : `较 ${formatShanghaiDayLabel(priorObservation.day)}`}
-            </p>
-          )}
-          {/* 自释：今日资产变化含资金进出与估值修正，不能当作投资收益阅读 */}
-          <p className="daily-overview__note">
-            含资金进出与估值修正，不是组合投资盈亏
-          </p>
-          {usesRecordedTodayObservation ? (
-            <p>
-              当前刷新有失败 · 资产变化截至 {formatShanghaiShortDateTime(changeEndpoint.observedAt)}
-            </p>
-          ) : null}
-          {todayChange === null &&
-          priorObservation !== null &&
-          todayChangeIssueSources.length > 0 ? (
-            <div
-              className="daily-overview__change-issues"
-              data-testid="overview-today-change-issues"
+            )}
+            <article className="daily-overview__change">
+              <h2>
+                {intervalFallback ? "自上次完整记录以来资产变化" : "今日资产变化"}
+              </h2>
+              <MetricValue
+                currency={currency}
+                hidden={!showSensitiveInfo}
+                profitColorScheme={profitColorScheme}
+                signed
+                unavailableLabel="暂不可比"
+                value={todayChange}
+              />
+              {priorObservation === null ? null : (
+                <p>
+                  {intervalFallback
+                    ? `较 ${formatShanghaiDayLabel(priorObservation.day)}（${daysSincePriorObservation} 日）`
+                    : `较 ${formatShanghaiDayLabel(priorObservation.day)}`}
+                </p>
+              )}
+              {/* 自释：今日资产变化含资金进出与估值修正，不能当作投资收益阅读 */}
+              <p className="daily-overview__note">
+                含资金进出与估值修正，非投资收益
+              </p>
+            </article>
+            {!currentValuationComplete || !current?.complete ? <details
+              className="daily-overview__confidence"
+              data-testid="overview-confidence"
             >
-              <p>未计入今日变化</p>
-              {!showSensitiveInfo ? (
-                <span>
-                  已隐藏 {todayChangeIssueSources.length} 个来源。
-                </span>
-              ) : (
-                <>
-                  <ul>
+              <summary>
+                <span>{dataStatusLabel}</span>
+                {usesRecordedTodayObservation ? <span className="daily-overview__confidence-context">
+                  {" · "}资产变化截至 {formatShanghaiShortDateTime(changeEndpoint.observedAt)}
+                </span> : currentValuationComplete ? <span className="daily-overview__confidence-context">
+                  {" · "}总额含最近成功值
+                </span> : null}
+              </summary>
+              <div className="daily-overview__confidence-details">
+                <p>{currentReason ?? `已覆盖 ${recordedSources.length} 个来源`}</p>
+                {usesRecordedTodayObservation ? <p>
+                  当前刷新有失败，资产变化使用上述时间的已记录观测。
+                </p> : null}
+                {usdValuation.expiredCount > 0 ? <p>
+                  过期来源 {usdValuation.expiredCount} 个；可在顶部刷新资产。
+                </p> : null}
+                {todayChangeIssueSources.length > 0 ? <div
+                  className="daily-overview__change-issues"
+                  data-testid="overview-data-issues"
+                >
+                  {!showSensitiveInfo ? <span>已隐藏 {todayChangeIssueSources.length} 个来源。</span> : <ul>
                     {todayChangeIssueSources.map((source) => (
                       <li data-tone={source.tone} key={source.label}>
                         <span>
                           <strong>{source.label}</strong>
                           <small>{source.status}</small>
                         </span>
-                        <b>
-                          {source.amount === null
-                            ? "无法折算"
-                            : `${amount(source.amount)} ${currency}`}
-                        </b>
+                        <b>{source.amount === null ? "无法折算" : `${amount(source.amount)} ${currency}`}</b>
                       </li>
                     ))}
-                  </ul>
-                </>
-              )}
-            </div>
-          ) : null}
-        </article>
-      </section>
-
-      <section
-        className="daily-overview__summary"
-        data-compact={summaryCompact ? "true" : undefined}
-        aria-label="本金与收益摘要"
-      >
-        {summaryCompact ? (
-          /* 两个指标都不可用时压缩为一行，避免读屏与视觉上重复播报「数据不足」 */
-          <>
-            <p className="daily-overview__summary-label">本金与收益</p>
-            <span
-              className="daily-overview__summary-item"
-              data-testid="overview-net-investment"
+                  </ul>}
+                </div> : null}
+              </div>
+            </details> : null}
+            <section
+              className="daily-overview__trend"
+              data-testid="overview-trend"
             >
-              <span>累计净投入</span>
+              <AssetTrendPanel
+                title="资产走势"
+                range={{ ...trendRange, currentDay, firstDay: trend.firstDay }}
+                ariaLabel="总资产趋势"
+                chartHeight={320}
+                currency={currency}
+                dateAxisPresentation="compact"
+                formatAmount={amount}
+                formatDay={formatShanghaiDayLabel}
+                isSensitiveHidden={!showSensitiveInfo}
+                points={trend.points}
+                rangePresentation="compact"
+              />
+            </section>
+          </article>
+        </section>
+
+        {investmentBooks ? <section className="daily-overview__summary investment-books__overview" aria-label="三本账本金与收益">
+          {INVESTMENT_BOOKS.map(book => {
+            const result = analyzeInvestmentBook({ state: investmentBooks, bookId: book.id, sources: liveSources, observations: trendObservations, manualRecords, currentDay });
+            return <article key={book.id} className="daily-overview__book">
+              <header className="daily-overview__book-heading">
+                <h2>{book.name}账本 <span>· {book.currency}</span></h2>
+                <VibeLink href={`/performance?book=${book.id}`} variant="text" size="compact" shape="square" aria-label={`查看${book.name}投资账本`}><SourceDetailArrowIcon /></VibeLink>
+              </header>
+              <div className="daily-overview__book-total" aria-label={`${book.name}资产金额`}>
+                <MetricValue currency={book.currency} hidden={!showSensitiveInfo} value={result.current?.total ?? null} />
+              </div>
+              <dl className="daily-overview__book-metrics">
+                <div><dt>累计净投入</dt><dd><MetricValue currency={book.currency} hidden={!showSensitiveInfo} value={result.current?.netInvestment ?? null} /></dd></div>
+                <div><dt>累计收益</dt><dd><MetricValue currency={book.currency} hidden={!showSensitiveInfo} profitColorScheme={profitColorScheme} signed value={result.current?.profit ?? null} /></dd></div>
+              </dl>
+              <p className="daily-overview__book-date">{result.current ? `截至 ${result.current.day}` : "暂无资产记录"}</p>
+              {showSensitiveInfo && result.missingReason ? <p className="daily-overview__book-warning">{result.missingReason}</p> : null}
+            </article>;
+          })}
+        </section> : <section
+          className="daily-overview__summary"
+          data-compact={summaryCompact ? "true" : undefined}
+          aria-label="本金与收益摘要"
+        >
+          {summaryCompact ? (
+            /* 两个指标都不可用时压缩为一行，避免读屏与视觉上重复播报「数据不足」 */
+            <>
+              <p className="daily-overview__summary-label">本金与收益</p>
+              <span
+                className="daily-overview__summary-item"
+                data-testid="overview-net-investment"
+              >
+                <span>累计净投入</span>
+                <MetricValue
+                  currency={currency}
+                  hidden={!showSensitiveInfo}
+                  value={analysis.cumulativeNetInvestment}
+                />
+              </span>
+              <span
+                className="daily-overview__summary-item"
+                data-testid="overview-investment-profit"
+              >
+                <span>组合投资盈亏</span>
+                <MetricValue
+                  currency={currency}
+                  hidden={!showSensitiveInfo}
+                  signed
+                  value={analysis.investmentProfit}
+                />
+              </span>
+            </>
+          ) : null}
+          {summaryCompact ? null : (
+            <article data-testid="overview-net-investment">
+              <p>累计净投入</p>
               <MetricValue
                 currency={currency}
                 hidden={!showSensitiveInfo}
                 value={analysis.cumulativeNetInvestment}
               />
-            </span>
-            <span
-              className="daily-overview__summary-item"
-              data-testid="overview-investment-profit"
-            >
-              <span>组合投资盈亏</span>
+              {currency !== "USD" ? <span>按当前汇率折算</span> : null}
+            </article>
+          )}
+          {summaryCompact ? null : (
+            <article data-testid="overview-investment-profit">
+              <p>组合投资盈亏</p>
               <MetricValue
                 currency={currency}
                 hidden={!showSensitiveInfo}
                 signed
                 value={analysis.investmentProfit}
               />
-            </span>
-          </>
-        ) : null}
-        {summaryCompact ? null : (
-          <article data-testid="overview-net-investment">
-            <p>累计净投入</p>
-            <MetricValue
-              currency={currency}
-              hidden={!showSensitiveInfo}
-              value={analysis.cumulativeNetInvestment}
-            />
-            {currency !== "USD" ? <span>按当前汇率折算</span> : null}
-          </article>
-        )}
-        {summaryCompact ? null : (
-          <article data-testid="overview-investment-profit">
-            <p>组合投资盈亏</p>
-            <MetricValue
-              currency={currency}
-              hidden={!showSensitiveInfo}
-              signed
-              value={analysis.investmentProfit}
-            />
-            {currency !== "USD" ? <span>按当前汇率折算</span> : null}
-          </article>
-        )}
-        {demoMode ? null : (
-          <div className="daily-overview__summary-actions">
-            <VibeLink href="/performance" variant="outline">
-              记录资金
-            </VibeLink>
-            <VibeLink href="/performance" variant="text">
-              查看收益分析
-            </VibeLink>
-          </div>
-        )}
-      </section>
-
-      <div className="daily-overview__analysis">
-        <section
-          className="daily-overview__trend"
-          data-testid="overview-trend"
-        >
-          <header>
-            <div>
-              <p className="card-label">总资产趋势</p>
-              <h2>近 7 日资产走势</h2>
+              {currency !== "USD" ? <span>按当前汇率折算</span> : null}
+            </article>
+          )}
+          {demoMode ? null : (
+            <div className="daily-overview__summary-actions">
+              <VibeLink href="/performance" variant="outline">
+                记录资金
+              </VibeLink>
+              <VibeLink href="/performance" variant="text">
+                查看投资账本
+              </VibeLink>
             </div>
-            <div className="daily-overview__trend-actions">
-              <span>
-                {trend.firstDay
-                  ? `${formatShanghaiDayLabel(trend.firstDay)} 至 ${formatShanghaiDayLabel(currentDay)}`
-                  : "暂无可用观察"}
-              </span>
-              {demoMode ? null : (
-                <VibeLink
-                  className="daily-overview__trend-link"
-                  href="/performance"
-                  variant="text"
-                >
-                  查看长期趋势
-                </VibeLink>
-              )}
-            </div>
-          </header>
-          <AssetTrendChart
-            ariaLabel="近 7 日总资产趋势"
-            chartHeight={176}
-            currency={currency}
-            formatAmount={amount}
-            formatDay={formatShanghaiDayLabel}
-            incompleteCount={trend.incompleteCount}
-            isSensitiveHidden={!showSensitiveInfo}
-            points={trend.points}
-            unavailableCount={trend.unavailableCount}
-          />
-        </section>
+          )}
+        </section>}
       </div>
 
       <LongbridgeRealtimeNotice state={realtimeState} retry={retry} />
@@ -736,7 +734,7 @@ export function DailyOverviewWorkspace({
         <header>
           <div>
             <p className="card-label">ASSETS / DISTRIBUTION</p>
-            <h2>资产分布</h2>
+            <h2>按来源分布</h2>
           </div>
           {demoMode ? null : (
             <VibeLink aria-label="查看全部资产与持仓" href="/assets" variant="outline">

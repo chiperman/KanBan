@@ -36,3 +36,7 @@ export function formatShanghaiShortDateTime(value: string | Date): string {
 export function formatShanghaiDayLabel(day: string): string {
   return `${day.slice(5, 7)}月${day.slice(8, 10)}日`;
 }
+
+export function formatShanghaiFullDayLabel(day: string): string {
+  return `${day.slice(0, 4)}年${formatShanghaiDayLabel(day)}`;
+}
