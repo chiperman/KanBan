@@ -1,7 +1,7 @@
 "use client";
 
+import { formatAssetAmount } from "@/ui/asset-price-display";
 import { portfolioSourceTotal } from "@/domain/evm-token-preferences";
-import { decimalToFixed } from "@/domain/decimal";
 import { useWorkbenchDisplayPreferences } from "@/ui/workbench-display-preferences";
 import { useState } from "react";
 
@@ -60,7 +60,7 @@ function SourceDirectoryRow({ diagnostic, card }: { diagnostic: DiagnosticSource
         </div>
         <div className="asset-source-directory__amount">
           <span className="card-label">来源原币总额</span>
-          <strong>{!showSensitiveInfo ? "••••••" : manualWithoutRecord ? "尚无记录" : `${decimalToFixed(total.amount, 2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")} ${total.currency}`}</strong>
+          <strong>{!showSensitiveInfo ? "••••••" : manualWithoutRecord ? "尚无记录" : `${formatAssetAmount(total.amount)} ${total.currency}`}</strong>
         </div>
         <div className="asset-source-directory__meta">
           <div className="asset-source-directory__status">

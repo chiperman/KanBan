@@ -1,5 +1,6 @@
 "use client";
 
+import { formatAssetAmount } from "@/ui/asset-price-display";
 import { useMemo } from "react";
 import { useLongbridgeRealtime } from "@/ui/use-longbridge-realtime";
 import { LongbridgeRealtimeNotice } from "@/ui/longbridge-realtime-notice";
@@ -69,8 +70,7 @@ type SourceComparison =
   | { state: "unavailable" };
 
 function amount(value: string): string {
-  const [integer, fraction] = decimalToFixed(value, 2).split(".");
-  return `${integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.${fraction}`;
+  return formatAssetAmount(value);
 }
 
 function sourceHealth(source: OverviewSource): {

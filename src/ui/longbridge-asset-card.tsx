@@ -23,7 +23,7 @@ import type {
 } from "@/server/ports";
 import { assetHoldingDisplayName } from "@/ui/asset-product-coverage";
 import { HoldingCandlestickChart } from "@/ui/holding-candlestick-chart";
-import { formatAssetUnitPrice } from "@/ui/asset-price-display";
+import { formatAssetAmount, formatAssetUnitPrice } from "@/ui/asset-price-display";
 import type { ProfitColorScheme } from "@/ui/profit-color-scheme";
 import { assetSourceHoldingsModel } from "@/ui/asset-source-card/holdings-model";
 import { amount } from "@/ui/asset-source-card/holding-detail-model";
@@ -37,7 +37,7 @@ import type { AssetSourceView } from "@/ui/asset-source-card/types";
 export type { AssetSourceView } from "@/ui/asset-source-card/types";
 
 function moneyAmount(value: string): string {
-  return amount(decimalToFixed(value, 2));
+  return formatAssetAmount(value);
 }
 
 export function AssetSourceCard({

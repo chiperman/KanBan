@@ -26,7 +26,11 @@ import {
   assetHoldingKey,
   AssetHoldingPositionStatus,
 } from "@/ui/asset-product-coverage";
-import { formatAssetUnitPrice } from "@/ui/asset-price-display";
+import {
+  formatAssetAmount,
+  formatAssetQuantity,
+  formatAssetUnitPrice,
+} from "@/ui/asset-price-display";
 import { sourceSyncStatus } from "@/ui/asset-source-status";
 import { formatShanghaiDateTime } from "@/ui/shanghai-date-time";
 import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
@@ -77,8 +81,7 @@ const VALUATION_OPTIONS: readonly VibeSelectOption<ValuationFilter>[] = [
 ];
 
 function money(value: string): string {
-  const [integer, fraction] = decimalToFixed(value, 2).split(".");
-  return `${integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.${fraction}`;
+  return formatAssetAmount(value);
 }
 
 function signedPercent(value: string): string {
@@ -481,7 +484,7 @@ export function AssetsHoldingsWorkspace({
                           </strong>
                           {showSourceMarketValue && holding.sourceMarketValue ? (
                             <span>
-                              原币 {money(holding.sourceMarketValue.amount)} {holding.sourceMarketValue.currency}
+                              原币 {formatAssetAmount(holding.sourceMarketValue.amount)} {holding.sourceMarketValue.currency}
                             </span>
                           ) : holding.sourceMarketValue ? null : (
                             <span>原市值缺失</span>
@@ -504,7 +507,7 @@ export function AssetsHoldingsWorkspace({
                           <div className="assets-holdings__price-meta">
                             <span>
                               {showSensitiveInfo
-                                ? `${holding.quantity} ${holding.symbol}`
+                                ? `${formatAssetQuantity(holding.quantity)} ${holding.symbol}`
                                 : "••••••"}
                             </span>
                           </div>

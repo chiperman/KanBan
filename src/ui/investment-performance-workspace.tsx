@@ -1,5 +1,6 @@
 "use client";
 
+import { formatAssetAmount } from "@/ui/asset-price-display";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import {
@@ -18,7 +19,6 @@ import {
 import {
   decimalCompare,
   decimalMultiply,
-  decimalToFixed,
 } from "@/domain/decimal";
 import { buildTotalValuation, convertCurrencyAmount, type ReportingCurrency } from "@/domain/valuation";
 import { hasManualAssetRecord } from "@/domain/manual-asset-records";
@@ -85,8 +85,7 @@ const CASHFLOW_CURRENCY_OPTIONS: readonly VibeSelectOption<InvestmentCashflowCur
   CURRENCY_OPTIONS;
 
 function amount(value: string): string {
-  const [integer, fraction] = decimalToFixed(value, 2).split(".");
-  return `${integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.${fraction}`;
+  return formatAssetAmount(value);
 }
 
 function cashflowKindLabel(kind: InvestmentCashflowKind): string {

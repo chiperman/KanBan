@@ -1,7 +1,8 @@
 "use client";
 
+import { formatAssetAmount } from "@/ui/asset-price-display";
 import { useMemo, useState } from "react";
-import { decimalMultiply, decimalToFixed } from "@/domain/decimal";
+import { decimalMultiply } from "@/domain/decimal";
 import { rangeDays } from "@/domain/investment-performance-trend";
 import { analyzeSourceInvestmentAccount, type SourceInvestmentHistory } from "@/domain/source-investment-history";
 import type { ValuationSource } from "@/domain/valuation";
@@ -14,8 +15,7 @@ import { VibeMetric } from "@/ui/vibe/vibe-data-instrument";
 
 // 金额始终按十进制字符串格式化，避免大额金额经 Number 转换后丢精度。
 function money(value: string): string {
-  const [integer, fraction] = decimalToFixed(value, 2).split(".");
-  return `${integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.${fraction}`;
+  return formatAssetAmount(value);
 }
 
 export function SourceInvestmentPerformance({ history, sourceId, sourceName, records, observations, source, manualRecords, currentDay, range, showSensitiveInfo, onEdit, onDelete }: {
@@ -67,7 +67,7 @@ export function SourceInvestmentPerformance({ history, sourceId, sourceName, rec
       </div>}
       ariaLabel={`${sourceName}${curve === "return" ? "收益率曲线" : curve === "profit" ? "累计收益曲线" : "资产总额趋势"}`}
       currency={curve === "return" ? "%" : analysis.currency ?? "USD"}
-      formatAmount={curve === "return" ? value => decimalToFixed(value, 2) : money}
+      formatAmount={curve === "return" ? value => formatAssetAmount(value) : money}
       formatDay={formatShanghaiDayLabel}
       chartHeight={256}
       points={points}

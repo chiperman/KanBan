@@ -1,6 +1,6 @@
+import { formatAssetAmount } from "@/ui/asset-price-display";
 import { useId, useState } from "react";
 
-import { decimalToFixed } from "@/domain/decimal";
 import type {
   AssetHolding,
   AssetProductCoverage,
@@ -66,9 +66,7 @@ const CAPABILITY_ORDER: readonly AssetProductCoverage["capability"][] = [
 ];
 
 function money(value: string): string {
-  const [integer, fraction] = decimalToFixed(value, 2).split(".");
-  const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  return fraction ? `${grouped}.${fraction}` : grouped;
+  return formatAssetAmount(value);
 }
 
 export function assetHoldingKey(holding: AssetHolding): string {

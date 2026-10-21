@@ -1,9 +1,10 @@
 "use client";
 
+import { formatAssetAmount } from "@/ui/asset-price-display";
 import { useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { activeBookRecords, analyzeInvestmentBook, bookHistoryPrefix, INVESTMENT_BOOKS, investmentBook, type BookMember, type BookRecord, type InvestmentBookId, type InvestmentBookState } from "@/domain/investment-books";
-import { decimalCompare, decimalMultiply, decimalToFixed } from "@/domain/decimal";
+import { decimalCompare, decimalMultiply } from "@/domain/decimal";
 import { shanghaiDay } from "@/domain/daily-asset-snapshots";
 import { parseSourceInvestmentHistory } from "@/domain/source-investment-history";
 import { rangeDays } from "@/domain/investment-performance-trend";
@@ -32,8 +33,7 @@ import { VibeNotice } from "@/ui/vibe/vibe-notice";
 export type InvestmentBookSource = Omit<AssetSourceSummary, "credentialReference" | "permissions">;
 const labels = { opening: "期初本金", deposit: "入金", withdrawal: "出金", valuation: "资产金额" };
 export function bookMoney(value: string): string {
-  const [integer, fraction] = decimalToFixed(value, 2).split(".");
-  return `${integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.${fraction}`;
+  return formatAssetAmount(value);
 }
 async function bookRequest(body: object) {
   const response = await fetch("/api/investment-books", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
