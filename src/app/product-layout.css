@@ -7334,6 +7334,10 @@ body {
 }
 
 .security-settings__recovery {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--vibe-space-4);
   margin-top: var(--vibe-space-10);
   padding-top: var(--vibe-space-6);
   border-top: 1px solid var(--line);
