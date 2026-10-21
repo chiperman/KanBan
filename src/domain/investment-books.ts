@@ -265,16 +265,18 @@ export function analyzeInvestmentBook(input: {
       rows.every(row => row?.complete && (row.status ?? "complete") === "complete" && row.total[book.currency] != null);
     const amount = complete ? decimalAdd(...rows.map(row => row!.total[book.currency]!)) : null;
     automaticValues.set(observation.day, amount);
-    if (!historyThrough || observation.day > historyThrough) values.set(observation.day, { day: observation.day, amount, basis: "自动同步汇总" });
+    if (!historyThrough || observation.day > historyThrough) values.set(observation.day, { day: observation.day, amount, basis: observation.day === input.currentDay ? "当日累计观测" : "自动同步汇总" });
   }
   const todayMembers = required(input.currentDay);
-  if (book.automatic) {
+  if (book.automatic && !automaticValues.has(input.currentDay)) {
     const sources = todayMembers.map(member => input.sources.find(source => source.id === member.sourceId));
     const ready = todayMembers.length > 0 && todayMembers.every(member => member.confirmed) && sources.every(source => source &&
       sourceBookId(source) === book.id &&
       (source.kind !== "manual" || source.hasManualRecord !== false) &&
       source.lifecycle !== "disconnected" && source.sync.status === "current" &&
-      (source.kind === "manual" || shanghaiDay(source.snapshot.syncedAt) === input.currentDay));
+      (source.kind === "manual" || (shanghaiDay(source.snapshot.syncedAt) === input.currentDay &&
+        (source.sync.recentAttempts === undefined || source.sync.recentAttempts.some(attempt =>
+          attempt.mode === "all" && attempt.outcome === "success" && shanghaiDay(attempt.attemptedAt) === input.currentDay)))));
     const valuation = ready ? buildTotalValuation(sources as BookSource[], book.currency, "source", input.sources) : null;
     const amount = valuation && !valuation.incomplete && valuation.expiredCount === 0 ? valuation.amount : null;
     automaticValues.set(input.currentDay, amount);

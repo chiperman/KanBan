@@ -3,15 +3,16 @@ import { formatShanghaiDateTime } from "@/ui/shanghai-date-time";
 import { settlementOutcomeLabel, settlementQualityLabel, settlementReasonLabel, settlementSchedulerLabel } from "@/ui/formal-settlement-status";
 import { VibeStatusTag } from "@/ui/vibe/vibe-data-instrument";
 
-export function AutomaticDailySettlementSettings({ execution, scheduler }: {
+export function AutomaticDailySettlementSettings({ execution, scheduler, backgroundActive = false }: {
   execution: FormalSettlementExecution | null;
+  backgroundActive?: boolean;
   scheduler: FormalSettlementSchedulerStatus;
 }) {
   return (
     <section id="automatic-daily-settlement" className="settings-section" aria-labelledby="automatic-daily-settlement-title">
       <h2 id="automatic-daily-settlement-title">自动日结</h2>
       <dl className="security-settings__statuses">
-        <div><dt>本机调度</dt><dd><VibeStatusTag tone="muted">{settlementSchedulerLabel[scheduler.state]}</VibeStatusTag></dd></div>
+        <div><dt>本机调度</dt><dd><VibeStatusTag tone="muted">{backgroundActive ? "由后台采集每十五分钟检查" : settlementSchedulerLabel[scheduler.state]}</VibeStatusTag></dd></div>
         <div><dt>检查时间</dt><dd>{formatShanghaiDateTime(scheduler.checkedAt)}（上海时间）</dd></div>
         <div><dt>最近执行</dt><dd>{execution ? formatShanghaiDateTime(execution.startedAt) + "（上海时间）" : "暂无执行记录"}</dd></div>
         {execution ? <>
@@ -26,7 +27,7 @@ export function AutomaticDailySettlementSettings({ execution, scheduler }: {
         <p className="formal-daily-settlement-note">
           <span className="formal-daily-settlement-note__label">探测范围</span>
           <span>
-            仅检查本机 launchd 任务，外部调度状态未知。已加载或过去执行成功不代表当前采集正常；暂无记录不代表未启用。
+            后台采集运行时同时检查正式日结；未检测到后台心跳时，显示独立日结任务的本机调度状态。过去执行成功不代表当前采集正常。
           </span>
         </p>
         <p className="formal-daily-settlement-note">

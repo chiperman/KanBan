@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { decimalAdd, decimalCompare, decimalMultiply, decimalSubtract } from "@/domain/decimal";
 import { activeSourceHoldings } from "@/domain/evm-token-preferences";
 import {
@@ -410,6 +411,7 @@ export class ReadOnlyFormalSettlementSourceCapture
     private readonly secrets: SecretStore,
     private readonly refresher: AssetSourceRefresher,
     private readonly timeoutMs = 60_000,
+    private readonly assetSources?: AssetSources,
   ) {}
 
   async capture(input: {
@@ -425,18 +427,30 @@ export class ReadOnlyFormalSettlementSourceCapture
       input.source.kind === "longbridge" &&
       credentialReference !== null &&
       isMacOSKeychainCredentialReference(credentialReference);
-    const credentials = credentialReference === null
-      ? ""
-      : usesKeychainReference
-        ? credentialReference
-        : await this.secrets.get(credentialReference);
-    if (credentials === null) throw new Error("只读凭证不可用");
+    const guard = this.assetSources?.refreshGuard;
+    const token = randomUUID();
+    const lease = () => ({ sourceId: input.source.id, token, now: new Date().toISOString() });
+    if (guard && !await guard.claim({ ...lease(), leaseMs: this.timeoutMs + 5_000 })) throw new Error("来源正在刷新，等待下次日结检查");
     const controller = new AbortController();
+    const assertCurrent = async () => {
+      controller.signal.throwIfAborted();
+      if (guard && !await guard.owns(lease())) throw new Error("来源读取租约失效");
+      if (this.assetSources) {
+        const current = (await this.assetSources.list()).find(source => source.id === input.source.id);
+        if (!current || current.lifecycle === "disconnected" || current.kind !== input.source.kind ||
+            current.accountId !== input.source.accountId || current.credentialReference !== credentialReference) throw new Error("来源连接已变化");
+      }
+    };
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
-      return (
-        await Promise.race([
-          this.refresher.refresh({
+      const result = await Promise.race([
+          (async () => {
+            await assertCurrent();
+            const credentials = credentialReference === null ? "" : usesKeychainReference
+              ? credentialReference : await this.secrets.get(credentialReference);
+            if (credentials === null) throw new Error("只读凭证不可用");
+            controller.signal.throwIfAborted();
+            return this.refresher.refresh({
             source: input.source,
             credentials,
             mode: "all",
@@ -444,19 +458,26 @@ export class ReadOnlyFormalSettlementSourceCapture
             signal: controller.signal,
             persistCredentials: usesKeychainReference || credentialReference === null
               ? () => Promise.resolve()
-              : (value) => this.secrets.replace(credentialReference, value),
-          }),
+              : async (value) => {
+                await assertCurrent();
+                controller.signal.throwIfAborted();
+                await this.secrets.replace(credentialReference, value);
+              },
+            });
+          })(),
           new Promise<never>((_, reject) => {
             timeout = setTimeout(() => {
               controller.abort();
               reject(new Error(`日结来源读取超时（${this.timeoutMs}ms）`));
             }, this.timeoutMs);
           }),
-        ])
-      ).snapshot;
+        ]);
+      await assertCurrent();
+      return result.snapshot;
     } finally {
       if (timeout !== undefined) clearTimeout(timeout);
       controller.abort();
+      if (guard) await guard.release(lease());
     }
   }
 }

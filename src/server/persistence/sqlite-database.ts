@@ -1,3 +1,6 @@
+import type { BackgroundCollectionStore, CollectionState } from "@/server/background-collection";
+import { buildDailyAssetSnapshot } from "@/domain/daily-asset-snapshots";
+import type { AssetSourceRefreshGuard } from "@/server/ports";
 import { parseSourceInvestmentHistory, type SourceInvestmentHistory } from "@/domain/source-investment-history";
 import type { InvestmentBookId, InvestmentBookStore } from "@/domain/investment-books";
 import { InvalidSourceInvestmentRecordError, parseSourceInvestmentRecordInput, type SourceInvestmentRecord, type SourceInvestmentRecordInput } from "@/domain/source-investment-records";
@@ -12,7 +15,7 @@ import type { AssetSourceSummary, BinanceAuthorizationResult, BitAuthorizationRe
 
 /** SQLite 业务适配器；装配与启动交由组合根，跨表事务仍在此编排。 */
 export class SqliteDashboardDatabase
-  implements DashboardDatabase, InvestmentCashflowStore, InvestmentBookStore,
+  implements DashboardDatabase, InvestmentCashflowStore, InvestmentBookStore, BackgroundCollectionStore,
     AssetFullRefreshStateDatabase, FormalDailySettlementDatabase, FormalSettlementExecutionDatabase
 {
   private readonly database: DatabaseSync;
@@ -23,6 +26,48 @@ export class SqliteDashboardDatabase
   ) {
     this.stores = openSqliteDashboard(databasePath);
     this.database = this.stores.database;
+  }
+
+  readonly refreshGuard: AssetSourceRefreshGuard = {
+    claim: (input) => Promise.resolve(this.transaction(() => this.stores.refreshState.claimLease(
+      `asset_source_refresh:${input.sourceId}`, input.token, input.now, input.leaseMs,
+    ))),
+    owns: (input) => Promise.resolve(this.stores.refreshState.ownsLease(
+      `asset_source_refresh:${input.sourceId}`, input.token, input.now,
+    )),
+    commit: (input) => Promise.resolve(this.transaction(() => {
+      if (!this.stores.refreshState.ownsLease(`asset_source_refresh:${input.sourceId}`, input.token, input.now)) return false;
+      const current = this.stores.readModel.listSourcesSync().find(source => source.id === input.sourceId);
+      const next = input.source;
+      if (!current || current.lifecycle === "disconnected" || current.kind !== next.kind ||
+          current.accountId !== next.accountId || current.credentialReference !== next.credentialReference ||
+          current.snapshot.syncedAt > next.snapshot.syncedAt ||
+          (current.sync.lastAttemptAt ?? "") > (next.sync.lastAttemptAt ?? "")) return false;
+      this.stores.sourceData.writeDetails({ ...current, snapshot: next.snapshot, sync: next.sync });
+      if (input.recordObservation) {
+        this.stores.observations.record(buildDailyAssetSnapshot(
+          this.stores.readModel.listSourcesSync(), next.snapshot.syncedAt, new Set([next.id]),
+        ), true);
+      }
+      return true;
+    })),
+    release: (input) => Promise.resolve(this.transaction(() => this.stores.refreshState.releaseLease(
+      `asset_source_refresh:${input.sourceId}`, input.token,
+    ))),
+  };
+
+  async readCollectionState(): Promise<CollectionState | null> {
+    const value = this.stores.metadata.get("background_collection_state");
+    return value ? JSON.parse(value) as CollectionState : null;
+  }
+  async saveCollectionState(state: CollectionState): Promise<void> {
+    this.transaction(() => this.stores.metadata.set("background_collection_state", JSON.stringify(state)));
+  }
+  async claimCollection(token: string, now: string): Promise<boolean> {
+    return this.transaction(() => this.stores.refreshState.claimLease("background_collection_lease", token, now, 5 * 60_000));
+  }
+  async releaseCollection(token: string): Promise<void> {
+    this.transaction(() => this.stores.refreshState.releaseLease("background_collection_lease", token));
   }
 
   close(): void {

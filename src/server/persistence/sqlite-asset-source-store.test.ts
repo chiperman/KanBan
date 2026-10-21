@@ -73,7 +73,7 @@ test("手工记录更新与删除来源的跨表失败均完整回滚", async ()
     await assert.rejects(database.recordManualAssetSource(source.id, { day: "2026-10-01", amount: "20", currency: "USD" }, capturedAt), /fixture manual failure/);
     assert.deepEqual(await state(database), before);
     sql.exec("DROP TRIGGER reject_manual_observation");
-    sql.exec(`CREATE TRIGGER reject_delete_recalculation BEFORE DELETE ON daily_asset_snapshots
+    sql.exec(`CREATE TRIGGER reject_delete_recalculation BEFORE DELETE ON daily_asset_trend_observations
       BEGIN SELECT RAISE(ABORT, 'fixture deletion failure'); END;`);
     await assert.rejects(database.deleteAssetSourceData(source.id), /fixture deletion failure/);
     assert.deepEqual(await state(database), before);

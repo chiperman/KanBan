@@ -24,6 +24,7 @@ export interface AssetCardDatabase {
 
 /** 来源摘要与来源生命周期持久化所需的最小接口。 */
 export interface AssetSourceDatabase {
+  refreshGuard?: import("@/server/ports").AssetSourceRefreshGuard;
   listSources(): Promise<AssetSourceSummary[]>;
   replaceSources(sources: AssetSourceSummary[]): Promise<void>;
   updateSource(source: AssetSourceSummary): Promise<void>;

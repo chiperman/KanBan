@@ -15,3 +15,9 @@ Node 使用内置 SQLite、模块 hooks 和实验性类型转换；CLI 的实验
 `pnpm dev` / `pnpm start` 的原生产物检查只校验并加载扩展公开接口，不调用 Keychain 查询或 Cargo；缺失或不兼容时明确报错，不能自动退回明文存储。启动包装器另外会在 macOS 且配置 OAuth Client ID 时检查登录钥匙串，必要时交互修复，入口见 [run-local-next.mjs](../../scripts/run-local-next.mjs)。`pnpm build` 仍为显式构建链。复制部署时同时带上签署 `.node` 和 `artifact.json`。
 
 源码在 [native/longbridge-keychain-sdk/](../../native/longbridge-keychain-sdk/)，其中 [vendor/longbridge-oauth/](../../native/longbridge-keychain-sdk/vendor/longbridge-oauth/) 是 [Cargo 实际引用](../../native/longbridge-keychain-sdk/Cargo.toml) 的本地补丁源码。该目录及两处 Cargo 锁文件保留在版本控制中；两个 `target/` 目录属于本机编译生成物，不与补丁源码混同。
+
+## 后台运行环境
+
+`pnpm runtime:prepare` 复用经指纹、摘要及平台校验的原生产物，独立安装依赖并执行应用生产构建；不会重复编译 Rust。运行副本、端口和正式数据与开发分离，安装步骤见 [后台自动采集](service-composition.md#后台自动采集)。
+
+后台入口加载运行副本的 `.env.local`，要求绝对路径 `KANBAN_DATA_DIR`；launchd 显式提供 Node 路径、PATH 与正式数据目录。网络环境准备后另起 Node 进程，使 Node 内置代理在初始化时生效。网页登录会话不参与采集，来源凭证、服务端加密密钥、CLI 登录与登录钥匙串仍须有效；来源授权失效不会由网页登录自动修复。

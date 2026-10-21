@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   abortableSyncDelay,
   abortableSyncOperation,
@@ -37,6 +38,15 @@ export class SourceRefreshExecutor {
     mode: AssetRefreshMode,
     attemptedAt: string,
   ): Promise<SourceRefreshOutcome> {
+    const guard = this.sources.refreshGuard;
+    const token = randomUUID();
+    const lease = () => ({ sourceId: source.id, token, now: this.clock.now().toISOString() });
+    if (guard && !await guard.claim({ ...lease(), leaseMs: this.sourceTimeoutMs + 5_000 })) return "superseded";
+    const save = async (next: AssetSourceSummary, recordObservation: boolean) => {
+      if (guard) return guard.commit({ ...lease(), source: next, recordObservation });
+      await this.sources.update(next);
+      return true;
+    };
     const controller = new AbortController();
     const startedAt = performance.now();
     const timeout = setTimeout(() => {
@@ -69,7 +79,7 @@ export class SourceRefreshExecutor {
               persistCredentials: async (value) => {
                 signal.throwIfAborted();
                 if (usesKeychainReference) return;
-                if (await this.currentVersion(source) === null) {
+                if ((guard && !await guard.owns(lease())) || await this.currentVersion(source) === null) {
                   throw new DOMException("Source was replaced", "AbortError");
                 }
                 signal.throwIfAborted();
@@ -85,7 +95,7 @@ export class SourceRefreshExecutor {
         }
         const durationMs = Math.max(0, Math.round(performance.now() - attemptStartedAt));
         const current = await this.currentVersion(source);
-        if (current === null) return "superseded";
+        if (current === null || (guard && !await guard.owns(lease()))) return "superseded";
         const diagnostic = result === undefined
           ? diagnoseAssetSyncError(failure, stage, durationMs) : null;
         const record: AssetSyncAttempt = {
@@ -98,7 +108,7 @@ export class SourceRefreshExecutor {
         const retainHoldingsFailure = mode === "prices" && current.sync.status === "expired" &&
           (current.sync.failedMode === "holdings" || current.sync.failedMode === "all");
         if (result !== undefined) {
-          await this.sources.update({
+          const saved = await save({
             ...current, snapshot: result.snapshot,
             sync: retainHoldingsFailure ? {
               ...current.sync, lastAttemptAt: attemptedAt, recentAttempts,
@@ -107,10 +117,10 @@ export class SourceRefreshExecutor {
               lastAttemptAt: attemptedAt, error: null, failedMode: null,
               diagnostic: null, recentAttempts,
             },
-          });
-          return "success";
+          }, mode === "all");
+          return saved ? "success" : "superseded";
         }
-        await this.sources.update({
+        const saved = await save({
           ...current,
           sync: retainHoldingsFailure ? {
             ...current.sync, lastAttemptAt: attemptedAt, recentAttempts,
@@ -119,7 +129,8 @@ export class SourceRefreshExecutor {
             error: assetSyncErrorMessage(diagnostic!), failedMode: mode,
             diagnostic, recentAttempts,
           },
-        });
+        }, false);
+        if (!saved) return "superseded";
         if (!diagnostic!.retryable || attempt === 3 || controller.signal.aborted) return "failure";
         const delay = Math.max(500 * 2 ** (attempt - 1),
           failure instanceof AssetRequestError ? failure.retryAfterMs ?? 0 : 0);
@@ -127,12 +138,13 @@ export class SourceRefreshExecutor {
         if (delay >= remaining) return "failure";
         try { await abortableSyncDelay(delay, controller.signal); }
         catch { return "failure"; }
-        if (await this.currentVersion(source) === null) return "superseded";
+        if ((guard && !await guard.owns(lease())) || await this.currentVersion(source) === null) return "superseded";
       }
       return "failure";
     } finally {
       clearTimeout(timeout);
       controller.abort();
+      if (guard) await guard.release(lease());
     }
   }
 
@@ -140,7 +152,8 @@ export class SourceRefreshExecutor {
     const current = (await this.sources.list()).find((candidate) => candidate.id === source.id);
     if (
       current === undefined ||
-      current.kind === "manual" ||
+      current.kind !== source.kind ||
+      current.accountId !== source.accountId ||
       current.lifecycle === "disconnected" ||
       current.credentialReference === null ||
       current.credentialReference !== source.credentialReference

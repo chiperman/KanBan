@@ -79,6 +79,30 @@ export class SqliteRefreshStateStore {
     );
   }
 
+  claimLease(key: string, token: string, now: string, leaseMs: number): boolean {
+    const previous = this.metadataStore.get(key);
+    if (previous !== null) {
+      const lease = JSON.parse(previous) as { expiresAt: number };
+      if (lease.expiresAt > Date.parse(now)) return false;
+    }
+    this.metadataStore.set(key, JSON.stringify({ token, expiresAt: Date.parse(now) + leaseMs }));
+    return true;
+  }
+
+  ownsLease(key: string, token: string, now: string): boolean {
+    const value = this.metadataStore.get(key);
+    if (value === null) return false;
+    const lease = JSON.parse(value) as { token: string; expiresAt: number };
+    return lease.token === token && lease.expiresAt > Date.parse(now);
+  }
+
+  releaseLease(key: string, token: string): void {
+    const value = this.metadataStore.get(key);
+    if (value !== null && (JSON.parse(value) as { token: string }).token === token) {
+      this.metadataStore.deleteIfValue(key, value);
+    }
+  }
+
   clear(): void {
     this.metadataStore.deleteMany([
       "asset_full_refresh_attempted_at",

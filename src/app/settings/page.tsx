@@ -1,3 +1,4 @@
+import { BackgroundCollectionSettings } from "@/ui/background-collection-settings";
 import { WorkspaceViewNavigation } from "@/ui/workspace-view-navigation";
 import { AutomaticDailySettlementSettings } from "@/ui/automatic-daily-settlement-settings";
 import { redirect } from "next/navigation";
@@ -46,9 +47,10 @@ export default async function SettingsPage({
     ? savedProfitColorScheme
     : null;
   const externalServiceStatus = await services.externalServices.status();
-  const [execution, scheduler] = await Promise.all([
+  const [execution, scheduler, collection] = await Promise.all([
     services.formalSettlementExecutions.latest(),
     services.formalSettlementScheduler.read(),
+    view === "data" ? services.backgroundCollection?.read() ?? null : null,
   ]);
 
   return (
@@ -100,7 +102,8 @@ export default async function SettingsPage({
               </div>
             </section>
             </> : <>
-              <AutomaticDailySettlementSettings execution={execution} scheduler={scheduler} />
+              <BackgroundCollectionSettings status={collection} />
+              <AutomaticDailySettlementSettings execution={execution} scheduler={scheduler} backgroundActive={collection?.health === "running"} />
               <BusinessDataBackupSettings />
               <ExternalServiceSettings initialStatus={externalServiceStatus} />
             </>}

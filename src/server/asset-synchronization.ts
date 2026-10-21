@@ -51,7 +51,6 @@ export class SourceIsolatedAssetSynchronization
     this.observationRecorder = new RefreshObservationRecorder(
       sources,
       dailySnapshots,
-      (source) => this.isRefreshable(source),
     );
   }
 
@@ -149,10 +148,10 @@ export class SourceIsolatedAssetSynchronization
       (outcome) => outcome === "superseded",
     ).length;
 
-    if (input.isFullBatch && sources.length > 0) {
+    if (!this.sources.refreshGuard && input.mode === "all" && sources.length > 0) {
       await this.observationRecorder.record(sources, outcomes, attemptedAt);
-      await this.fullRefreshState.finish(attemptedAt);
     }
+    if (input.isFullBatch) await this.fullRefreshState.finish(attemptedAt);
     await this.clearCycleWhenNoRefreshableSources();
 
     return {

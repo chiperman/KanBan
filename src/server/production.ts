@@ -1,3 +1,4 @@
+import { BackgroundAssetCollection } from "@/server/background-collection";
 import { SystemClock } from "@/server/clock";
 import { ObservedFormalSettlementRunner } from "@/server/formal-settlement-execution";
 import { LocalFormalSettlementScheduler } from "@/server/formal-settlement-scheduler";
@@ -114,7 +115,16 @@ export function createProductionServices(
   });
   const formalDailySettlements = new DatabaseFormalDailySettlements(database);
   const formalSettlementExecutions = new DatabaseFormalSettlementExecutions(database);
+  const assetSynchronization = new SourceIsolatedAssetSynchronization(
+    assetSources, readySecrets, clock, sourceRefresher, 60_000, dailyAssetSnapshots, fullRefreshState,
+  );
+  const formalDailySettlementRunner = new ObservedFormalSettlementRunner(new MarketCloseFormalDailySettlement(
+    assetSources, clock, formalDailySettlements,
+    new ReadOnlyFormalSettlementSourceCapture(readySecrets, sourceRefresher, 60_000, assetSources),
+    new ServeLongbridgeFormalSettlementCandleReader(),
+  ), formalSettlementExecutions, clock);
   return {
+    backgroundCollection: new BackgroundAssetCollection(database, assetSources, dailyAssetSnapshots, fullRefreshState, assetSynchronization, formalDailySettlementRunner, clock),
     clock,
     assetCards: new DatabaseAssetCardStore(database),
     assetSources,
@@ -131,23 +141,9 @@ export function createProductionServices(
     formalDailySettlements,
     formalSettlementExecutions,
     formalSettlementScheduler: new LocalFormalSettlementScheduler(undefined, { workspace: process.cwd(), dataDir }),
-    formalDailySettlementRunner: new ObservedFormalSettlementRunner(new MarketCloseFormalDailySettlement(
-      assetSources,
-      clock,
-      formalDailySettlements,
-      new ReadOnlyFormalSettlementSourceCapture(readySecrets, sourceRefresher),
-      new ServeLongbridgeFormalSettlementCandleReader(),
-    ), formalSettlementExecutions, clock),
+    formalDailySettlementRunner,
     externalServices,
-    assetSynchronization: new SourceIsolatedAssetSynchronization(
-      assetSources,
-      readySecrets,
-      clock,
-      sourceRefresher,
-      60_000,
-      dailyAssetSnapshots,
-      fullRefreshState,
-    ),
+    assetSynchronization,
     assetFullRefreshState: fullRefreshState,
     prices,
     auth: new SessionOwnerAuth(clock),

@@ -18,6 +18,10 @@ pnpm dev
 
 已有兼容原生产物时，日常开发直接运行 `pnpm dev`。本机配置放在已忽略的 `.env.local`，运行时数据保存在 `data/`。
 
+需要 Mac 登录后持续采集时，使用独立生产运行副本和正式数据目录，无需每天手动启动开发服务器；准备、迁移及安装命令见 [后台自动采集](docs/operations/service-composition.md#后台自动采集)。
+
+已安装 3001 正式版后，开发完成在仓库根目录执行 `pnpm runtime:update` 即可更新；沿用正式数据与采集周期，构建失败保留旧版，启动检查失败恢复旧任务。使用 `pnpm runtime:update --check` 可只查看更新目标。切换时网页短暂重启，流程与回退边界见 [永久运行副本](docs/operations/service-composition.md#永久运行副本)。
+
 清除构建目录或首次检出后，可单独生成路由类型并检查类型，无需完整构建：
 
 ```sh

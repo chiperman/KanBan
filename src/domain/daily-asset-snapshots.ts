@@ -133,11 +133,16 @@ function sourceSnapshot(
   source: AssetSourceSummary,
   capturedAt: string,
   rateSources: AssetSourceSummary[],
+  successfulSourceIds?: ReadonlySet<string>,
 ): DailyAssetSourceSnapshot {
+  const observed = source.kind === "manual" || (
+    shanghaiDay(source.snapshot.syncedAt) === shanghaiDay(capturedAt) &&
+    (successfulSourceIds === undefined || successfulSourceIds.has(source.id))
+  );
   const total = {
-    USD: sourceValue(source, "USD", rateSources),
-    CNY: sourceValue(source, "CNY", rateSources),
-    HKD: sourceValue(source, "HKD", rateSources),
+    USD: observed ? sourceValue(source, "USD", rateSources) : null,
+    CNY: observed ? sourceValue(source, "CNY", rateSources) : null,
+    HKD: observed ? sourceValue(source, "HKD", rateSources) : null,
   };
   const valuation = buildTotalValuation(
     [source],
@@ -146,21 +151,19 @@ function sourceSnapshot(
     rateSources,
   );
   const complete =
+    observed &&
     !valuation.incomplete &&
     total.USD !== null &&
     total.HKD !== null;
-  const status = source.sync.status === "expired"
-    ? "expired" as const
-    : complete
+  // 历史观测的有效性不随后续同步失败而撤销；实时同步状态另行展示。
+  const status = complete
       ? "complete" as const
       : "incomplete" as const;
   const snapshot = {
     sourceId: source.id,
     label: source.label,
     kind: source.kind,
-    capturedAt: source.sync.status === "expired"
-      ? source.snapshot.syncedAt
-      : capturedAt,
+    capturedAt: source.snapshot.syncedAt,
     complete,
     status,
     total,
@@ -171,32 +174,28 @@ function sourceSnapshot(
   };
 }
 
-function totalValue(
-  sources: AssetSourceSummary[],
-  currency: ReportingCurrency,
-): string | null {
-  const valuation = buildTotalValuation(sources, currency, "source");
-  const hasKnownValue = valuation.groups.some(
-    (group) => group.amount !== null,
-  );
-  return hasKnownValue ? valuation.amount : null;
-}
-
 export function buildDailyAssetSnapshot(
   sources: AssetSourceSummary[],
   capturedAt: string,
+  successfulSourceIds?: ReadonlySet<string>,
 ): DailyAssetSnapshot {
-  const recordedSources = sources.filter(hasManualAssetRecord);
+  const recordedSources = sources.filter((source) =>
+    source.lifecycle !== "disconnected" && hasManualAssetRecord(source),
+  );
   const exchangeRates = recordedSources.flatMap(
     (source) => source.snapshot.exchangeRates,
   );
   const sourceSnapshots = recordedSources.map((source) =>
-    sourceSnapshot(source, capturedAt, recordedSources),
+    sourceSnapshot(source, capturedAt, recordedSources, successfulSourceIds),
   );
+  const sum = (currency: ReportingCurrency) => {
+    const values = sourceSnapshots.flatMap((source) => source.total[currency] ?? []);
+    return values.length > 0 ? decimalAdd(...values) : null;
+  };
   const total = {
-    USD: totalValue(recordedSources, "USD"),
-    CNY: totalValue(recordedSources, "CNY"),
-    HKD: totalValue(recordedSources, "HKD"),
+    USD: sum("USD"),
+    CNY: sum("CNY"),
+    HKD: sum("HKD"),
   };
   const complete =
     sourceSnapshots.length > 0 &&
@@ -249,26 +248,21 @@ export function assetClassTrendObservation(
 }
 
 export function mergeDailyTrendObservation(
-  previous: DailyAssetTrendObservation,
+  previous: DailyAssetTrendObservation | undefined,
   next: DailyAssetTrendObservation,
-  preservePreviousOnFailedRefresh: boolean,
 ): DailyAssetTrendObservation {
+  if (!previous || previous.day !== next.day) return next;
   const previousBySourceId = new Map(
     previous.sources.map((source) => [source.sourceId, source]),
   );
-  // 全量批次声明当前参与观测的来源集合；手工增量另由记录接口合并。
+  // 新观测声明当前参与的来源集合；仅沿用同日有效的来源值。
   const sources = next.sources.map((source) => {
     const previousSource = previousBySourceId.get(source.sourceId);
-    return preservePreviousOnFailedRefresh && previousSource !== undefined
-      ? {
-          ...source,
-          capturedAt: previousSource.capturedAt,
-          total: previousSource.total,
-          assetClassTotals: previousSource.assetClassTotals,
-        }
-      : previousSource?.complete && !source.complete
-        ? previousSource
-        : source;
+    const previousUsable = previousSource?.complete &&
+      (previousSource.status ?? "complete") === "complete" &&
+      (previousSource.kind === "manual" || shanghaiDay(previousSource.capturedAt) === next.day);
+    return previousUsable && (!source.complete || source.capturedAt < previousSource.capturedAt)
+      ? previousSource : source;
   });
   const sum = (currency: "USD" | "CNY" | "HKD") => {
     const values = sources.flatMap((source) => source.total[currency] ?? []);
@@ -276,6 +270,7 @@ export function mergeDailyTrendObservation(
   };
   const total = { USD: sum("USD"), CNY: sum("CNY"), HKD: sum("HKD") };
   const complete =
+    sources.length > 0 &&
     total.USD !== null &&
     total.HKD !== null &&
     sources.every((source) => source.complete);

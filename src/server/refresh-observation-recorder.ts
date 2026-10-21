@@ -1,4 +1,4 @@
-import { buildDailyAssetSnapshot } from "@/domain/daily-asset-snapshots";
+import { buildDailyAssetSnapshot, mergeDailyTrendObservation } from "@/domain/daily-asset-snapshots";
 import type {
   AssetSourceSummary,
   AssetSources,
@@ -6,12 +6,11 @@ import type {
 } from "@/server/ports";
 import type { SourceRefreshOutcome } from "@/server/source-refresh-executor";
 
-/** 记录全量刷新后的组合观测，并阻止来源集合变化时伪造历史端点。 */
+/** 无原子持久化能力的适配器，在刷新后累计成功来源。 */
 export class RefreshObservationRecorder {
   constructor(
     private readonly sources: AssetSources,
     private readonly dailySnapshots: DailyAssetSnapshots,
-    private readonly isRefreshable: (source: AssetSourceSummary) => boolean,
   ) {}
 
   async record(
@@ -19,25 +18,15 @@ export class RefreshObservationRecorder {
     outcomes: SourceRefreshOutcome[],
     attemptedAt: string,
   ): Promise<void> {
-    if (
-      !outcomes.some((outcome) => outcome === "success") ||
-      outcomes.some((outcome) => outcome === "superseded")
-    ) return;
+    if (!outcomes.some((outcome) => outcome === "success")) return;
 
     const connectedSources = (await this.sources.list()).filter(
       (source) => source.lifecycle !== "disconnected",
     );
-    const currentTargetIds = connectedSources
-      .filter((source) => this.isRefreshable(source))
-      .map((source) => source.id)
-      .toSorted();
-    const targetIds = sources.map((source) => source.id).toSorted();
-    if (
-      currentTargetIds.length !== targetIds.length ||
-      !currentTargetIds.every((id, index) => id === targetIds[index])
-    ) return;
-
-    const dailySnapshot = buildDailyAssetSnapshot(connectedSources, attemptedAt);
+    const successfulIds = new Set(sources.filter((_, index) => outcomes[index] === "success").map(source => source.id));
+    const next = buildDailyAssetSnapshot(connectedSources, attemptedAt, successfulIds);
+    const previous = (await this.dailySnapshots.listTrendObservations()).find(row => row.day === next.day);
+    const dailySnapshot = mergeDailyTrendObservation(previous, next);
     await this.dailySnapshots.record(
       dailySnapshot,
       dailySnapshot.complete && dailySnapshot.status === "complete",

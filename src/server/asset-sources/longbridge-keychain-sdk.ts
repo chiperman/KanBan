@@ -1,4 +1,5 @@
 import path from "node:path";
+import { createRequire } from "node:module";
 
 type NativeLongbridgeSdk = {
   accountIdentity(clientId: string): string;
@@ -136,7 +137,7 @@ function nativeSdk(): NativeLongbridgeSdk {
   );
   try {
     // Native addon 必须只在服务端运行；避免被 Next 静态分析进浏览器包。
-    const dynamicRequire = eval("require") as NodeRequire;
+    const dynamicRequire = createRequire(path.join(process.cwd(), "package.json"));
     return dynamicRequire(nativePath) as NativeLongbridgeSdk;
   } catch {
     throw new Error("长桥 Keychain SDK 未构建，请先运行 pnpm native:longbridge:build");

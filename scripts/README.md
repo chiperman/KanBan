@@ -40,6 +40,10 @@
 
 | 命令或脚本 | 入口与作用 |
 | --- | --- |
+| `pnpm runtime:prepare <新永久目录> [参数]` | [prepare-runtime.mjs](prepare-runtime.mjs)：准备独立的生产运行副本，不复制业务数据或安装任务；参数与迁移边界见 [后台自动采集](../docs/operations/service-composition.md#后台自动采集) |
+| `pnpm runtime:update [--check]` | [update-runtime.mjs](update-runtime.mjs)：从开发仓库更新已安装的 3001 正式版，沿用正式配置、数据与采集周期，验证失败恢复旧任务；`--check` 只检查配置，切换与备份边界见 [永久运行副本](../docs/operations/service-composition.md#永久运行副本) |
+| `pnpm background:run` | [run-background.mjs](run-background.mjs) / [run-background-collection.ts](run-background-collection.ts)：一次后台检查，执行到期全量、失败补试及正式日结；必须显式指定正式数据目录 |
+| `pnpm background:launchd <install\|status\|remove\|print>` | [background-launchd.mjs](background-launchd.mjs)：管理永久副本的网页常驻与每分钟后台检查任务；移除不删除数据 |
 | `pnpm daily-settlement:run` | [run-formal-daily-settlement.ts](run-formal-daily-settlement.ts)：独立运行生产日结服务；`APP_ENV=test` 不会将此 CLI 切换为测试替身，合同见 [正式日结](../docs/operations/service-composition.md#正式日结) |
 | `pnpm daily-settlement:launchd <install\|status\|remove\|print>` | [formal-daily-settlement-launchd.mjs](formal-daily-settlement-launchd.mjs)：安装、查询、移除或打印本实例的 macOS 任务配置 |
 | `pnpm migrate:json-to-sqlite <dashboard.sqlite> <dashboard.json> <cards.json>` | [migrate-json-to-sqlite.ts](migrate-json-to-sqlite.ts)：显式迁移旧 JSON；目标空库校验及备份见 [服务生命周期](../docs/operations/service-composition.md) |

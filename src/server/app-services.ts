@@ -1,3 +1,4 @@
+import type { BackgroundAssetCollection } from "@/server/background-collection";
 import type {
   AssetCardStore,
   AssetFullRefreshState,
@@ -48,6 +49,7 @@ export interface AssetServices {
 }
 
 export interface AssetObservationServices {
+  backgroundCollection?: BackgroundAssetCollection;
   assetSynchronization: AssetSynchronization;
   assetFullRefreshState: AssetFullRefreshState;
   dailyAssetSnapshots: DailyAssetSnapshots;
@@ -88,6 +90,7 @@ export interface AppServices extends
 }
 
 export interface ProductionAppServices extends AppServices {
+  backgroundCollection: BackgroundAssetCollection;
   investmentBooks: InvestmentBookStore;
   assetSourceDetails: AssetSourceDetails;
 }

@@ -20,7 +20,11 @@
     "test": "pnpm typecheck && pnpm design:lint && pnpm test:unit",
     "preinstall": "node scripts/check-toolchain.mjs",
     "design:lint": "node scripts/lint-design-tokens.mjs",
-    "native:longbridge:check": "node scripts/native-artifact.mjs"
+    "native:longbridge:check": "node scripts/native-artifact.mjs",
+    "background:run": "node scripts/run-background.mjs",
+    "background:launchd": "node scripts/background-launchd.mjs",
+    "runtime:prepare": "node scripts/prepare-runtime.mjs",
+    "runtime:update": "node scripts/update-runtime.mjs"
   },
   "dependencies": {
     "@simplewebauthn/browser": "^13.3.0",

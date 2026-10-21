@@ -249,6 +249,24 @@ export interface AssetSources {
   list(): Promise<AssetSourceSummary[]>;
   replaceAll(sources: AssetSourceSummary[]): Promise<void>;
   update(source: AssetSourceSummary): Promise<void>;
+  /** 生产持久化提供跨进程租约及快照/每日观测的原子提交。 */
+  refreshGuard?: AssetSourceRefreshGuard;
+}
+
+export interface SourceRefreshLease {
+  sourceId: string;
+  token: string;
+  now: string;
+}
+
+export interface AssetSourceRefreshGuard {
+  claim(input: SourceRefreshLease & { leaseMs: number }): Promise<boolean>;
+  owns(input: SourceRefreshLease): Promise<boolean>;
+  commit(input: SourceRefreshLease & {
+    source: AssetSourceSummary;
+    recordObservation: boolean;
+  }): Promise<boolean>;
+  release(input: SourceRefreshLease): Promise<void>;
 }
 
 export interface AssetSourceLifecycle {

@@ -11,7 +11,7 @@
 | [同步服务](../../src/server/asset-synchronization.ts) | 读取来源、保存快照与覆盖状态；失败时保留最后成功数据并表达时效 |
 | [刷新器路由](../../src/server/asset-sources/router.ts) / [生产装配](../../src/server/production.ts) | 选择对应适配器并注入凭证、行情与存储能力 |
 
-统一刷新入口及周期状态见 [源码导航](../current-baseline.md#其他实现入口)，正式日结是独立流程，见 [服务生命周期](service-composition.md#正式日结)。组合趋势的部分成功写入门槛仍有合同与实现差异，见 [待核定事项](../backlog.md#组合趋势写入合同与实现核定)。
+统一刷新入口及周期状态见 [源码导航](../current-baseline.md#其他实现入口)。组合趋势按同日来源累计有效观测，后台调度与刷新互斥见 [后台自动采集](service-composition.md#后台自动采集)；正式日结仍是 [独立流程](service-composition.md#正式日结)。
 
 ## 适配器导航
 

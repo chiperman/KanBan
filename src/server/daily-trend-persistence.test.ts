@@ -76,7 +76,7 @@ test("SQLite 同日断开后全量观测移除旧来源，手工增量保留其�
   assert.equal((await state.snapshots.list())[0].total.USD, "300", "当天基准不得被断开或手工编辑改写");
 });
 
-test("SQLite 部分失败保留上一批金额和过期状态，手工增量独立且恢复后更新", async t => {
+test("SQLite 部分失败保留成功来源并更新新成功值，手工增量独立且恢复后更新", async t => {
   const state = await fixture(t);
   await state.synchronization.refresh("all");
   const manualId = await state.addManual();
@@ -85,13 +85,13 @@ test("SQLite 部分失败保留上一批金额和过期状态，手工增量独�
   state.failures.add("beta");
   assert.equal((await state.synchronization.refresh("all")).failureCount, 1);
   let [trend] = await state.snapshots.listTrendObservations();
-  assert.equal(trend.total.USD, "350");
-  assert.equal(trend.status, "expired");
-  assert.equal(trend.sources.find(source => source.sourceId === "alpha")?.total.USD, "100");
+  assert.equal(trend.total.USD, "360");
+  assert.equal(trend.status, "complete");
+  assert.equal(trend.sources.find(source => source.sourceId === "alpha")?.total.USD, "110");
   await state.database.recordManualAssetSource(manualId, { day: "2026-10-02", amount: "70", currency: "USD" }, "2026-10-02T03:00:00.000Z");
   [trend] = await state.snapshots.listTrendObservations();
-  assert.equal(trend.total.USD, "370");
-  assert.equal(trend.status, "expired");
+  assert.equal(trend.total.USD, "380");
+  assert.equal(trend.status, "complete");
   state.failures.clear();
   state.amounts.beta = "220";
   state.advance("2026-10-02T04:00:00.000Z");

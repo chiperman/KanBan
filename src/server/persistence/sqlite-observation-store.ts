@@ -224,25 +224,21 @@ export class SqliteObservationStore {
   ): void {
     const isCurrentDay = record.day === shanghaiDay(capturedAt);
     const currentObservation = isCurrentDay
-      ? buildDailyAssetSnapshot(this.readModel.listSourcesSync(), capturedAt)
+      ? buildDailyAssetSnapshot(this.readModel.listSourcesSync(), capturedAt, new Set())
       : null;
     const manualSource = currentObservation?.sources.find(
       (item) => item.sourceId === source.id,
     ) ?? manualDailySource(source, record);
 
-    const hasBaseline = this.database
-      .prepare("SELECT day FROM daily_asset_snapshots WHERE day = ?")
-      .get(record.day) !== undefined;
-    if (!hasBaseline && currentObservation !== null) {
-      this.insertBaseline(currentObservation);
+    if (currentObservation !== null) {
+      this.record(currentObservation, true);
+      return;
     }
 
     const hasTrend = this.database
       .prepare("SELECT day FROM daily_asset_trend_observations WHERE day = ?")
       .get(record.day) !== undefined;
-    if (!hasTrend && currentObservation !== null) {
-      this.upsertTrend(currentObservation);
-    } else if (!hasTrend) {
+    if (!hasTrend) {
       this.database
         .prepare(`
           INSERT INTO daily_asset_trend_observations (
@@ -327,31 +323,16 @@ export class SqliteObservationStore {
   }
 
   record(snapshot: DailyAssetTrendObservation, createBaseline: boolean): void {
-    const baseline = this.database
-      .prepare("SELECT status FROM daily_asset_snapshots WHERE day = ?")
-      .get(snapshot.day) as { status: "complete" | "incomplete" | "expired" }
-        | undefined;
-    if (baseline === undefined && createBaseline) {
-      this.insertBaseline(snapshot);
-    } else if (
-      createBaseline &&
-      baseline !== undefined &&
-      baseline.status === "expired"
-    ) {
-      this.replaceExpiredBaseline(snapshot);
+    const existing = this.readModel.listDailyObservationsSync(
+      "daily_asset_trend_observations", "daily_asset_source_trend_observations", snapshot.day,
+    )[0];
+    const merged = mergeDailyTrendObservation(existing, snapshot);
+    if (createBaseline && merged.complete && merged.status === "complete") {
+      const baseline = this.database.prepare("SELECT status FROM daily_asset_snapshots WHERE day = ?")
+        .get(snapshot.day) as { status: string } | undefined;
+      if (baseline === undefined) this.insertBaseline(merged);
+      else if (baseline.status !== "complete") this.replaceExpiredBaseline(merged);
     }
-    const hasTrend = this.database
-      .prepare("SELECT day FROM daily_asset_trend_observations WHERE day = ?")
-      .get(snapshot.day) !== undefined;
-    const existing = hasTrend
-      ? this.readModel.listDailyObservationsSync(
-          "daily_asset_trend_observations", "daily_asset_source_trend_observations", snapshot.day,
-        )[0]
-      : undefined;
-    this.upsertTrend(
-      existing
-        ? mergeDailyTrendObservation(existing, snapshot, !createBaseline)
-        : snapshot,
-    );
+    this.upsertTrend(merged);
   }
 }

@@ -153,7 +153,7 @@ class TestDailySnapshots implements DailyAssetSnapshots {
   async createIfAbsent(snapshot: DailyAssetSnapshot): Promise<boolean> {
     if (this.baselines.some(({ day }) => day === snapshot.day)) return false;
     this.baselines.push(structuredClone(snapshot));
-    this.trends.push(structuredClone(snapshot));
+    if (!this.trends.some(row => row.day === snapshot.day)) this.trends.push(structuredClone(snapshot));
     return true;
   }
   async record(snapshot: DailyAssetTrendObservation, createBaseline: boolean): Promise<void> {
@@ -407,7 +407,7 @@ test("完整全量批次冻结当天首个基准并更新趋势", async () => {
   assert.equal((await fixture.dailySnapshots.listTrendObservations())[0]?.total.USD, "304");
 });
 
-test("部分成功写入当天趋势兜底，后续全失败不会覆盖", async () => {
+test("部分成功仅记录成功来源，后续全失败不会覆盖", async () => {
   const fixture = await synchronizationFixture();
   const betaBeforeFailure = structuredClone(
     (await fixture.sources.list()).find(({ id }) => id === "source-beta")!,
@@ -431,9 +431,9 @@ test("部分成功写入当天趋势兜底，后续全失败不会覆盖", async
   const historyBeforeFailure = await fixture.dailySnapshots.listTrendObservations();
   assert.equal(historyBeforeFailure.length, 1);
   assert.deepEqual(historyBeforeFailure[0]?.total, {
-    USD: "301",
-    CNY: "2167.2",
-    HKD: "2347.8",
+    USD: "101",
+    CNY: "727.2",
+    HKD: "787.8",
   });
   assert.deepEqual(historyBeforeFailure[0] && {
     day: historyBeforeFailure[0].day,
@@ -443,8 +443,8 @@ test("部分成功写入当天趋势兜底，后续全失败不会覆盖", async
   }, {
     day: "2026-08-20",
     capturedAt: "2026-08-20T04:00:00.000Z",
-    complete: true,
-    status: "expired",
+    complete: false,
+    status: "incomplete",
   });
 
   fixture.clock.set("2026-08-20T05:00:00.000Z");
@@ -504,7 +504,7 @@ test("全量批次在历史收尾异常后保留中断诊断", async () => {
   });
 });
 
-test("单来源刷新不改变全量周期或组合历史，手动全量可绕过未到期周期", async () => {
+test("单来源刷新累计到组合历史且不改变周期，手动全量可绕过未到期周期", async () => {
   const fixture = await synchronizationFixture();
   fixture.refresher.configure("schedule");
 
@@ -521,10 +521,11 @@ test("单来源刷新不改变全量周期或组合历史，手动全量可绕�
     attemptedAt: "2026-08-20T04:00:00.000Z",
     inProgressAt: null,
   });
-  assert.deepEqual(
-    await fixture.dailySnapshots.listTrendObservations(),
-    historyBeforeSingleSource,
-  );
+  const historyAfterSingleSource = await fixture.dailySnapshots.listTrendObservations();
+  assert.equal(historyAfterSingleSource[0].total.USD, "303");
+  assert.equal(historyAfterSingleSource[0].sources.find(source => source.sourceId === "source-beta")?.capturedAt,
+    historyBeforeSingleSource[0].sources.find(source => source.sourceId === "source-beta")?.capturedAt);
+  assert.equal((await fixture.dailySnapshots.list())[0].total.USD, "302");
   assert.equal(
     (await fixture.sources.list()).find(({ id }) => id === "source-alpha")?.snapshot.total.amount,
     "102",
@@ -546,7 +547,7 @@ test("单来源刷新不改变全量周期或组合历史，手动全量可绕�
   });
 });
 
-test("断开来源不参与新历史，恢复后须等待下一完整批次", async () => {
+test("断开来源不参与新历史，恢复后单来源成功也能累计", async () => {
   const fixture = await synchronizationFixture();
   fixture.refresher.configure("schedule");
 
@@ -569,7 +570,7 @@ test("断开来源不参与新历史，恢复后须等待下一完整批次", as
     (await fixture.dailySnapshots.listTrendObservations())[0]?.sources.map(
       ({ sourceId }) => sourceId,
     ),
-    ["source-alpha"],
+    ["source-alpha", "source-beta"],
   );
 
   fixture.clock.set("2026-08-20T07:00:00.000Z");
@@ -914,7 +915,7 @@ test("已开始单来源后，全量吸收排队目标并在后续完整批次�
   assert.equal((await fixture.dailySnapshots.listTrendObservations()).length, 1);
 });
 
-test("来源生命周期变化使在途读取安全结束，不污染同步错误或组合历史", async () => {
+test("来源生命周期变化丢弃在途结果，其他成功来源仍累计历史", async () => {
   for (const change of [
     (sources: TestSources) => sources.setLifecycle("source-alpha", "disconnected"),
     (sources: TestSources) => sources.replaceCredential("source-alpha", "replacement-reference"),
@@ -947,7 +948,12 @@ test("来源生命周期变化使在途读取安全结束，不污染同步错�
       assert.equal(current.sync.error, null);
       assert.deepEqual(current.snapshot, before.snapshot);
     }
-    assert.deepEqual(await fixture.dailySnapshots.listTrendObservations(), []);
+    const [trend] = await fixture.dailySnapshots.listTrendObservations();
+    const beta = trend.sources.find(source => source.sourceId === "source-beta");
+    assert.equal(beta?.total.USD, "200");
+    // 长桥被断开或删除时，成功读取的 beta 仍缺少可信报告汇率。
+    assert.equal(beta?.complete, current !== undefined && current.lifecycle !== "disconnected");
+    assert.equal(trend.sources.find(source => source.sourceId === "source-alpha")?.complete ?? false, false);
   }
 });
 

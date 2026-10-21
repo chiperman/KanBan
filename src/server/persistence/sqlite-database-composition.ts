@@ -73,6 +73,7 @@ export function openSqliteDashboard(
 
     return {
       database,
+      metadata,
       transactions,
       cards,
       sourceData,

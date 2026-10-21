@@ -17,6 +17,7 @@ export class DatabaseAssetCardStore implements AssetCardStore {
 
 export class DatabaseAssetSources implements AssetSources {
   constructor(private readonly database: AssetSourceDatabase) {}
+  get refreshGuard() { return this.database.refreshGuard; }
   list() { return this.database.listSources(); }
   replaceAll(sources: AssetSourceSummary[]) { return this.database.replaceSources(sources); }
   update(source: AssetSourceSummary) { return this.database.updateSource(source); }

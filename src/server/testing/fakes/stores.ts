@@ -125,30 +125,15 @@ export class InMemoryDailyAssetSnapshots implements DailyAssetSnapshots {
   }
 
   async record(snapshot: DailyAssetSnapshot, createBaseline: boolean): Promise<void> {
-    const baselineIndex = this.snapshots.findIndex(
-      ({ day }) => day === snapshot.day,
-    );
-    if (createBaseline && baselineIndex === -1) {
-      await this.createIfAbsent(snapshot);
-    } else if (
-      createBaseline &&
-      this.snapshots[baselineIndex].status === "expired"
-    ) {
-      this.snapshots[baselineIndex] = structuredClone(snapshot);
+    const previous = this.trendObservations.find(row => row.day === snapshot.day);
+    const merged = mergeDailyTrendObservation(previous, snapshot);
+    const baselineIndex = this.snapshots.findIndex(row => row.day === snapshot.day);
+    if (createBaseline && merged.complete && merged.status === "complete") {
+      if (baselineIndex === -1) await this.createIfAbsent(merged);
+      else if (this.snapshots[baselineIndex].status !== "complete") this.snapshots[baselineIndex] = structuredClone(merged);
     }
-    const index = this.trendObservations.findIndex(({ day }) => day === snapshot.day);
-    if (index === -1) {
-      this.trendObservations = [
-        ...this.trendObservations,
-        structuredClone(snapshot),
-      ].sort((left, right) => left.day.localeCompare(right.day));
-    } else {
-      this.trendObservations[index] = mergeDailyTrendObservation(
-        this.trendObservations[index],
-        snapshot,
-        !createBaseline,
-      );
-    }
+    this.trendObservations = [...this.trendObservations.filter(row => row.day !== snapshot.day), structuredClone(merged)]
+      .sort((a, b) => a.day.localeCompare(b.day));
   }
 
   async recordManual(

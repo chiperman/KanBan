@@ -6,6 +6,7 @@ import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { existsSync } from "node:fs";
 import process from "node:process";
 import { resolveNodeNetworkEnvironment } from "./local-network-environment.mjs";
 
@@ -20,6 +21,9 @@ if (mode !== "dev" && mode !== "start") {
   throw new Error("本地 Next 启动模式必须是 dev 或 start");
 }
 
+if (mode === "dev" && existsSync(path.join(process.cwd(), ".kanban-runtime.json"))) {
+  throw new Error("永久运行副本仅运行生产服务；请回开发目录使用 pnpm dev 和独立开发数据");
+}
 const require = createRequire(import.meta.url);
 try {
   process.loadEnvFile(path.join(process.cwd(), ".env.local"));
