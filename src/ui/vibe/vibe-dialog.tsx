@@ -46,6 +46,7 @@ export function VibeDialog({
   onSubmit,
   title,
   titleId,
+  onPointerDown: onOverlayPointerDown,
   ...overlayProps
 }: VibeDialogProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -143,6 +144,12 @@ export function VibeDialog({
       data-vibe-component="modal"
       role="dialog"
       {...overlayProps}
+      onPointerDown={(event) => {
+        onOverlayPointerDown?.(event);
+        if (!event.defaultPrevented && event.target === event.currentTarget) {
+          onCloseRef.current();
+        }
+      }}
     >
       {onSubmit ? (
         <form className={panelClassName} onSubmit={onSubmit}>
