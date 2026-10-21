@@ -2,7 +2,7 @@
 
 import { WorkspaceViewNavigation } from "@/ui/workspace-view-navigation";
 import { ASSET_VIEWS } from "@/ui/workbench-navigation";
-import { Fragment, useId, useMemo, useState } from "react";
+import { Fragment, useId, useMemo, useState, type ReactNode } from "react";
 
 import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
 import { longbridgeReferenceRates } from "@/domain/investment-performance";
@@ -89,13 +89,22 @@ function signedPercent(value: string): string {
   return `${comparison > 0 ? "+" : ""}${money(value)}%`;
 }
 
+function HoldingValue({ value, unit }: { value: string; unit?: string }) {
+  return (
+    <>
+      <span className="assets-holdings__number">{value}</span>
+      {unit ? <> <span className="vibe-metric__unit">{unit}</span></> : null}
+    </>
+  );
+}
+
 function displayAmount(
   value: string | null,
   fromCurrency: string,
   reportingCurrency: ReportingCurrency,
   rates: WorkspaceSource["snapshot"]["exchangeRates"],
   hidden: boolean,
-): string {
+): ReactNode {
   if (hidden) return "••••••";
   if (value === null) return "数据不足";
   const converted = convertCurrencyAmount(
@@ -104,7 +113,9 @@ function displayAmount(
     reportingCurrency,
     rates,
   );
-  return converted === null ? "无法折算" : `${money(converted)} ${reportingCurrency}`;
+  return converted === null
+    ? "无法折算"
+    : <HoldingValue value={money(converted)} unit={reportingCurrency} />;
 }
 
 function displayPrice(
@@ -113,7 +124,7 @@ function displayPrice(
   reportingCurrency: ReportingCurrency,
   rates: WorkspaceSource["snapshot"]["exchangeRates"],
   assetClass: AssetHolding["assetClass"],
-): string {
+): ReactNode {
   const converted = convertCurrencyAmount(
     value,
     fromCurrency,
@@ -122,7 +133,7 @@ function displayPrice(
   );
   return converted === null
     ? "无法折算"
-    : `${formatAssetUnitPrice(converted, assetClass)} ${reportingCurrency}`;
+    : <HoldingValue value={formatAssetUnitPrice(converted, assetClass)} unit={reportingCurrency} />;
 }
 
 function holdingMarketValue(
@@ -479,12 +490,15 @@ export function AssetsHoldingsWorkspace({
                                 ? holding.valuation.status === "unvalued"
                                   ? "未估值"
                                   : "数据不足"
-                                : `${money(marketValue)} ${currency}`
+                                : <HoldingValue value={money(marketValue)} unit={currency} />
                               : "••••••"}
                           </strong>
                           {showSourceMarketValue && holding.sourceMarketValue ? (
                             <span>
-                              原币 {formatAssetAmount(holding.sourceMarketValue.amount)} {holding.sourceMarketValue.currency}
+                              原币 <HoldingValue
+                                value={formatAssetAmount(holding.sourceMarketValue.amount)}
+                                unit={holding.sourceMarketValue.currency}
+                              />
                             </span>
                           ) : holding.sourceMarketValue ? null : (
                             <span>原市值缺失</span>
@@ -517,7 +531,7 @@ export function AssetsHoldingsWorkspace({
                             {holding.changePercent === null
                               ? "数据不足"
                               : showSensitiveInfo
-                                ? signedPercent(holding.changePercent)
+                                ? <HoldingValue value={signedPercent(holding.changePercent)} />
                                 : "••••••"}
                           </strong>
                         </td>

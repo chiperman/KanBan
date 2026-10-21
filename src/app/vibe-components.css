@@ -746,7 +746,7 @@ textarea.vibe-field__input {
 .vibe-notice__marker {
   display: grid;
   width: 24px;
-  height: 24px;
+  height: 1lh;
   flex: 0 0 auto;
   /* Preserve content alignment after removing the 3px border. */
   margin-inline-start: 3px;
