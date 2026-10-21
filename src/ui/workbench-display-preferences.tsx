@@ -20,6 +20,8 @@ type WorkbenchDisplayPreferences = {
   toggleSensitiveInfo(): void;
   sidebarCollapsed: boolean;
   toggleSidebar(): void;
+  showTrendDots: boolean;
+  setShowTrendDots(show: boolean): void;
 };
 
 const WorkbenchDisplayPreferencesContext =
@@ -61,23 +63,26 @@ export function WorkbenchDisplayPreferencesProvider({
   // 演示模式的独立 provider 不持久化，仅展示虚构数据。
   const [showSensitiveInfo, setShowSensitiveInfo] = useState(!persist);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showTrendDots, setCurrentTrendDots] = useState(true);
 
   useEffect(() => {
     if (!persistenceEnabled) {
       setCurrentCurrency("USD");
       setShowSensitiveInfo(true);
       setSidebarCollapsed(false);
+      setCurrentTrendDots(true);
       document.documentElement.dataset.sidebarCollapsed = "false";
       return;
     }
     setCurrentCurrency(storedCurrency());
     setShowSensitiveInfo(!sensitiveInfoIsHidden());
     try {
+      setCurrentTrendDots(window.localStorage.getItem("pad-trend-dots") !== "false");
       const collapsed = window.localStorage.getItem("pad-sidebar-collapsed") === "true";
       setSidebarCollapsed(collapsed);
       document.documentElement.dataset.sidebarCollapsed = String(collapsed);
     } catch {
-      // 存储不可用时保留可操作的展开导航。
+      // 存储不可用时保留默认显示偏好。
     }
   }, [persistenceEnabled]);
 
@@ -136,6 +141,16 @@ export function WorkbenchDisplayPreferencesProvider({
     }
   }, [persistenceEnabled, sidebarCollapsed]);
 
+  const setShowTrendDots = useCallback((show: boolean) => {
+    setCurrentTrendDots(show);
+    if (!persistenceEnabled) return;
+    try {
+      window.localStorage.setItem("pad-trend-dots", String(show));
+    } catch {
+      // 存储不可用时，仍在当前页面内生效。
+    }
+  }, [persistenceEnabled]);
+
   const value = useMemo(
     () => ({
       currency,
@@ -144,8 +159,10 @@ export function WorkbenchDisplayPreferencesProvider({
       toggleSensitiveInfo,
       sidebarCollapsed,
       toggleSidebar,
+      showTrendDots,
+      setShowTrendDots,
     }),
-    [currency, setCurrency, showSensitiveInfo, toggleSensitiveInfo, sidebarCollapsed, toggleSidebar],
+    [currency, setCurrency, showSensitiveInfo, toggleSensitiveInfo, sidebarCollapsed, toggleSidebar, showTrendDots, setShowTrendDots],
   );
 
   return (

@@ -12,7 +12,26 @@ import { formatShanghaiDayLabel } from "@/ui/shanghai-date-time";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeDateField } from "@/ui/vibe/vibe-date-field";
 import { VibeDialog } from "@/ui/vibe/vibe-dialog";
-import { VibeSelect } from "@/ui/vibe/vibe-field";
+import { VibeIcon } from "@/ui/vibe/vibe-icon";
+import { useWorkbenchDisplayPreferences } from "@/ui/workbench-display-preferences";
+
+type CompactRangePreset = "7d" | "1m" | "6m" | "1y" | "all";
+
+const COMPACT_RANGE_PRESETS: readonly CompactRangePreset[] = [
+  "7d",
+  "1m",
+  "6m",
+  "1y",
+  "all",
+];
+
+const COMPACT_RANGE_LABELS: Record<CompactRangePreset, string> = {
+  "7d": "1周",
+  "1m": "1月",
+  "6m": "半年",
+  "1y": "1年",
+  all: "全部",
+};
 
 export type AssetTrendRangeSelection = {
   preset: InvestmentPerformanceIntervalPreset;
@@ -45,10 +64,11 @@ export function AssetTrendPanel({
   metricControls,
   children,
   emptyMessage,
+  coveragePresentation,
   rangePresentation = "default",
   title,
   ...chart
-}: Omit<ComponentProps<typeof AssetTrendChart>, "incompleteCount" | "unavailableCount"> & {
+}: Omit<ComponentProps<typeof AssetTrendChart>, "incompleteCount" | "unavailableCount" | "showDotFill"> & {
   range: AssetTrendRange;
   metricControls?: ReactNode;
   children?: ReactNode;
@@ -56,6 +76,7 @@ export function AssetTrendPanel({
   rangePresentation?: "default" | "quiet" | "compact";
   title?: string;
 }) {
+  const { showTrendDots } = useWorkbenchDisplayPreferences();
   const id = useId();
   const [editing, setEditing] = useState(false);
   const [startDay, setStartDay] = useState(range.currentDay);
@@ -68,6 +89,35 @@ export function AssetTrendPanel({
     : point.observed ? [point.day] : []))].toSorted();
   const validRange = startDay !== "" && endDay !== "" &&
     startDay <= endDay && endDay <= range.currentDay;
+  const rangeControl = rangePresentation === "compact" ? (
+    <div className="asset-trend-panel__range asset-trend-panel__range--below" role="group" aria-label="分析区间">
+      <div className="asset-trend-panel__range-options">
+        {COMPACT_RANGE_PRESETS.map(preset => <VibeButton
+          key={preset}
+          aria-pressed={range.preset === preset}
+          className="asset-trend-panel__range-option vibe-button--range"
+          disabled={range.pending}
+          onClick={() => choosePreset(preset)}
+          size="compact"
+          type="button"
+          variant="text"
+        >{COMPACT_RANGE_LABELS[preset]}</VibeButton>)}
+      </div>
+      <VibeButton
+        aria-label="自定义分析区间"
+        aria-haspopup="dialog"
+        aria-pressed={range.preset === "custom"}
+        className="asset-trend-panel__custom-range vibe-button--range"
+        title="自定义分析区间"
+        type="button"
+        variant="text"
+        size="compact"
+        shape="square"
+        disabled={range.pending}
+        onClick={() => choosePreset("custom")}
+      ><VibeIcon name="calendar" /></VibeButton>
+    </div>
+  ) : null;
 
   function choosePreset(preset: InvestmentPerformanceIntervalPreset) {
     if (preset !== "custom") {
@@ -77,8 +127,6 @@ export function AssetTrendPanel({
     const days = rangeDays(range.preset, range.currentDay, range.firstDay, range.customRange);
     setStartDay(range.customRange?.startDay ?? days[0] ?? range.firstDay ?? range.currentDay);
     setEndDay(range.customRange?.endDay ?? days.at(-1) ?? range.currentDay);
-    // The selected menu option unmounts; let the dialog restore focus to the trigger.
-    if (rangePresentation === "compact") document.getElementById(`${id}-range`)?.focus();
     setEditing(true);
   }
 
@@ -89,18 +137,6 @@ export function AssetTrendPanel({
     {metricControls}
     {rangePresentation === "compact" ? <header className="asset-trend-panel__toolbar">
       {title ? <h2>{title}</h2> : null}
-      <div className="asset-trend-panel__range" role="group" aria-label="分析区间">
-        <VibeSelect
-          fieldId={`${id}-range`}
-          label="分析区间"
-          variant="compact"
-          disabled={range.pending}
-          value={range.preset}
-          onValueChange={choosePreset}
-          options={INTERVAL_OPTIONS.map(option => ({ ...option, label: option.value === "all" ? "全部历史" : option.label }))}
-        />
-        {range.preset === "custom" ? <VibeButton type="button" variant="text" size="compact" disabled={range.pending} onClick={() => choosePreset("custom")}>修改日期</VibeButton> : null}
-      </div>
     </header> : <div className="investment-performance__range" role="group" aria-label="分析区间">
       <span aria-hidden="true" className="vibe-field__label">分析区间</span>
       <div className="investment-performance__range-options">
@@ -125,16 +161,19 @@ export function AssetTrendPanel({
     {children}
     <AssetTrendChart
       {...chart}
+      showDotFill={showTrendDots}
+      plotPresentation={rangePresentation === "compact" ? "minimal" : chart.plotPresentation}
       coverageNote={rangePresentation !== "default" && !chart.isSensitiveHidden
         ? actualDays.length
           ? `实际记录 ${formatShanghaiDayLabel(actualDays[0]!)} 至 ${formatShanghaiDayLabel(actualDays.at(-1)!)}`
           : "所选区间暂无实际记录"
         : undefined}
-      coveragePresentation={rangePresentation === "compact" ? "disclosure" : "default"}
+      coveragePresentation={coveragePresentation ?? (rangePresentation === "compact" ? "disclosure" : "default")}
       emptyMessage={emptyMessage}
       incompleteCount={chart.points.filter(point => (point.observed || point.manualRecordDay) && point.status !== "complete").length}
       unavailableCount={chart.points.filter(point => (point.observed || point.manualRecordDay) && point.amount === null).length}
     />
+    {rangeControl}
     {editing ? <VibeDialog
       aria-label="自定义分析区间"
       title="自定义分析区间"

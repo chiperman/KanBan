@@ -6,6 +6,7 @@ const paths = {
   "arrow-left": <path d="M20 12H4m6-6-6 6 6 6" />,
   "arrow-right": <path d="M4 12h16m-6-6 6 6-6 6" />,
   search: <><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4.5 4.5" /></>,
+  calendar: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M7 3v4M17 3v4M3 11h18" /></>,
   eye: <><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" /><circle cx="12" cy="12" r="2.5" /></>,
   "eye-off": <><path d="m3 3 18 18M10 6.2A12 12 0 0 1 12 6c6.5 0 10 6 10 6a19 19 0 0 1-3 3.5M6.2 6.8A20 20 0 0 0 2 12s3.5 6 10 6a12 12 0 0 0 4.5-.8" /><path d="M10 10a2.8 2.8 0 0 0 4 4" /></>,
   lock: <><rect x="5" y="10" width="14" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></>,

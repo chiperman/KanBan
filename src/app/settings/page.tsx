@@ -18,6 +18,7 @@ import { ProfitColorSettings } from "@/ui/profit-color-settings";
 import { RecoverySetup } from "@/ui/recovery-setup";
 import { ExternalServiceSettings } from "@/ui/external-service-settings";
 import { SessionGuard } from "@/ui/session-guard";
+import { TrendAppearanceSettings } from "@/ui/trend-appearance-settings";
 import { WorkbenchShell } from "@/ui/workbench-shell";
 import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
 
@@ -74,6 +75,13 @@ export default async function SettingsPage({
             >
               <h2 id="default-preferences-title">默认偏好</h2>
               <ProfitColorSettings initialScheme={initialProfitColorScheme} />
+            </section>
+            <section
+              className="settings-section"
+              aria-labelledby="personalization-title"
+            >
+              <h2 id="personalization-title">个性化</h2>
+              <TrendAppearanceSettings />
             </section>
             </> : view === "security" ? <>
             <section

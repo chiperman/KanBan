@@ -529,6 +529,36 @@ textarea.vibe-field__input {
   padding-inline: 4px;
 }
 
+/* Range choices keep separate hit areas; only the selection has a fill. */
+.vibe-button--range {
+  min-width: var(--vibe-control-height);
+  min-height: var(--vibe-control-height);
+  padding-inline: var(--vibe-space-4);
+  border-radius: var(--r-pill);
+  color: var(--secondary);
+  font-family: var(--f-ui);
+  font-size: var(--vibe-type-body-sm);
+  letter-spacing: normal;
+}
+
+.vibe-button.vibe-button--range[aria-pressed="true"] {
+  background: var(--raised);
+  color: var(--display);
+}
+
+@media (hover: hover) {
+  .vibe-button--range:not(:disabled):hover {
+    background: var(--raised);
+    color: var(--display);
+  }
+}
+
+@media (max-width: 639px) {
+  .vibe-button--range {
+    padding-inline: var(--vibe-space-1);
+  }
+}
+
 /* Entity names remain recognisable as links without hover or color alone. */
 .vibe-entity-link {
   display: inline-flex;

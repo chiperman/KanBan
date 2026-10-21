@@ -576,10 +576,6 @@ export function DailyOverviewWorkspace({
                     : `较 ${formatShanghaiDayLabel(priorObservation.day)}`}
                 </p>
               )}
-              {/* 自释：今日资产变化含资金进出与估值修正，不能当作投资收益阅读 */}
-              <p className="daily-overview__note">
-                含资金进出与估值修正，非投资收益
-              </p>
             </article>
             {!currentValuationComplete || !current?.complete ? <details
               className="daily-overview__confidence"
@@ -628,6 +624,7 @@ export function DailyOverviewWorkspace({
                 range={{ ...trendRange, currentDay, firstDay: trend.firstDay }}
                 ariaLabel="总资产趋势"
                 chartHeight={320}
+                coveragePresentation="none"
                 currency={currency}
                 dateAxisPresentation="compact"
                 formatAmount={amount}

@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState, type ComponentProps } from "react";
+import { useEffect, useId, useState, type ComponentProps } from "react";
 import {
+  Area,
   CartesianGrid,
+  ComposedChart,
   Line,
-  LineChart,
+  ReferenceDot,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -50,6 +52,106 @@ type AssetTrendBenchmark = {
   enabledSymbols: MarketBenchmarkSymbol[];
   returnComparison?: boolean;
 };
+
+type CurveLineProps = {
+  dataKey: string;
+  stroke: string;
+  type?: "linear" | "monotone" | "stepAfter";
+  activeDot?: boolean;
+  connectNulls?: boolean;
+  dot?: boolean;
+  filter?: string;
+  strokeDasharray?: string;
+  strokeWidth?: number;
+  name?: string;
+};
+
+/* The reference screenshot uses one continuous curve with a single
+   end marker; the end dot is presentational and never participates in
+   tooltip data. */
+function CurveLine({
+  dataKey,
+  stroke,
+  type = "monotone",
+  activeDot = false,
+  connectNulls = true,
+  dot = false,
+  filter,
+  strokeDasharray,
+  strokeWidth = 2.4,
+  name,
+}: CurveLineProps) {
+  return (
+    <Line
+      activeDot={activeDot ? {
+        r: 5,
+        fill: "var(--surface)",
+        stroke,
+        strokeWidth: 2.5,
+      } : false}
+      connectNulls={connectNulls}
+      dataKey={dataKey}
+      dot={dot}
+      filter={filter}
+      isAnimationActive={false}
+      name={name}
+      stroke={stroke}
+      strokeDasharray={strokeDasharray}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={strokeWidth}
+      type={type}
+    />
+  );
+}
+
+function TrendEffects({ dotsId, glowId }: { dotsId: string; glowId: string }) {
+  const plotArea = usePlotArea();
+  return (
+    <defs>
+      <pattern height="6" id={dotsId} patternUnits="userSpaceOnUse" width="6">
+        <circle
+          cx="3"
+          cy="3"
+          r="1"
+          style={{ fill: "var(--display)", opacity: 0.8 }}
+        />
+      </pattern>
+      {plotArea ? <filter
+        colorInterpolationFilters="sRGB"
+        filterUnits="userSpaceOnUse"
+        height={plotArea.height + 48}
+        id={glowId}
+        width={plotArea.width + 48}
+        x={plotArea.x - 24}
+        y={plotArea.y - 24}
+      >
+        <feGaussianBlur in="SourceGraphic" stdDeviation="6" />
+        <feComponentTransfer result="wideGlow">
+          <feFuncA slope="0.24" type="linear" />
+        </feComponentTransfer>
+        <feGaussianBlur in="SourceGraphic" result="nearGlow" stdDeviation="2" />
+        <feComponentTransfer in="nearGlow" result="softGlow">
+          <feFuncA slope="0.4" type="linear" />
+        </feComponentTransfer>
+        <feMerge>
+          <feMergeNode in="wideGlow" />
+          <feMergeNode in="softGlow" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter> : null}
+    </defs>
+  );
+}
+
+function TrendExtentLabels({ minimum, maximum }: { minimum: string; maximum: string }) {
+  const plotArea = usePlotArea();
+  if (!plotArea) return null;
+  return <g fill="var(--secondary)" fontFamily="var(--f-mono)" fontSize={12}>
+    <text x={plotArea.x} y={plotArea.y - 12}>{maximum}</text>
+    {minimum !== maximum ? <text x={plotArea.x} y={plotArea.y + plotArea.height + 20}>{minimum}</text> : null}
+  </g>;
+}
 
 export function AssetTrendDateTick({ x, y, index, visibleTicksCount, payload, tickFormatter }: XAxisTickContentProps) {
   return <text
@@ -337,7 +439,9 @@ export function AssetTrendChart({
   emptyMessage = "无可用趋势",
   points,
   showCurrency = true,
-  lineType = "linear",
+  showDotFill = true,
+  lineType = "monotone",
+  plotPresentation = "default",
   unavailableCount,
   variant = "total",
 }: {
@@ -345,7 +449,7 @@ export function AssetTrendChart({
   benchmark?: AssetTrendBenchmark | null;
   chartHeight?: number;
   coverageNote?: string;
-  coveragePresentation?: "default" | "disclosure";
+  coveragePresentation?: "default" | "disclosure" | "none";
   currency: string;
   dateAxisPresentation?: "default" | "compact";
   formatAmount(value: string): string;
@@ -359,10 +463,15 @@ export function AssetTrendChart({
   emptyMessage?: string;
   points: AssetTrendChartPoint[];
   showCurrency?: boolean;
-  lineType?: "linear" | "stepAfter";
+  showDotFill?: boolean;
+  lineType?: "linear" | "monotone" | "stepAfter";
+  plotPresentation?: "default" | "minimal";
   unavailableCount: number;
   variant?: "source" | "total";
 }) {
+  const dotFillId = `asset-trend-dots-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  const glowId = `${dotFillId}-glow`;
+
   if (isSensitiveHidden) {
     return <HiddenTrendState variant={variant} />;
   }
@@ -388,10 +497,11 @@ export function AssetTrendChart({
   const missingCount = data.filter((point) => !point.observed && !point.manualRecordDay && point.historicalAmount === null).length;
   const historicalObserved = data.filter((point) => point.historicalValue !== null).length;
   const today = data.at(-1);
-  const values = data.flatMap((point) => [
-    ...(point.value === null ? [] : [point.value]),
-    ...(point.historicalValue === null ? [] : [point.historicalValue]),
+  const amounts = data.flatMap((point) => [
+    ...(point.amount === null ? [] : [point.amount]),
+    ...(point.historicalAmount === null ? [] : [point.historicalAmount]),
   ]);
+  const values = amounts.map(Number);
   const qualitySummary = <QualitySummary
     historicalLabel={historicalSeries?.label ?? null}
     historicalObserved={historicalObserved}
@@ -401,7 +511,7 @@ export function AssetTrendChart({
     total={points.length}
     unavailableCount={unavailableCount}
   />;
-  const comparisonHeader = coveragePresentation === "disclosure" ? (
+  const comparisonHeader = coveragePresentation === "none" ? null : coveragePresentation === "disclosure" ? (
     <details className="asset-trend-coverage">
       <summary>数据覆盖{missingCount + incompleteCount + unavailableCount > 0 ? " · 存在缺测或不完整记录" : ""}</summary>
       {coverageNote ? <p className="asset-trend-coverage-note">{coverageNote}</p> : null}
@@ -415,13 +525,14 @@ export function AssetTrendChart({
   );
   const benchmarkVisible = benchmark?.comparison?.reason === null &&
     benchmark.enabledSymbols.length > 0;
+  const minimalPlot = plotPresentation === "minimal" && !benchmarkVisible;
   const compactDateAxis = dateAxisPresentation === "compact";
   const firstYear = points[0]?.day.slice(0, 4) ?? "";
   const lastYear = points.at(-1)?.day.slice(0, 4) ?? "";
   const formatAxisDay = firstYear !== lastYear
     ? (day: string) => day
     : formatDay;
-  const dateAxis = compactDateAxis ? <CalendarAssetTrendXAxis points={points} /> : (
+  const dateAxis = minimalPlot ? <XAxis dataKey="day" hide /> : compactDateAxis ? <CalendarAssetTrendXAxis points={points} /> : (
     <XAxis
       axisLine={{ stroke: "var(--line-2)" }}
       dataKey="day"
@@ -477,6 +588,10 @@ export function AssetTrendChart({
         assets: comparisonPoint?.assets == null ? null : Number(comparisonPoint.assets),
       };
     });
+    const benchmarkLastValueIndex = benchmarkData.reduce(
+      (lastIndex, point, index) => point.assets === null ? lastIndex : index,
+      -1,
+    );
     const benchmarkValues = benchmarkData.flatMap((point) => [
       ...(point.assets === null ? [] : [point.assets]),
       ...benchmark.enabledSymbols.flatMap((symbol) =>
@@ -499,7 +614,7 @@ export function AssetTrendChart({
             width="100%"
             height={chartHeight ?? (variant === "source" ? 168 : 300)}
           >
-            <LineChart
+            <ComposedChart
               accessibilityLayer
               aria-label={`${assetsLabel}与市场价格指数趋势`}
               data={benchmarkData}
@@ -511,6 +626,7 @@ export function AssetTrendChart({
               }}
               role="img"
             >
+              <TrendEffects dotsId={dotFillId} glowId={glowId} />
               <CartesianGrid
                 horizontal
                 vertical={false}
@@ -545,48 +661,52 @@ export function AssetTrendChart({
                 cursor={{ stroke: "var(--line-2)", strokeWidth: 1 }}
               />
               <ReferenceLine stroke="var(--line-2)" strokeWidth={1} y={0} />
-              <Line
+              {showDotFill ? <Area
                 activeDot={false}
+                baseValue={benchmarkMinimum - benchmarkPadding}
                 connectNulls
                 dataKey="assets"
                 dot={false}
+                fill={`url(#${dotFillId})`}
+                fillOpacity={0.85}
                 isAnimationActive={false}
+                stroke="none"
+                type={lineType}
+              /> : null}
+              <CurveLine
+                activeDot
+                dataKey="assets"
+                filter={`url(#${glowId})`}
                 name={`我的${assetsLabel}`}
                 stroke="var(--display)"
-                strokeLinecap="square"
-                strokeWidth={2}
                 type={lineType}
               />
               {benchmark.enabledSymbols.includes(".SPX.US") ? (
-                <Line
-                  activeDot={false}
-                  connectNulls
+                <CurveLine
                   dataKey=".SPX.US"
-                  dot={false}
-                  isAnimationActive={false}
                   name={marketBenchmarkLabel(".SPX.US")}
                   stroke="var(--secondary)"
-                  strokeLinecap="square"
-                  strokeWidth={2}
-                  type="linear"
                 />
               ) : null}
               {benchmark.enabledSymbols.includes(".NDX.US") ? (
-                <Line
-                  activeDot={false}
-                  connectNulls
+                <CurveLine
                   dataKey=".NDX.US"
-                  dot={false}
-                  isAnimationActive={false}
                   name={marketBenchmarkLabel(".NDX.US")}
                   stroke="var(--muted)"
                   strokeDasharray="5 4"
-                  strokeLinecap="square"
-                  strokeWidth={2}
-                  type="linear"
                 />
               ) : null}
-            </LineChart>
+              {benchmarkLastValueIndex >= 0 ? (
+                <ReferenceDot
+                  fill="var(--surface)"
+                  r={5}
+                  stroke="var(--display)"
+                  strokeWidth={2.4}
+                  x={benchmarkData[benchmarkLastValueIndex].day}
+                  y={benchmarkData[benchmarkLastValueIndex].assets!}
+                />
+              ) : null}
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
         {coveragePresentation === "disclosure" ? comparisonHeader : null}
@@ -615,6 +735,10 @@ export function AssetTrendChart({
     Math.abs(value) >= 1_000
       ? `${Math.round(value / 1_000)}k`
       : Math.round(value).toLocaleString();
+  const lastValueIndex = data.reduce(
+    (lastIndex, point, index) => point.value === null ? lastIndex : index,
+    -1,
+  );
 
   return (
     <div className={`asset-trend-comparison asset-trend-comparison--${variant}`}>
@@ -625,28 +749,30 @@ export function AssetTrendChart({
           width="100%"
           height={chartHeight ?? (variant === "source" ? 168 : 300)}
         >
-          <LineChart
+          <ComposedChart
             accessibilityLayer
             aria-label={ariaLabel}
             data={data}
             margin={{
-              top: 12,
-              right: variant === "source" ? 12 : 20,
-              bottom: 6,
+              top: minimalPlot ? 32 : 12,
+              right: minimalPlot ? 8 : variant === "source" ? 12 : 20,
+              bottom: minimalPlot ? 32 : 6,
               left: 0,
             }}
             role="img"
           >
-            <CartesianGrid
+            <TrendEffects dotsId={dotFillId} glowId={glowId} />
+            {minimalPlot ? null : <CartesianGrid
               horizontal
               vertical={false}
               stroke="var(--line)"
               strokeDasharray="0"
-            />
+            />}
             {dateAxis}
             <YAxis
               axisLine={false}
               domain={[axisMinimum, axisMaximum]}
+              hide={minimalPlot}
               tick={{
                 fill: "var(--muted)",
                 fontFamily: "var(--f-mono)",
@@ -654,7 +780,7 @@ export function AssetTrendChart({
               }}
               tickFormatter={compactAxisValue}
               tickLine={false}
-              width={variant === "source" ? 48 : 56}
+              width={minimalPlot ? 0 : variant === "source" ? 48 : 56}
             />
             <TrendChartTooltip
               content={(props) => (
@@ -668,7 +794,7 @@ export function AssetTrendChart({
               )}
               cursor={{ stroke: "var(--line-2)", strokeWidth: 1 }}
             />
-            {today?.amount != null ? (
+            {!minimalPlot && today?.amount != null ? (
               <ReferenceLine
                 stroke="var(--secondary)"
                 strokeWidth={1}
@@ -676,32 +802,50 @@ export function AssetTrendChart({
               />
             ) : null}
             {historicalObserved > 0 ? (
-              <Line
-                activeDot={false}
-                connectNulls
-                dataKey="historicalValue"
+              <CurveLine
                 dot={historicalObserved === 1}
-                isAnimationActive={false}
+                dataKey="historicalValue"
                 name={historicalSeries?.label}
                 stroke="var(--secondary)"
                 strokeDasharray="5 4"
-                strokeLinecap="square"
-                strokeWidth={2}
                 type={lineType}
               />
             ) : null}
-            <Line
+            {showDotFill ? <Area
               activeDot={false}
+              baseValue={axisMinimum}
               connectNulls
               dataKey="value"
-              dot={data.filter(point => point.value !== null).length === 1}
+              dot={false}
+              fill={`url(#${dotFillId})`}
+              fillOpacity={0.85}
               isAnimationActive={false}
+              stroke="none"
+              type={lineType}
+            /> : null}
+            <CurveLine
+              activeDot
+              dataKey="value"
+              filter={`url(#${glowId})`}
               stroke="var(--display)"
-              strokeLinecap="square"
-              strokeWidth={2}
+              strokeWidth={minimalPlot ? 3 : 2.4}
               type={lineType}
             />
-          </LineChart>
+            {minimalPlot ? <TrendExtentLabels
+              maximum={formatAmount(amounts[values.indexOf(maximum)])}
+              minimum={formatAmount(amounts[values.indexOf(minimum)])}
+            /> : null}
+            {lastValueIndex >= 0 ? (
+              <ReferenceDot
+                fill="var(--surface)"
+                r={5}
+                stroke="var(--display)"
+                strokeWidth={2.4}
+                x={data[lastValueIndex].day}
+                y={data[lastValueIndex].value!}
+              />
+            ) : null}
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
       {coveragePresentation === "disclosure" ? comparisonHeader : null}
