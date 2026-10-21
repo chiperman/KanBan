@@ -9,6 +9,7 @@ import {
   type FormEvent,
 } from "react";
 
+import { LockedComputer } from "@/ui/locked-computer/locked-computer";
 import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
 import { VibeVerificationCode } from "@/ui/vibe/vibe-verification-code";
@@ -200,147 +201,6 @@ function LockedFlowOpacity({
   );
 }
 
-const LOCKED_KEYBOARD_ROWS = [
-  {
-    id: "number",
-    gap: 3,
-    height: 8,
-    widths: Array.from({ length: 15 }, () => 21),
-    x: 10,
-    y: 4,
-  },
-  {
-    id: "qwerty",
-    gap: 3,
-    height: 8,
-    widths: [27, ...Array.from({ length: 12 }, () => 21), 39],
-    x: 10,
-    y: 13,
-  },
-  {
-    id: "home",
-    gap: 3,
-    height: 8,
-    widths: [34, ...Array.from({ length: 11 }, () => 21), 56],
-    x: 10,
-    y: 22,
-  },
-  {
-    id: "shift",
-    gap: 3,
-    height: 8,
-    widths: [46, ...Array.from({ length: 10 }, () => 21), 68],
-    x: 10,
-    y: 31,
-  },
-] as const;
-
-interface LockedKeyboardKey {
-  height: number;
-  id: string;
-  width: number;
-  x: number;
-  y: number;
-}
-
-const LOCKED_KEYBOARD_KEYS: LockedKeyboardKey[] = [
-  ...LOCKED_KEYBOARD_ROWS.flatMap((row) => {
-    let cursorX = row.x;
-    return row.widths.map((width, index) => {
-      const key = {
-        height: row.height,
-        id: `${row.id}-${index}`,
-        width,
-        x: cursorX,
-        y: row.y,
-      };
-      cursorX += width + row.gap;
-      return key;
-    });
-  }),
-  { id: "modifier-control", x: 10, y: 40, width: 29, height: 8 },
-  { id: "modifier-system", x: 42, y: 40, width: 29, height: 8 },
-  { id: "modifier-alt-left", x: 74, y: 40, width: 29, height: 8 },
-  { id: "space", x: 106, y: 40, width: 145, height: 8 },
-  { id: "modifier-alt-right", x: 254, y: 40, width: 29, height: 8 },
-  { id: "modifier-system-right", x: 286, y: 40, width: 29, height: 8 },
-  { id: "modifier-control-right", x: 318, y: 40, width: 49, height: 8 },
-  ...Array.from({ length: 3 }, (_, column) =>
-    Array.from({ length: 2 }, (_, row) => ({
-      id: `navigation-${column}-${row}`,
-      x: 375 + column * 18,
-      y: 4 + row * 9,
-      width: 14,
-      height: 8,
-    })),
-  ).flat(),
-  { id: "arrow-up", x: 393, y: 31, width: 14, height: 8 },
-  { id: "arrow-left", x: 375, y: 40, width: 14, height: 8 },
-  { id: "arrow-down", x: 393, y: 40, width: 14, height: 8 },
-  { id: "arrow-right", x: 411, y: 40, width: 14, height: 8 },
-  ...Array.from({ length: 4 }, (_, column) => ({
-    id: `numpad-top-${column}`,
-    x: 445 + column * 25,
-    y: 4,
-    width: 20,
-    height: 8,
-  })),
-  ...Array.from({ length: 3 }, (_, column) => ({
-    id: `numpad-seven-${column}`,
-    x: 445 + column * 25,
-    y: 13,
-    width: 20,
-    height: 8,
-  })),
-  { id: "numpad-plus", x: 520, y: 13, width: 20, height: 17 },
-  ...Array.from({ length: 3 }, (_, column) => ({
-    id: `numpad-four-${column}`,
-    x: 445 + column * 25,
-    y: 22,
-    width: 20,
-    height: 8,
-  })),
-  ...Array.from({ length: 3 }, (_, column) => ({
-    id: `numpad-one-${column}`,
-    x: 445 + column * 25,
-    y: 31,
-    width: 20,
-    height: 8,
-  })),
-  { id: "numpad-enter", x: 520, y: 31, width: 20, height: 17 },
-  { id: "numpad-zero", x: 445, y: 40, width: 45, height: 8 },
-  { id: "numpad-decimal", x: 495, y: 40, width: 20, height: 8 },
-];
-
-function getLockedKeyboardPoint(x: number, y: number) {
-  const rowProgress = y / 48;
-  const left = 63.5 + (38.5 - 63.5) * rowProgress;
-  const right = 608 + (633 - 608) * rowProgress;
-
-  return {
-    x: left + (x / 544) * (right - left),
-    y: 500 + y,
-  };
-}
-
-function getLockedKeyboardKeyPath(key: LockedKeyboardKey) {
-  const topLeft = getLockedKeyboardPoint(key.x, key.y);
-  const topRight = getLockedKeyboardPoint(key.x + key.width, key.y);
-  const bottomRight = getLockedKeyboardPoint(
-    key.x + key.width,
-    key.y + key.height,
-  );
-  const bottomLeft = getLockedKeyboardPoint(key.x, key.y + key.height);
-
-  return [
-    `M${topLeft.x.toFixed(2)} ${topLeft.y.toFixed(2)}`,
-    `L${topRight.x.toFixed(2)} ${topRight.y.toFixed(2)}`,
-    `L${bottomRight.x.toFixed(2)} ${bottomRight.y.toFixed(2)}`,
-    `L${bottomLeft.x.toFixed(2)} ${bottomLeft.y.toFixed(2)}`,
-    "Z",
-  ].join("");
-}
-
 interface LockedFlowRouteProps {
   reducedMotion: boolean;
   route: (typeof LOCKED_FLOW_ROUTES)[number];
@@ -426,246 +286,153 @@ function LockedProductFlow() {
   const reducedMotion = useReducedMotion();
 
   return (
-    <div className="login-product-visual">
-      <svg
-        aria-labelledby="locked-product-flow-title locked-product-flow-description"
-        className="locked-product-flow"
-        data-testid="locked-product-flow"
-        focusable="false"
-        role="img"
-        viewBox="0 0 680 600"
-      >
-        <title id="locked-product-flow-title">个人资产看板只读数据流</title>
-        <desc id="locked-product-flow-description">
-          Longbridge、Binance、OKX、Bitget 和 Web3
-          只读资产汇总。
-        </desc>
-
-        <defs>
-          {reducedMotion
-            ? null
-            : LOCKED_FLOW_ROUTES.map((route) => (
-                <mask
-                  height="580"
-                  id={`locked-flow-mask-${route.id}`}
-                  key={route.id}
-                  maskUnits="userSpaceOnUse"
-                  width="680"
-                  x="0"
-                  y="0"
+    <LockedComputer reducedMotion={reducedMotion}>
+      <defs>
+        {reducedMotion
+          ? null
+          : LOCKED_FLOW_ROUTES.map((route) => (
+              <mask
+                height="580"
+                id={`locked-flow-mask-${route.id}`}
+                key={route.id}
+                maskUnits="userSpaceOnUse"
+                width="680"
+                x="0"
+                y="0"
+              >
+                <path
+                  className="locked-flow-route-reveal"
+                  d={route.route}
+                  pathLength="1"
                 >
-                  <path
-                    className="locked-flow-route-reveal"
-                    d={route.route}
-                    pathLength="1"
-                  >
-                    <animate
-                      attributeName="stroke-dashoffset"
-                      begin={LOCKED_FLOW_BEGIN}
-                      calcMode="linear"
-                      dur={LOCKED_FLOW_DURATION}
-                      keyTimes={`0;${route.start};${route.end};${LOCKED_FLOW_MASK_HOLD};${LOCKED_FLOW_RESET};1`}
-                      repeatCount="indefinite"
-                      values="1;1;0;0;1;1"
-                    />
-                  </path>
-                </mask>
-              ))}
-        </defs>
-
-        <g className="locked-flow-device">
-          <rect
-            className="locked-flow-device-back"
-            height="372"
-            rx="10"
-            transform="translate(0 2)"
-            width="640"
-            x="20"
-            y="20"
-          />
-          <rect
-            className="locked-flow-device-front"
-            height="340"
-            rx="5"
-            transform="translate(0 2)"
-            width="608"
-            x="36"
-            y="36"
-          />
-
-          <g className="locked-flow-screen" transform="translate(0 2)">
-            {LOCKED_FLOW_SOURCES.map((source, index) => {
-              const centerY = source.y + 16;
-              return (
-                <g
-                  className={`locked-flow-source locked-flow-source--${index + 1}`}
-                  key={source.label}
-                >
-                  <LockedFlowOpacity
-                    activeAt={source.start}
-                    inactiveOpacity={0.54}
-                    reducedMotion={reducedMotion}
+                  <animate
+                    attributeName="stroke-dashoffset"
+                    begin={LOCKED_FLOW_BEGIN}
+                    calcMode="linear"
+                    dur={LOCKED_FLOW_DURATION}
+                    keyTimes={`0;${route.start};${route.end};${LOCKED_FLOW_MASK_HOLD};${LOCKED_FLOW_RESET};1`}
+                    repeatCount="indefinite"
+                    values="1;1;0;0;1;1"
                   />
-                  <rect height="32" rx="3" width="96" x="52" y={source.y} />
-                  <text dominantBaseline="middle" textAnchor="middle" x="100" y={centerY}>
-                    {source.label}
-                  </text>
-                </g>
-              );
-            })}
-            {LOCKED_FLOW_SOURCES.map((route) => (
-              <LockedFlowRoute
-                key={route.id}
-                reducedMotion={reducedMotion}
-                route={route}
-              />
+                </path>
+              </mask>
             ))}
-            {LOCKED_FLOW_CONTINUATION.map((route) => (
-              <LockedFlowRoute
-                key={route.id}
-                reducedMotion={reducedMotion}
-                route={route}
-              />
-            ))}
-
-            <g className="locked-flow-stage locked-flow-stage--sync">
+      </defs>
+      <g className="locked-flow-screen">
+        {LOCKED_FLOW_SOURCES.map((source, index) => {
+          const centerY = source.y + 16;
+          return (
+            <g
+              className={`locked-flow-source locked-flow-source--${index + 1}`}
+              key={source.label}
+            >
               <LockedFlowOpacity
-                activeAt={LOCKED_FLOW_SYNC_ACTIVE}
-                inactiveOpacity={0.5}
+                activeAt={source.start}
+                inactiveOpacity={0.54}
                 reducedMotion={reducedMotion}
               />
-              <rect height="76" rx="4" width="64" x="212" y="174" />
-              <text dominantBaseline="middle" textAnchor="middle" x="244" y="212">
-                SYNC
+              <rect height="32" rx="3" width="96" x="52" y={source.y} />
+              <text dominantBaseline="middle" textAnchor="middle" x="100" y={centerY}>
+                {source.label}
               </text>
             </g>
-
-            <g className="locked-flow-stage locked-flow-stage--value">
-              <LockedFlowOpacity
-                activeAt={LOCKED_FLOW_VALUE_ACTIVE}
-                inactiveOpacity={0.5}
-                reducedMotion={reducedMotion}
-              />
-              <rect height="76" rx="4" width="64" x="328" y="174" />
-              <text dominantBaseline="middle" textAnchor="middle" x="360" y="212">
-                VALUE
-              </text>
-            </g>
-
-            <g className="locked-flow-stage locked-flow-stage--dashboard">
-              <LockedFlowOpacity
-                activeAt={LOCKED_FLOW_DASHBOARD_ACTIVE}
-                inactiveOpacity={0.5}
-                reducedMotion={reducedMotion}
-              />
-              <text className="locked-flow-dashboard-label" x="436" y="142">
-                READ ONLY
-              </text>
-              <rect height="134" rx="4" width="184" x="436" y="154" />
-              <circle cx="458" cy="182" r="10" />
-              <path d="M476 176H526M476 186H518" />
-              <path d="M448 212H608" />
-              <path d="M448 226H520M448 238H510" />
-              <rect height="5" width="8" x="450" y="252" />
-              <rect height="5" width="8" x="468" y="252" />
-              <rect height="5" width="8" x="486" y="252" />
-              <rect height="5" width="8" x="450" y="266" />
-              <rect height="5" width="8" x="468" y="266" />
-              <rect height="5" width="8" x="486" y="266" />
-              <circle cx="550" cy="232" r="3" />
-              <circle cx="568" cy="232" r="3" />
-              <circle cx="586" cy="232" r="3" />
-              <circle
-                className="locked-flow-dashboard-point-base"
-                cx="606"
-                cy="232"
-                r="3"
-              />
-              <circle className="locked-flow-dashboard-point" cx="606" cy="232" r="3">
-                <LockedFlowOpacity
-                  activeAt={LOCKED_FLOW_DASHBOARD_ACTIVE}
-                  inactiveOpacity={0}
-                  reducedMotion={reducedMotion}
-                />
-              </circle>
-              <rect height="12" width="12" x="544" y="252" />
-              <rect height="12" width="12" x="568" y="252" />
-              <rect height="12" width="12" x="592" y="252" />
-              <path className="locked-flow-dashboard-chart" d="M546 196L560 182L574 192L594 170" />
-              <circle
-                className="locked-flow-dashboard-point-base"
-                cx="594"
-                cy="170"
-                r="3"
-              />
-              <circle className="locked-flow-dashboard-point" cx="594" cy="170" r="3">
-                <LockedFlowOpacity
-                  activeAt={LOCKED_FLOW_DASHBOARD_ACTIVE}
-                  inactiveOpacity={0}
-                  reducedMotion={reducedMotion}
-                />
-              </circle>
-            </g>
-          </g>
-
-          <rect
-            className="locked-flow-device-chassis"
-            height="94"
-            rx="6"
-            width="640"
-            x="20"
-            y="424"
+          );
+        })}
+        {LOCKED_FLOW_SOURCES.map((route) => (
+          <LockedFlowRoute
+            key={route.id}
+            reducedMotion={reducedMotion}
+            route={route}
           />
-          <path
-            className="locked-flow-device-neck"
-            d="M58 394V418H622V394"
+        ))}
+        {LOCKED_FLOW_CONTINUATION.map((route) => (
+          <LockedFlowRoute
+            key={route.id}
+            reducedMotion={reducedMotion}
+            route={route}
           />
-          <path
-            className="locked-flow-device-neck-base"
-            d="M58 418H622L650 424H30L58 418Z"
-          />
-          <path className="locked-flow-device-chassis-line" d="M20 491H660" />
-          <rect
-            className="locked-flow-device-drive"
-            height="20"
-            rx="1"
-            width="156"
-            x="57"
-            y="447"
-          />
-          <circle className="locked-flow-device-power" cx="238" cy="457" r="5" />
-          <g className="locked-flow-device-vent" aria-hidden="true">
-            {Array.from({ length: 9 }, (_, column) =>
-              Array.from({ length: 4 }, (_, row) => (
-                <circle
-                  cx={516 + column * 10}
-                  cy={449 + row * 9}
-                  key={`${column}-${row}`}
-                  r="1.2"
-                />
-              )),
-            )}
-          </g>
-          <circle className="locked-flow-device-status" cx="621" cy="457.5" r="4" />
+        ))}
 
-          <g transform="translate(0 4)">
-            <path
-              className="locked-flow-keyboard-shell"
-              d="M64 496H616Q620 496 621 501L650 553Q651 558 646 558H34Q29 558 30 553L59 501Q60 496 64 496Z"
-            />
-            <path
-              className="locked-flow-keyboard-front"
-              d="M30 558H650V570Q650 574 646 574H34Q30 574 30 570V558Z"
-            />
-            <g className="locked-flow-device-keys" aria-hidden="true">
-              {LOCKED_KEYBOARD_KEYS.map((key) => (
-                <path d={getLockedKeyboardKeyPath(key)} key={key.id} />
-              ))}
-            </g>
-          </g>
+        <g className="locked-flow-stage locked-flow-stage--sync">
+          <LockedFlowOpacity
+            activeAt={LOCKED_FLOW_SYNC_ACTIVE}
+            inactiveOpacity={0.5}
+            reducedMotion={reducedMotion}
+          />
+          <rect height="76" rx="4" width="64" x="212" y="174" />
+          <text dominantBaseline="middle" textAnchor="middle" x="244" y="212">
+            SYNC
+          </text>
         </g>
-      </svg>
-    </div>
+
+        <g className="locked-flow-stage locked-flow-stage--value">
+          <LockedFlowOpacity
+            activeAt={LOCKED_FLOW_VALUE_ACTIVE}
+            inactiveOpacity={0.5}
+            reducedMotion={reducedMotion}
+          />
+          <rect height="76" rx="4" width="64" x="328" y="174" />
+          <text dominantBaseline="middle" textAnchor="middle" x="360" y="212">
+            VALUE
+          </text>
+        </g>
+
+        <g className="locked-flow-stage locked-flow-stage--dashboard">
+          <LockedFlowOpacity
+            activeAt={LOCKED_FLOW_DASHBOARD_ACTIVE}
+            inactiveOpacity={0.5}
+            reducedMotion={reducedMotion}
+          />
+          <text className="locked-flow-dashboard-label" x="436" y="142">
+            READ ONLY
+          </text>
+          <rect height="134" rx="4" width="184" x="436" y="154" />
+          <circle cx="458" cy="182" r="10" />
+          <path d="M476 176H526M476 186H518" />
+          <path d="M448 212H608" />
+          <path d="M448 226H520M448 238H510" />
+          <rect height="5" width="8" x="450" y="252" />
+          <rect height="5" width="8" x="468" y="252" />
+          <rect height="5" width="8" x="486" y="252" />
+          <rect height="5" width="8" x="450" y="266" />
+          <rect height="5" width="8" x="468" y="266" />
+          <rect height="5" width="8" x="486" y="266" />
+          <circle cx="550" cy="232" r="3" />
+          <circle cx="568" cy="232" r="3" />
+          <circle cx="586" cy="232" r="3" />
+          <circle
+            className="locked-flow-dashboard-point-base"
+            cx="606"
+            cy="232"
+            r="3"
+          />
+          <circle className="locked-flow-dashboard-point" cx="606" cy="232" r="3">
+            <LockedFlowOpacity
+              activeAt={LOCKED_FLOW_DASHBOARD_ACTIVE}
+              inactiveOpacity={0}
+              reducedMotion={reducedMotion}
+            />
+          </circle>
+          <rect height="12" width="12" x="544" y="252" />
+          <rect height="12" width="12" x="568" y="252" />
+          <rect height="12" width="12" x="592" y="252" />
+          <path className="locked-flow-dashboard-chart" d="M546 196L560 182L574 192L594 170" />
+          <circle
+            className="locked-flow-dashboard-point-base"
+            cx="594"
+            cy="170"
+            r="3"
+          />
+          <circle className="locked-flow-dashboard-point" cx="594" cy="170" r="3">
+            <LockedFlowOpacity
+              activeAt={LOCKED_FLOW_DASHBOARD_ACTIVE}
+              inactiveOpacity={0}
+              reducedMotion={reducedMotion}
+            />
+          </circle>
+        </g>
+      </g>
+    </LockedComputer>
   );
 }
 

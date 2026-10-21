@@ -66,6 +66,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## Anatomy
+
+- Source: local `anatomy` skill, `kit/iso-kit.ts`.
+- License: MIT, Copyright (c) 2026 Ryan.
+- Usage: projection, slab and plane helpers for the login computer illustration.
+- Full license: [src/ui/locked-computer/LICENSE](../src/ui/locked-computer/LICENSE).
+
 The application font licenses remain beside the font files under
 [public/fonts/nothing-open/](../public/fonts/nothing-open/). The standalone
 landing page ships its own font files and the same OFL notices under

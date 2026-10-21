@@ -8461,6 +8461,7 @@ body {
 }
 
 .login-product-visual {
+  position: relative;
   grid-area: visual;
   width: min(calc(100% + 55px), 670px);
   align-self: center;
@@ -8475,18 +8476,230 @@ body {
   overflow: visible;
 }
 
-.locked-flow-device-back,
-.locked-flow-device-front,
-.locked-flow-device-chassis,
-.locked-flow-device-drive,
-.locked-flow-keyboard-shell,
-.locked-flow-keyboard-front,
-.locked-flow-device-neck,
-.locked-flow-device-neck-base {
-  fill: var(--bg);
-  stroke: currentColor;
-  stroke-width: 1;
+.locked-computer {
+  --computer-body: color-mix(in srgb, var(--surface) 94%, var(--primary));
+  --computer-edge: color-mix(in srgb, var(--secondary) 56%, var(--surface));
+  user-select: none;
+}
+
+.locked-computer-fill,
+.locked-computer-cap {
+  fill: var(--computer-body);
+}
+
+.locked-computer-power-rim {
+  fill: color-mix(in srgb, var(--computer-body) 90%, var(--primary));
+}
+
+.locked-computer-cap,
+.locked-computer-power-rim {
+  stroke: var(--computer-edge);
+  stroke-width: 0.4;
+}
+
+.locked-computer-top {
+  fill: color-mix(in srgb, var(--computer-body) 90%, var(--primary));
+}
+
+.locked-computer-shade[data-shade="0"] {
+  fill: color-mix(in srgb, var(--computer-body) 66%, var(--bg));
+}
+
+.locked-computer-shade[data-shade="1"] {
+  fill: color-mix(in srgb, var(--computer-body) 82%, var(--bg));
+}
+
+.locked-computer-shade[data-shade="2"] {
+  fill: color-mix(in srgb, var(--computer-body) 96%, var(--primary));
+}
+
+.locked-computer-shade[data-shade="3"] {
+  fill: color-mix(in srgb, var(--computer-body) 88%, var(--primary));
+}
+
+.locked-computer-solid--dark {
+  --computer-body: var(--line-2);
+}
+
+.locked-computer-edge,
+.locked-computer-bevel,
+.locked-computer-panel-seam {
+  fill: none;
+  stroke: var(--computer-edge);
+  stroke-linejoin: round;
+  stroke-width: 0.65;
   vector-effect: non-scaling-stroke;
+}
+
+.locked-computer-bevel {
+  stroke: var(--line-2);
+}
+
+.locked-computer-panel-seam {
+  stroke-width: 0.4;
+}
+
+.locked-computer-shadow {
+  fill: var(--primary);
+  opacity: 0.035;
+  filter: blur(12px);
+}
+
+.locked-computer-recess,
+.locked-computer-slot,
+.locked-computer-bezel {
+  fill: var(--line-2);
+  stroke: var(--computer-edge);
+  stroke-width: 0.25;
+}
+
+.locked-computer-drive,
+.locked-computer-glass {
+  fill: var(--bg);
+}
+
+.locked-computer-glass {
+  transition: fill var(--vibe-duration-fast) ease-out;
+}
+
+.login-product-visual[data-powered="false"] .locked-computer-glass {
+  fill: var(--dark-grey);
+}
+
+.locked-computer-crt-wall {
+  fill: var(--line-2);
+}
+
+.locked-computer-crt-wall[data-wall="upper"] {
+  fill: color-mix(in srgb, var(--secondary) 55%, var(--line-2));
+}
+
+.locked-computer-key-dish {
+  fill: none;
+  stroke: var(--computer-edge);
+  stroke-width: 0.3;
+  pointer-events: none;
+}
+
+.locked-computer-cable {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.locked-computer-cable-edge {
+  stroke: var(--secondary);
+}
+
+.locked-computer-cable-body {
+  stroke: var(--line-2);
+}
+
+.locked-computer-cable-shine {
+  stroke: var(--surface);
+}
+
+.locked-computer-screw {
+  fill: var(--muted);
+}
+
+.locked-computer-power-mark {
+  fill: none;
+  stroke: var(--primary);
+  stroke-linecap: round;
+  stroke-width: 0.55;
+}
+
+.locked-computer-led {
+  fill: var(--success);
+}
+
+.login-product-visual[data-powered="false"] .locked-computer-led {
+  fill: var(--muted);
+}
+
+.locked-computer-reflection {
+  fill: var(--display);
+  opacity: 0.025;
+  pointer-events: none;
+}
+
+.locked-computer-picture {
+  opacity: 1;
+  transform: scaleY(1);
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: opacity var(--vibe-duration-fast) ease-out,
+    transform var(--vibe-duration-fast) ease-out;
+}
+
+.login-product-visual[data-powered="false"] .locked-computer-picture {
+  opacity: 0;
+  transform: scaleY(0.005);
+}
+
+.locked-computer-scanlines {
+  pointer-events: none;
+}
+
+.locked-computer-scanline {
+  fill: var(--primary);
+}
+
+.locked-computer-raster {
+  opacity: 0.1;
+}
+
+.locked-computer-sweep {
+  opacity: 0.16;
+}
+
+.locked-computer-key {
+  transition: transform 120ms cubic-bezier(0.22, 1, 0.36, 1);
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
+.locked-computer-key[data-pressed="true"] {
+  transform: translateY(3px);
+  transition-duration: 40ms;
+}
+
+.locked-computer-key-legend {
+  fill: var(--secondary);
+  font-family: var(--f-mono);
+  pointer-events: none;
+}
+
+.locked-computer-power {
+  position: absolute;
+  width: var(--vibe-control-height);
+  height: var(--vibe-control-height);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+  touch-action: manipulation;
+}
+
+.locked-computer-power:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+
+.login-product-visual:has(.locked-computer-power:active) .locked-computer-switch {
+  transform: translateY(0.8px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .locked-computer-glass,
+  .locked-computer-picture,
+  .locked-computer-key {
+    transition: none;
+  }
 }
 
 .locked-flow-screen rect {
@@ -8496,11 +8709,8 @@ body {
   vector-effect: non-scaling-stroke;
 }
 
-.locked-flow-device-chassis-line,
-.locked-flow-device-power,
 .locked-flow-screen path,
-.locked-flow-screen circle,
-.locked-flow-device-keys path {
+.locked-flow-screen circle {
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
@@ -8523,20 +8733,6 @@ body {
 .locked-flow-route-runner {
   fill: currentColor !important;
   stroke: none !important;
-}
-
-.locked-flow-device-status {
-  fill: var(--success);
-  stroke: none !important;
-  animation: locked-flow-device-status 1.2s steps(1, end) infinite;
-}
-
-.locked-flow-device-vent circle {
-  fill: currentColor;
-}
-
-.locked-flow-device-keys path {
-  stroke-linejoin: round;
 }
 
 .locked-flow-screen text {
@@ -8629,18 +8825,6 @@ body {
   stroke: currentColor !important;
 }
 
-@keyframes locked-flow-device-status {
-  0%,
-  49.99% {
-    opacity: 1;
-  }
-
-  50%,
-  100% {
-    opacity: 0.25;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .locked-flow-source,
   .locked-flow-stage {
@@ -8650,11 +8834,6 @@ body {
 
   .locked-flow-screen .locked-flow-dashboard-point {
     fill: var(--accent);
-    opacity: 1;
-  }
-
-  .locked-flow-device-status {
-    animation: none;
     opacity: 1;
   }
 
