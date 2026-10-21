@@ -1,3 +1,4 @@
+import { rejectCrossOrigin } from "@/server/auth/request-origin";
 import {
   sessionCookieHeader,
 } from "@/server/auth/cookies";
@@ -22,6 +23,8 @@ function rateLimitedResponse(): Response {
 }
 
 export async function POST(request: Request) {
+  const originError = rejectCrossOrigin(request);
+  if (originError) return originError;
   const services = getServices();
   const now = services.clock.now();
   const credential = await services.ownerRecoveryCredentials.get();

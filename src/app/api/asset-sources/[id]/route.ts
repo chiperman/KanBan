@@ -1,4 +1,5 @@
 import { getServices } from "@/server/composition";
+import { rejectCrossOrigin } from "@/server/auth/request-origin";
 import {
   executeAssetSourceDelete,
   executeAssetSourcePatch,
@@ -19,14 +20,6 @@ async function existingSource(id: string) {
   const source = (await services.assetSources.list()).find((item) => item.id === id);
   if (!source) return { response: Response.json({ error: "资产来源不存在" }, { status: 404 }) };
   return { services, source };
-}
-
-function rejectCrossOrigin(request: Request): Response | null {
-  const origin = request.headers.get("origin");
-  if ((origin && origin !== new URL(request.url).origin) || request.headers.get("sec-fetch-site") === "cross-site") {
-    return Response.json({ error: "请求来源不匹配" }, { status: 403 });
-  }
-  return null;
 }
 
 export async function PATCH(

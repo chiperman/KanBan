@@ -1,6 +1,7 @@
 import { investmentBook } from "@/domain/investment-books";
 import { parseManualAssetRecordInput } from "@/domain/manual-asset-records";
 import { getServices } from "@/server/composition";
+import { rejectCrossOrigin } from "@/server/auth/request-origin";
 
 export const dynamic = "force-dynamic";
 
@@ -12,10 +13,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const origin = request.headers.get("origin");
-  if ((origin && origin !== new URL(request.url).origin) || request.headers.get("sec-fetch-site") === "cross-site") {
-    return Response.json({ error: "请求来源不匹配" }, { status: 403 });
-  }
+  const originError = rejectCrossOrigin(request);
+  if (originError) return originError;
   const services = getServices();
   if (!(await services.auth.currentSession())) return Response.json({ error: "需要所有者身份" }, { status: 401 });
   const store = services.investmentBooks;

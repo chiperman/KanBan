@@ -1,4 +1,5 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { link, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 
 import type { Clock } from "@/server/ports";
@@ -14,6 +15,7 @@ import {
   LEGACY_HISTORY_WARNING,
   SENSITIVE_ASSET_DATA_WARNING,
   type BackupRestorePreview,
+  type BackupSummary,
   type BusinessDataBackup,
   type BusinessDataBackupStore,
   type BusinessDataState,
@@ -22,10 +24,16 @@ import {
 export { SENSITIVE_ASSET_DATA_WARNING } from "./backup/document-codec";
 export type {
   BackupRestorePreview,
+  BackupSummary,
   BusinessDataBackup,
   BusinessDataBackupStore,
   BusinessDataState,
 } from "./backup/document-codec";
+
+/** 上传落盘的体积上限。实测本机全量业务数据约 1.5 MB，趋势观测仍会增长。 */
+export const MAX_BACKUP_CONTENTS_BYTES = 32 * 1024 * 1024;
+/** 上传文件名落盘前必须可安全使用；与本机导出产物同规则。 */
+const BACKUP_FILE_NAME = /^[a-zA-Z0-9][a-zA-Z0-9._-]*\.json$/i;
 
 export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
   constructor(
@@ -37,11 +45,35 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
   private backupPath(fileName: string): string {
     if (
       path.basename(fileName) !== fileName ||
-      !/^[a-zA-Z0-9][a-zA-Z0-9._-]*\.json$/.test(fileName)
+      !BACKUP_FILE_NAME.test(fileName)
     ) {
       throw new Error("备份文件名无效");
     }
     return path.join(this.backupDirectory, fileName);
+  }
+
+  /** 完整写入私有临时文件后，以硬链接原子创建目标；同名时重试，不覆盖备份。 */
+  private async saveBackup(fileName: string, contents: string): Promise<string> {
+    this.backupPath(fileName);
+    const base = fileName;
+    const stem = base.slice(0, -".json".length);
+    const temporaryPath = path.join(this.backupDirectory, `.backup-${randomUUID()}.tmp`);
+    try {
+      await atomicWritePrivateFile(temporaryPath, contents);
+      for (let attempt = 0; ; attempt += 1) {
+        const candidate = attempt === 0 ? base : `${stem}-${attempt}.json`;
+        try {
+          await link(temporaryPath, this.backupPath(candidate));
+          return candidate;
+        } catch (error) {
+          if (typeof error !== "object" || error === null || !("code" in error) || error.code !== "EEXIST") {
+            throw error;
+          }
+        }
+      }
+    } finally {
+      await rm(temporaryPath, { force: true });
+    }
   }
 
   private async decode(fileName: string): Promise<{ state: BusinessDataState; formatVersion: number }> {
@@ -87,7 +119,7 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
 
   async exportBackup(fileName?: string) {
     const createdAt = this.clock.now().toISOString();
-    const resolvedFileName = fileName ?? `asset-dashboard-${createdAt.replace(/[:.]/g, "-")}.json`;
+    const requestedFileName = fileName ?? `asset-dashboard-${createdAt.replace(/[:.]/g, "-")}.json`;
     const [
       assetCards,
       sources,
@@ -126,11 +158,7 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
       sourceInvestmentRecords,
       investmentBooks,
     }, createdAt);
-    await ensurePrivateDirectory(this.backupDirectory);
-    await atomicWritePrivateFile(
-      this.backupPath(resolvedFileName),
-      contents,
-    );
+    const resolvedFileName = await this.saveBackup(requestedFileName, contents);
     return {
       fileName: resolvedFileName,
       checksum,
@@ -141,6 +169,45 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
   async previewRestore(fileName: string): Promise<BackupRestorePreview> {
     const decoded = await this.decode(fileName);
     return this.previewFor(decoded.state, decoded.formatVersion);
+  }
+
+  /** 只列出业务数据 JSON：备份目录里还可能有手工放入的 SQLite 修复快照。 */
+  async listBackups(): Promise<BackupSummary[]> {
+    await ensurePrivateDirectory(this.backupDirectory);
+    const entries = await readdir(this.backupDirectory);
+    const summaries = await Promise.all(
+      entries
+        .filter((name) => BACKUP_FILE_NAME.test(name) && path.basename(name) === name)
+        .map(async (fileName) => {
+          const info = await stat(this.backupPath(fileName)).catch(() => null);
+          if (info === null || !info.isFile()) return null;
+          return {
+            fileName,
+            modifiedAt: info.mtime.toISOString(),
+            size: info.size,
+          };
+        }),
+    );
+    return summaries
+      .filter((entry) => entry !== null)
+      .sort((left, right) => right.fileName.localeCompare(left.fileName));
+  }
+
+  /** 上传的备份先解码校验，再以 0600 落盘，之后可反复选择恢复。 */
+  async importBackup(input: {
+    contents: string;
+    fileName: string;
+  }): Promise<{ fileName: string; warning: string }> {
+    const size = Buffer.byteLength(input.contents, "utf8");
+    if (size > MAX_BACKUP_CONTENTS_BYTES) {
+      throw new Error(
+        `备份文件超过 ${MAX_BACKUP_CONTENTS_BYTES / (1024 * 1024)} MB，请确认选择的是业务数据备份`,
+      );
+    }
+    const { state } = decodeBackupDocument(input.contents);
+    await this.store.validateBusinessData(state);
+    const fileName = await this.saveBackup(input.fileName, input.contents);
+    return { fileName, warning: SENSITIVE_ASSET_DATA_WARNING };
   }
 
   async restore(fileName: string, discardConfirmation?: string): Promise<BackupRestorePreview> {

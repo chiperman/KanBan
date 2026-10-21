@@ -200,6 +200,18 @@ export function createTestServices(): TestServices {
     assetSourceConnections,
     assetSourceOnboarding,
     businessDataBackups: {
+      async listBackups() {
+        return exportedBackupFileName === null
+          ? []
+          : [{
+            fileName: exportedBackupFileName,
+            modifiedAt: null,
+            size: 0,
+          }];
+      },
+      async importBackup() {
+        throw new Error("测试环境不支持上传备份");
+      },
       async exportBackup() {
         exportedBackupFileName = "asset-dashboard-test-backup.json";
         return {

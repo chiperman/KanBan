@@ -1,3 +1,4 @@
+import { rejectCrossOrigin } from "@/server/auth/request-origin";
 import { issueChallenge } from "@/server/auth/challenges";
 import { CHALLENGE_COOKIE } from "@/server/auth/session";
 import { generateAuthenticationOptions } from "@simplewebauthn/server";
@@ -9,6 +10,8 @@ import { challengeCookieHeader, readCookie, relyingParty } from "@/server/auth/c
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  const originError = rejectCrossOrigin(request);
+  if (originError) return originError;
   const services = getServices();
   const credential = await services.ownerCredentials.get();
   if (credential === null) {

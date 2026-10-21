@@ -1,3 +1,4 @@
+import { rejectCrossOrigin } from "@/server/auth/request-origin";
 import { consumeChallenge, withOwnerCredentialLock } from "@/server/auth/challenges";
 import { verifyRegistrationResponse } from "@simplewebauthn/server";
 import type { RegistrationResponseJSON } from "@simplewebauthn/server";
@@ -17,6 +18,8 @@ function reject(error: string, status: number) {
 }
 
 export async function POST(request: Request) {
+  const originError = rejectCrossOrigin(request);
+  if (originError) return originError;
   return withOwnerCredentialLock(async () => {
     const services = getServices();
     const ownerCredential = await services.ownerCredentials.get();

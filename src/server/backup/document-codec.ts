@@ -89,8 +89,20 @@ export interface BusinessDataBackup {
     checksum: string;
     warning: string;
   }>;
+  listBackups(): Promise<BackupSummary[]>;
+  importBackup(input: {
+    contents: string;
+    fileName: string;
+  }): Promise<{ fileName: string; warning: string }>;
   previewRestore(fileName: string): Promise<BackupRestorePreview>;
   restore(fileName: string, discardConfirmation?: string): Promise<BackupRestorePreview>;
+}
+
+/** 备份目录里可被选择恢复的一个备份。只列业务数据 JSON，不列其它本机文件。 */
+export interface BackupSummary {
+  fileName: string;
+  modifiedAt: string | null;
+  size: number;
 }
 
 export interface BusinessDataBackupStore {

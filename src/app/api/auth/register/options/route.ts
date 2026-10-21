@@ -1,3 +1,4 @@
+import { rejectCrossOrigin } from "@/server/auth/request-origin";
 import { issueChallenge } from "@/server/auth/challenges";
 import { CHALLENGE_COOKIE } from "@/server/auth/session";
 import { generateRegistrationOptions } from "@simplewebauthn/server";
@@ -12,6 +13,8 @@ export const dynamic = "force-dynamic";
  * 其余状态仅对已登录所有者开放，用于重新绑定或恢复，不提供公开注册。
  */
 export async function POST(request: Request) {
+  const originError = rejectCrossOrigin(request);
+  if (originError) return originError;
   const services = getServices();
   const ownerCredential = await services.ownerCredentials.get();
   const recoveryCredential = await services.ownerRecoveryCredentials.get();

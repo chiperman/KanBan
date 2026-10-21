@@ -4,6 +4,7 @@ import {
   type AssetSourceProvider,
 } from "@/server/asset-source-onboarding";
 import { getServices } from "@/server/composition";
+import { rejectCrossOrigin } from "@/server/auth/request-origin";
 
 interface PreviewRoute<Input extends AssetSourceAuthorizationInput> {
   provider: AssetSourceProvider;
@@ -66,6 +67,8 @@ export function createPreviewRoute<Input extends AssetSourceAuthorizationInput>(
 ) {
   return {
     POST: async (request: Request) => {
+      const originError = rejectCrossOrigin(request);
+      if (originError) return originError;
       const unauthorized = await ownerRequired();
       if (unauthorized) return unauthorized;
       const input = config.parse(await request.json().catch(() => null));
@@ -108,6 +111,8 @@ export function createPreviewRoute<Input extends AssetSourceAuthorizationInput>(
         }
       : undefined,
     DELETE: async (request: Request) => {
+      const originError = rejectCrossOrigin(request);
+      if (originError) return originError;
       const unauthorized = await ownerRequired();
       if (unauthorized) return unauthorized;
       getServices().assetSourceOnboarding.cancel(
@@ -125,6 +130,8 @@ export function createConfirmRoute(
     | ((body: Record<string, unknown>) => AssetSourceProvider | null),
 ) {
   return async function POST(request: Request) {
+    const originError = rejectCrossOrigin(request);
+    if (originError) return originError;
     const unauthorized = await ownerRequired();
     if (unauthorized) return unauthorized;
     const body = (await request.json().catch(() => null)) as Record<

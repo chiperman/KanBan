@@ -1,5 +1,6 @@
 import type { InvestmentCashflowUpdate } from "@/server/ports";
 import { getServices } from "@/server/composition";
+import { rejectCrossOrigin } from "@/server/auth/request-origin";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,8 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const originError = rejectCrossOrigin(request);
+  if (originError) return originError;
   const services = await ownerServices();
   if (!services) return Response.json({ error: "需要所有者身份" }, { status: 401 });
   if (services.investmentBooks) return Response.json({ error: "资金记账已统一到三本账，请到投资账本中选择账本操作" }, { status: 409 });
@@ -63,6 +66,8 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const originError = rejectCrossOrigin(request);
+  if (originError) return originError;
   const services = await ownerServices();
   if (!services) return Response.json({ error: "需要所有者身份" }, { status: 401 });
   if (services.investmentBooks) return Response.json({ error: "资金记账已统一到三本账，请到投资账本中选择账本操作" }, { status: 409 });

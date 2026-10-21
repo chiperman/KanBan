@@ -1,3 +1,4 @@
+import { rejectCrossOrigin } from "@/server/auth/request-origin";
 import { getServices } from "@/server/composition";
 
 export const dynamic = "force-dynamic";
@@ -6,6 +7,8 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const originError = rejectCrossOrigin(request);
+  if (originError) return originError;
   const { id } = await params;
   const services = getServices();
   if ((await services.auth.currentSession()) === null) {

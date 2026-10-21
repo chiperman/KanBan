@@ -1,3 +1,4 @@
+import { rejectCrossOrigin } from "@/server/auth/request-origin";
 import { getServices } from "@/server/composition";
 import type { ExternalServiceConfigurationInput } from "@/server/ports";
 
@@ -17,6 +18,8 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
+  const originError = rejectCrossOrigin(request);
+  if (originError) return originError;
   const services = await ownerServices();
   if (!services) {
     return Response.json({ error: "需要所有者身份" }, { status: 401 });

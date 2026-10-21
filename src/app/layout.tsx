@@ -23,7 +23,13 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <body>
-        <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
+        {/* React warns in development when a component renders <script>;
+            text/plain on the client keeps the inline bootstrap inert. */}
+        <script
+          dangerouslySetInnerHTML={{ __html: themeBootstrap }}
+          suppressHydrationWarning
+          type={typeof window === "undefined" ? "text/javascript" : "text/plain"}
+        />
         <WorkbenchDisplayPreferencesProvider>
           <AssetRefreshProvider>
             <ThemeInitializer />

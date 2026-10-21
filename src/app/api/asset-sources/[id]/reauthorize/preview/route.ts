@@ -1,3 +1,4 @@
+import { rejectCrossOrigin } from "@/server/auth/request-origin";
 import type { AssetSourceProviderId } from "@/domain/asset-source-providers";
 import { getServices } from "@/server/composition";
 
@@ -114,6 +115,8 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const originError = rejectCrossOrigin(request);
+  if (originError) return originError;
   const { id } = await params;
   const context = await existingSource(id);
   if ("response" in context) return context.response;
@@ -148,6 +151,8 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const originError = rejectCrossOrigin(request);
+  if (originError) return originError;
   const { id } = await params;
   const context = await existingSource(id);
   if ("response" in context) return context.response;

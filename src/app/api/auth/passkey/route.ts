@@ -1,3 +1,4 @@
+import { rejectCrossOrigin } from "@/server/auth/request-origin";
 import { getServices } from "@/server/composition";
 
 export const dynamic = "force-dynamic";
@@ -6,7 +7,9 @@ export const dynamic = "force-dynamic";
  * 移除当前 Passkey：仅限已登录所有者，且必须保留可用的 TOTP 登录，
  * 避免删到既无 Passkey 又无 TOTP 而无法登录。
  */
-export async function DELETE() {
+export async function DELETE(request: Request) {
+  const originError = rejectCrossOrigin(request);
+  if (originError) return originError;
   const services = getServices();
   if ((await services.auth.currentSession()) === null) {
     return Response.json({ error: "需要所有者身份" }, { status: 401 });

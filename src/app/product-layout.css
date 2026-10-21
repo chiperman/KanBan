@@ -7386,7 +7386,114 @@ body {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
   gap: var(--vibe-space-3);
-  margin-top: var(--vibe-space-4);
+  margin-top: var(--vibe-space-5);
+}
+
+.business-data-dropzone {
+  display: grid;
+  place-items: center;
+  min-height: var(--vibe-control-height);
+  padding: var(--vibe-space-8) var(--vibe-space-5);
+  margin-block: var(--vibe-space-4);
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--secondary);
+  cursor: pointer;
+  text-align: center;
+  transition:
+    border-color var(--vibe-duration-fast) var(--ease),
+    background-color var(--vibe-duration-fast) var(--ease),
+    color var(--vibe-duration-fast) var(--ease);
+}
+
+.business-data-dropzone:hover,
+.business-data-dropzone[data-dragging] {
+  border-color: var(--primary);
+  background: var(--raised);
+  color: var(--display);
+}
+
+.business-data-dropzone__prompt {
+  display: grid;
+  justify-items: center;
+  gap: var(--vibe-space-2);
+}
+
+.business-data-dropzone__glyph {
+  width: var(--vibe-space-6);
+  height: var(--vibe-space-6);
+  color: var(--primary);
+}
+
+.business-data-dropzone__title {
+  margin: 0;
+  color: var(--primary);
+  font-family: var(--f-ui);
+  font-size: var(--vibe-type-body-sm);
+  font-weight: 500;
+}
+
+.business-data-dropzone__hint {
+  margin: 0;
+  font-size: var(--vibe-type-caption);
+}
+
+.business-data-dropzone[data-busy] {
+  border-style: solid;
+  cursor: default;
+}
+
+.business-data-dropzone__progress {
+  display: grid;
+  width: min(360px, 100%);
+  gap: var(--vibe-space-2);
+  justify-items: start;
+}
+
+.business-data-dropzone__name,
+.business-data-dropzone__meta {
+  margin: 0;
+}
+
+.business-data-dropzone__name {
+  color: var(--primary);
+  font-family: var(--f-ui);
+  font-size: var(--vibe-type-body-sm);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.business-data-dropzone__meta {
+  color: var(--secondary);
+  font-size: var(--vibe-type-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.business-data-dropzone__track {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 4px;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: var(--raised);
+}
+
+.business-data-dropzone__bar {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--accent);
+  transform-origin: left center;
+  transition: transform var(--vibe-duration-fast) var(--ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .business-data-dropzone,
+  .business-data-dropzone__bar {
+    transition: none;
+  }
 }
 
 .business-data-restore__preview {
@@ -10646,6 +10753,11 @@ body {
   .asset-source-detail__lifecycle-grid,
   .investment-books__pending {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* 数据与维护的同排卡片保持一致高度，避免内容较少的卡片提前收底。 */
+  .workbench-shell .settings-main--data {
+    align-items: stretch;
   }
 
   .asset-source-detail__lifecycle-grid > :only-child,
