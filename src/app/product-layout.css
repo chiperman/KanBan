@@ -7887,6 +7887,24 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.settings-trend-preview {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: var(--vibe-space-2);
+}
+
+.settings-trend-preview__chart {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.settings-trend-preview > span {
+  color: var(--secondary);
+  font-family: var(--f-ui);
+  font-size: var(--vibe-type-caption);
+}
+
 @media (max-width: 639px) {
   .settings-section,
   .external-service-settings {

@@ -101,6 +101,15 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 
 选中态是**边框转 `--display` + 底色 `--raised`**，不是上色。18×18 的原生 checkbox 用 `accent-color: var(--display)`。
 
+## 设置偏好选择卡片
+
+设置中需要比较效果的互斥偏好统一使用 `.settings-choice` 单选卡片，例如盈亏颜色、走势图点阵。即使底层值是布尔值，也应把两个状态明确展示为可选项，不在同类设置中混用方形复选框或另绘勾选标记。可同时选中多个条目的场景继续使用复选行。
+
+- 一组使用 `fieldset.settings-choice-group` 与 `legend`，选项放入 `.settings-choice-list`；每张卡片由 `label.settings-choice` 包裹同组 `name` 的原生 `input type="radio"`，整张卡片可点击，并保留原生键盘与焦点行为。
+- 单选圆点为 18×18，使用 `accent-color: var(--display)`；选中时卡片边框为 `--display`、底色为 `--raised`，未选中时为 `--line` 边框与透明底。各项复用同一配方，不通过强调色区分选中态。
+- `.settings-choice-copy` 承载选项名称与说明；`.settings-choice-preview` 展示该选项对应的固定示例，选中与未选中的选项均保留各自预览，便于直接比较。示例不读取真实资产数据，对读屏隐藏，选项含义由可访问的名称与说明表达。
+- 复用 [现有布局](../../src/app/product-layout.css) 的双列与窄屏单列规则，不为单个偏好另设尺寸、边框或选中态。实际调用者为 [盈亏颜色](../../src/ui/profit-color-settings.tsx) 与 [走势图点阵](../../src/ui/trend-appearance-settings.tsx)。
+
 ---
 
 ## 状态标签 · `.vibe-status-tag`

@@ -24,6 +24,7 @@ import {
   type MarketBenchmarkSymbol,
 } from "@/domain/market-benchmark";
 import { formatShanghaiFullDayLabel } from "@/ui/shanghai-date-time";
+import { TrendDotPattern } from "@/ui/trend-dot-pattern";
 
 export type AssetTrendChartPoint = {
   amount: string | null;
@@ -109,14 +110,11 @@ function TrendEffects({ dotsId, glowId }: { dotsId: string; glowId: string }) {
   const plotArea = usePlotArea();
   return (
     <defs>
-      <pattern height="6" id={dotsId} patternUnits="userSpaceOnUse" width="6">
-        <circle
-          cx="3"
-          cy="3"
-          r="1"
-          style={{ fill: "var(--display)", opacity: 0.8 }}
-        />
-      </pattern>
+      {plotArea ? <TrendDotPattern
+        height={plotArea.height}
+        id={dotsId}
+        top={plotArea.y}
+      /> : null}
       {plotArea ? <filter
         colorInterpolationFilters="sRGB"
         filterUnits="userSpaceOnUse"
@@ -668,7 +666,7 @@ export function AssetTrendChart({
                 dataKey="assets"
                 dot={false}
                 fill={`url(#${dotFillId})`}
-                fillOpacity={0.85}
+                fillOpacity={1}
                 isAnimationActive={false}
                 stroke="none"
                 type={lineType}
@@ -818,7 +816,7 @@ export function AssetTrendChart({
               dataKey="value"
               dot={false}
               fill={`url(#${dotFillId})`}
-              fillOpacity={0.85}
+              fillOpacity={1}
               isAnimationActive={false}
               stroke="none"
               type={lineType}
