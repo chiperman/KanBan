@@ -162,7 +162,6 @@ export function AssetTrendPanel({
     <AssetTrendChart
       {...chart}
       showDotFill={showTrendDots}
-      plotPresentation={rangePresentation === "compact" ? "minimal" : chart.plotPresentation}
       coverageNote={rangePresentation !== "default" && !chart.isSensitiveHidden
         ? actualDays.length
           ? `实际记录 ${formatShanghaiDayLabel(actualDays[0]!)} 至 ${formatShanghaiDayLabel(actualDays.at(-1)!)}`
