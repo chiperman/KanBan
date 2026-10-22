@@ -47,11 +47,13 @@ export function AssetSourceTrend({
   formatAmount: (value: string) => string;
 }) {
   const isManual = source.kind === "manual";
+  const manualRecords = source.trendHistory?.records ?? source.manualRecords ?? [];
+  const trendCurrency = source.trendHistory?.currency ?? reportingCurrency;
   const heading = { title: assetSourceDisplayName(source) };
   const localRange = useAssetTrendRange();
   const firstDay = [
     ...history.filter(day => day.sources.some(item => item.sourceId === source.id)).map(day => day.day),
-    ...(source.manualRecords ?? []).map(record => record.day),
+    ...manualRecords.map(record => record.day),
   ].toSorted()[0];
   const selection = range ?? { ...localRange, currentDay, firstDay };
   const trendDays = rangeDays(selection.preset, currentDay, selection.firstDay, selection.customRange);
@@ -59,8 +61,8 @@ export function AssetSourceTrend({
     currentDay,
     history,
     isManual,
-    manualRecords: source.manualRecords ?? [],
-    reportingCurrency,
+    manualRecords,
+    reportingCurrency: trendCurrency,
     sourceId: source.id,
     trendDays,
     trendRange: "all",
@@ -70,7 +72,7 @@ export function AssetSourceTrend({
       className="asset-trend source-trend"
       data-testid={`asset-source-trend-${source.id}`}
     >
-      <p className="card-label">资产金额趋势</p>
+      <p className="card-label">资产金额趋势{trendCurrency !== reportingCurrency ? ` · ${trendCurrency}` : ""}</p>
       {hasTrendContent ? <p className="trend-note">资产金额变化包含资金进出，不能作为收益率。</p> : null}
       <AssetTrendPanel
         range={selection}
@@ -80,7 +82,7 @@ export function AssetSourceTrend({
           comparison: trendBenchmark.comparison,
           enabledSymbols: trendBenchmark.enabledSymbols,
         }}
-        currency={reportingCurrency}
+        currency={trendCurrency}
         formatAmount={formatAmount}
         formatDay={formatShanghaiDayLabel}
         isSensitiveHidden={!showSensitiveInfo}

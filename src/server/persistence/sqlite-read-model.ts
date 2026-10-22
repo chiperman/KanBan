@@ -78,6 +78,7 @@ export class SqliteDashboardReadModel {
   readSourceDetail(query: { sourceId: string; from?: string; to?: string }) {
     const investmentHistory = this.investments.getSourceInvestmentHistory(query.sourceId);
     const investmentRecords = this.investments.listSourceInvestmentRecordsSync(query.sourceId);
+    const manualRecords = this.sources.listManualAssetRecordsSync(query.sourceId);
     const history = this.observations.listDailyObservationsSync(
       "daily_asset_trend_observations", "daily_asset_source_trend_observations", undefined, query,
     );
@@ -92,13 +93,12 @@ export class SqliteDashboardReadModel {
     }
     return {
       sources: this.sources.listSourcesSync(query.sourceId),
-      manualRecords: this.sources.listManualAssetRecordsSync(query.sourceId),
+      manualRecords,
       history: [...byDay.values()].sort((a, b) => a.day.localeCompare(b.day)),
       firstDay: [
         this.observations.firstSourceObservationDay(query.sourceId),
         imported[0]?.day,
-        investmentHistory?.openingInvestment.day,
-        investmentRecords[0]?.day,
+        manualRecords.at(-1)?.day,
       ].filter((day): day is string => day !== undefined).sort()[0],
       investmentHistory,
       investmentRecords,

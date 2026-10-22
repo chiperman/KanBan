@@ -19,6 +19,8 @@ export type SourceTrendObservation =
   & DailyAssetTrendObservation["sources"][number]
   & { day: string };
 
+type ManualTrendRecord = Pick<ManualAssetRecord, "day" | "currency"> & { amount: string | null };
+
 export interface AssetSourceTrendModel {
   abnormalPoints: AssetTrendChartPoint[];
   missingDayCount: number;
@@ -40,8 +42,8 @@ function sourceHistoryFor(
 }
 
 function latestManualRecordByDay(
-  records: readonly ManualAssetRecord[],
-): ManualAssetRecord[] {
+  records: readonly ManualTrendRecord[],
+): ManualTrendRecord[] {
   return records
     .map((record, index) => ({ record, index }))
     .toSorted((left, right) => {
@@ -54,9 +56,9 @@ function latestManualRecordByDay(
 }
 
 function latestRecordOnOrBefore(
-  sortedRecords: readonly ManualAssetRecord[],
+  sortedRecords: readonly ManualTrendRecord[],
   day: string,
-): ManualAssetRecord | undefined {
+): ManualTrendRecord | undefined {
   let lower = 0;
   let upper = sortedRecords.length;
   while (lower < upper) {
@@ -80,7 +82,7 @@ export function assetSourceTrendModel({
   currentDay: string;
   history: readonly DailyAssetTrendObservation[];
   isManual: boolean;
-  manualRecords: readonly ManualAssetRecord[];
+  manualRecords: readonly ManualTrendRecord[];
   reportingCurrency: ReportingCurrency;
   sourceId: string;
   trendDays?: readonly string[];
@@ -127,18 +129,20 @@ export function assetSourceTrendModel({
       }
       const recordedObservation = sourceTrendByDay.get(record.day);
       const recordedSnapshot = trendSnapshotByDay.get(record.day);
+      const amount = record.amount === null ? null : record.currency === reportingCurrency
+        ? record.amount
+        : recordedObservation?.total[reportingCurrency] ?? convertCurrencyAmount(
+          record.amount,
+          record.currency,
+          reportingCurrency,
+          recordedSnapshot?.exchangeRates ?? [],
+        );
       return {
         day,
-        amount: recordedObservation?.total[reportingCurrency] ??
-          convertCurrencyAmount(
-            record.amount,
-            record.currency,
-            reportingCurrency,
-            recordedSnapshot?.exchangeRates ?? [],
-          ),
+        amount,
         manualRecordDay: record.day,
-        observed: record.day === day && recordedObservation !== undefined,
-        status: "complete" as const,
+        observed: record.day === day,
+        status: amount === null ? "incomplete" as const : "complete" as const,
       };
     }
     const observation = sourceTrendByDay.get(day);

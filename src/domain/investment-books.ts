@@ -340,3 +340,23 @@ export function analyzeInvestmentBook(input: {
       points.at(-1)?.total == null ? "资产数据尚未完整。请检查来源同步、计价汇率和账本来源范围。" : null,
   };
 }
+
+/** 单一手工来源可复用本账生效资产历史；多来源整账总额不能分摊到单个账户。 */
+export function manualSourceBookAssetHistory(input: Omit<Parameters<typeof analyzeInvestmentBook>[0], "bookId"> & {
+  sourceId: string;
+}) {
+  const source = input.sources.find(source => source.id === input.sourceId);
+  const members = input.state.members.filter(member => member.bookId === "a-shares");
+  if (source?.kind !== "manual" || sourceBookId(source) !== "a-shares" ||
+      members.length !== 1 || members[0].sourceId !== input.sourceId || !members[0].confirmed ||
+      !activeBookRecords(input.state, "a-shares").some(record => record.kind === "valuation")) return null;
+  const analysis = analyzeInvestmentBook({ ...input, bookId: "a-shares" });
+  return {
+    currency: analysis.book.currency,
+    records: analysis.points.map(point => ({
+      day: point.day,
+      amount: point.total,
+      currency: analysis.book.currency,
+    })),
+  };
+}

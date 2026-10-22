@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 
 import { shanghaiDay } from "@/domain/daily-asset-snapshots";
 import { longbridgeReferenceRates } from "@/domain/investment-performance";
+import { manualSourceBookAssetHistory } from "@/domain/investment-books";
 import {
   redirectLoopbackIpToLocalhost,
   type PageSearchParams,
@@ -66,6 +67,9 @@ export default async function AssetSourceDetailPage({
   const records = source.kind === "manual"
     ? manualRecords.filter((record) => record.sourceId === source.id)
     : [];
+  const trendHistory = books === null ? null : manualSourceBookAssetHistory({
+    state: books, sourceId: id, sources, observations: history, manualRecords, currentDay,
+  });
   const cardHidden = cards.find((card) => card.sourceId === source.id)?.hidden ?? false;
   const reportingExchangeRates = longbridgeReferenceRates(sources);
   const savedProfitColorScheme =
@@ -102,13 +106,13 @@ export default async function AssetSourceDetailPage({
               investmentRecords={"investmentRecords" in detail ? detail.investmentRecords : []}
               initialPreset={effectivePreset}
               initialCustomRange={customRange}
-              firstDay={detail.firstDay}
+              firstDay={trendHistory?.records[0]?.day ?? detail.firstDay}
               cardHidden={cardHidden}
               currentDay={currentDay}
               history={history}
               profitColorScheme={profitColorScheme}
               reportingExchangeRates={reportingExchangeRates}
-              source={{ ...source, ...(source.kind === "manual" ? { manualRecords: records } : {}) }}
+              source={{ ...source, ...(source.kind === "manual" ? { manualRecords: records, trendHistory } : {}) }}
             />
           </main>
         </div>
