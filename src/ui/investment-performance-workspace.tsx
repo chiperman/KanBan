@@ -644,6 +644,7 @@ export function InvestmentPerformanceWorkspace({
   const benchmarkDataState = useMarketBenchmarkComparison({
     enabledSymbols: enabledBenchmarkSymbols,
     points: portfolioTrend.points,
+    sources: liveSources,
     visible: benchmarkVisible,
   });
 

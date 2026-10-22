@@ -154,6 +154,7 @@ export function InvestmentBooksWorkspace({ state, initialBookId = "us-stocks", v
     enabledSymbols,
     points: analysis.points.filter(point => selectedDays.has(point.day)),
     records: analysis.records,
+    sources: liveSources,
     visible: benchmarkVisible,
   });
   const points = days.filter(day => day >= (analysis.points[0]?.day ?? currentDay)).map(day => {
