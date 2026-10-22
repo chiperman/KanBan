@@ -296,14 +296,19 @@ export function analyzeInvestmentBook(input: {
     }
   }
   // Canonical explicit totals replace the day's automatic/manual evidence; never add them together.
+  const recordsById = new Map(input.state.records.map(row => [row.id, row]));
+  const importedValuationDays = new Set<string>();
   for (const row of records.filter(row => row.kind === "valuation").toSorted((a,b) => a.origin === b.origin ? 0 : a.origin === "import" ? -1 : 1)) {
     if (book.automatic && row.origin === "import" && historyThrough && row.day > historyThrough) continue;
     values.set(row.day, { day: row.day, amount: row.amount, basis: row.origin === "provider" ? "长桥每日资产" : row.origin === "import" ? "导入历史总额" : "手动账本总额" });
+    let original = row;
+    while (original.replacesId) original = recordsById.get(original.replacesId)!;
+    if (original.origin === "import") importedValuationDays.add(row.day);
   }
   const historyComparison = [...automaticValues.entries()].filter(([day, amount]) => {
     const historical = values.get(day);
     return day <= input.currentDay && historyThrough && day <= historyThrough &&
-      amount !== null && historical?.basis === "导入历史总额" && historical.amount !== null &&
+      amount !== null && importedValuationDays.has(day) && historical?.amount != null &&
       decimalCompare(amount, historical.amount) !== 0;
   }).toSorted(([a], [b]) => b.localeCompare(a)).map(([day, amount]) => ({
     day, historicalTotal: values.get(day)!.amount!, automaticTotal: amount!,

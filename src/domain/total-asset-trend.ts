@@ -52,13 +52,15 @@ export function projectTotalAssetTrendObservations(input: {
       const record = recordsBySource.get(source.id)?.find(row => row.day <= observation.day);
       if (!record) continue;
       const previous = byId.get(source.id);
-      // 已有原币金额与原件冲突时，不用另一条记录补齐缺失币种。
       const nativeAmount = previous?.total[record.currency];
-      if (previous && (nativeAmount == null || decimalCompare(nativeAmount, record.amount) !== 0)) continue;
+      // 原币更正后按观测日已存汇率重算，避免沿用旧余额的折算金额。
+      const recordedTotal = nativeAmount != null && decimalCompare(nativeAmount, record.amount) === 0
+        ? previous?.total
+        : undefined;
       const total = {
-        USD: previous?.total.USD ?? convertCurrencyAmount(record.amount, record.currency, "USD", observation.exchangeRates ?? []),
-        CNY: previous?.total.CNY ?? convertCurrencyAmount(record.amount, record.currency, "CNY", observation.exchangeRates ?? []),
-        HKD: previous?.total.HKD ?? convertCurrencyAmount(record.amount, record.currency, "HKD", observation.exchangeRates ?? []),
+        USD: recordedTotal?.USD ?? convertCurrencyAmount(record.amount, record.currency, "USD", observation.exchangeRates ?? []),
+        CNY: recordedTotal?.CNY ?? convertCurrencyAmount(record.amount, record.currency, "CNY", observation.exchangeRates ?? []),
+        HKD: recordedTotal?.HKD ?? convertCurrencyAmount(record.amount, record.currency, "HKD", observation.exchangeRates ?? []),
       };
       byId.set(source.id, {
         ...previous,

@@ -351,13 +351,21 @@ export function DailyOverviewWorkspace({
   const intervalFallback = daysSincePriorObservation !== null &&
     daysSincePriorObservation > 1;
   const comparisonTotal = priorObservation?.total[currency];
+  const changeSourceIds = new Set(current?.complete
+    ? recordedSources.map(source => source.id)
+    : recordedTodayObservation?.sources.map(source => source.sourceId));
+  const hasSameSourceScope = priorObservation !== null &&
+    changeSourceIds.size === priorObservation.sources.length &&
+    priorObservation.sources.every(source => changeSourceIds.has(source.sourceId));
   const todayChange = changeEndpoint !== null &&
+    hasSameSourceScope &&
     comparisonTotal != null
     ? decimalSubtract(changeEndpoint.amount, comparisonTotal)
     : null;
   const trendRange = useAssetTrendRange();
   const trend = useMemo(() => {
     const firstTrendDay = totalTrendObservations
+      .filter((observation) => observation.total[currency] != null)
       .map((observation) => observation.day)
       .toSorted()
       .at(0);
