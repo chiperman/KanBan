@@ -14,13 +14,13 @@ export function sourceSyncStatus(
   const lastSuccessfulAt = formatShanghaiDateTime(source.sync.lastSuccessfulAt);
   if (source.sync.error !== null) {
     return {
-      label: `同步失败 · 数据过期 · 显示 ${lastSuccessfulAt} 的最后成功数据`,
+      label: `资产同步失败 · ${source.sync.error === "资产来源同步失败" ? "原因未记录" : source.sync.error} · 显示 ${lastSuccessfulAt} 的最后成功资产数据`,
       tone: "error",
     };
   }
   if (source.sync.status === "expired") {
     return {
-      label: `数据过期 · 显示 ${lastSuccessfulAt} 的最后成功数据`,
+      label: `资产待更新 · 显示 ${lastSuccessfulAt} 的最后成功资产数据`,
       tone: "warning",
     };
   }

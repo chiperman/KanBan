@@ -3,6 +3,7 @@
 import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
 import { assetSourceKindMetadata } from "@/domain/asset-source-kinds";
 import { AssetSourceRefreshButton } from "@/ui/asset-refresh-controls";
+import { sourceSyncStatus } from "@/ui/asset-source-status";
 import { VibeStatusTag } from "@/ui/vibe/vibe-data-instrument";
 import type { AssetSourceView } from "./types";
 
@@ -34,15 +35,16 @@ export function AssetSourceHeader({
 }) {
   const isManual = source.kind === "manual";
   const heading = sourceHeading(source);
+  const longbridge = source.kind === "longbridge";
   const sourceState = isManual
     ? { label: null, tone: "muted" as const }
     : source.lifecycle === "disconnected"
-    ? { label: "OFFLINE", tone: "muted" as const }
+    ? { label: longbridge ? "已断开" : "OFFLINE", tone: "muted" as const }
     : source.sync.error
-      ? { label: "ERROR", tone: "error" as const }
+      ? { label: longbridge ? "上次资产同步失败" : "ERROR", tone: "error" as const }
       : source.sync.status === "expired"
-        ? { label: "STALE", tone: "warning" as const }
-        : { label: "CURRENT", tone: "success" as const };
+        ? { label: longbridge ? "资产待更新" : "STALE", tone: "warning" as const }
+        : { label: longbridge ? "资产已同步" : "CURRENT", tone: "success" as const };
   return (
     <>
       <header className="asset-source-head">
@@ -51,6 +53,7 @@ export function AssetSourceHeader({
           <VibeStatusTag
             className={`source-live-state ${source.sync.status}`}
             tone={sourceState.tone}
+            title={longbridge ? sourceSyncStatus(source)?.label : undefined}
           >
             {sourceState.label
               ? `${providerCode(source)} / ${sourceState.label}`

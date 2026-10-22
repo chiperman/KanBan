@@ -1,10 +1,13 @@
 "use client";
 
+import { LongbridgeConnectionSummary } from "@/ui/longbridge-connection-settings";
+
 import { WorkspaceViewNavigation } from "@/ui/workspace-view-navigation";
 import { lazy, Suspense, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
 import { AssetSourceRefreshButton } from "@/ui/asset-refresh-controls";
+import { sourceSyncStatus } from "@/ui/asset-source-status";
 import { type AssetTrendRange } from "@/ui/asset-trend-panel";
 import { SourceInvestmentPerformance } from "@/ui/source-investment-performance";
 import type { SourceInvestmentHistory } from "@/domain/source-investment-history";
@@ -32,6 +35,7 @@ import { useLongbridgeRealtime } from "@/ui/use-longbridge-realtime";
 import type { ProfitColorScheme } from "@/ui/profit-color-scheme";
 import { useWorkbenchDisplayPreferences } from "@/ui/workbench-display-preferences";
 import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
+import { VibeStatusTag } from "@/ui/vibe/vibe-data-instrument";
 import { VibeDialog } from "@/ui/vibe/vibe-dialog";
 import { VibeIcon } from "@/ui/vibe/vibe-icon";
 import {
@@ -203,6 +207,8 @@ function SourceDisplayNameForm({ source }: { source: DetailSource }) {
   );
 }
 
+type SourceLifecycleAction = "visibility" | "disconnect" | "restore" | "delete";
+
 function SourceLifecycleActions({
   cardHidden,
   source,
@@ -215,16 +221,16 @@ function SourceLifecycleActions({
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [deleteStep, setDeleteStep] = useState<1 | 2 | null>(null);
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState("");
+  const [failure, setFailure] = useState<{ action: SourceLifecycleAction; message: string } | null>(null);
   const name = assetSourceDisplayName(source);
   const manual = source.kind === "manual";
 
   async function run(
-    action: "visibility" | "disconnect" | "restore" | "delete",
+    action: SourceLifecycleAction,
     body: Record<string, unknown> = {},
   ) {
     setPending(true);
-    setError("");
+    setFailure(null);
     try {
       if (action === "delete") {
         await sourceRequest(`/api/asset-sources/${encodeURIComponent(source.id)}`, "DELETE", {
@@ -242,7 +248,7 @@ function SourceLifecycleActions({
       setDeleteStep(null);
       router.refresh();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "来源操作失败");
+      setFailure({ action, message: caught instanceof Error ? caught.message : "来源操作失败" });
     } finally {
       setPending(false);
     }
@@ -250,73 +256,79 @@ function SourceLifecycleActions({
 
   return (
     <>
-      <div className="asset-source-detail__lifecycle-grid">
-      <section aria-label="来源显示与生命周期" className="asset-source-lifecycle">
-        <p className="card-label">DISPLAY / LIFECYCLE</p>
-        <h2>显示与生命周期</h2>
-        <p>
-          {hidden
-            ? "来源卡片已隐藏。"
-            : "仅隐藏总览卡片。"}
-        </p>
-        <VibeButton
-          disabled={pending}
-          onClick={() => void run("visibility", { hidden: !hidden })}
-          type="button"
-          variant="outline"
-        >
-          {hidden ? "恢复显示来源卡片" : "隐藏来源卡片"}
-        </VibeButton>
-      </section>
-
-      <section aria-label="危险操作" className="asset-source-danger">
-        <p className="card-label">DANGEROUS / SOURCE DATA</p>
-        <h2>危险操作</h2>
-        {manual ? (
-          <p>永久删除会移除来源及全部历史记录。</p>
-        ) : source.lifecycle === "disconnected" ? (
-          <p>已断开；历史数据保留。</p>
-        ) : (
-          <p>断开将停止同步；历史数据保留。</p>
-        )}
-        <div className="asset-source-detail__lifecycle-actions">
-        {!manual ? (
-          source.lifecycle === "disconnected" ? (
+      <section aria-labelledby="source-display-heading" className="asset-source-detail__setting-section">
+        <h2 id="source-display-heading">显示</h2>
+        <div className="asset-source-detail__setting-content">
+          <div className="asset-source-detail__management-row">
+            <div>
+              <h3>总览卡片</h3>
+              <p>{hidden ? "已隐藏，可随时恢复显示。" : "隐藏后仍保留来源与历史数据。"}</p>
+            </div>
             <VibeButton
               disabled={pending}
-              onClick={() => void run("restore")}
+              onClick={() => void run("visibility", { hidden: !hidden })}
               type="button"
               variant="outline"
             >
-              恢复连接
+              {hidden ? "恢复显示" : "隐藏卡片"}
             </VibeButton>
-          ) : (
+          </div>
+          {failure?.action === "visibility" ? (
+            <VibeNotice role="alert" tone="error">{failure.message}</VibeNotice>
+          ) : null}
+        </div>
+      </section>
+      <section aria-labelledby="source-danger-heading" className="asset-source-detail__setting-section">
+        <h2 id="source-danger-heading">危险操作</h2>
+        <div className="asset-source-detail__setting-content">
+          {!manual ? (
+            <div className="asset-source-detail__management-row">
+              <div>
+                <h3>{source.lifecycle === "disconnected" ? "恢复来源连接" : "断开来源"}</h3>
+                <p>{source.lifecycle === "disconnected" ? "已断开；历史数据保留。" : "断开将停止同步；历史数据保留。"}</p>
+              </div>
+              {source.lifecycle === "disconnected" ? (
+                <VibeButton
+                  disabled={pending}
+                  onClick={() => void run("restore")}
+                  type="button"
+                  variant="outline"
+                >
+                  恢复连接
+                </VibeButton>
+              ) : (
+                <VibeButton
+                  disabled={pending}
+                  onClick={() => { setFailure(null); setConfirmDisconnect(true); }}
+                  type="button"
+                  variant="outline"
+                  tone="danger"
+                >
+                  断开来源
+                </VibeButton>
+              )}
+            </div>
+          ) : null}
+          <div className="asset-source-detail__management-row">
+            <div>
+              <h3>删除来源数据</h3>
+              <p>永久删除来源及全部历史记录，无法恢复。</p>
+            </div>
             <VibeButton
               disabled={pending}
-              onClick={() => setConfirmDisconnect(true)}
+              onClick={() => { setFailure(null); setDeleteStep(1); }}
               type="button"
               variant="outline"
               tone="danger"
             >
-              断开来源
+              永久删除数据
             </VibeButton>
-          )
-        ) : null}
-        <VibeButton
-          disabled={pending}
-          onClick={() => setDeleteStep(1)}
-          type="button"
-          variant="outline"
-          tone="danger"
-        >
-          永久删除数据
-        </VibeButton>
+          </div>
+          {failure && failure.action !== "visibility" && !confirmDisconnect && deleteStep === null ? (
+            <VibeNotice role="alert" tone="error">{failure.message}</VibeNotice>
+          ) : null}
         </div>
-        {error ? (
-          <VibeNotice role="alert" tone="error">{error}</VibeNotice>
-        ) : null}
       </section>
-      </div>
 
       {confirmDisconnect ? (
         <VibeDialog
@@ -335,7 +347,9 @@ function SourceLifecycleActions({
           onClose={() => setConfirmDisconnect(false)}
           title={`确认断开 ${name}`}
           titleId="source-disconnect-dialog-title"
-        />
+        >
+          {failure?.action === "disconnect" ? <VibeNotice role="alert" tone="error">{failure.message}</VibeNotice> : null}
+        </VibeDialog>
       ) : null}
 
       {deleteStep === 1 ? (
@@ -375,7 +389,9 @@ function SourceLifecycleActions({
           onClose={() => setDeleteStep(null)}
           title="第二次确认永久删除"
           titleId="source-delete-confirmation-dialog-title"
-        />
+        >
+          {failure?.action === "delete" ? <VibeNotice role="alert" tone="error">{failure.message}</VibeNotice> : null}
+        </VibeDialog>
       ) : null}
     </>
   );
@@ -441,6 +457,7 @@ export function AssetSourceDetail({
 
   const name = assetSourceDisplayName(source);
   const manual = source.kind === "manual";
+  const syncNotice = source.lifecycle !== "disconnected" ? sourceSyncStatus(source) : null;
   const firstSourceTrendDay = useMemo(
     () => firstDay ?? history.flatMap((observation) =>
       observation.sources.some((item) => item.sourceId === source.id)
@@ -537,11 +554,16 @@ export function AssetSourceDetail({
           trendBenchmark={null}
           trendRangeSelection={trendRange}
         />
-      </section> : <>
-      <div className="asset-source-detail__account-info">
-        <section aria-label="来源身份" className="asset-source-detail__metadata">
-          <h2>来源身份</h2>
-          <div className="asset-source-detail__forms">
+      </section> : <div className="asset-source-detail__settings">
+        <section aria-labelledby="source-identity-heading" className="asset-source-detail__setting-section">
+          <h2 id="source-identity-heading">基本信息</h2>
+          <div className="asset-source-detail__setting-content">
+            <dl>
+              <div>
+                <dt>来源类型</dt>
+                <dd>{manual ? "手工资产记录" : source.kind.startsWith("evm-watch-") ? "观察钱包" : "自动账户"}</dd>
+              </div>
+            </dl>
             <SourceDisplayNameForm key={`${source.id}:${source.displayName ?? ""}`} source={source} />
             {manual ? (
               <Suspense fallback={null}>
@@ -552,62 +574,55 @@ export function AssetSourceDetail({
                 />
               </Suspense>
             ) : null}
+            <details className="asset-source-detail__disclosure">
+              <summary>来源标识</summary>
+              <p>{source.label}</p>
+            </details>
           </div>
-          <dl>
-            <div>
-              <dt>来源名称</dt>
-              <dd>{name}</dd>
-            </div>
-            <div>
-              <dt>来源标识</dt>
-              <dd>{source.label}</dd>
-            </div>
-            <div>
-              <dt>来源类型</dt>
-              <dd>{manual ? "手工资产记录" : source.kind.startsWith("evm-watch-") ? "观察钱包" : "自动账户"}</dd>
-            </div>
-          </dl>
         </section>
 
         {!manual ? (
-          <section aria-label="只读授权摘要" className="asset-source-detail__metadata">
-            <h2>只读授权摘要</h2>
-            <dl>
-              <div>
-                <dt>授权状态</dt>
-                <dd>{authorizationStatus(source)}</dd>
-              </div>
-              <div>
-                <dt>最近校验</dt>
-                <dd>{formatTime(source.sync.lastAttemptAt)}</dd>
-              </div>
-              <div>
-                <dt>权限摘要</dt>
-                <dd>{permissionSummary(source.permissions)}</dd>
-              </div>
-            </dl>
-            <div className="asset-source-detail__metadata-actions">
-              <VibeLink
-                href={`/asset-sources/${encodeURIComponent(source.id)}/reauthorize`}
-                variant="outline"
-              >
-                更换授权 / 重新授权
-              </VibeLink>
-              {source.kind.startsWith("evm-watch-") ? (
-                <VibeLink
-                  href={`/asset-sources/${encodeURIComponent(source.id)}/settings`}
-                  variant="outline"
-                >
-                  管理资产范围
-                </VibeLink>
-              ) : null}
+          <section aria-labelledby="source-connection-heading" className="asset-source-detail__setting-section">
+            <h2 id="source-connection-heading">连接与授权</h2>
+            <div className="asset-source-detail__setting-content">
+              <VibeStatusTag tone="muted">
+                {authorizationStatus(source)}
+              </VibeStatusTag>
+              {syncNotice ? <VibeNotice tone={syncNotice.tone === "warning" ? "info" : syncNotice.tone}>{syncNotice.label}</VibeNotice> : null}
+              {source.kind === "longbridge" ? (
+                <LongbridgeConnectionSummary
+                  sourceId={source.id}
+                  permissions={permissionSummary(source.permissions)}
+                  lastAttemptLabel={formatTime(source.sync.lastAttemptAt)}
+                />
+              ) : <>
+                <dl>
+                  <div><dt>只读权限</dt><dd>{permissionSummary(source.permissions)}</dd></div>
+                  <div><dt>最近同步尝试</dt><dd>{formatTime(source.sync.lastAttemptAt)}</dd></div>
+                </dl>
+                <div className="asset-source-detail__metadata-actions">
+                  <VibeLink
+                    href={`/asset-sources/${encodeURIComponent(source.id)}/reauthorize`}
+                    variant="outline"
+                  >
+                    {source.kind.startsWith("evm-watch-") ? "管理公开地址" : "重新授权"}
+                  </VibeLink>
+                  {source.kind.startsWith("evm-watch-") ? (
+                    <VibeLink
+                      href={`/asset-sources/${encodeURIComponent(source.id)}/settings`}
+                      variant="outline"
+                    >
+                      管理资产范围
+                    </VibeLink>
+                  ) : null}
+                </div>
+              </>}
             </div>
           </section>
         ) : null}
 
-      </div>
-      <SourceLifecycleActions cardHidden={cardHidden} source={source} />
-      </>}
+        <SourceLifecycleActions key={source.id} cardHidden={cardHidden} source={source} />
+      </div>}
 
       {manual && (investmentRecord !== null || editingRecord !== null) ? <SourceInvestmentRecordDialog sourceId={source.id} sourceName={name}
         assetOnly={bookMode}

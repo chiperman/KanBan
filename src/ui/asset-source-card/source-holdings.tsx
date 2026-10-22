@@ -13,6 +13,8 @@ import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeSegmentedBar, VibeStatusTag } from "@/ui/vibe/vibe-data-instrument";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
 import { formatShanghaiDateTime } from "@/ui/shanghai-date-time";
+import { sourceSyncStatus } from "@/ui/asset-source-status";
+import { AssetFinancialValue } from "@/ui/asset-financial-value";
 import { HoldingDetailRow } from "./holding-detail-row";
 import type { assetSourceHoldingsModel } from "./holdings-model";
 import { SourceCashBalances } from "./source-cash-balances";
@@ -131,7 +133,12 @@ export function AssetSourceHoldings({
                   ? "持仓行情未接入"
                   : "未估值"
                 : showSensitiveInfo
-                  ? formatDisplayMoney(holding.marketValue, holding.currency) ?? "无法折算"
+                  ? (() => {
+                    const value = formatDisplayMoney(holding.marketValue, holding.currency);
+                    return value === null
+                      ? "无法折算"
+                      : <AssetFinancialValue>{value}</AssetFinancialValue>;
+                  })()
                   : "••••••"}
             </strong>
           </li>
@@ -241,34 +248,47 @@ export function AssetSourceHoldings({
         includedAssetKeys={includedAssetKeys}
         assetScopeHref={assetScopeHref}
       />
-      {unvaluedCount > 0 ? (
-        <VibeStatusTag className="asset-sync-status" tone="warning">
-          含 {unvaluedCount} 项未估值资产
-        </VibeStatusTag>
-      ) : null}
-      {quoteUnavailableCount > 0 ? (
-        <VibeStatusTag className="asset-sync-status" tone="muted">
-          {quoteUnavailableCount} 项期权行情未接入 · 账户总额已包含
-        </VibeStatusTag>
-      ) : null}
-      <p className="asset-updated">最后更新：{formatShanghaiDateTime(source.snapshot.syncedAt)}</p>
-      {source.lifecycle === "disconnected" ? (
-        <VibeStatusTag className="asset-sync-status expired" tone="muted">
-          已断开 · 历史数据保留
-        </VibeStatusTag>
-      ) : (
-        <VibeStatusTag
-          className={`asset-sync-status ${source.sync.status}`}
-          tone={source.sync.status === "expired" ? "warning" : "muted"}
-        >
-          {source.sync.status === "expired" ? "过期数据" : "数据当前"}
-        </VibeStatusTag>
-      )}
-      {source.sync.error ? (
-        <VibeNotice className="asset-sync-error" role="alert" tone="error">
-          {source.label} 同步失败：{source.sync.error}
-        </VibeNotice>
-      ) : null}
+      <div className="asset-source-footer">
+        {unvaluedCount > 0 || quoteUnavailableCount > 0 ? (
+          <div className="asset-source-footer__statuses">
+            {unvaluedCount > 0 ? (
+              <VibeStatusTag className="asset-sync-status" tone="warning">
+                含 {unvaluedCount} 项未估值资产
+              </VibeStatusTag>
+            ) : null}
+            {quoteUnavailableCount > 0 ? (
+              <VibeStatusTag className="asset-sync-status" tone="muted">
+                {quoteUnavailableCount} 项期权行情未接入 · 账户总额已包含
+              </VibeStatusTag>
+            ) : null}
+          </div>
+        ) : null}
+        <div className="asset-source-footer__meta">
+          <p className="asset-updated">
+            <span>{source.kind === "longbridge" ? "资产同步时间" : "最后更新"}</span>
+            <time dateTime={source.snapshot.syncedAt}>
+              {formatShanghaiDateTime(source.snapshot.syncedAt)}
+            </time>
+          </p>
+          {source.lifecycle === "disconnected" ? (
+            <VibeStatusTag className="asset-sync-status expired" tone="muted">
+              已断开 · 历史数据保留
+            </VibeStatusTag>
+          ) : (
+            <VibeStatusTag
+              className={`asset-sync-status ${source.sync.status}`}
+              tone={source.sync.status === "expired" ? "warning" : "muted"}
+            >
+              {source.sync.status === "expired" ? "过期数据" : source.kind === "longbridge" ? "资产已同步" : "数据当前"}
+            </VibeStatusTag>
+          )}
+        </div>
+        {source.sync.error ? (
+          <VibeNotice className="asset-sync-error" role="alert" tone="error">
+            {sourceSyncStatus(source)?.label}
+          </VibeNotice>
+        ) : null}
+      </div>
     </>
   );
 }

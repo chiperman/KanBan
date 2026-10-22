@@ -1,6 +1,7 @@
 "use client";
 
 import { formatAssetAmount } from "@/ui/asset-price-display";
+import { AssetFinancialValue } from "@/ui/asset-financial-value";
 import { portfolioSourceTotal } from "@/domain/evm-token-preferences";
 import { useWorkbenchDisplayPreferences } from "@/ui/workbench-display-preferences";
 import { useState } from "react";
@@ -60,7 +61,15 @@ function SourceDirectoryRow({ diagnostic, card }: { diagnostic: DiagnosticSource
         </div>
         <div className="asset-source-directory__amount">
           <span className="card-label">来源原币总额</span>
-          <strong>{!showSensitiveInfo ? "••••••" : manualWithoutRecord ? "尚无记录" : `${formatAssetAmount(total.amount)} ${total.currency}`}</strong>
+          <strong>
+            {!showSensitiveInfo
+              ? "••••••"
+              : manualWithoutRecord
+                ? "尚无记录"
+                : <AssetFinancialValue unit={total.currency}>
+                    {formatAssetAmount(total.amount)}
+                  </AssetFinancialValue>}
+          </strong>
         </div>
         <div className="asset-source-directory__meta">
           <div className="asset-source-directory__status">

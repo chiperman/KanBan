@@ -33,7 +33,7 @@ export function AssetSourceTotal({
           className="asset-total manual-asset-unrecorded"
           data-testid="manual-asset-unrecorded"
         >
-          0 <span className="vibe-metric__unit">{reportingCurrency}</span>
+          尚无记录
         </p>
       )}
     </>

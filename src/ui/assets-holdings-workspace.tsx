@@ -92,7 +92,7 @@ function signedPercent(value: string): string {
 function HoldingValue({ value, unit }: { value: string; unit?: string }) {
   return (
     <>
-      <span className="assets-holdings__number">{value}</span>
+      <span className="assets-holdings__number asset-financial-number">{value}</span>
       {unit ? <> <span className="vibe-metric__unit">{unit}</span></> : null}
     </>
   );

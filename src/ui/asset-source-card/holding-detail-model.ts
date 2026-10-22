@@ -82,6 +82,7 @@ function hasLegacyLongbridgeQuote(holding: AssetHolding): boolean {
 export function holdingQuoteSessionText(
   holding: AssetHolding,
   showSensitiveInfo: boolean,
+  includeQuoteTime = true,
 ): string | null {
   if (!showSensitiveInfo || holding.currentPrice === null) return null;
   const evidence = holding.quoteEvidence;
@@ -110,9 +111,11 @@ export function holdingQuoteSessionText(
     evidence?.freshness === "retained" ? "保留行情" : null,
     evidence?.delivery === "delayed" ? "延迟行情" : null,
     sessionLabel,
-    quotedAt === null
-      ? "时间不可用"
-      : `行情 ${formatShanghaiDateTime(quotedAt)}`,
+    includeQuoteTime
+      ? quotedAt === null
+        ? "时间不可用"
+        : `行情 ${formatShanghaiDateTime(quotedAt)}`
+      : null,
   ].filter(Boolean).join(" · ");
 }
 

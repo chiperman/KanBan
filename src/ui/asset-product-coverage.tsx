@@ -7,6 +7,7 @@ import type {
   AssetSnapshotCoverage,
 } from "@/server/ports";
 import { assetHoldingDisplayName } from "@/ui/asset-holding-display";
+import { AssetFinancialValue } from "@/ui/asset-financial-value";
 import { VibeStatusTag } from "@/ui/vibe/vibe-data-instrument";
 
 const ASSET_PRODUCT_LABELS: Record<string, string> = {
@@ -175,9 +176,14 @@ export function AssetProductCoverage({
           tone="warning"
         >
           {label}
-          {coverage?.unexplainedValue
-            ? ` · ${coverage.totalIsAuthoritative ? "明细差额" : "未解释"} ${money(coverage.unexplainedValue.amount)} ${coverage.unexplainedValue.currency}`
-            : ""}
+          {coverage?.unexplainedValue ? (
+            <>
+              {` · ${coverage.totalIsAuthoritative ? "明细差额" : "未解释"} `}
+              <AssetFinancialValue unit={coverage.unexplainedValue.currency}>
+                {money(coverage.unexplainedValue.amount)}
+              </AssetFinancialValue>
+            </>
+          ) : ""}
           {coverage && coverage.excludedPositiveAccounts.length > 0
             ? ` · 未纳入 ${coverage.excludedPositiveAccounts.join("、")}`
             : ""}

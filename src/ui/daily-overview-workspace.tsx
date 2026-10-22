@@ -1,6 +1,7 @@
 "use client";
 
 import { formatAssetAmount } from "@/ui/asset-price-display";
+import { AssetFinancialValue } from "@/ui/asset-financial-value";
 import { useMemo } from "react";
 import { useLongbridgeRealtime } from "@/ui/use-longbridge-realtime";
 import { LongbridgeRealtimeNotice } from "@/ui/longbridge-realtime-notice";
@@ -608,7 +609,13 @@ export function DailyOverviewWorkspace({
                           <strong>{source.label}</strong>
                           <small>{source.status}</small>
                         </span>
-                        <b>{source.amount === null ? "无法折算" : `${amount(source.amount)} ${currency}`}</b>
+                        <b>
+                          {source.amount === null
+                            ? "无法折算"
+                            : <AssetFinancialValue unit={currency}>
+                                {amount(source.amount)}
+                              </AssetFinancialValue>}
+                        </b>
                       </li>
                     ))}
                   </ul>}
@@ -783,10 +790,9 @@ export function DailyOverviewWorkspace({
                         {sourceAmount === null
                           ? "无法折算"
                           : (
-                            <>
-                              <VibeLiveCounter value={amount(sourceAmount)} resetKey={currency} />{" "}
-                              <span className="vibe-metric__unit">{currency}</span>
-                            </>
+                            <AssetFinancialValue unit={currency}>
+                              <VibeLiveCounter value={amount(sourceAmount)} resetKey={currency} />
+                            </AssetFinancialValue>
                           )}
                       </strong>
                       <div
@@ -818,12 +824,11 @@ export function DailyOverviewWorkspace({
                             <span className="daily-overview__source-column-label">
                               昨日金额
                             </span>{" "}
-                            <span className="daily-overview__source-yesterday-amount">
-                              {amount(comparison.previousAmount)}
-                            </span>{" "}
-                            <span className="vibe-metric__unit">
-                              {currency}
-                            </span>
+                            <AssetFinancialValue unit={currency}>
+                              <span className="daily-overview__source-yesterday-amount">
+                                {amount(comparison.previousAmount)}
+                              </span>
+                            </AssetFinancialValue>
                           </small>
                         ) : comparison.state === "scope-change" ? (
                           /* 昨日确实没有这个来源，说清楚而不是留空白 */

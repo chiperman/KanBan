@@ -7,7 +7,8 @@ import type { ReportingCurrency } from "@/domain/valuation";
 import type { DailyAssetTrendObservation } from "@/server/ports";
 import { AssetTrendPanel, useAssetTrendRange, type AssetTrendRange } from "@/ui/asset-trend-panel";
 import { rangeDays } from "@/domain/investment-performance-trend";
-import { formatShanghaiDayLabel } from "@/ui/shanghai-date-time";
+import { formatShanghaiDayLabel, formatShanghaiFullDayLabel } from "@/ui/shanghai-date-time";
+import { AssetFinancialValue } from "@/ui/asset-financial-value";
 import { assetSourceTrendModel } from "./source-trend-model";
 import type { AssetSourceView } from "./types";
 
@@ -112,12 +113,14 @@ export function AssetSourceTrend({
                         data-testid={`asset-source-daily-detail-${source.id}`}
                       >
                         <time dateTime={observation.day}>
-                          {formatShanghaiDayLabel(observation.day)}
+                          {formatShanghaiFullDayLabel(observation.day)}
                         </time>
                         <strong>
                           {observationAmount === null
                             ? "未估值"
-                            : `${formatAmount(observationAmount)} ${reportingCurrency}`}
+                            : <AssetFinancialValue unit={reportingCurrency}>
+                                {formatAmount(observationAmount)}
+                              </AssetFinancialValue>}
                         </strong>
                         {abnormal ? (
                           <span>

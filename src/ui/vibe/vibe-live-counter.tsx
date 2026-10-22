@@ -65,12 +65,14 @@ function zeroValue(style: ParsedCounterValue): ParsedCounterValue {
 export function VibeLiveCounter({
   animate = true,
   animationKey,
+  paused = false,
   resetKey,
   value,
 }: {
   animate?: boolean;
   /** 同一快照内的行情等待当前动画结束，再过渡到最新值。 */
   animationKey?: string;
+  paused?: boolean;
   resetKey?: string;
   value: string;
 }) {
@@ -98,7 +100,7 @@ export function VibeLiveCounter({
     const reducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
-    if (sameBatch && target && animate && !reducedMotion && cancelAnimationRef.current !== null) {
+    if (sameBatch && target && animate && !paused && !reducedMotion && cancelAnimationRef.current !== null) {
       // 仅保留最新目标，不打断当前动画，也不积压中间行情。
       return;
     }
@@ -109,6 +111,11 @@ export function VibeLiveCounter({
       counter.dataset.counterState = "static";
       renderedValueRef.current = null;
       previousResetKeyRef.current = resetKey;
+      return;
+    }
+
+    if (paused && !reducedMotion && renderedValueRef.current !== null) {
+      counter.dataset.counterState = "paused";
       return;
     }
 
@@ -211,7 +218,7 @@ export function VibeLiveCounter({
     } else {
       startAnimation();
     }
-  }, [animate, animationKey, resetKey, value]);
+  }, [animate, animationKey, paused, resetKey, value]);
 
   useLayoutEffect(() => () => {
     cancelAnimationRef.current?.();

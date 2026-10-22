@@ -1,6 +1,7 @@
 "use client";
 
 import type { AssetHolding } from "@/server/ports";
+import { AssetFinancialValue } from "@/ui/asset-financial-value";
 
 export function SourceCashBalances({
   balances: cashBalances,
@@ -28,7 +29,9 @@ export function SourceCashBalances({
                 <span>{balance.currency} CASH</span>
                 <strong>
                   {showSensitiveInfo
-                    ? `${formatAmount(balance.amount)} ${balance.currency}`
+                    ? <AssetFinancialValue unit={balance.currency}>
+                        {formatAmount(balance.amount)}
+                      </AssetFinancialValue>
                     : "••••••"}
                 </strong>
               </li>

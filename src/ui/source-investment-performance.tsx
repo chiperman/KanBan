@@ -10,6 +10,7 @@ import type { SourceInvestmentRecord } from "@/domain/source-investment-records"
 import type { DailyAssetTrendObservation, ManualAssetRecord } from "@/server/ports";
 import { AssetTrendPanel, type AssetTrendRange } from "@/ui/asset-trend-panel";
 import { formatShanghaiDayLabel } from "@/ui/shanghai-date-time";
+import { AssetFinancialValue } from "@/ui/asset-financial-value";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeMetric } from "@/ui/vibe/vibe-data-instrument";
 
@@ -95,7 +96,7 @@ export function SourceInvestmentPerformance({ history, sourceId, sourceName, rec
       <ol className="manual-asset-history-list">
         {records.toSorted((a,b)=>b.day.localeCompare(a.day)||b.recordedAt.localeCompare(a.recordedAt)).map(record=><li key={record.id}>
           <span>{record.day}</span><span>{{opening:"期初本金",deposit:"投入",withdrawal:"取出",valuation:"当天资产金额"}[record.kind]}</span>
-          <strong>{money(record.amount)} {record.currency}</strong>
+          <strong><AssetFinancialValue unit={record.currency}>{money(record.amount)}</AssetFinancialValue></strong>
           {onEdit && onDelete ? <div className="source-performance__record-actions">
             <VibeButton type="button" variant="text" onClick={()=>onEdit(record)} aria-label={`编辑 ${record.day} ${record.amount} ${record.currency} 记录`}>编辑</VibeButton>
             <VibeButton type="button" variant="text" tone="danger" onClick={()=>onDelete(record)} aria-label={`删除 ${record.day} ${record.amount} ${record.currency} 记录`}>删除</VibeButton>
@@ -105,12 +106,12 @@ export function SourceInvestmentPerformance({ history, sourceId, sourceName, rec
     </details> : null}
     {showSensitiveInfo && history ? <details className="daily-trend-details">
       <summary>导入记账记录（{history.records.length} 条）</summary>
-      <p className="trend-note">{history.accountName} · 期初本金 {history.openingInvestment.day}：{money(history.openingInvestment.amount)} {history.currency}。{history.openingBasis}。</p>
+      <p className="trend-note">{history.accountName} · 期初本金 {history.openingInvestment.day}：<AssetFinancialValue unit={history.currency}>{money(history.openingInvestment.amount)}</AssetFinancialValue>。{history.openingBasis}。</p>
       <ol className="manual-asset-history-list">
         {history.records.toReversed().map(record => <li key={record.id}>
           <span>{record.day}</span>
           <span>{record.kind === "valuation" ? "当天资产金额" : record.kind === "deposit" ? "投入" : "取出"}</span>
-          <strong>{money(record.amount)} {history.currency}</strong>
+          <strong><AssetFinancialValue unit={history.currency}>{money(record.amount)}</AssetFinancialValue></strong>
         </li>)}
       </ol>
     </details> : null}

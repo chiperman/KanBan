@@ -1,6 +1,7 @@
 "use client";
 
 import { formatAssetAmount } from "@/ui/asset-price-display";
+import { AssetFinancialValue } from "@/ui/asset-financial-value";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import {
@@ -918,12 +919,9 @@ export function InvestmentPerformanceWorkspace({
                           {hidden ? (
                             "••••••"
                           ) : (
-                            <>
-                              {sign}{amount(cashflow.amount)}{" "}
-                              <span className="investment-performance__cashflow-unit">
-                                {cashflow.currency}
-                              </span>
-                            </>
+                            <AssetFinancialValue unit={cashflow.currency}>
+                              {`${sign}${amount(cashflow.amount)}`}
+                            </AssetFinancialValue>
                           )}
                         </strong>
                         <div className="investment-performance__cashflow-meta">
@@ -945,7 +943,10 @@ export function InvestmentPerformanceWorkspace({
                             ) : (
                               <>
                                 <span>
-                                  {currency} 计价 {sign}{amount(convertedAmount)}
+                                  {currency} 计价{" "}
+                                  <AssetFinancialValue>
+                                    {sign}{amount(convertedAmount)}
+                                  </AssetFinancialValue>
                                 </span>
                                 {conversionEvidence === undefined ? null : (
                                   <span>
@@ -996,8 +997,9 @@ export function InvestmentPerformanceWorkspace({
                     currentAnalysis.cumulativeNetInvestment,
                   )}
                 >
-                  {signedAmount(currentAnalysis.cumulativeNetInvestment, amount)}{" "}
-                  <span className="investment-performance__cashflow-unit">{currency}</span>
+                  <AssetFinancialValue unit={currency}>
+                    {signedAmount(currentAnalysis.cumulativeNetInvestment, amount)}
+                  </AssetFinancialValue>
                 </strong>
               )}
             </p>

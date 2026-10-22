@@ -1,6 +1,9 @@
 "use client";
 
+import { LongbridgeConnectionSettings } from "@/ui/longbridge-connection-settings";
+import type { LongbridgeConnectionMode } from "@/server/asset-sources/longbridge-connection";
 import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
+import { AssetFinancialValue } from "@/ui/asset-financial-value";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -123,6 +126,8 @@ export function AssetSourceFlow({
   );
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const [longbridgeMode, setLongbridgeMode] = useState<LongbridgeConnectionMode>("cli");
+  const [longbridgeReady, setLongbridgeReady] = useState(false);
   const [fields, setFields] = useState(initialAssetSourceFields);
   const [manualLabel, setManualLabel] = useState("");
   const [evmServiceStatus, setEvmServiceStatus] =
@@ -153,6 +158,7 @@ export function AssetSourceFlow({
     const callbackError = params.get("longbridge_error");
     const previewId = params.get("longbridge_preview");
     if (callbackError) {
+      setProviderId("longbridge");
       setError(callbackError);
       setStep("configure");
       return;
@@ -223,51 +229,43 @@ export function AssetSourceFlow({
   }
 
   async function startOAuth() {
+    setPending(true);
+    setError("");
     const endpoint = reauthorization === undefined
       ? "/api/asset-sources/longbridge/oauth/start"
       : `/api/asset-sources/${encodeURIComponent(reauthorization.sourceId)}/reauthorize/oauth/start`;
-    const response = await fetch(endpoint, { method: "POST" });
-    const body = await readJsonResult<{ authorizationUrl?: string; error?: string }>(response);
-    if (lockOnUnauthorizedResponse(response)) {
-      setError(OWNER_SESSION_EXPIRED_MESSAGE);
+    try {
+      const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: longbridgeMode }) });
+      const body = await readJsonResult<{ authorizationUrl?: string; error?: string }>(response);
+      if (lockOnUnauthorizedResponse(response)) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
+      if (!response.ok || !body?.authorizationUrl) throw new Error(body?.error ?? "无法开始长桥授权");
+      window.location.assign(body.authorizationUrl);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "无法开始长桥授权");
       setPending(false);
-      return;
     }
-    if (!response.ok || !body?.authorizationUrl) {
-      setError(body?.error ?? "无法开始长桥授权");
-      setPending(false);
-      return;
-    }
-    window.location.assign(body.authorizationUrl);
   }
 
   async function startSinglePreview() {
     if (!provider) return;
     setPending(true);
     setError("");
-    if (provider.authorization === "oauth") {
-      await startOAuth();
-      return;
-    }
-    const endpoint = previewUrl ?? `/api/asset-sources/${provider.route}/preview`;
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(sourceAuthorizationBody()),
-    });
-    const body = await readJsonResult<Preview & { error?: string }>(response);
-    setPending(false);
-    if (lockOnUnauthorizedResponse(response)) {
-      setError(OWNER_SESSION_EXPIRED_MESSAGE);
-      return;
-    }
-    if (!response.ok || body === null) {
-      setError(body?.error ?? provider.validationError);
-      return;
-    }
-    setFields(initialAssetSourceFields());
-    setPreviews([body]);
-    setStep("preview");
+    try {
+      const endpoint = previewUrl ?? `/api/asset-sources/${provider.route}/preview`;
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(providerId === "longbridge" ? { mode: longbridgeMode } : sourceAuthorizationBody()),
+      });
+      const body = await readJsonResult<Preview & { error?: string }>(response);
+      if (lockOnUnauthorizedResponse(response)) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
+      if (!response.ok || body === null) throw new Error(body?.error ?? provider.validationError);
+      setFields(initialAssetSourceFields());
+      setPreviews([body]);
+      setStep("preview");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : provider.validationError);
+    } finally { setPending(false); }
   }
 
   async function startEvmPreview() {
@@ -451,7 +449,9 @@ export function AssetSourceFlow({
   }
 
   const ready =
-    providerId === "manual"
+    providerId === "longbridge"
+      ? longbridgeReady
+      : providerId === "manual"
       ? manualLabel.trim() !== ""
       : selectedProvider !== null &&
         selectedProvider.fields.every(
@@ -459,16 +459,16 @@ export function AssetSourceFlow({
         ) &&
         (isReauthorizing || providerId !== "evm" || evmChains.length > 0);
   const flowTitle = isReauthorizing
-    ? `重新授权 ${reauthorization.sourceLabel}`
+    ? providerId === "longbridge" ? `管理 ${reauthorization.sourceLabel} 连接` : `重新授权 ${reauthorization.sourceLabel}`
     : "新增资产来源";
-  const configurationTitle = providerId === "manual"
+  const configurationTitle = providerId === "longbridge" ? "连接长桥" : providerId === "manual"
     ? "填写来源名称"
     : isEvm
       ? "填写公开地址"
       : "填写只读授权";
   const startLabel = pending
     ? "正在校验…"
-    : providerId === "manual"
+    : providerId === "longbridge" ? "连接并预览" : providerId === "manual"
       ? "查看确认"
       : providerId === "evm"
         ? EVM_WATCH_WALLET.startLabel
@@ -532,7 +532,7 @@ export function AssetSourceFlow({
         <section aria-labelledby="source-flow-configure-title" className="asset-source-flow__panel">
           <h2 id="source-flow-configure-title">{configurationTitle}</h2>
           <p>
-            {providerId === "manual"
+            {providerId === "longbridge" ? "仅执行账户、持仓和行情读取。" : providerId === "manual"
               ? "无凭证；确认后创建。"
               : isReauthorizing && isEvm
                 ? "仅接受公开地址。"
@@ -540,7 +540,9 @@ export function AssetSourceFlow({
                   ? "仅接受公开地址。"
                   : "仅接受只读权限。"}
           </p>
-          {providerId === "manual" ? (
+          {providerId === "longbridge" ? (
+            <LongbridgeConnectionSettings sourceId={reauthorization?.sourceId} mode={longbridgeMode} onMode={setLongbridgeMode} onReady={setLongbridgeReady} onAuthorizeSdk={() => void startOAuth()} pending={pending} />
+          ) : providerId === "manual" ? (
             <VibeField
               autoComplete="off"
               autoFocus
@@ -680,10 +682,12 @@ export function AssetSourceFlow({
                       <dt>{description.label}</dt>
                       <dd>
                         {description.previewScope(current.accountMode)} ·{" "}
-                        {formatAmount(
-                          current.total.amount,
-                          current.provider !== "longbridge",
-                        )} {current.total.currency}
+                        <AssetFinancialValue unit={current.total.currency}>
+                          {formatAmount(
+                            current.total.amount,
+                            current.provider !== "longbridge",
+                          )}
+                        </AssetFinancialValue>
                       </dd>
                     </div>
                   );

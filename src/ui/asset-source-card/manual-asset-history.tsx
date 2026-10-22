@@ -3,6 +3,7 @@
 import type { ManualAssetRecord } from "@/server/ports";
 import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
 import { formatShanghaiDateTime } from "@/ui/shanghai-date-time";
+import { AssetFinancialValue } from "@/ui/asset-financial-value";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeStatusTag } from "@/ui/vibe/vibe-data-instrument";
 import type { AssetSourceView } from "./types";
@@ -46,7 +47,13 @@ export function ManualAssetHistory({
             {manualRecords.map((record) => (
               <li key={record.day}>
                 <span>{record.day}</span>
-                <strong>{showSensitiveInfo ? `${formatAmount(record.amount)} ${record.currency}` : "••••••"}</strong>
+                <strong>
+                  {showSensitiveInfo
+                    ? <AssetFinancialValue unit={record.currency}>
+                        {formatAmount(record.amount)}
+                      </AssetFinancialValue>
+                    : "••••••"}
+                </strong>
                 <span className="manual-asset-history-actions">
                   <VibeButton
                     data-demo-disabled={onReadOnlyAction ? "true" : undefined}

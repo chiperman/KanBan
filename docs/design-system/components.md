@@ -157,6 +157,7 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 - 数值用 `--f-display`（Doto）、`tabular-nums`、字重 500、字距 `-.045em`、行高 .95。
 - 单位回落到 `--f-mono` `--vibe-type-label`（11px）、色 `--secondary`。
 - 计数动画：1200ms、三次缓动、`IntersectionObserver` 阈值 0.6、遵守减弱动效偏好。
+- `VibeLiveCounter` 可用 `paused` 暂停并保留当前显示值，解除后从该值接续；默认不暂停。
 - `aria-label` 必须是**最终值**，而不是动画中间值。
 
 > 注意：`.vibe-live-counter` 与 `.vibe-metric__value` **本身没有样式**，视觉完全来自父级 `.vibe-metric`。不要为它们另写样式。
@@ -242,7 +243,7 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 ## 数据表 · `.vibe-data-table`
 
 - 表头 `--vibe-type-micro` 等宽大写、`--muted`、下边界 `--line-2`。
-- 单元格 `--f-mono` `--vibe-type-label`（11px）、下边界 `--line`、数值右对齐、文本左对齐。
+- 单元格默认 `--f-mono` `--vibe-type-label`（11px）、下边界 `--line`、数值右对齐、文本左对齐；持仓明细的字号与双行布局遵守 [金融信息与隐私](patterns.md#金融信息与隐私)。
 - **无斑马纹。** 需要区分时用更多留白或分组细线。
 - 不可读或未估值必须在文案上如实说明（“未估值”／“数据不足”），状态前景可用 `--error`，不以整行色底代替文字。使用表头与单元格语义，窄屏滚动及数值完整性见页面模式。
 
