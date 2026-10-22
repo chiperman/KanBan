@@ -52,6 +52,54 @@ test("历史本金只算一次，历史截止前整账金额替换自动观测�
   assert.throws(() => validateInvestmentBookState({ ...state, historyThroughDay: { "us-stocks": "2026-10-10" } }), /衔接日期/);
 });
 
+test("资金早于资产估值时，账本起点取资金日期但不生成资产余额点", () => {
+  const sources = [source("lb", "longbridge")];
+  const imported = history();
+  imported.records[1].day = "2026-10-11";
+  imported.records[2].day = "2026-10-18";
+  imported.reconciliation.asOf = "2026-10-18";
+  const state = migrateInvestmentBooks({ sources, histories: [imported], sourceRecords: [], cashflows: [] });
+  const result = analyzeInvestmentBook({ state, bookId: "us-stocks", sources, observations: [], manualRecords: [], currentDay: "2026-10-18" });
+  assert.equal(result.firstRecordDay, "2026-10-01");
+  assert.equal(result.firstTrendDay, "2026-10-01");
+  assert.deepEqual(result.points.map(row => row.day), ["2026-10-11", "2026-10-18"]);
+});
+
+test("资产估值早于资金记录时，全部区间保留更早的真实估值", () => {
+  const sources = [source("lb", "longbridge")];
+  const state = migrateInvestmentBooks({ sources, histories: [], sourceRecords: [], cashflows: [] });
+  state.records.push({
+    id: "deposit",
+    bookId: "us-stocks",
+    day: "2026-10-01",
+    kind: "deposit",
+    amount: "100",
+    currency: "USD",
+    note: "",
+    recordedAt: at,
+    origin: "manual",
+    originKey: "manual:deposit",
+  });
+  const result = analyzeInvestmentBook({
+    state,
+    bookId: "us-stocks",
+    sources,
+    observations: [{
+      day: "2026-09-01",
+      capturedAt: at,
+      complete: true,
+      total: { USD: "120", CNY: null },
+      sources: [{ sourceId: "lb", label: "lb", kind: "longbridge", capturedAt: at, complete: true, total: { USD: "120", CNY: null } }],
+    }],
+    manualRecords: [],
+    currentDay: "2026-10-18",
+  });
+  assert.equal(result.firstRecordDay, "2026-10-01");
+  assert.equal(result.firstAssetPointDay, "2026-09-01");
+  assert.equal(result.firstTrendDay, "2026-09-01");
+  assert.equal(result.points[0]?.day, "2026-09-01");
+});
+
 test("截止日保留历史与自动金额差异供核对，次日接自动资产而不补造资金", () => {
   const sources = [source("exchange", "binance", "150"), source("wallet", "evm-watch-ethereum", "50")];
   const imported = history("exchange");

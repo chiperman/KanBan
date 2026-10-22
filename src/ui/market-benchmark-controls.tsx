@@ -1,7 +1,5 @@
 "use client";
 
-import type { ReactNode } from "react";
-
 import {
   MARKET_BENCHMARKS,
   type MarketBenchmarkSymbol,
@@ -55,26 +53,28 @@ export function MarketBenchmarkControls({
     );
   }
 
-  let state: ReactNode = null;
+  const comparisonReady = enabledSymbols.length > 0 &&
+    dataState.kind === "ready" && dataState.comparison.reason === null;
+  const stateTitle = returnComparison
+    ? comparisonReady ? "区间收益率" : "累计收益率"
+    : comparisonReady ? "资产变化率" : "资产金额";
+  let stateDescription: string | undefined;
   if (enabledSymbols.length === 0) {
-    state = <BenchmarkState title="未选指数" />;
+    stateDescription = returnComparison
+      ? undefined
+      : "未选指数，选择至少一个指数即可查看市场对比。";
+  } else if (comparisonReady) {
+    stateDescription = returnComparison
+      ? undefined
+      : `${assetsLabel}与指数从共同起点比较；资产变化包含资金进出。`;
+  } else if (dataState.kind === "loading") {
+    stateDescription = undefined;
   } else if (dataState.kind === "unavailable") {
-    // 只说「未连接」会让人以为功能坏了；补一句成因与下一步，避免误判为故障。
-    state = (
-      <BenchmarkState title="未连接长桥">
-        未接入长桥行情，指数对比不可用；接入后自动出现。
-      </BenchmarkState>
-    );
+    stateDescription = "接入长桥行情后可对比。";
   } else if (dataState.kind === "failed") {
-    state = (
-      <BenchmarkState title="指数读取失败" />
-    );
-  } else if (dataState.kind === "ready" && dataState.comparison.reason !== null) {
-    state = (
-      <BenchmarkState title="数据不足">
-        {dataState.comparison.reason}
-      </BenchmarkState>
-    );
+    stateDescription = "指数加载失败，刷新重试。";
+  } else {
+    stateDescription = dataState.comparison.reason!;
   }
 
   return (
@@ -88,11 +88,9 @@ export function MarketBenchmarkControls({
           className="investment-performance__benchmark-baseline"
           role="status"
         >
-          {enabledSymbols.length === 0 ? "\u00a0" : dataState.kind === "loading"
-            ? "行情加载中"
-            : dataState.kind === "ready" && dataState.comparison.baselineDay !== null
-              ? `基准起点 ${formatDay(dataState.comparison.baselineDay)}`
-              : "\u00a0"}
+          {comparisonReady && dataState.kind === "ready" && dataState.comparison.baselineDay !== null
+            ? `基准起点 ${formatDay(dataState.comparison.baselineDay)}`
+            : "\u00a0"}
         </span>
       </div>
       <div
@@ -111,18 +109,16 @@ export function MarketBenchmarkControls({
               type="button"
               variant="outline"
             >
+              <span
+                aria-hidden="true"
+                className={`benchmark-color-swatch benchmark-color-swatch--${benchmark.symbol === ".SPX.US" ? "spx" : "ndx"}`}
+              />
               {benchmark.label}
             </VibeButton>
           );
         })}
       </div>
-      {state}
-      {returnComparison ? <p className="trend-note">
-        {dataState.kind === "ready" && dataState.comparison.reason === null && enabledSymbols.length > 0
-          ? "对比图：共同起点以来的区间收益率，Modified Dietz 扣除入出金影响，不年化；顶部仍为累计指标。"
-          : "当前展示记账以来累计收益率；指数可用且选中后切换为共同起点的区间收益率。"}
-        指数为价格收益，不含分红；各自本币、不折算汇率。指数采用上海当日零点前已收盘日 K，休市沿用前收盘。
-      </p> : null}
+      <BenchmarkState title={stateTitle}>{stateDescription}</BenchmarkState>
     </div>
   );
 }

@@ -75,6 +75,8 @@
   --success: #5bc96b;
   --warning: #f2c94c;
   --error: #ff5247;
+  --benchmark-spx: #63b9f2;
+  --benchmark-ndx: #f2b95e;
   --dotbg: rgba(255, 255, 255, 0.48);
   --glass: rgba(16, 16, 16, 0.9);
   --glass-brd: rgba(255, 255, 255, 0.09);
@@ -99,6 +101,8 @@
   --success: #247e37;
   --warning: #9c6b00;
   --error: #d23b30;
+  --benchmark-spx: #1769aa;
+  --benchmark-ndx: #9b5d00;
   --dotbg: rgba(0, 0, 0, 0.42);
   --glass: rgba(255, 255, 255, 0.96);
   --glass-brd: rgba(0, 0, 0, 0.08);

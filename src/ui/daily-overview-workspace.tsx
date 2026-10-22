@@ -638,7 +638,6 @@ export function DailyOverviewWorkspace({
                 formatDay={formatShanghaiDayLabel}
                 isSensitiveHidden={!showSensitiveInfo}
                 points={trend.points}
-                rangePresentation="compact"
               />
             </section>
           </article>

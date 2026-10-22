@@ -72,17 +72,11 @@ html {
   align-self: stretch;
 }
 
-.investment-performance__range {
-  display: grid;
-  min-width: 0;
-}
-
 .investment-performance__scope {
   display: grid;
   min-width: 0;
 }
 
-.investment-performance__range-options,
 .investment-performance__scope-options {
   display: flex;
   min-width: 0;
@@ -97,7 +91,6 @@ html {
   font-size: var(--vibe-type-caption);
 }
 
-.investment-performance__range-option.vibe-button,
 .investment-performance__scope-option.vibe-button {
   min-width: 72px;
 }
@@ -259,38 +252,68 @@ html {
 
 .investment-performance__benchmark-series > span::before {
   width: 20px;
-  border-top: 2px solid var(--display);
+  height: 2px;
   content: "";
 }
 
+.investment-performance__benchmark-series > .investment-performance__benchmark-series--assets {
+  color: var(--display);
+}
+
+.investment-performance__benchmark-series--assets::before {
+  background: currentColor;
+}
+
 .investment-performance__benchmark-series--spx::before {
-  border-color: var(--secondary);
+  background: currentColor;
 }
 
 .investment-performance__benchmark-series--ndx::before {
-  border-color: var(--muted);
-  border-top-style: dashed;
+  height: 4px;
+  background: radial-gradient(
+    circle,
+    currentColor 0 1.5px,
+    transparent 1.6px
+  ) 0 50% / 6px 4px repeat-x;
+}
+
+.investment-performance__benchmark-series > .investment-performance__benchmark-series--spx {
+  color: var(--benchmark-spx);
+}
+
+.investment-performance__benchmark-series > .investment-performance__benchmark-series--ndx {
+  color: var(--benchmark-ndx);
+}
+
+.benchmark-color-swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+
+.benchmark-color-swatch--spx {
+  background: var(--benchmark-spx);
+}
+
+.benchmark-color-swatch--ndx {
+  background: var(--benchmark-ndx);
 }
 
 .investment-performance__benchmark-state {
   display: grid;
-  align-content: center;
-  gap: var(--vibe-space-2);
-  min-height: 0;
-  padding: var(--vibe-space-3) 0;
+  gap: var(--vibe-space-1);
   color: var(--secondary);
+  font-size: var(--vibe-type-caption);
+  line-height: 1.6;
 }
 
 .investment-performance__benchmark-state > strong {
   color: var(--display);
-  font-family: var(--f-display);
-  font-size: var(--vibe-type-subheading);
-  font-weight: 400;
-}
-
-.investment-performance__benchmark-state > span {
-  font-size: var(--vibe-type-caption);
-  line-height: 1.6;
+  font-family: var(--f-ui);
+  font-size: var(--vibe-type-body-xs);
+  font-weight: 500;
 }
 
 .investment-performance__interval {
@@ -774,13 +797,11 @@ html {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .investment-performance__range-options,
   .investment-performance__scope-options {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .investment-performance__range-option.vibe-button,
   .investment-performance__scope-option.vibe-button {
 
     width: 100%;
@@ -5154,6 +5175,21 @@ body {
   gap: var(--vibe-space-3);
 }
 
+.asset-trend-event-legend {
+  display: flex;
+  align-items: center;
+  gap: var(--vibe-space-4);
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
+}
+
+.asset-trend-event-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--vibe-space-1);
+}
+
 .asset-trend-comparison-header {
   display: flex;
   align-items: flex-end;
@@ -5173,6 +5209,22 @@ body {
   letter-spacing: 0.08em;
 }
 
+.asset-trend-extent-labels {
+  font-family: var(--f-display);
+  font-variant-numeric: tabular-nums;
+  font-variation-settings: "ROND" 100;
+  font-weight: 500;
+  letter-spacing: -0.045em;
+}
+
+.asset-trend-comparison .recharts-yAxis .recharts-cartesian-axis-tick-value {
+  font-family: var(--f-display);
+  font-variant-numeric: tabular-nums;
+  font-variation-settings: "ROND" 100;
+  font-weight: 500;
+  letter-spacing: -0.045em;
+}
+
 .asset-trend-quality {
   margin: 0;
   color: var(--secondary);
@@ -5182,15 +5234,71 @@ body {
 .asset-trend-tooltip {
   display: grid;
   gap: var(--vibe-space-1);
+  width: max-content;
+  max-width: calc(100vw - 2 * var(--vibe-space-6));
   padding: var(--vibe-space-3);
   border: 1px solid var(--line-2);
   background: var(--surface);
   color: var(--secondary);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.asset-trend-tooltip-row {
+  display: grid;
+  min-width: 0;
+}
+
+.asset-trend-tooltip-row > * {
+  grid-area: 1 / 1;
+  min-width: 0;
+}
+
+.asset-trend-tooltip-sizer {
+  visibility: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+.asset-trend-tooltip-amount {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--vibe-space-1);
+  font-family: var(--f-display);
+  font-variant-numeric: tabular-nums;
+  font-variation-settings: "ROND" 100;
+  font-weight: 500;
+  letter-spacing: -0.045em;
+}
+
+.asset-trend-tooltip-amount > :last-child {
+  flex-shrink: 0;
+}
+
+.asset-trend-tooltip .asset-trend-tooltip-series--spx {
+  color: var(--benchmark-spx);
+}
+
+.asset-trend-tooltip .asset-trend-tooltip-series--ndx {
+  color: var(--benchmark-ndx);
+}
+
+.asset-trend-tooltip .asset-trend-tooltip-event--deposit {
+  color: var(--success);
+}
+
+.asset-trend-tooltip .asset-trend-tooltip-event--withdrawal {
+  color: var(--error);
 }
 
 .asset-trend-tooltip strong {
   color: var(--display);
+  font-family: var(--f-display);
+  font-variant-numeric: tabular-nums;
+  font-variation-settings: "ROND" 100;
   font-weight: 500;
+  letter-spacing: -0.045em;
 }
 
 .asset-trend-tooltip small {
@@ -10692,19 +10800,6 @@ body {
   border-block-end: 1px solid var(--line);
 }
 
-.source-performance .investment-performance__range {
-  gap: var(--vibe-space-2);
-}
-
-.source-performance .investment-performance__range > .vibe-field__label {
-  display: none;
-}
-
-.source-performance .investment-performance__range-options {
-  flex-wrap: wrap;
-  gap: var(--vibe-space-1);
-}
-
 .source-performance__chart-caption {
   margin-block-end: calc(-1 * var(--vibe-space-3));
 }
@@ -10804,14 +10899,6 @@ body {
   .source-performance .asset-source-detail__analysis-controls {
     width: 100%;
     justify-content: flex-start;
-  }
-
-  .source-performance .investment-performance__range {
-    width: 100%;
-  }
-
-  .source-performance .investment-performance__range-options {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .source-performance__records .manual-asset-history-list li {
@@ -10982,18 +11069,6 @@ body {
   gap: var(--vibe-space-4);
 }
 
-.asset-trend-panel .investment-performance__range {
-  gap: var(--vibe-space-2);
-}
-
-.asset-trend-panel .investment-performance__range > .vibe-field__label {
-  display: block;
-}
-
-.asset-trend-panel .investment-performance__range-options {
-  gap: var(--vibe-space-2);
-}
-
 .asset-trend-panel .source-performance__curve-options {
   flex-wrap: wrap;
   gap: var(--vibe-space-2);
@@ -11003,7 +11078,7 @@ body {
   margin-block-end: 0;
 }
 
-.asset-trend-panel.asset-trend-panel--compact .asset-trend-panel__range {
+.asset-trend-panel__range {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr)) var(--vibe-control-height);
   align-items: center;
@@ -11013,12 +11088,12 @@ body {
   margin-inline: auto;
 }
 
-.asset-trend-panel--compact .asset-trend-panel__range-options {
+.asset-trend-panel__range-options {
   display: contents;
 }
 
-.asset-trend-panel--compact .asset-trend-panel__range-option,
-.asset-trend-panel--compact .asset-trend-panel__custom-range {
+.asset-trend-panel__range-option.vibe-button,
+.asset-trend-panel__custom-range.vibe-button {
   min-width: 0;
   width: 100%;
 }
@@ -11556,28 +11631,6 @@ body {
   background: transparent;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
-}
-
-.daily-overview__trend .asset-trend-panel__range {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: end;
-  gap: var(--vibe-space-2);
-}
-
-.daily-overview__trend .asset-trend-panel__range--below {
-  justify-content: flex-start;
-  gap: var(--vibe-space-2);
-}
-
-.daily-overview__trend .asset-trend-panel__range .vibe-field__label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
 }
 
 .daily-overview__trend .asset-trend-coverage {

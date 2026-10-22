@@ -82,7 +82,7 @@ export default async function PerformancePage({
               state={books}
               key={initialBook ?? "us-stocks"}
               initialBookId={initialBook}
-              view={query?.view === "records" ? "records" : query?.view === "manage" ? "manage" : "performance"}
+              view={query?.view === "records" || query?.view === "manage" ? "records" : "performance"}
               sources={sources.map(({ credentialReference: _credential, permissions: _permissions, ...source }) => source)}
               observations={trendObservations}
               manualRecords={manualRecords}

@@ -25,13 +25,22 @@ import {
 } from "@/domain/market-benchmark";
 import { formatShanghaiFullDayLabel } from "@/ui/shanghai-date-time";
 import { TrendDotPattern } from "@/ui/trend-dot-pattern";
+import { VibeLiveCounter } from "@/ui/vibe/vibe-live-counter";
 
 export type AssetTrendChartPoint = {
   amount: string | null;
   day: string;
+  events?: AssetTrendEvent[];
   manualRecordDay?: string;
   observed: boolean;
   status: "complete" | "incomplete" | "expired";
+};
+
+export type AssetTrendEvent = {
+  amount: string;
+  currency: string;
+  kind: "opening" | "deposit" | "withdrawal";
+  originalAmount?: { amount: string; currency: string };
 };
 
 type ChartDatum = AssetTrendChartPoint & {
@@ -54,6 +63,10 @@ type AssetTrendBenchmark = {
   returnComparison?: boolean;
 };
 
+const TREND_CHART_ANIMATION_DURATION = 200;
+// Keep event shapes above the cursor and active dot.
+const FUNDING_EVENT_Z_INDEX = 1300;
+
 type CurveLineProps = {
   dataKey: string;
   stroke: string;
@@ -67,9 +80,7 @@ type CurveLineProps = {
   name?: string;
 };
 
-/* The reference screenshot uses one continuous curve with a single
-   end marker; the end dot is presentational and never participates in
-   tooltip data. */
+/* The end marker is presentational and never participates in tooltip data. */
 function CurveLine({
   dataKey,
   stroke,
@@ -94,7 +105,9 @@ function CurveLine({
       dataKey={dataKey}
       dot={dot}
       filter={filter}
-      isAnimationActive={false}
+      animationDuration={TREND_CHART_ANIMATION_DURATION}
+      animationEasing="ease-in-out"
+      isAnimationActive="auto"
       name={name}
       stroke={stroke}
       strokeDasharray={strokeDasharray}
@@ -145,7 +158,13 @@ function TrendEffects({ dotsId, glowId }: { dotsId: string; glowId: string }) {
 function TrendExtentLabels({ minimum, maximum }: { minimum: string; maximum: string }) {
   const plotArea = usePlotArea();
   if (!plotArea) return null;
-  return <g fill="var(--secondary)" fontFamily="var(--f-mono)" fontSize={12}>
+  return <g
+    className="asset-trend-extent-labels"
+    fill="var(--secondary)"
+    fontFamily="var(--f-display)"
+    fontSize={12}
+    fontWeight={500}
+  >
     <text x={plotArea.x} y={plotArea.y - 12}>{maximum}</text>
     {minimum !== maximum ? <text x={plotArea.x} y={plotArea.y + plotArea.height + 20}>{minimum}</text> : null}
   </g>;
@@ -158,7 +177,7 @@ export function AssetTrendDateTick({ x, y, index, visibleTicksCount, payload, ti
     y={y}
     dy="0.71em"
     fill="var(--muted)"
-    fontFamily="var(--f-mono)"
+    fontFamily="var(--f-display)"
     fontSize={10}
     textAnchor={visibleTicksCount === 1 ? "middle" : index === 0 ? "start" : index === visibleTicksCount - 1 ? "end" : "middle"}
   >{tickFormatter ? tickFormatter(payload.value, index) : payload.value}</text>;
@@ -263,6 +282,34 @@ function percentage(value: number, signed = false): string {
   return `${signed && normalized > 0 ? "+" : ""}${(normalized * 100).toFixed(2)}%`;
 }
 
+function formatTrendTooltipDay(day: string): string {
+  // Keep number/CJK spacing explicit so later text spacing cannot change placement.
+  return formatShanghaiFullDayLabel(day).replace(/([年月日])/g, " $1 ").trim();
+}
+
+const TREND_TOOLTIP_OFFSET = 10;
+
+type TrendTooltipRow = {
+  tag: "span" | "strong" | "small";
+  text: string;
+  unit?: string;
+  series?: "spx" | "ndx";
+  tone?: "deposit" | "withdrawal";
+  counter?: { value: string; prefix?: string; suffix?: string };
+};
+
+function trendTooltipSizing(points: TrendTooltipRow[][]): string[][] {
+  const rows: Set<string>[] = [];
+  for (const point of points) {
+    point.forEach(({ text, unit }, index) => {
+      rows[index] ??= new Set();
+      // Tabular digits share a width; keep only distinct text shapes for sizing.
+      if (text) rows[index].add(`${text}${unit ? ` ${unit}` : ""}`.replace(/[0-9]/g, "0"));
+    });
+  }
+  return rows.map(row => [...row]);
+}
+
 const TrendPointerContext = createContext<number | null>(null);
 
 function TrendChartSurface({ children }: { children: ReactNode }) {
@@ -310,6 +357,7 @@ function TrendChartTooltip(props: ComponentProps<typeof Tooltip>) {
       {...props}
       cursor={<TrendChartCursor />}
       filterNull={false}
+      offset={TREND_TOOLTIP_OFFSET}
       isAnimationActive={false}
     />
   );
@@ -317,6 +365,38 @@ function TrendChartTooltip(props: ComponentProps<typeof Tooltip>) {
 
 function hasTrendRecord(point: AssetTrendChartPoint): boolean {
   return point.observed || point.manualRecordDay === point.day;
+}
+
+function TrendTooltipSurface({ rows, sizing }: {
+  rows: TrendTooltipRow[];
+  sizing: string[][];
+}) {
+  return (
+    <div className="asset-trend-tooltip">
+      {rows.map(({ tag: Tag, text, unit, series, tone, counter }, index) => {
+        const content = counter ? <>
+          {counter.prefix}<VibeLiveCounter
+            animate={false}
+            value={counter.value}
+          />{counter.suffix}
+        </> : text;
+        return sizing[index]?.length ? (
+          <div className="asset-trend-tooltip-row" key={index}>
+            {sizing[index].map(candidate => (
+              <Tag aria-hidden="true" className="asset-trend-tooltip-sizer" key={candidate}>{candidate}</Tag>
+            ))}
+            <Tag className={[
+              unit ? "asset-trend-tooltip-amount" : null,
+              series ? `asset-trend-tooltip-series--${series}` : null,
+              tone ? `asset-trend-tooltip-event--${tone}` : null,
+            ].filter(Boolean).join(" ") || undefined}>
+              {unit ? <><span>{content}</span>{" "}<span>{unit}</span></> : content}
+            </Tag>
+          </div>
+        ) : null;
+      })}
+    </div>
+  );
 }
 
 function HiddenTrendState({
@@ -337,85 +417,159 @@ function HiddenTrendState({
   );
 }
 
-function TrendTooltip({
-  active,
+function trendTooltipRows(point: ChartDatum, {
   currency,
   formatAmount,
-  formatDay,
-  payload,
   showCurrency,
-}: TooltipContentProps & {
+}: {
   currency: string;
   formatAmount(value: string): string;
-  formatDay(day: string): string;
   showCurrency: boolean;
-}) {
-  const point = payload?.[0]?.payload as ChartDatum | undefined;
-  if (!active || !point) return null;
-  const hasRecord = hasTrendRecord(point);
+}): TrendTooltipRow[] {
+  const hasRecord = hasTrendRecord(point) || (point.events?.length ?? 0) > 0;
   const amount = hasRecord ? point.amount ?? point.historicalAmount : point.historicalAmount;
   const missing = !hasRecord && point.historicalAmount === null;
   const showingHistorical = amount !== null && (!hasRecord || point.amount === null);
   const quality = missing ? null : point.status === "expired"
     ? "过期"
     : point.status === "incomplete"
-      ? "不完整"
+      ? point.amount === null && point.events?.length ? "暂无资产估值" : "不完整"
       : null;
+  const formattedAmount = amount === null ? null : formatAmount(amount);
+  const prefix = showingHistorical ? `${point.historicalLabel} ` : undefined;
+
+  return [
+    { tag: "span", text: formatTrendTooltipDay(point.day) },
+    { tag: "strong", text: missing ? "暂无记录" : formattedAmount === null
+      ? "—"
+      : `${prefix ?? ""}${formattedAmount}`,
+      counter: formattedAmount === null ? undefined : { value: formattedAmount, prefix },
+      unit: showCurrency && !missing ? currency : undefined },
+    { tag: "small", text: [!missing && amount === null ? "未估值" : null, showingHistorical ? "早期记录" : null, quality].filter(Boolean).join(" · ") },
+    ...fundingEventRows(point.events, formatAmount),
+  ];
+}
+
+function fundingEventRows(
+  events: AssetTrendEvent[] | undefined,
+  formatAmount: (value: string) => string,
+): TrendTooltipRow[] {
+  return (events ?? []).flatMap(event => {
+    const original = event.originalAmount ?? event;
+    const sign = event.kind === "opening" ? "" : event.kind === "deposit" ? "+" : "-";
+    const tone = event.kind === "opening" ? undefined : event.kind;
+    const rows: TrendTooltipRow[] = [{
+      tag: "small",
+      text: `${event.kind === "opening" ? "期初本金" : event.kind === "deposit" ? "入金" : "出金"} ${sign}${formatAmount(original.amount)}`,
+      unit: original.currency,
+      tone,
+    }];
+    if (event.originalAmount) rows.push({
+      tag: "small",
+      text: `折合 ${sign}${formatAmount(event.amount)}`,
+      unit: event.currency,
+      tone,
+    });
+    return rows;
+  });
+}
+
+function FundingEventMarker({ cx, cy, kinds }: {
+  cx?: number;
+  cy?: number;
+  kinds: AssetTrendEvent["kind"][];
+}) {
+  if (cx === undefined || cy === undefined) return <g />;
+  const deposit = kinds.includes("deposit");
+  const withdrawal = kinds.includes("withdrawal");
+  const radius = withdrawal ? deposit ? 6 : 4.5 : deposit ? 4 : 2.5;
 
   return (
-    <div className="asset-trend-tooltip">
-      <span>{formatDay(point.day)}</span>
-      <strong>
-        {missing ? "暂无记录" : amount === null
-          ? "未估值"
-          : `${showingHistorical ? `${point.historicalLabel} ` : ""}${formatAmount(amount)}${showCurrency ? ` ${currency}` : ""}`}
-      </strong>
-      {showingHistorical ? <small>早期记录</small> : null}
-      {quality ? <small>{quality}</small> : null}
+    <g aria-hidden="true" pointerEvents="none">
+      <circle cx={cx} cy={cy} fill="var(--surface)" r={radius + 2.5} />
+      <circle
+        cx={cx}
+        cy={cy}
+        fill={withdrawal ? "var(--surface)" : deposit ? "var(--display)" : "var(--secondary)"}
+        r={radius}
+        stroke={withdrawal ? "var(--display)" : "none"}
+        strokeWidth={1.5}
+      />
+      {deposit && withdrawal ? <circle cx={cx} cy={cy} fill="var(--display)" r={3} /> : null}
+    </g>
+  );
+}
+
+function FundingEventLegend({ points }: { points: AssetTrendChartPoint[] }) {
+  if (!points.some(point => point.events?.some(event => event.kind !== "opening"))) return null;
+
+  return (
+    <div aria-label="资金标记" className="asset-trend-event-legend">
+      {(["deposit", "withdrawal"] as const).map(kind => (
+        <span key={kind}>
+          <svg aria-hidden="true" height={16} viewBox="0 0 20 20" width={16}>
+            <FundingEventMarker cx={10} cy={10} kinds={[kind]} />
+          </svg>
+          {kind === "deposit" ? "入金" : "出金"}
+        </span>
+      ))}
     </div>
   );
 }
 
-function BenchmarkTrendTooltip({
-  active,
+function benchmarkTooltipReturnRow(label: string, value: number | null, series?: "spx" | "ndx"): TrendTooltipRow {
+  const formattedValue = value === null ? null : percentage(value, true).slice(0, -1);
+  const prefix = `${label} `;
+  return {
+    tag: "strong",
+    text: `${prefix}${formattedValue === null ? "数据不足" : `${formattedValue}%`}`,
+    series,
+    counter: formattedValue === null ? undefined : { value: formattedValue, prefix, suffix: "%" },
+  };
+}
+
+function benchmarkTooltipRows(point: BenchmarkChartDatum, {
   assetScopeLabel,
   currency,
   enabledSymbols,
   formatAmount,
-  formatDay,
-  payload,
   returnComparison,
-}: TooltipContentProps & {
+}: {
   assetScopeLabel: string;
   currency: string;
   enabledSymbols: MarketBenchmarkSymbol[];
   formatAmount(value: string): string;
-  formatDay(day: string): string;
   returnComparison?: boolean;
-}) {
-  const point = payload?.[0]?.payload as BenchmarkChartDatum | undefined;
-  if (!active || point === undefined) return null;
-  const missing = !hasTrendRecord(point);
+}): TrendTooltipRow[] {
+  const missing = !hasTrendRecord(point) && (point.events?.length ?? 0) === 0;
   const assetsLabel = returnComparison ? `${assetScopeLabel}收益率` : assetLabel(assetScopeLabel);
 
-  return (
-    <div className="asset-trend-tooltip">
-      <span>{formatDay(point.day)}</span>
-      <strong>
-        我的{assetsLabel} {missing ? "暂无记录" : point.assets === null ? "数据不足" : percentage(point.assets, true)}
-      </strong>
-      {returnComparison || missing ? null : point.amount === null ? (
-        <small>资产金额未估值</small>
-      ) : (
-        <small>{formatAmount(point.amount)} {currency}</small>
-      )}
-      {enabledSymbols.map((symbol) => (
-        <strong key={symbol}>
-          {marketBenchmarkLabel(symbol)} {point[symbol] === null ? "数据不足" : percentage(point[symbol], true)}
-        </strong>
-      ))}
-    </div>
-  );
+  const rows: TrendTooltipRow[] = [
+    { tag: "span", text: formatTrendTooltipDay(point.day) },
+    missing ? { tag: "strong", text: `我的${assetsLabel} 暂无记录` } : benchmarkTooltipReturnRow(`我的${assetsLabel}`, point.assets),
+  ];
+  if (!returnComparison) {
+    const formattedAmount = missing || point.amount === null ? null : formatAmount(point.amount);
+    rows.push({ tag: "small", text: missing ? "" : formattedAmount ?? "—", unit: missing ? undefined : currency,
+      counter: formattedAmount === null ? undefined : { value: formattedAmount } });
+    rows.push({ tag: "small", text: !missing && point.amount === null ? "资产金额未估值" : "" });
+  }
+  for (const symbol of enabledSymbols) rows.push(benchmarkTooltipReturnRow(
+    marketBenchmarkLabel(symbol),
+    point[symbol],
+    symbol === ".SPX.US" ? "spx" : "ndx",
+  ));
+  rows.push(...fundingEventRows(point.events, formatAmount));
+  return rows;
+}
+
+function TrendTooltip<Point,>({ active, payload, rowsForPoint, sizing }: TooltipContentProps & {
+  rowsForPoint(point: Point): TrendTooltipRow[];
+  sizing: string[][];
+}) {
+  const point = payload?.[0]?.payload as Point | undefined;
+  if (!active || point === undefined) return null;
+  return <TrendTooltipSurface rows={rowsForPoint(point)} sizing={sizing} />;
 }
 
 function QualitySummary({
@@ -522,8 +676,10 @@ export function AssetTrendChart({
     };
   });
   const observed = data.filter((point) => (point.observed || point.manualRecordDay) && point.amount !== null && point.status === "complete").length;
-  const missingCount = data.filter((point) => !point.observed && !point.manualRecordDay && point.historicalAmount === null).length;
+  const missingCount = data.filter((point) => !point.observed && !point.manualRecordDay &&
+    (point.events?.length ?? 0) === 0 && point.historicalAmount === null).length;
   const historicalObserved = data.filter((point) => point.historicalValue !== null).length;
+  const eventPoints = data.filter(point => point.value !== null && (point.events?.length ?? 0) > 0);
   const today = data.at(-1);
   const amounts = data.flatMap((point) => [
     ...(point.amount === null ? [] : [point.amount]),
@@ -573,19 +729,19 @@ export function AssetTrendChart({
   );
   const benchmarkLegend = benchmark ? (
     <div
-      aria-hidden={!benchmarkVisible}
+      aria-hidden={!benchmarkVisible && !benchmark.returnComparison}
       aria-label="已显示曲线"
       className="investment-performance__benchmark-series"
     >
       <span className="investment-performance__benchmark-series--assets">
         我的{benchmark.returnComparison ? `${benchmark.assetScopeLabel}收益率` : assetLabel(benchmark.assetScopeLabel)}
       </span>
-      {benchmark.enabledSymbols.includes(".SPX.US") ? (
+      {benchmarkVisible && benchmark.enabledSymbols.includes(".SPX.US") ? (
         <span className="investment-performance__benchmark-series--spx">
           {marketBenchmarkLabel(".SPX.US")}
         </span>
       ) : null}
-      {benchmark.enabledSymbols.includes(".NDX.US") ? (
+      {benchmarkVisible && benchmark.enabledSymbols.includes(".NDX.US") ? (
         <span className="investment-performance__benchmark-series--ndx">
           {marketBenchmarkLabel(".NDX.US")}
         </span>
@@ -620,6 +776,7 @@ export function AssetTrendChart({
       (lastIndex, point, index) => point.assets === null ? lastIndex : index,
       -1,
     );
+    const benchmarkEventPoints = benchmarkData.filter(point => point.assets !== null && (point.events?.length ?? 0) > 0);
     const benchmarkValues = benchmarkData.flatMap((point) => [
       ...(point.assets === null ? [] : [point.assets]),
       ...benchmark.enabledSymbols.flatMap((symbol) =>
@@ -632,6 +789,14 @@ export function AssetTrendChart({
       ? Math.max(Math.abs(benchmarkMaximum) * 0.1, 0.01)
       : (benchmarkMaximum - benchmarkMinimum) * 0.08;
     const assetsLabel = benchmark.returnComparison ? `${benchmark.assetScopeLabel}收益率` : assetLabel(benchmark.assetScopeLabel);
+    const tooltipRows = (point: BenchmarkChartDatum) => benchmarkTooltipRows(point, {
+      assetScopeLabel: benchmark.assetScopeLabel,
+      currency,
+      enabledSymbols: benchmark.enabledSymbols,
+      formatAmount,
+      returnComparison: benchmark.returnComparison,
+    });
+    const tooltipSizing = trendTooltipSizing(benchmarkData.map(tooltipRows));
 
     return (
       <div className={`asset-trend-comparison asset-trend-comparison--${variant}`}>
@@ -667,27 +832,33 @@ export function AssetTrendChart({
                 domain={[benchmarkMinimum - benchmarkPadding, benchmarkMaximum + benchmarkPadding]}
                 tick={{
                   fill: "var(--muted)",
-                  fontFamily: "var(--f-mono)",
+                  fontFamily: "var(--f-display)",
                   fontSize: 10,
+                  fontWeight: 500,
                 }}
-                tickFormatter={(value: number) => `${Math.round(value * 100)}%`}
+                tickFormatter={(value: number) => percentage(value)}
                 tickLine={false}
                 width={56}
               />
               <TrendChartTooltip
                 content={(props) => (
-                  <BenchmarkTrendTooltip
+                  <TrendTooltip
                     {...props}
-                    assetScopeLabel={benchmark.assetScopeLabel}
-                    currency={currency}
-                    enabledSymbols={benchmark.enabledSymbols}
-                    formatAmount={formatAmount}
-                    formatDay={formatShanghaiFullDayLabel}
-                    returnComparison={benchmark.returnComparison}
+                    rowsForPoint={tooltipRows}
+                    sizing={tooltipSizing}
                   />
                 )}
               />
               <ReferenceLine stroke="var(--line-2)" strokeWidth={1} y={0} />
+              {benchmarkEventPoints.map(point => (
+                <ReferenceDot
+                  key={`funding-event:${point.day}`}
+                  shape={({ cx, cy }) => <FundingEventMarker cx={cx} cy={cy} kinds={point.events!.map(event => event.kind)} />}
+                  x={point.day}
+                  y={point.assets!}
+                  zIndex={FUNDING_EVENT_Z_INDEX}
+                />
+              ))}
               {showDotFill ? <Area
                 activeDot={false}
                 baseValue={benchmarkMinimum - benchmarkPadding}
@@ -696,7 +867,9 @@ export function AssetTrendChart({
                 dot={false}
                 fill={`url(#${dotFillId})`}
                 fillOpacity={1}
-                isAnimationActive={false}
+                animationDuration={TREND_CHART_ANIMATION_DURATION}
+                animationEasing="ease-in-out"
+                isAnimationActive="auto"
                 stroke="none"
                 type={lineType}
               /> : null}
@@ -712,18 +885,19 @@ export function AssetTrendChart({
                 <CurveLine
                   dataKey=".SPX.US"
                   name={marketBenchmarkLabel(".SPX.US")}
-                  stroke="var(--secondary)"
+                  stroke="var(--benchmark-spx)"
                 />
               ) : null}
               {benchmark.enabledSymbols.includes(".NDX.US") ? (
                 <CurveLine
                   dataKey=".NDX.US"
                   name={marketBenchmarkLabel(".NDX.US")}
-                  stroke="var(--muted)"
-                  strokeDasharray="5 4"
+                  stroke="var(--benchmark-ndx)"
+                  strokeDasharray="1 6"
+                  strokeWidth={2.8}
                 />
               ) : null}
-              {benchmarkLastValueIndex >= 0 ? (
+              {benchmarkLastValueIndex >= 0 && !benchmarkData[benchmarkLastValueIndex].events?.length ? (
                 <ReferenceDot
                   fill="var(--surface)"
                   r={5}
@@ -736,6 +910,7 @@ export function AssetTrendChart({
             </ComposedChart>
           </ResponsiveContainer>
         </TrendChartSurface>
+        <FundingEventLegend points={benchmarkEventPoints} />
         {coveragePresentation === "disclosure" ? comparisonHeader : null}
       </div>
     );
@@ -758,14 +933,15 @@ export function AssetTrendChart({
     : (maximum - minimum) * 0.08;
   const axisMinimum = minimum - padding;
   const axisMaximum = maximum + padding;
-  const compactAxisValue = (value: number) =>
-    Math.abs(value) >= 1_000
-      ? `${Math.round(value / 1_000)}k`
-      : Math.round(value).toLocaleString();
+  const axisValue = (value: number) => currency === "%"
+    ? `${formatAmount(String(value))}%`
+    : formatAmount(String(value));
   const lastValueIndex = data.reduce(
     (lastIndex, point, index) => point.value === null ? lastIndex : index,
     -1,
   );
+  const tooltipRows = (point: ChartDatum) => trendTooltipRows(point, { currency, formatAmount, showCurrency });
+  const tooltipSizing = trendTooltipSizing(data.map(tooltipRows));
 
   return (
     <div className={`asset-trend-comparison asset-trend-comparison--${variant}`}>
@@ -802,21 +978,20 @@ export function AssetTrendChart({
               hide={minimalPlot}
               tick={{
                 fill: "var(--muted)",
-                fontFamily: "var(--f-mono)",
+                fontFamily: "var(--f-display)",
                 fontSize: 10,
+                fontWeight: 500,
               }}
-              tickFormatter={compactAxisValue}
+              tickFormatter={axisValue}
               tickLine={false}
-              width={minimalPlot ? 0 : variant === "source" ? 48 : 56}
+              width={minimalPlot ? 0 : currency === "%" ? 56 : 84}
             />
             <TrendChartTooltip
               content={(props) => (
                 <TrendTooltip
                   {...props}
-                  currency={currency}
-                  formatAmount={formatAmount}
-                  formatDay={formatShanghaiFullDayLabel}
-                  showCurrency={showCurrency}
+                  rowsForPoint={tooltipRows}
+                  sizing={tooltipSizing}
                 />
               )}
             />
@@ -827,6 +1002,15 @@ export function AssetTrendChart({
                 x={today.day}
               />
             ) : null}
+            {!minimalPlot ? eventPoints.map(point => (
+              <ReferenceDot
+                key={`funding-event:${point.day}`}
+                shape={({ cx, cy }) => <FundingEventMarker cx={cx} cy={cy} kinds={point.events!.map(event => event.kind)} />}
+                x={point.day}
+                y={point.value!}
+                zIndex={FUNDING_EVENT_Z_INDEX}
+              />
+            )) : null}
             {historicalObserved > 0 ? (
               <CurveLine
                 dot={historicalObserved === 1}
@@ -845,7 +1029,9 @@ export function AssetTrendChart({
               dot={false}
               fill={`url(#${dotFillId})`}
               fillOpacity={1}
-              isAnimationActive={false}
+              animationDuration={TREND_CHART_ANIMATION_DURATION}
+              animationEasing="ease-in-out"
+              isAnimationActive="auto"
               stroke="none"
               type={lineType}
             /> : null}
@@ -861,7 +1047,7 @@ export function AssetTrendChart({
               maximum={formatAmount(amounts[values.indexOf(maximum)])}
               minimum={formatAmount(amounts[values.indexOf(minimum)])}
             /> : null}
-            {lastValueIndex >= 0 ? (
+            {lastValueIndex >= 0 && (minimalPlot || !data[lastValueIndex].events?.length) ? (
               <ReferenceDot
                 fill="var(--surface)"
                 r={5}
@@ -874,6 +1060,7 @@ export function AssetTrendChart({
           </ComposedChart>
         </ResponsiveContainer>
       </TrendChartSurface>
+      {!minimalPlot ? <FundingEventLegend points={eventPoints} /> : null}
       {coveragePresentation === "disclosure" ? comparisonHeader : null}
     </div>
   );
