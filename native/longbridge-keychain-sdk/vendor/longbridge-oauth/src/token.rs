@@ -2,7 +2,7 @@
 
 use std::{
     path::{Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use oauth2::TokenResponse;
@@ -58,11 +58,15 @@ impl OAuthToken {
 
     /// True if the token expires within 5 minutes.
     pub(crate) fn expires_soon(&self) -> bool {
+        self.expires_within(Duration::from_secs(300))
+    }
+
+    pub(crate) fn expires_within(&self, window: Duration) -> bool {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        self.expires_at.saturating_sub(now) < 300
+        self.expires_at.saturating_sub(now) <= window.as_secs()
     }
 
     /// Load token from a JSON file at the given path.

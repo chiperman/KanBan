@@ -89,6 +89,17 @@ pub enum OAuthError {
     #[error("no refresh token available")]
     NoRefreshToken,
 
+    /// The server rejected the refresh grant or client configuration.
+    #[error("长桥 OAuth 续期被拒绝（{code}），请重新授权或检查客户端配置")]
+    RefreshTokenRejected {
+        /// Whitelisted OAuth error code; never a raw response body.
+        code: String,
+    },
+
+    /// Explicit response scopes exceed the application's read-only policy.
+    #[error("长桥返回的授权范围不在允许的只读范围内，请重新授权")]
+    InvalidReadOnlyScope,
+
     /// Failed to refresh access token
     #[error("failed to refresh token: {message}")]
     RefreshTokenFailed {

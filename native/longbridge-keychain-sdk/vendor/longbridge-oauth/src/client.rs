@@ -199,7 +199,19 @@ impl OAuth {
             .request_async(async_http_client)
             .await
             .map_err(|e| {
-                tracing::error!(client_id = %self.0.client_id, error = %e, "failed to refresh token");
+                if let oauth2::RequestTokenError::ServerResponse(response) = &e {
+                    // Do not expose response bodies or error descriptions containing credentials.
+                    let code = match response.error().as_ref() {
+                        "invalid_grant" => Some("invalid_grant"),
+                        "invalid_client" => Some("invalid_client"),
+                        "unauthorized_client" => Some("unauthorized_client"),
+                        "invalid_scope" => Some("invalid_scope"),
+                        _ => None,
+                    };
+                    if let Some(code) = code {
+                        return OAuthError::RefreshTokenRejected { code: code.to_string() };
+                    }
+                }
                 OAuthError::RefreshTokenFailed {
                     message: e.to_string(),
                 }
@@ -224,19 +236,26 @@ where
     TT: oauth2::TokenType,
     T: oauth2::TokenResponse<TT>,
 {
-    let scopes = token_response.scopes().ok_or_else(|| {
-        OAuthError::Other("长桥未返回 OAuth scope，无法证明授权为只读".to_string())
-    })?;
-    let actual: Vec<&str> = scopes.iter().map(|scope| scope.as_ref()).collect();
-    let matches_requested_scope = actual.first().is_some_and(|scope| {
-        *scope == requested_scope
-            || (requested_scope == "6" && *scope == "account.read")
-    });
-    if actual.len() != 1 || !matches_requested_scope {
-        return Err(OAuthError::Other(format!(
-            "长桥授权范围不是仅账户读取（实际：{}）",
-            actual.join(" ")
-        )));
+    if !matches!(requested_scope, "6" | "account.read") {
+        return Err(OAuthError::InvalidReadOnlyScope);
+    }
+    validate_account_read_scope_values(token_response.scopes().map(|scopes| {
+        scopes.iter().map(|scope| scope.as_ref()).collect()
+    }))
+}
+
+/// Shared read-only scope policy for authorization and refresh responses.
+/// Omitted scopes retain the read-only scope requested by this application.
+pub fn validate_account_read_scope_values(actual: Option<Vec<&str>>) -> OAuthResult<()> {
+    let actual = actual.unwrap_or_else(|| vec!["6"]);
+    let single = actual.len() == 1
+        && matches!(actual.first().copied(), Some("6" | "account.read"));
+    let combined = actual.len() == 3
+        && actual.contains(&"watchlist")
+        && actual.contains(&"account.read")
+        && actual.contains(&"trade.read");
+    if !single && !combined {
+        return Err(OAuthError::InvalidReadOnlyScope);
     }
     Ok(())
 }

@@ -27,6 +27,13 @@ export function BackgroundCollectionSettings({ status }: { status: CollectionSta
         <VibeNotice tone="error">最近执行未完成，请检查来源状态与本机后台日志。</VibeNotice>
       ) : null}
 
+      {status?.state?.sdkAuthorization?.error ? (
+        <VibeNotice tone="error">
+          {status.state.sdkAuthorization.error}
+          {status.state.sdkAuthorization.nextRetryAt ? `；下次补试：${time(status.state.sdkAuthorization.nextRetryAt)}` : ""}
+        </VibeNotice>
+      ) : null}
+
       <dl className="background-collection__overview">
         <div>
           <dt>下次采集计划</dt>

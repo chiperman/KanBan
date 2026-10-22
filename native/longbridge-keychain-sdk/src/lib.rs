@@ -245,22 +245,49 @@ where
 }
 
 fn validate_account_read_scope_values(actual: Option<Vec<&str>>) -> NapiResult<()> {
-    // 本流程仅请求固定的账户读取 scope。OAuth 响应省略 scope 时，
-    // 以该请求范围验证；明确返回的范围仍必须通过下面的严格白名单。
-    let actual = actual.unwrap_or_else(|| vec![ACCOUNT_READ_SCOPE]);
-    let is_single_read_only = actual.len() == 1
-        && matches!(actual.first().copied(), Some("6" | "account.read"));
-    let is_combined_read_only = actual.len() == 3
-        && actual.contains(&"watchlist")
-        && actual.contains(&"account.read")
-        && actual.contains(&"trade.read");
-    if !is_single_read_only && !is_combined_read_only {
-        return Err(napi_error(format!(
-            "长桥授权范围不是允许的只读范围（实际：{}）",
-            actual.join(" ")
-        )));
-    }
-    Ok(())
+    longbridge_oauth::validate_account_read_scope_values(actual)
+        .map_err(|error| napi_error(error.to_string()))
+}
+
+const RENEWAL_WINDOW: Duration = Duration::from_secs(24 * 60 * 60);
+
+/// 仅读取本地到期时间，绝不返回令牌或触发续期。
+#[napi]
+pub fn authorization_expiry(client_id: String) -> NapiResult<String> {
+    let token = KeychainTokenStorage::new(&client_id).load_checked(&client_id)
+        .map_err(|_| napi_error("无法读取长桥 SDK 本地凭证，请检查 macOS Keychain"))?
+        .ok_or_else(|| napi_error("长桥 SDK 尚未授权，请重新授权"))?;
+    serialize(serde_json::json!({ "expiresAt": token.expires_at }))
+}
+
+/// 只在到期前 24 小时内续期；不读取资产、不启动交互授权。
+#[napi]
+pub async fn renew_authorization(client_id: String) -> NapiResult<String> {
+    let storage = KeychainTokenStorage::new(&client_id);
+    storage.require_token().map_err(|_| napi_error("长桥 SDK 本地凭证不可用"))?;
+    let renewal = tokio::time::timeout(Duration::from_secs(30),
+        OAuthBuilder::new(&client_id)
+            .token_storage(storage.clone())
+            .refresh_before_expiry(RENEWAL_WINDOW)
+            .build_cached(),
+    ).await;
+    let (error, retryable) = match renewal {
+        Ok(Ok(_)) => (None, false),
+        Ok(Err(OAuthError::RefreshTokenRejected { code })) if code == "invalid_grant" =>
+            (Some("长桥 SDK 续期被拒绝（invalid_grant），凭证已失效，请重新授权"), false),
+        Ok(Err(OAuthError::RefreshTokenRejected { .. })) =>
+            (Some("长桥 SDK 续期被拒绝，请检查 OAuth 客户端配置并重新授权"), false),
+        Ok(Err(OAuthError::NoRefreshToken)) =>
+            (Some("长桥 SDK 缺少续期凭证，请重新授权"), false),
+        Ok(Err(OAuthError::InvalidReadOnlyScope)) =>
+            (Some("长桥 SDK 续期返回的权限超出只读范围，请重新授权"), false),
+        Ok(Err(_)) => (Some("长桥 SDK 续期或凭证保存失败，请检查网络与 macOS Keychain"), true),
+        Err(_) => (Some("长桥 SDK 续期超时，请检查网络"), true),
+    };
+    let token = storage.load_checked(&client_id)
+        .map_err(|_| napi_error("无法读取长桥 SDK 本地凭证，请检查 macOS Keychain"))?
+        .ok_or_else(|| napi_error("长桥 SDK 尚未授权，请重新授权"))?;
+    serialize(serde_json::json!({ "expiresAt": token.expires_at, "error": error, "retryable": retryable }))
 }
 
 async fn load_oauth(client_id: String, callback_port: u16) -> Result<longbridge::oauth::OAuth, String> {

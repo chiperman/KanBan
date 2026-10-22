@@ -5,6 +5,8 @@ type NativeLongbridgeSdk = {
   accountIdentity(clientId: string): string;
   beginAuthorization(clientId: string, callbackPort: number): string;
   authorizationStatus(clientId: string): string;
+  authorizationExpiry(clientId: string): string;
+  renewAuthorization(clientId: string): Promise<unknown>;
   beginBrowserAuthorization(clientId: string, redirectUri: string): string;
   completeBrowserAuthorization(
     clientId: string,
@@ -48,6 +50,12 @@ type NativeLongbridgeSdk = {
 export interface LongbridgeSdkAuthorization {
   status: "idle" | "authorizing" | "authorized";
   authorizationUrl: string | null;
+}
+
+export interface LongbridgeSdkRenewal {
+  expiresAt: number;
+  error: string | null;
+  retryable: boolean;
 }
 
 export interface LongbridgeAccountIdentity {
@@ -227,6 +235,14 @@ export class LongbridgeKeychainSdk {
       nativeSdk().authorizationStatus(this.clientId),
       "长桥 SDK 授权状态格式无效",
     );
+  }
+
+  authorizationExpiry(): number {
+    return parse<{ expiresAt: number }>(nativeSdk().authorizationExpiry(this.clientId), "长桥 SDK 到期时间无效").expiresAt;
+  }
+
+  async renewAuthorization(): Promise<LongbridgeSdkRenewal> {
+    return parse(await nativeSdk().renewAuthorization(this.clientId), "长桥 SDK 续期响应无效");
   }
 
   async readAssets(reportingCurrency: "USD"): Promise<LongbridgeSdkAssets> {

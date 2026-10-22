@@ -130,6 +130,17 @@ export class LongbridgeConnections implements LongbridgeOAuth, AssetSourceRefres
     }
   }
 
+  async sdkAuthorizationExpiry(): Promise<number | null> {
+    const sources = (await this.store.listSources()).filter(source => source.kind === "longbridge" &&
+      source.lifecycle !== "disconnected" && source.credentialReference &&
+      (parseConnection(source.credentialReference)?.mode ?? "both") !== "cli");
+    if (!sources.length) return null;
+    for (const source of sources) await this.check(this.binding(source), "sdk", new AbortController().signal);
+    return this.sdk.authorizationExpiry();
+  }
+
+  renewSdkAuthorization() { return this.sdk.renewAuthorization(); }
+
   private async read<T>(reference: string, connection: LongbridgeConnection, cli: () => Promise<T>, sdk: () => Promise<T>, signal = AbortSignal.timeout(60_000)): Promise<T> {
     const attempt = async (transport: "cli" | "sdk", operation: () => Promise<T>, fallback: boolean) => {
       try {

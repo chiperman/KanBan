@@ -127,7 +127,7 @@ export function createProductionServices(
     undefined, longbridge.tradingCalendar,
   ), formalSettlementExecutions, clock);
   return {
-    backgroundCollection: new BackgroundAssetCollection(database, assetSources, dailyAssetSnapshots, fullRefreshState, assetSynchronization, formalDailySettlementRunner, clock, longbridgeDailyAssets),
+    backgroundCollection: new BackgroundAssetCollection(database, assetSources, dailyAssetSnapshots, fullRefreshState, assetSynchronization, formalDailySettlementRunner, clock, longbridgeDailyAssets, longbridge),
     clock,
     assetCards: new DatabaseAssetCardStore(database),
     assetSources,

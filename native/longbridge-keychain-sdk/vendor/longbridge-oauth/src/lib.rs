@@ -36,7 +36,7 @@ mod storage;
 mod token;
 
 pub use builder::OAuthBuilder;
-pub use client::OAuth;
+pub use client::{OAuth, validate_account_read_scope_values};
 pub use error::{OAuthError, OAuthResult};
 pub use storage::{FileTokenStorage, StoredToken, TokenStorage};
 

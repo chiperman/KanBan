@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use crate::{
     client::{DEFAULT_CALLBACK_PORT, OAuth, OAuthInner},
@@ -21,6 +21,7 @@ pub struct OAuthBuilder {
     pub(crate) storage: Arc<dyn TokenStorage>,
     /// Requested OAuth permission. KanBan keeps this to the account read scope.
     pub(crate) scope: String,
+    refresh_before_expiry: Duration,
 }
 
 impl OAuthBuilder {
@@ -31,6 +32,7 @@ impl OAuthBuilder {
             callback_port: DEFAULT_CALLBACK_PORT,
             storage: default_storage(),
             scope: "6".to_string(),
+            refresh_before_expiry: Duration::from_secs(300),
         }
     }
 
@@ -77,6 +79,14 @@ impl OAuthBuilder {
         self
     }
 
+    /// Refresh a stored token within this window when building the client.
+    /// Ordinary access-token requests retain their five-minute window.
+    #[must_use]
+    pub fn refresh_before_expiry(mut self, window: Duration) -> Self {
+        self.refresh_before_expiry = window;
+        self
+    }
+
     /// Synchronously build the [`OAuth`] client.
     ///
     /// This is the blocking equivalent of [`build`](OAuthBuilder::build).  It
@@ -117,6 +127,15 @@ impl OAuthBuilder {
     /// authorization flow is started and `open_url` is called with the
     /// authorization URL.  The resulting token is persisted for future use.
     pub async fn build(self, open_url: impl Fn(&str)) -> OAuthResult<OAuth> {
+        self.build_inner(Some(open_url)).await
+    }
+
+    /// Load or refresh a stored token without ever starting browser authorization.
+    pub async fn build_cached(self) -> OAuthResult<OAuth> {
+        self.build_inner(None::<fn(&str)>).await
+    }
+
+    async fn build_inner(self, open_url: Option<impl Fn(&str)>) -> OAuthResult<OAuth> {
         let storage = self.storage;
 
         let inner = Arc::new(OAuthInner {
@@ -133,7 +152,7 @@ impl OAuthBuilder {
             .map(crate::token::OAuthToken::from);
 
         let token = match loaded {
-            Some(t) if !t.expires_soon() => {
+            Some(t) if !t.expires_within(self.refresh_before_expiry) => {
                 tracing::debug!(client_id = %self.client_id, expires_at = t.expires_at, "loaded valid token from storage");
                 t
             }
@@ -157,6 +176,7 @@ impl OAuthBuilder {
                 }
             }
             None => {
+                let open_url = open_url.ok_or(crate::error::OAuthError::NoTokenAvailable)?;
                 tracing::debug!("no cached token found, starting authorization flow");
                 let new_token = oauth.authorize_inner(open_url).await?;
                 storage.save(&new_token.clone().into())?;
