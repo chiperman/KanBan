@@ -24,13 +24,14 @@ import {
   type ReportingCurrency,
 } from "@/domain/valuation";
 import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
-import { totalTrendObservationStatus } from "@/domain/daily-trend-observations";
+import { projectTotalAssetTrendObservations, totalAssetTrendStatus } from "@/domain/total-asset-trend";
 import { portfolioSourceTotal } from "@/domain/evm-token-preferences";
 import { hasManualAssetRecord } from "@/domain/manual-asset-records";
 import type {
   AssetSourceSummary,
   DailyAssetSourceSnapshot,
   DailyAssetTrendObservation,
+  ImportedAssetSourceHistoryObservation,
   InvestmentCashflow,
 } from "@/server/ports";
 import { AssetGlobalRefreshControl } from "@/ui/asset-refresh-controls";
@@ -164,13 +165,13 @@ function sourceTotalInCurrency(
 function latestCompletedPriorObservation(
   observations: DailyAssetTrendObservation[],
   currentDay: string,
+  currency: ReportingCurrency,
 ): DailyAssetTrendObservation | null {
   return observations
     .filter(
       (observation) =>
         observation.day < currentDay &&
-        observation.complete &&
-        (observation.status === undefined || observation.status === "complete"),
+        totalAssetTrendStatus(observation, currency) === "complete",
     )
     .toSorted(
       (left, right) =>
@@ -216,6 +217,7 @@ function daysBetweenShanghaiDays(startDay: string, endDay: string): number {
 export function DailyOverviewWorkspace({
   investmentBooks,
   manualRecords = [],
+  importedHistory = [],
   cashflows,
   currentDay,
   currentObservedAt,
@@ -226,6 +228,7 @@ export function DailyOverviewWorkspace({
 }: {
   investmentBooks?: InvestmentBookState | null;
   manualRecords?: ManualAssetRecord[];
+  importedHistory?: ImportedAssetSourceHistoryObservation[];
   cashflows: InvestmentCashflow[];
   currentDay: string;
   currentObservedAt: string;
@@ -241,6 +244,12 @@ export function DailyOverviewWorkspace({
   } = useWorkbenchDisplayPreferences();
 
   const { liveSources, state: realtimeState, retry } = useLongbridgeRealtime(sources, !demoMode);
+  const totalTrendObservations = useMemo(
+    () => projectTotalAssetTrendObservations({
+      observations: trendObservations, sources, manualRecords, importedHistory,
+    }),
+    [trendObservations, sources, manualRecords, importedHistory],
+  );
   const recordedSources = useMemo(
     () => liveSources.filter(hasManualAssetRecord),
     [liveSources],
@@ -298,15 +307,15 @@ export function DailyOverviewWorkspace({
   const currentValuationComplete = current !== null && usdValuationComplete;
   const recordedTodayObservation = useMemo(
     () =>
-      trendObservations
+      totalTrendObservations
         .filter(
           (observation) =>
             observation.day === currentDay &&
-            observation.total[currency] !== null,
+            totalAssetTrendStatus(observation, currency) === "complete",
         )
         .toSorted((left, right) => right.capturedAt.localeCompare(left.capturedAt))
         .at(0) ?? null,
-    [currentDay, trendObservations],
+    [currency, currentDay, totalTrendObservations],
   );
   const recordedTodayTotal = recordedTodayObservation?.total[currency] ?? null;
   const changeEndpoint = current?.complete
@@ -332,8 +341,9 @@ export function DailyOverviewWorkspace({
     [cashflows, currency, currentTotals.USD, currentObservedAt, longbridgeRates],
   );
   const priorObservation = latestCompletedPriorObservation(
-    trendObservations,
+    totalTrendObservations,
     currentDay,
+    currency,
   );
   const daysSincePriorObservation = priorObservation === null
     ? null
@@ -347,18 +357,18 @@ export function DailyOverviewWorkspace({
     : null;
   const trendRange = useAssetTrendRange();
   const trend = useMemo(() => {
-    const firstTrendDay = trendObservations
+    const firstTrendDay = totalTrendObservations
       .map((observation) => observation.day)
       .toSorted()
       .at(0);
     const days = rangeDays(trendRange.preset, currentDay, firstTrendDay, trendRange.customRange);
     const observationsByDay = new Map(
-      trendObservations.map((observation) => [observation.day, observation]),
+      totalTrendObservations.map((observation) => [observation.day, observation]),
     );
     const points = days.map((day) => {
       const observation = observationsByDay.get(day);
       const status = observation
-        ? totalTrendObservationStatus(observation.sources)
+        ? totalAssetTrendStatus(observation, currency)
         : "incomplete";
       return {
         day,
@@ -371,7 +381,7 @@ export function DailyOverviewWorkspace({
       firstDay: firstTrendDay,
       points,
     };
-  }, [currency, currentDay, trendObservations, trendRange.preset, trendRange.customRange]);
+  }, [currency, currentDay, totalTrendObservations, trendRange.preset, trendRange.customRange]);
   const sourceSummaries = useMemo(
     () => {
       const priorSourcesById = new Map(

@@ -268,7 +268,8 @@ export function analyzeInvestmentBook(input: {
       rows.every(row => row?.complete && (row.status ?? "complete") === "complete" && row.total[book.currency] != null);
     const amount = complete ? decimalAdd(...rows.map(row => row!.total[book.currency]!)) : null;
     automaticValues.set(observation.day, amount);
-    if (!historyThrough || observation.day > historyThrough) values.set(observation.day, { day: observation.day, amount, basis: observation.day === input.currentDay ? "当日累计观测" : "自动同步汇总" });
+    // Crypto imports only take precedence on recorded dates; complete same-day observations fill gaps.
+    if (!historyThrough || observation.day > historyThrough || (book.id === "crypto" && amount !== null)) values.set(observation.day, { day: observation.day, amount, basis: observation.day === input.currentDay ? "当日累计观测" : "自动同步汇总" });
   }
   const todayMembers = required(input.currentDay);
   if (book.automatic && !automaticValues.has(input.currentDay)) {
@@ -283,7 +284,7 @@ export function analyzeInvestmentBook(input: {
     const valuation = ready ? buildTotalValuation(sources as BookSource[], book.currency, "source", input.sources) : null;
     const amount = valuation && !valuation.incomplete && valuation.expiredCount === 0 ? valuation.amount : null;
     automaticValues.set(input.currentDay, amount);
-    if (!historyThrough || input.currentDay > historyThrough) values.set(input.currentDay, { day: input.currentDay, amount, basis: "自动同步汇总（含手动补充来源）" });
+    if (!historyThrough || input.currentDay > historyThrough || (book.id === "crypto" && amount !== null)) values.set(input.currentDay, { day: input.currentDay, amount, basis: "自动同步汇总（含手动补充来源）" });
   }
   if (!book.automatic) {
     const days = [...new Set(input.manualRecords.filter(row => members.some(member => member.sourceId === row.sourceId)).map(row => row.day))];

@@ -20,7 +20,6 @@ export default async function AssetsPage({
   await redirectLoopbackIpToLocalhost("/assets", searchParams);
   const services = getServices();
   if ((await services.auth.currentSession()) === null) redirect("/");
-  const sourcesExpanded = (await searchParams)?.view === "sources";
   const [storedSources, manualRecords, cards, fullRefreshState] = await Promise.all([
     services.assetSources.list(),
     services.manualAssetRecords.list(),
@@ -64,7 +63,7 @@ export default async function AssetsPage({
             跳到主要内容
           </a>
           <main id="main-content">
-            <AssetsHoldingsWorkspace sources={sources} sourcesExpanded={sourcesExpanded} />
+            <AssetsHoldingsWorkspace sources={sources} />
           </main>
         </div>
       </WorkbenchShell>

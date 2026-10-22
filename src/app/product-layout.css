@@ -1782,6 +1782,11 @@ html {
   gap: var(--vibe-space-3);
 }
 
+.assets-holdings__source-access {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
 @media (min-width: 721px) {
   .workbench-page-header__actions > .vibe-button,
   .workbench-page-header__actions > .vibe-select,
@@ -7515,8 +7520,7 @@ body {
   gap: var(--vibe-space-2) var(--vibe-space-4);
 }
 
-.data-maintenance-disclosure > summary,
-.assets-holdings__sources > summary {
+.data-maintenance-disclosure > summary {
   min-height: var(--vibe-control-height);
   padding-block: var(--vibe-space-3);
   color: var(--secondary);
@@ -7526,8 +7530,7 @@ body {
   overflow-wrap: anywhere;
 }
 
-.data-maintenance-disclosure > summary:focus-visible,
-.assets-holdings__sources > summary:focus-visible {
+.data-maintenance-disclosure > summary:focus-visible {
   outline: 1px solid var(--display);
   outline-offset: var(--vibe-space-1);
   border-radius: var(--r-sm);
@@ -7550,67 +7553,7 @@ body {
   overflow-wrap: anywhere;
 }
 
-.assets-holdings__sources {
-  min-width: 0;
-  padding-inline: var(--vibe-space-6);
-  border-block: 1px solid var(--line);
-}
-
-.assets-holdings__sources > summary {
-  color: var(--primary);
-  font-size: var(--vibe-type-body-sm);
-}
-
-.assets-holdings__sources > summary > span,
-.assets-holdings__sources > p {
-  color: var(--secondary);
-  font-size: var(--vibe-type-caption);
-}
-
-.assets-holdings__source-list {
-  display: grid;
-  gap: 0 var(--vibe-space-8);
-  margin: 0;
-  padding: 0 0 var(--vibe-space-4);
-  list-style: none;
-}
-
-.assets-holdings__source-list > li {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--vibe-space-3);
-  padding-block: var(--vibe-space-3);
-  border-block-start: 1px solid var(--line);
-}
-
-.assets-holdings__source-list > li > div {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.assets-holdings__source-state {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--vibe-space-1) var(--vibe-space-3);
-  margin-block-start: var(--vibe-space-1);
-  color: var(--secondary);
-  font-size: var(--vibe-type-caption);
-}
-
-@media (min-width: 640px) {
-  .assets-holdings__source-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 639px) {
-  .assets-holdings__sources {
-    padding-inline: var(--vibe-space-4);
-  }
-
   .data-checks .data-health-section-heading {
     flex-wrap: wrap;
     align-items: start;

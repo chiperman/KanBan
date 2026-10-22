@@ -226,9 +226,12 @@ export class SqliteObservationStore {
     const currentObservation = isCurrentDay
       ? buildDailyAssetSnapshot(this.readModel.listSourcesSync(), capturedAt, new Set())
       : null;
+    const historicalObservation = isCurrentDay ? null : this.readModel.listDailyObservationsSync(
+      "daily_asset_trend_observations", "daily_asset_source_trend_observations", record.day,
+    )[0];
     const manualSource = currentObservation?.sources.find(
       (item) => item.sourceId === source.id,
-    ) ?? manualDailySource(source, record);
+    ) ?? manualDailySource(source, record, historicalObservation?.exchangeRates ?? []);
 
     if (currentObservation !== null) {
       this.record(currentObservation, true);
@@ -293,7 +296,8 @@ export class SqliteObservationStore {
     const complete =
       totalUsd !== null &&
       totals("total_hkd") !== null &&
-      sources.every((source) => source.complete === 1);
+      sources.every((source) => source.complete === 1 &&
+        source.total_usd !== null && source.total_cny !== null && source.total_hkd !== null);
     const status = sources.some((source) => source.status === "expired")
       ? "expired"
       : complete

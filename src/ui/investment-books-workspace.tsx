@@ -107,7 +107,7 @@ function ImportDialog({ bookId, onClose }: { bookId: InvestmentBookId; onClose()
     <VibeButton type="button" variant="outline" onClick={inspect}>核对导入数据</VibeButton>
     {error ? <VibeNotice tone="error" role="alert">{error}</VibeNotice> : null}
     {preview ? <VibeNotice tone="info">{preview.accountName} · {preview.records.length} 条 · 截至 {preview.reconciliation.asOf}<br />净投入 <AssetFinancialValue unit={preview.currency}>{bookMoney(preview.reconciliation.netInvestment)}</AssetFinancialValue> / 资产 <AssetFinancialValue unit={preview.currency}>{bookMoney(preview.reconciliation.total)}</AssetFinancialValue> / 收益 <AssetFinancialValue unit={preview.currency}>{bookMoney(preview.reconciliation.profit)}</AssetFinancialValue></VibeNotice> : null}
-    <p className="trend-note">历史总额与后续同步按截止日衔接，不叠加。发现原件被改写、缺失或账本冲突时会拒绝导入。</p>
+    <p className="trend-note">{bookId === "crypto" ? "有导入资产记录的日期优先采用历史总额，其余日期采用当天完整自动同步，不跨日补值或叠加。" : "历史总额与后续同步按截止日衔接，不叠加。"}发现原件被改写、缺失或账本冲突时会拒绝导入。</p>
   </ActionDialog>;
 }
 function MemberDialog({ member, currentDay, onClose }: { member: BookMember; currentDay: string; onClose(): void }) {
@@ -148,6 +148,7 @@ export function InvestmentBooksWorkspace({ state, initialBookId = "us-stocks", v
   const { liveSources, state: realtimeState, retry } = useLongbridgeRealtime(sources);
   const analysis = useMemo(() => analyzeInvestmentBook({ state, bookId, sources: liveSources, observations, manualRecords, currentDay }), [state, bookId, liveSources, observations, manualRecords, currentDay]);
   const current = analysis.current;
+  const firstValuationDay = analysis.points.find(point => point.total !== null)?.day;
   const pointMap = new Map(analysis.points.map(row => [row.day, row]));
   const days = rangeDays(trendRange.preset, currentDay, analysis.firstTrendDay ?? undefined, trendRange.customRange);
   const selectedDays = new Set(days);
@@ -216,7 +217,7 @@ export function InvestmentBooksWorkspace({ state, initialBookId = "us-stocks", v
       <header className="source-performance__heading"><h2>{analysis.book.name}</h2><p>{analysis.book.automatic ? "资产自动同步" : "资产手动更新"} · {current ? `截至 ${current.day}` : "暂无资产记录"}{state.historyThroughDay[bookId] ? ` · 历史截止 ${state.historyThroughDay[bookId]}` : ""}</p></header>
       <div className="source-performance__metrics investment-books__metrics">{metrics.map(metric => <article key={metric.label}><p className="card-label">{metric.label}</p><VibeMetric animate={false} value={!showSensitiveInfo ? "••••••" : metric.value == null ? "数据不足" : bookMoney(metric.value)} unit={metric.unit} /></article>)}</div>
       {showSensitiveInfo && analysis.missingReason ? <VibeNotice tone="info" role="status">{analysis.missingReason}</VibeNotice> : null}
-      {showSensitiveInfo && analysis.historyComparison ? <VibeNotice tone="info" role="status">历史与同步金额待核对：{analysis.historyComparison.day} 历史总额 <AssetFinancialValue unit={analysis.book.currency}>{bookMoney(analysis.historyComparison.historicalTotal)}</AssetFinancialValue>，自动汇总 <AssetFinancialValue unit={analysis.book.currency}>{bookMoney(analysis.historyComparison.automaticTotal)}</AssetFinancialValue>，相差 <AssetFinancialValue unit={analysis.book.currency}>{bookMoney(analysis.historyComparison.difference)}</AssetFinancialValue>。请核对采集时间和来源范围。历史截止日及以前采用历史总额，之后接自动汇总；差额不会补成入金，两份金额不会相加。</VibeNotice> : null}
+      {showSensitiveInfo && analysis.historyComparison ? <VibeNotice tone="info" role="status">历史与同步金额待核对：{analysis.historyComparison.day} 历史总额 <AssetFinancialValue unit={analysis.book.currency}>{bookMoney(analysis.historyComparison.historicalTotal)}</AssetFinancialValue>，自动汇总 <AssetFinancialValue unit={analysis.book.currency}>{bookMoney(analysis.historyComparison.automaticTotal)}</AssetFinancialValue>，相差 <AssetFinancialValue unit={analysis.book.currency}>{bookMoney(analysis.historyComparison.difference)}</AssetFinancialValue>。请核对采集时间和来源范围。{bookId === "crypto" ? "有导入资产记录的日期优先采用历史总额，其余日期采用当天完整自动汇总；" : "历史截止日及以前采用历史总额，之后接自动汇总；"}差额不会补成入金，两份金额不会相加。</VibeNotice> : null}
       <AssetTrendPanel
         benchmark={benchmarkVisible ? {
           assetScopeLabel: analysis.book.name,
@@ -246,8 +247,11 @@ export function InvestmentBooksWorkspace({ state, initialBookId = "us-stocks", v
           onEnabledSymbolsChange={setEnabledSymbols}
           returnComparison
         /> : null}
+        {showSensitiveInfo && firstValuationDay && analysis.firstRecordDay && analysis.firstRecordDay < firstValuationDay && days[0] < firstValuationDay
+          ? <p className="trend-note">{formatShanghaiFullDayLabel(firstValuationDay)} 前缺少完整资产估值。</p>
+          : null}
       </AssetTrendPanel>
-      <details className="daily-trend-details"><summary>计算口径</summary><div className="daily-trend-details-content"><p>累计收益 = 资产总额 − 期初本金 − 累计入金 + 累计出金。指标与本金均截至上方资产日期。</p><p>收益率采用 Modified Dietz 扣除入出金影响，不年化。不对比指数时显示记账以来累计收益率，对比时显示共同起点的区间收益率；顶部仍为累计值。</p><p>指数不含分红，按各自本币计算，不折算汇率。使用上海当日零点前已收盘日 K，休市沿用前收盘。</p><p>导入历史截止日及以前采用历史整本账总额，之后采用同步或手动资产记录；同一天只计一个总额。缺少资产或汇率时留空。</p><p>虚拟货币合并交易所、钱包和手动补充来源。账内互转不增加本金；三本账之间转账需分别记录一笔出金、一笔入金。</p></div></details>
+      <details className="daily-trend-details"><summary>计算口径</summary><div className="daily-trend-details-content"><p>累计收益 = 资产总额 − 期初本金 − 累计入金 + 累计出金。指标与本金均截至上方资产日期。</p><p>收益率采用 Modified Dietz 扣除入出金影响，不年化。不对比指数时显示记账以来累计收益率，对比时显示共同起点的区间收益率；顶部仍为累计值。</p><p>指数不含分红，按各自本币计算，不折算汇率。使用上海当日零点前已收盘日 K，休市沿用前收盘。</p><p>{bookId === "crypto" ? "有导入资产记录（含更正）的日期优先采用历史整本账总额，其余日期采用当天最新完整自动同步，不跨日补值；" : "导入历史截止日及以前采用历史整本账总额，之后采用同步或手动资产记录；"}同一天只计一个总额。缺少资产或汇率时留空。</p><p>虚拟货币合并交易所、钱包和手动补充来源。账内互转不增加本金；三本账之间转账需分别记录一笔出金、一笔入金。</p></div></details>
     </section> : null}
     {view === "records" ? <>
     <section className="source-performance" aria-label="统一记账记录"><header className="investment-books__section-heading"><div><h2>记账记录</h2><p className="trend-note">历史和新记录按日期排列，入金出金独立列出。资产同日仅展示生效总额。</p></div><VibeButton type="button" variant="outline" onClick={() => setDialog("import")}>导入历史记账</VibeButton></header>

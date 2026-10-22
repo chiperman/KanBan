@@ -35,13 +35,17 @@ export async function GET() {
     let cached = dailyCandles.get(services);
     if (cached?.key !== key) {
       // 比较只使用上海当日零点前的已收盘日 K；同日共享读取，仍逐次校验会话和来源。
-      const request = Promise.all(SYMBOLS.map(async (symbol) => [
-        symbol,
-        await services.longbridgeBenchmarkCandlesticks.readDailyCandlesticks({
-          count: CANDLE_COUNT,
-          symbol,
-        }),
-      ] as const)).then(Object.fromEntries);
+      const request = (async () => {
+        const candles: Record<string, LongbridgeBenchmarkCandlestick[]> = {};
+        // CLI 并发身份检查可能返回不完整账户信息；两个指数依次读取，保留前后身份校验。
+        for (const symbol of SYMBOLS) {
+          candles[symbol] = await services.longbridgeBenchmarkCandlesticks.readDailyCandlesticks({
+            count: CANDLE_COUNT,
+            symbol,
+          });
+        }
+        return candles;
+      })();
       cached = { key, request };
       dailyCandles.set(services, cached);
       const entry = cached;

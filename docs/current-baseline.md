@@ -9,7 +9,7 @@
 | 页面 | 当前职责 | 源码入口 |
 | --- | --- | --- |
 | `/` 总览 | 总资产、今日变化、默认全部历史的完整趋势；按原币种展示三本账的本金与收益；按来源分布保留各来源总额、较昨日变化与昨日金额 | [页面](../src/app/page.tsx) / [DailyOverviewWorkspace](../src/ui/daily-overview-workspace.tsx) |
-| `/assets` 资产 | 展示持仓，标题区提供“新增来源”；“全部来源”提供独立于持仓筛选的详情与管理入口，包含无持仓、总览已隐藏和已断开的来源；`?view=sources` 展开全部来源 | [页面](../src/app/assets/page.tsx) / [AssetsHoldingsWorkspace](../src/ui/assets-holdings-workspace.tsx) |
+| `/assets` 资产 | 展示持仓，标题区提供“新增来源”；持仓中的来源名称进入详情，来源筛选包含无持仓、手工、总览已隐藏和已断开的来源，选定后提供详情入口；旧 `?view=sources#asset-sources` 定位持仓区域 | [页面](../src/app/assets/page.tsx) / [AssetsHoldingsWorkspace](../src/ui/assets-holdings-workspace.tsx) |
 | `/performance` 投资账本 | 美股、A股、虚拟货币三本账；分“收益表现 / 记账记录”，记账记录承载历史导入与更正追溯；视角切换之后保留待确认来源范围与旧资金核对；记录支持类型筛选、每页 20 条分页及指定页跳转；A股更新资产，美股与虚拟货币沿用自动同步 | [页面](../src/app/performance/page.tsx) / [InvestmentBooksWorkspace](../src/ui/investment-books-workspace.tsx) |
 | `/asset-sources` 兼容入口 | 认证后跳转 `/assets?view=sources#asset-sources` | [页面](../src/app/asset-sources/page.tsx) |
 | `/asset-sources/[id]` 来源详情 | 以来源真实名称为标题；“资产概况”展示来源余额、趋势并进入所属投资账，“连接与管理”维护名称、类别、授权及生命周期；手工来源可更新资产总额，资金统一在三本账维护 | [页面](../src/app/asset-sources/[id]/page.tsx) / [AssetSourceDetail](../src/ui/asset-source-detail.tsx) / [资产更新表单](../src/ui/source-investment-record-dialog.tsx) / [手工类别表单](../src/ui/source-manual-asset-class-form.tsx) |

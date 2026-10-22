@@ -1,6 +1,7 @@
 import { sourceTrendClassTotals } from "@/domain/daily-asset-snapshots";
 import { decimalAdd } from "@/domain/decimal";
-import type { AssetSourceSummary, DailyAssetSnapshot, DailyAssetSourceSnapshot, DailyAssetTrendObservation, ManualAssetRecord } from "@/server/ports";
+import { convertCurrencyAmount } from "@/domain/valuation";
+import type { AssetExchangeRate, AssetSourceSummary, DailyAssetSnapshot, DailyAssetSourceSnapshot, DailyAssetTrendObservation, ManualAssetRecord } from "@/server/ports";
 
 export function withoutSnapshotSource(
   snapshot: DailyAssetSnapshot,
@@ -36,11 +37,12 @@ export function manualDailySource(
     "id" | "kind" | "label" | "manualAssetClass"
   >,
   record: ManualAssetRecord,
+  exchangeRates: AssetExchangeRate[] = [],
 ): DailyAssetSourceSnapshot {
   const total = {
-    USD: record.currency === "USD" ? record.amount : null,
-    CNY: record.currency === "CNY" ? record.amount : null,
-    HKD: record.currency === "HKD" ? record.amount : null,
+    USD: convertCurrencyAmount(record.amount, record.currency, "USD", exchangeRates),
+    CNY: convertCurrencyAmount(record.amount, record.currency, "CNY", exchangeRates),
+    HKD: convertCurrencyAmount(record.amount, record.currency, "HKD", exchangeRates),
   };
   const observation = {
     sourceId: source.id,
