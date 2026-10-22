@@ -1,4 +1,5 @@
 import { cookies } from "next/headers"
+import Image from "next/image"
 
 import { shanghaiDay } from "@/domain/daily-asset-snapshots"
 import { createDemoDashboardData } from "@/domain/demo-dashboard"
@@ -107,31 +108,15 @@ export default async function AssetDashboardPage({
           跳到主要内容
         </a>
         <header className="page-header locked-header">
-          <div className="locked-brand">
-            <span className="header-wordmark" lang="en">
-              PERSONAL ASSET DASHBOARD
-            </span>
-          </div>
-          <div className="header-side">
-            <div className="page-header__context">
-              <LocalClock initialTime={new Date().toISOString()} compact />
-            </div>
-            <div className="page-header__actions" aria-label="页面操作">
-              <VibeLink
-                aria-label="进入演示模式"
-                className="header-demo-link"
-                href="/?mode=demo"
-                variant="outline"
-              >
-                演示模式
-              </VibeLink>
-              <ThemeSwitcher showLabel />
-            </div>
-          </div>
+          <Image alt="KanBan" className="locked-logo" height={40} src="/icon.svg" width={40} />
+          <ThemeSwitcher />
         </header>
         <main id="main-content" className="login-main">
           <OwnerLogin ownerProvisioned={ownerProvisioned} recoveryConfigured={recoveryConfigured} />
         </main>
+        <footer className="locked-footer">
+          <LocalClock initialTime={new Date().toISOString()} compact />
+        </footer>
       </div>
     )
   }

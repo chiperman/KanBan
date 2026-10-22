@@ -970,6 +970,10 @@ body::before {
   mix-blend-mode: difference;
 }
 
+body:has(.page-locked)::before {
+  display: none;
+}
+
 .page-setup .setup-panel.vibe-auth-surface {
   width: min(100%, 760px);
   padding: 64px 48px 48px;
@@ -979,7 +983,7 @@ body::before {
 }
 
 .page-locked .login-gate.vibe-auth-surface {
-  padding: 40px;
+  padding: 0;
   border-radius: 0;
   background: transparent;
   -webkit-backdrop-filter: none;
@@ -1451,13 +1455,8 @@ body::before {
     max-height: calc(100dvh - 24px);
   }
 
-  .page-setup .setup-panel.vibe-auth-surface,
-  .page-locked .login-gate.vibe-auth-surface {
+  .page-setup .setup-panel.vibe-auth-surface {
     padding: 48px 22px 32px;
-  }
-
-  .page-locked .login-gate.vibe-auth-surface {
-    padding: 36px 22px;
   }
 
   .vibe-dialog-overlay:has(.source-dialog) {
@@ -1511,6 +1510,7 @@ body::before {
     transition: none;
   }
 }
-.page-locked .login-actions--choice .vibe-button {
-  font-size: var(--vibe-type-caption);
+.page-locked .login-enter.vibe-button {
+  font-size: var(--vibe-type-body-sm);
+  white-space: normal;
 }

@@ -112,9 +112,9 @@
 
 | Token | 值 | 真实用途 |
 |---|---|---|
-| `--vibe-type-display-xl` | 72px | 登录展示态的大字标 |
+| `--vibe-type-display-xl` | 72px | 总览资产总额 |
 | `--vibe-type-display-lg` | 48px | 总览金额、登录门标题 |
-| `--vibe-type-display-md` | 36px | 当日变动金额 |
+| `--vibe-type-display-md` | 36px | 当日变动金额、手机登录页标题 |
 | `--vibe-type-display-sm` | 26px | 趋势卡里的昨日／区间数字 |
 
 字号采用本表的项目刻度，不混用上游展示站的完整序列；13px 正文与 10/11px 标签是有效角色，不要求字号为 4px 倍数。新增档位必须有真实用途，并在 Token 中定义。

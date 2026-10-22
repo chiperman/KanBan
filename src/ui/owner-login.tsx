@@ -5,12 +5,13 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
-  type CSSProperties,
   type FormEvent,
 } from "react";
 
 import { LockedComputer } from "@/ui/locked-computer/locked-computer";
 import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
+import { VibeDotIcon } from "@/ui/vibe/vibe-dot-icon";
+import { VibeIcon } from "@/ui/vibe/vibe-icon";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
 import { VibeVerificationCode } from "@/ui/vibe/vibe-verification-code";
 
@@ -21,54 +22,6 @@ interface OwnerLoginProps {
   ownerProvisioned: boolean;
   recoveryConfigured: boolean;
 }
-
-const LOCKED_PIXEL_ROWS = [
-  { letter: "L", rows: ["10000", "10000", "10000", "10000", "10000", "10000", "11111"] },
-  { letter: "O", rows: ["01110", "10001", "10001", "10001", "10001", "10001", "01110"] },
-  { letter: "C", rows: ["01111", "10000", "10000", "10000", "10000", "10000", "01111"] },
-  { letter: "K", rows: ["10001", "10010", "10100", "11000", "10100", "10010", "10001"] },
-  { letter: "E", rows: ["11111", "10000", "10000", "11110", "10000", "10000", "11111"] },
-  { letter: "D", rows: ["11110", "10001", "10001", "10001", "10001", "10001", "11110"] },
-] as const;
-
-type LockedPixelLetter = (typeof LOCKED_PIXEL_ROWS)[number]["letter"];
-
-const LOCKED_PIXEL_PATHS: Record<LockedPixelLetter, readonly number[]> = {
-  L: [0, 5, 10, 15, 20, 25, 30, 31, 32, 33, 34],
-  O: [1, 2, 3, 9, 14, 19, 24, 29, 33, 32, 31, 25, 20, 15, 10, 5],
-  C: [4, 3, 2, 1, 5, 10, 15, 20, 25, 31, 32, 33, 34],
-  K: [4, 8, 12, 16, 22, 28, 34, 0, 5, 10, 15, 20, 25, 30],
-  E: [4, 3, 2, 1, 0, 5, 10, 15, 20, 25, 30, 31, 32, 33, 34, 16, 17, 18],
-  D: [0, 1, 2, 3, 9, 14, 19, 24, 29, 33, 32, 31, 30, 25, 20, 15, 10, 5],
-};
-
-const LOCKED_PIXEL_GLYPHS = (() => {
-  let animationIndex = 0;
-  return LOCKED_PIXEL_ROWS.map(({ letter, rows }) => {
-    const path = LOCKED_PIXEL_PATHS[letter];
-    const pathIndexByCell = new Map(
-      path.map((cellIndex, pathIndex) => [cellIndex, pathIndex]),
-    );
-    const glyphStartIndex = animationIndex;
-    animationIndex += path.length;
-
-    return {
-      letter,
-      cells: rows.flatMap((row, rowIndex) =>
-        [...row].map((value, columnIndex) => ({
-          filled: value === "1",
-          animationIndex:
-            value === "1"
-              ? glyphStartIndex +
-                (pathIndexByCell.get(rowIndex * 5 + columnIndex) ?? 0)
-              : null,
-        })),
-      ),
-    };
-  });
-})();
-
-type LockPixelStyle = CSSProperties & { "--lock-dot-index": number };
 
 const LOCKED_FLOW_DURATION = "12s";
 const LOCKED_FLOW_BEGIN = "0s";
@@ -253,32 +206,6 @@ function LockedFlowRoute({ reducedMotion, route }: LockedFlowRouteProps) {
         </>
       )}
     </g>
-  );
-}
-
-function LockedPixelDisplay() {
-  return (
-    <div
-      className="login-display-state login-display-pixels"
-      data-testid="locked-pixel-display"
-      aria-hidden="true"
-    >
-      {LOCKED_PIXEL_GLYPHS.map((glyph) => (
-        <span className="login-pixel-letter" key={glyph.letter}>
-          {glyph.cells.map((cell, index) => (
-            <span
-              className={`login-pixel${cell.filled ? " is-filled" : ""}`}
-              key={`${glyph.letter}-${index}`}
-              style={
-                cell.animationIndex === null
-                  ? undefined
-                  : ({ "--lock-dot-index": cell.animationIndex } as LockPixelStyle)
-              }
-            />
-          ))}
-        </span>
-      ))}
-    </div>
   );
 }
 
@@ -527,126 +454,129 @@ export function OwnerLogin({
   return (
     <section
       aria-labelledby="login-title"
-      className={`login-gate vibe-auth-surface${
-        locked
-          ? ` login-gate--owner login-gate--owner-${mode}`
-          : ""
-      }`}
+      className="login-gate vibe-auth-surface"
       data-testid="login-gate"
       data-vibe-surface="auth-panel"
     >
       <div className="login-auth-column">
-        <div className="login-intro">
-          {locked ? (
-            <LockedPixelDisplay />
-          ) : (
-            <p className="login-display-state" aria-hidden="true">
-              SETUP
-            </p>
-          )}
-          <h1
-            id="login-title"
-            className={locked ? "login-state-heading" : undefined}
-          >
-            {locked ? "看板已锁定" : "预置唯一所有者"}
-          </h1>
-        </div>
+        <h1 id="login-title">个人投资<br />资产看板</h1>
         <div className="login-flow" key={locked ? mode : "setup"}>
-        {state === "failed" ? (
-          <VibeNotice className="login-error" code="ERROR" role="alert" tone="error">
-            验证失败或已取消。
-          </VibeNotice>
-        ) : null}
-        {state === "unavailable" ? (
-          <VibeNotice className="login-error" code="ERROR" role="alert" tone="error">
-            请先预置登录凭证。
-          </VibeNotice>
-        ) : null}
-        {!locked ? (
-          <div className="login-actions first-run-actions">
-            <VibeLink className="provision-primary" href="/setup" variant="primary">
-              <span>开始首次预置</span>
-              <span className="provision-primary-arrow" aria-hidden="true">
-                →
-              </span>
-            </VibeLink>
-          </div>
-        ) : null}
-        {locked && mode === "choice" ? (
-          <div className="login-actions login-actions--choice">
-            {ownerProvisioned ? (
-              <VibeButton
-                type="button"
-                disabled={state === "pending"}
-                onClick={login}
-                variant="primary"
-              >
-                {state === "pending" ? "[ VERIFYING ]" : "使用 Passkey 登录"}
-              </VibeButton>
-            ) : null}
-            {recoveryConfigured ? (
-              <VibeButton
-                className="login-totp-entry"
-                type="button"
-                disabled={state === "pending"}
-                onClick={showRecoveryTotp}
-                variant={ownerProvisioned ? "outline" : "primary"}
-              >
-                使用 TOTP 登录
-              </VibeButton>
-            ) : null}
-          </div>
-        ) : null}
-        {mode === "recovery-totp" ? (
-          <form
-            className="login-form"
-            data-vibe-surface="auth-flow"
-            onSubmit={verifyRecoveryTotp}
-          >
-            <VibeVerificationCode
-              aria-describedby={recoveryError ? "recovery-totp-error" : undefined}
-              aria-invalid={recoveryError ? true : undefined}
-              disabled={recoveryPending || recoveryRateLimited}
-              fieldId="recovery-totp-code"
-              label="TOTP 验证码"
-              name="code"
-              ref={recoveryCodeRef}
-              required
-              spellCheck={false}
-            />
-            {recoveryError ? (
-              <VibeNotice
-                className="login-error"
-                code="ERROR"
-                id="recovery-totp-error"
-                role="alert"
-                tone="error"
-              >
-                {recoveryError}
-              </VibeNotice>
-            ) : null}
-            <div className="login-actions">
-              <VibeButton
-                type="submit"
-                disabled={recoveryPending || recoveryRateLimited}
-                variant="primary"
-              >
-                完成 TOTP 登录
-              </VibeButton>
-              <VibeButton
-                type="button"
-                disabled={recoveryPending}
-                onClick={returnToLoginChoice}
-                variant="text"
-              >
-                返回
-              </VibeButton>
+          {state === "failed" ? (
+            <VibeNotice className="login-error" code="ERROR" role="alert" tone="error">
+              验证失败或已取消。
+            </VibeNotice>
+          ) : null}
+          {state === "unavailable" ? (
+            <VibeNotice className="login-error" code="ERROR" role="alert" tone="error">
+              请先预置登录凭证。
+            </VibeNotice>
+          ) : null}
+          {!locked ? (
+            <div className="login-actions first-run-actions">
+              <VibeLink className="login-enter" href="/setup" variant="primary">
+                <VibeDotIcon name="key" />
+                <span>设置 Passkey</span>
+                <VibeIcon name="arrow-right" />
+              </VibeLink>
             </div>
-          </form>
-        ) : null}
+          ) : null}
+          {locked && mode === "choice" ? (
+            <div className="login-actions login-actions--choice">
+              {ownerProvisioned ? (
+                <VibeButton
+                  className="login-enter"
+                  type="button"
+                  disabled={state === "pending"}
+                  onClick={login}
+                  variant="primary"
+                >
+                  <VibeDotIcon name="key" />
+                  <span>{state === "pending" ? "正在验证…" : "使用 Passkey 登录"}</span>
+                  <VibeIcon name="arrow-right" />
+                </VibeButton>
+              ) : null}
+              {recoveryConfigured && !ownerProvisioned ? (
+                <VibeButton
+                  className="login-enter"
+                  type="button"
+                  onClick={showRecoveryTotp}
+                  variant="primary"
+                >
+                  <VibeDotIcon name="key" />
+                  <span>使用 TOTP 登录</span>
+                  <VibeIcon name="arrow-right" />
+                </VibeButton>
+              ) : null}
+            </div>
+          ) : null}
+          {mode === "recovery-totp" ? (
+            <form
+              className="login-form"
+              data-vibe-surface="auth-flow"
+              onSubmit={verifyRecoveryTotp}
+            >
+              <VibeVerificationCode
+                aria-describedby={recoveryError ? "recovery-totp-error" : undefined}
+                aria-invalid={recoveryError ? true : undefined}
+                disabled={recoveryPending || recoveryRateLimited}
+                fieldId="recovery-totp-code"
+                label="TOTP 验证码"
+                name="code"
+                ref={recoveryCodeRef}
+                required
+                spellCheck={false}
+              />
+              {recoveryError ? (
+                <VibeNotice
+                  className="login-error"
+                  code="ERROR"
+                  id="recovery-totp-error"
+                  role="alert"
+                  tone="error"
+                >
+                  {recoveryError}
+                </VibeNotice>
+              ) : null}
+              <div className="login-actions">
+                <VibeButton
+                  type="submit"
+                  disabled={recoveryPending || recoveryRateLimited}
+                  variant="primary"
+                >
+                  完成 TOTP 登录
+                </VibeButton>
+                <VibeButton
+                  type="button"
+                  disabled={recoveryPending}
+                  onClick={returnToLoginChoice}
+                  variant="text"
+                >
+                  返回
+                </VibeButton>
+              </div>
+            </form>
+          ) : null}
+        </div>
+        <div className="login-alternatives">
+          {locked && ownerProvisioned && recoveryConfigured && mode === "choice" ? (
+            <VibeButton
+              className="login-totp-entry"
+              type="button"
+              disabled={state === "pending"}
+              onClick={showRecoveryTotp}
+              variant="text"
+            >
+              使用 TOTP 登录
+            </VibeButton>
+          ) : null}
+          <VibeLink href="/?mode=demo" variant="text" aria-label="进入演示模式">
+            演示模式
+          </VibeLink>
         </div>
       </div>
-      {locked ? <LockedProductFlow /> : null}
+      <div className="login-visual-stage">
+        <LockedProductFlow />
+      </div>
     </section>
   );
 }
