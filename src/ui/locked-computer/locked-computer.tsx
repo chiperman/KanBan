@@ -7,6 +7,7 @@ import {
   POWER_FACE, POWER_POINT, SCREEN_CONTENT, SCREEN_OUTLINE, SCREEN_RECESS, SYSTEM_FRONT,
 } from "./geometry";
 import type { SolidPaths } from "./iso-kit";
+import { playKeyboardSound, playPowerSound } from "./sounds";
 
 function Solid({ paths, dark = false }: { paths: SolidPaths; dark?: boolean }) {
   return (
@@ -91,7 +92,14 @@ export function LockedComputer({ children, reducedMotion }: {
     pressedKey.current = key;
     keyPressedAt.current = performance.now();
     key.setAttribute("data-pressed", "true");
+    playKeyboardSound();
     event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function togglePower() {
+    const nextPowered = !powered;
+    setPowered(nextPowered);
+    playPowerSound(nextPowered);
   }
 
   return (
@@ -219,7 +227,7 @@ export function LockedComputer({ children, reducedMotion }: {
         aria-label={powered ? "关闭电脑" : "开启电脑"}
         aria-pressed={powered}
         className="locked-computer-power"
-        onClick={() => setPowered((value) => !value)}
+        onClick={togglePower}
         style={{ left: `${POWER_POINT[0] / 6.8}%`, top: `${POWER_POINT[1] / 6}%` }}
         type="button"
       />
