@@ -54,6 +54,7 @@ type WorkspaceSource = Omit<
   AssetSourceSummary,
   "credentialReference" | "permissions"
 > & {
+  hidden?: boolean;
   manualRecords: ManualAssetRecord[];
 };
 
@@ -244,8 +245,10 @@ function priceEvidence(holding: AssetHolding): string {
 
 export function AssetsHoldingsWorkspace({
   sources,
+  sourcesExpanded = false,
 }: {
   sources: WorkspaceSource[];
+  sourcesExpanded?: boolean;
 }) {
   const {
     currency,
@@ -369,6 +372,46 @@ export function AssetsHoldingsWorkspace({
       />
 
       <LongbridgeRealtimeNotice state={realtimeState} retry={retry} />
+
+      <details className="assets-holdings__sources" id="asset-sources" open={sourcesExpanded}>
+        <summary>
+          全部来源 <span>· {liveSources.length}</span>
+          {liveSources.some((source) => source.hidden) ? <span>· {liveSources.filter((source) => source.hidden).length} 个已隐藏</span> : null}
+          {liveSources.some((source) => source.lifecycle === "disconnected") ? <span>· {liveSources.filter((source) => source.lifecycle === "disconnected").length} 个已断开</span> : null}
+        </summary>
+        {liveSources.length === 0 ? <p>暂无来源，可通过“新增来源”接入账户、观察钱包或手工资产。</p> : (
+          <ul aria-label="全部资产来源" className="assets-holdings__source-list">
+            {liveSources.map((source) => {
+              const name = assetSourceDisplayName(source);
+              const sync = sourceSyncStatus(source);
+              return (
+                <li key={source.id}>
+                  <div>
+                    <VibeEntityLink href={`/asset-sources/${encodeURIComponent(source.id)}`}>
+                      {name}
+                    </VibeEntityLink>
+                    <div className="assets-holdings__source-state">
+                      <VibeStatusTag tone={source.lifecycle === "disconnected" ? "muted" : sync?.tone ?? "muted"}>
+                        {source.lifecycle === "disconnected" ? "已断开" : source.kind === "manual" ? "手工资产" : source.sync.error !== null ? "同步失败" : sync ? "数据待更新" : "已连接"}
+                      </VibeStatusTag>
+                      {source.hidden ? <span>总览已隐藏</span> : null}
+                      {source.kind === "manual"
+                        ? source.hasManualRecord === false ? <span>尚无记录</span> : null
+                        : activeSourceHoldings(source).length === 0 ? <span>无持仓明细</span> : null}
+                    </div>
+                  </div>
+                  <VibeLink
+                    href={`/asset-sources/${encodeURIComponent(source.id)}?view=manage`}
+                    aria-label={`管理 ${name}`}
+                    variant="text"
+                    size="compact"
+                  >管理</VibeLink>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </details>
 
       <section
         className="assets-holdings__observations"

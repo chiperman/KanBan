@@ -90,7 +90,7 @@ function AssetDialog({ currentDay, initialDay, state, sources, manualRecords, on
     <VibeSelectField fieldId="book-asset-source" label="资产来源" value={sourceId} onValueChange={id => { setSourceId(id); setAmount(manualRecords.find(row => row.sourceId === id && row.day === day)?.amount ?? ""); }} options={members.map(row => ({ value: row.sourceId, label: sources.find(source => source.id === row.sourceId)?.label ?? row.sourceId }))} />
     <VibeDateField fieldId="book-asset-day" label="资产日期" max={currentDay} value={day} onValueChange={setDay} />
     <VibeField fieldId="book-asset-amount" label="当天资产总额 · CNY" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} />
-    {members.length === 0 ? <VibeNotice tone="info">请先在设置的数据与维护中接入手工证券来源，并在本页确认来源范围。</VibeNotice> : null}
+    {members.length === 0 ? <VibeNotice tone="info">请先在资产页接入手工证券来源，并在本页确认来源范围。</VibeNotice> : null}
     <p className="trend-note">此处只更新资产金额。新增投入或取出资金，请另记入金或出金。</p>
   </ActionDialog>;
 }

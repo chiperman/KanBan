@@ -11,7 +11,7 @@ import {
 import { getServices } from "@/server/composition";
 import { readAssetRefreshState } from "@/server/asset-refresh-state";
 import { shanghaiDay } from "@/domain/daily-asset-snapshots";
-import { AssetSourceDirectory } from "@/ui/asset-source-directory";
+import { DataChecksSettings } from "@/ui/data-checks-settings";
 import {
   isProfitColorScheme,
   PROFIT_COLOR_SCHEME_COOKIE_KEY,
@@ -25,7 +25,6 @@ import { SessionGuard } from "@/ui/session-guard";
 import { TrendAppearanceSettings } from "@/ui/trend-appearance-settings";
 import { WorkbenchShell } from "@/ui/workbench-shell";
 import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
-import { VibeLink } from "@/ui/vibe/vibe-button";
 
 export const dynamic = "force-dynamic";
 
@@ -51,12 +50,11 @@ export default async function SettingsPage({
     ? savedProfitColorScheme
     : null;
   const externalServiceStatus = await services.externalServices.status();
-  const [execution, scheduler, collection, storedSources, cards, history, fullRefreshState] = await Promise.all([
+  const [execution, scheduler, collection, storedSources, history, fullRefreshState] = await Promise.all([
     services.formalSettlementExecutions.latest(),
     services.formalSettlementScheduler.read(),
     view === "data" ? services.backgroundCollection?.read() ?? null : null,
     view === "data" ? services.assetSources.list() : [],
-    view === "data" ? services.assetCards.list() : [],
     view === "data" ? services.dailyAssetSnapshots.listTrendObservations() : [],
     view === "data" ? readAssetRefreshState(services) : undefined,
   ]);
@@ -83,7 +81,6 @@ export default async function SettingsPage({
             <WorkbenchPageHeader
               eyebrow="LOCAL / SETTINGS"
               title="设置"
-              actions={view === "data" ? <VibeLink href="/asset-sources/new" variant="primary">新增来源</VibeLink> : undefined}
             />
             <WorkspaceViewNavigation label="设置分类" current={view === "preferences" ? "/settings" : `/settings?view=${view}`} items={[
               { href: "/settings", label: "偏好" },
@@ -121,18 +118,25 @@ export default async function SettingsPage({
                 <RecoverySetup configured={recoveryConfigured} />
               </div>
             </section>
-            </> : <>
-              <AssetSourceDirectory
-                cards={cards}
-                currentDay={shanghaiDay(services.clock.now())}
-                history={history}
-                sources={storedSources.map(({ credentialReference: _credential, ...source }) => source)}
-              />
-              <BackgroundCollectionSettings status={collection} />
-              <AutomaticDailySettlementSettings execution={execution} scheduler={scheduler} backgroundActive={collection?.health === "running"} />
-              <BusinessDataBackupSettings />
+            </> : <div className="data-maintenance-panel">
+              <section className="data-maintenance-section" aria-labelledby="collection-settlement-title">
+                <h2 id="collection-settlement-title">自动采集与日结</h2>
+                <div className="data-maintenance-section__content">
+                  <BackgroundCollectionSettings status={collection} />
+                  <AutomaticDailySettlementSettings execution={execution} scheduler={scheduler} backgroundActive={collection?.health === "running"} />
+                </div>
+              </section>
+              <section className="data-maintenance-section" aria-labelledby="data-checks-title">
+                <h2 id="data-checks-title">数据检查</h2>
+                <DataChecksSettings
+                  currentDay={shanghaiDay(services.clock.now())}
+                  history={history}
+                  sources={storedSources.map(({ credentialReference: _credential, ...source }) => source)}
+                />
+              </section>
               <ExternalServiceSettings initialStatus={externalServiceStatus} />
-            </>}
+              <BusinessDataBackupSettings />
+            </div>}
           </main>
         </div>
       </WorkbenchShell>

@@ -20,12 +20,14 @@ export default async function AssetsPage({
   await redirectLoopbackIpToLocalhost("/assets", searchParams);
   const services = getServices();
   if ((await services.auth.currentSession()) === null) redirect("/");
-  if ((await searchParams)?.view === "sources") redirect("/settings?view=data");
-  const [storedSources, manualRecords, fullRefreshState] = await Promise.all([
+  const sourcesExpanded = (await searchParams)?.view === "sources";
+  const [storedSources, manualRecords, cards, fullRefreshState] = await Promise.all([
     services.assetSources.list(),
     services.manualAssetRecords.list(),
+    services.assetCards.list(),
     readAssetRefreshState(services),
   ]);
+  const hiddenSourceIds = new Set(cards.filter((card) => card.hidden).map((card) => card.sourceId));
   const manualRecordsBySource = new Map<string, typeof manualRecords>();
   for (const record of manualRecords) {
     manualRecordsBySource.set(record.sourceId, [
@@ -36,6 +38,7 @@ export default async function AssetsPage({
   const sources = storedSources.map(
     ({ credentialReference: _credentialReference, permissions: _permissions, ...source }) => ({
       ...source,
+      hidden: hiddenSourceIds.has(source.id),
       manualRecords: source.kind === "manual"
         ? manualRecordsBySource.get(source.id) ?? []
         : [],
@@ -61,7 +64,7 @@ export default async function AssetsPage({
             跳到主要内容
           </a>
           <main id="main-content">
-            <AssetsHoldingsWorkspace sources={sources} />
+            <AssetsHoldingsWorkspace sources={sources} sourcesExpanded={sourcesExpanded} />
           </main>
         </div>
       </WorkbenchShell>

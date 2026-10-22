@@ -205,151 +205,153 @@ export function BusinessDataBackupSettings() {
 
   return (
     <section
-      className="settings-section business-data-backup-settings"
+      className="data-maintenance-section business-data-backup-settings"
       aria-labelledby="business-data-backup-title"
     >
       <h2 id="business-data-backup-title">备份与恢复</h2>
-      <p className="settings-description">
-        备份业务数据与资金账本。恢复会替换当前数据；不含凭证、令牌和密钥。
-      </p>
-      {/* 导出与恢复方向相反：分成两组，避免把「备份文件名」误读成导出目标 */}
-      <div className="business-data-backup-settings__group">
-        <p className="business-data-backup-settings__group-label">导出</p>
-        <div className="business-data-backup-settings__actions">
-          <VibeButton
-            disabled={pending !== null}
-            onClick={() => void exportBackup()}
-            type="button"
-            variant="primary"
-          >
-            {pending === "export" ? "正在导出…" : "导出业务数据备份"}
-          </VibeButton>
-        </div>
-        {exported && !restored ? (
-          <VibeNotice role="status" tone="success">
-            已导出本机备份 {exported.fileName}。{exported.warning}
-          </VibeNotice>
-        ) : null}
-      </div>
-      <div className="business-data-backup-settings__group business-data-backup-settings__group--restore">
-        <p className="business-data-backup-settings__group-label">
-          从本机备份恢复
-          <span className="business-data-backup-settings__group-caveat">
-            会替换当前业务数据
-          </span>
+      <div className="data-maintenance-section__content">
+        <p className="settings-description">
+          备份业务数据与资金账本。恢复会替换当前数据；不含凭证、令牌和密钥。
         </p>
-        <BusinessDataBackupDropzone
-          disabled={pending !== null || confirmOpen}
-          onUploadStart={() => {
-            if (!beginOperation("upload")) return false;
-            setPreview(null);
-            setRestored(null);
-            setConfirmOpen(false);
-            return true;
-          }}
-          onUploadEnd={finishOperation}
-          onUploaded={(backup) => {
-            setFileName(backup.fileName);
-            setPreview(null);
-            setRestored(null);
-            void loadBackups();
-          }}
-          onError={setError}
-        />
-        <div className="business-data-restore">
-          <VibeSelectField
-            disabled={pending !== null}
-            fieldId="business-data-backup-file-name"
-            label="选择备份"
-            onValueChange={selectBackup}
-            options={backupOptions(backups, fileName, loadingBackups, listError !== "")}
-            value={fileName}
-          />
-          <VibeButton
-            disabled={pending !== null}
-            onClick={() => void previewRestore()}
-            type="button"
-            variant="outline"
-          >
-            {pending === "preview" ? "正在预演…" : "预演恢复"}
-          </VibeButton>
-        </div>
-        {listError ? (
-          <VibeNotice role="alert" tone="error">
-            读取备份列表失败：{listError}
-            <VibeButton
-              disabled={loadingBackups || pending !== null}
-              onClick={() => void loadBackups()}
-              type="button"
-              variant="text"
-            >
-              重新加载备份
-            </VibeButton>
-          </VibeNotice>
-        ) : null}
-        {preview ? (
-          <div className="business-data-restore__preview">
-            <p>{previewSummary(preview)}</p>
-            <VibeNotice tone="info">{preview.warning}</VibeNotice>
+        {/* 导出与恢复方向相反：分成两组，避免把「备份文件名」误读成导出目标 */}
+        <div className="business-data-backup-settings__group">
+          <p className="business-data-backup-settings__group-label">导出</p>
+          <div className="business-data-backup-settings__actions">
             <VibeButton
               disabled={pending !== null}
-              onClick={() => setConfirmOpen(true)}
+              onClick={() => void exportBackup()}
+              type="button"
+              variant="primary"
+            >
+              {pending === "export" ? "正在导出…" : "导出业务数据备份"}
+            </VibeButton>
+          </div>
+          {exported && !restored ? (
+            <VibeNotice role="status" tone="success">
+              已导出本机备份 {exported.fileName}。{exported.warning}
+            </VibeNotice>
+          ) : null}
+        </div>
+        <div className="business-data-backup-settings__group business-data-backup-settings__group--restore">
+          <p className="business-data-backup-settings__group-label">
+            从本机备份恢复
+            <span className="business-data-backup-settings__group-caveat">
+              会替换当前业务数据
+            </span>
+          </p>
+          <BusinessDataBackupDropzone
+            disabled={pending !== null || confirmOpen}
+            onUploadStart={() => {
+              if (!beginOperation("upload")) return false;
+              setPreview(null);
+              setRestored(null);
+              setConfirmOpen(false);
+              return true;
+            }}
+            onUploadEnd={finishOperation}
+            onUploaded={(backup) => {
+              setFileName(backup.fileName);
+              setPreview(null);
+              setRestored(null);
+              void loadBackups();
+            }}
+            onError={setError}
+          />
+          <div className="business-data-restore">
+            <VibeSelectField
+              disabled={pending !== null}
+              fieldId="business-data-backup-file-name"
+              label="选择备份"
+              onValueChange={selectBackup}
+              options={backupOptions(backups, fileName, loadingBackups, listError !== "")}
+              value={fileName}
+            />
+            <VibeButton
+              disabled={pending !== null}
+              onClick={() => void previewRestore()}
               type="button"
               variant="outline"
             >
-              恢复此业务数据备份
+              {pending === "preview" ? "正在预演…" : "预演恢复"}
             </VibeButton>
           </div>
-        ) : null}
-        {restored ? (
-          <VibeNotice role="status" tone="success">
-            已恢复。自动来源需重新授权。
-          </VibeNotice>
-        ) : null}
-      </div>
-      {error ? (
-        <VibeNotice role="alert" tone="error">
-          {error}
-        </VibeNotice>
-      ) : null}
-      {confirmOpen && preview ? (
-        <VibeDialog
-          actions={
-            <>
+          {listError ? (
+            <VibeNotice role="alert" tone="error">
+              读取备份列表失败：{listError}
               <VibeButton
-                disabled={pending === "restore"}
-                onClick={() => setConfirmOpen(false)}
+                disabled={loadingBackups || pending !== null}
+                onClick={() => void loadBackups()}
                 type="button"
                 variant="text"
               >
-                取消
+                重新加载备份
               </VibeButton>
+            </VibeNotice>
+          ) : null}
+          {preview ? (
+            <div className="business-data-restore__preview">
+              <p>{previewSummary(preview)}</p>
+              <VibeNotice tone="info">{preview.warning}</VibeNotice>
               <VibeButton
-                disabled={pending === "restore"}
-                type="submit"
-                variant="primary"
+                disabled={pending !== null}
+                onClick={() => setConfirmOpen(true)}
+                type="button"
+                variant="outline"
               >
-                {pending === "restore" ? "正在恢复…" : "确认恢复"}
+                恢复此业务数据备份
               </VibeButton>
-            </>
-          }
-          description={
-            <>
-              将覆盖当前业务数据。自动来源需重新授权。
-              {preview.omittedHistory ? omittedHistorySummary(preview.omittedHistory) : null}
-            </>
-          }
-          eyebrow="LOCAL BACKUP / RESTORE"
-          onClose={() => setConfirmOpen(false)}
-          onSubmit={restore}
-          title="确认恢复业务数据"
-          titleId="business-data-restore-confirm-title"
-        >
-          <p className="business-data-restore__dialog-summary">
-            {previewSummary(preview)}
-          </p>
-        </VibeDialog>
-      ) : null}
+            </div>
+          ) : null}
+          {restored ? (
+            <VibeNotice role="status" tone="success">
+              已恢复。自动来源需重新授权。
+            </VibeNotice>
+          ) : null}
+        </div>
+        {error ? (
+          <VibeNotice role="alert" tone="error">
+            {error}
+          </VibeNotice>
+        ) : null}
+        {confirmOpen && preview ? (
+          <VibeDialog
+            actions={
+              <>
+                <VibeButton
+                  disabled={pending === "restore"}
+                  onClick={() => setConfirmOpen(false)}
+                  type="button"
+                  variant="text"
+                >
+                  取消
+                </VibeButton>
+                <VibeButton
+                  disabled={pending === "restore"}
+                  type="submit"
+                  variant="primary"
+                >
+                  {pending === "restore" ? "正在恢复…" : "确认恢复"}
+                </VibeButton>
+              </>
+            }
+            description={
+              <>
+                将覆盖当前业务数据。自动来源需重新授权。
+                {preview.omittedHistory ? omittedHistorySummary(preview.omittedHistory) : null}
+              </>
+            }
+            eyebrow="LOCAL BACKUP / RESTORE"
+            onClose={() => setConfirmOpen(false)}
+            onSubmit={restore}
+            title="确认恢复业务数据"
+            titleId="business-data-restore-confirm-title"
+          >
+            <p className="business-data-restore__dialog-summary">
+              {previewSummary(preview)}
+            </p>
+          </VibeDialog>
+        ) : null}
+      </div>
     </section>
   );
 }

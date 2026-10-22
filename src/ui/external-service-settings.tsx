@@ -96,69 +96,67 @@ export function ExternalServiceSettings({
 
   return (
     <section
-      className="external-service-settings"
+      className="data-maintenance-section"
+      id="external-services"
       aria-labelledby="external-service-settings-title"
     >
-      <div className="external-service-settings__head">
-        <div>
-          <h2 id="external-service-settings-title">行情与链上服务</h2>
-        </div>
-        <span className="external-service-settings__scope">GLOBAL / EVM</span>
+      <h2 id="external-service-settings-title">行情与链上服务</h2>
+      <div className="data-maintenance-section__content">
+        <form className="external-service-form" onSubmit={save}>
+          <dl className="external-service-statuses" data-testid="external-service-statuses">
+            {SERVICE_FIELDS.map((field) => {
+              const service = status[field.id];
+              return (
+                <div className="external-service-statuses__row" key={field.id}>
+                  <dt className="external-service-statuses__term">
+                    <label className="vibe-field__label" htmlFor={field.fieldId}>
+                      {FIELD_LABELS[field.id]}
+                    </label>
+                  </dt>
+                  {/* 状态与字段同处一行，读作「这个字段现在是什么状态」 */}
+                  <dd
+                    className="external-service-statuses__state"
+                    data-vibe-tone={service.configured ? "success" : "warning"}
+                  >
+                    {stateText(service.configured, service.verifiedAt)}
+                  </dd>
+                  <dd className="external-service-statuses__input">
+                    <input
+                      autoComplete="off"
+                      className="vibe-field__input"
+                      id={field.fieldId}
+                      name={field.name}
+                      placeholder={
+                        service.configured
+                          ? "输入新值可替换"
+                          : field.placeholderEmpty
+                      }
+                      required={!service.configured}
+                      type="password"
+                    />
+                  </dd>
+                </div>
+              );
+            })}
+          </dl>
+          <div className="external-service-form__actions">
+            <VibeButton disabled={pending} type="submit" variant="primary">
+              {pending ? "正在保存…" : "保存并验证"}
+            </VibeButton>
+            <span>留空保持原值。</span>
+          </div>
+        </form>
+        {saved ? (
+          <VibeNotice role="status" tone="success">
+            已保存并验证。
+          </VibeNotice>
+        ) : null}
+        {error ? (
+          <VibeNotice role="alert" tone="error">
+            {error}
+          </VibeNotice>
+        ) : null}
       </div>
-      <form className="external-service-form" onSubmit={save}>
-        <dl className="external-service-statuses" data-testid="external-service-statuses">
-          {SERVICE_FIELDS.map((field) => {
-            const service = status[field.id];
-            return (
-              <div className="external-service-statuses__row" key={field.id}>
-                <dt className="external-service-statuses__term">
-                  <label className="vibe-field__label" htmlFor={field.fieldId}>
-                    {FIELD_LABELS[field.id]}
-                  </label>
-                </dt>
-                {/* 状态与字段同处一行，读作「这个字段现在是什么状态」 */}
-                <dd
-                  className="external-service-statuses__state"
-                  data-vibe-tone={service.configured ? "success" : "warning"}
-                >
-                  {stateText(service.configured, service.verifiedAt)}
-                </dd>
-                <dd className="external-service-statuses__input">
-                  <input
-                    autoComplete="off"
-                    className="vibe-field__input"
-                    id={field.fieldId}
-                    name={field.name}
-                    placeholder={
-                      service.configured
-                        ? "输入新值可替换"
-                        : field.placeholderEmpty
-                    }
-                    required={!service.configured}
-                    type="password"
-                  />
-                </dd>
-              </div>
-            );
-          })}
-        </dl>
-        <div className="external-service-form__actions">
-          <VibeButton disabled={pending} type="submit" variant="primary">
-            {pending ? "正在保存…" : "保存并验证"}
-          </VibeButton>
-          <span>留空保持原值。</span>
-        </div>
-      </form>
-      {saved ? (
-        <VibeNotice role="status" tone="success">
-          已保存并验证。
-        </VibeNotice>
-      ) : null}
-      {error ? (
-        <VibeNotice role="alert" tone="error">
-          {error}
-        </VibeNotice>
-      ) : null}
     </section>
   );
 }

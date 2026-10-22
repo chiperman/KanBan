@@ -290,8 +290,7 @@ export function DataHealthDiagnostics({
     >
       <div className="data-health-section-heading">
         <div>
-          <p className="card-label">HISTORY / COVERAGE</p>
-          <h2>历史覆盖</h2>
+          <h3>历史覆盖</h3>
           <p className="data-health-history__summary">
             {rangeLabel} · {incompleteCount > 0 || gapCount > 0
               ? `不完整历史 ${incompleteCount} 天 · 数据缺口 ${gapCount} 天`

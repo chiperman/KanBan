@@ -10,13 +10,13 @@ export function BackgroundCollectionSettings({ status }: { status: CollectionSta
   const total = status?.sources.length ?? 0;
   const report = status?.state?.report;
   const running = status?.health === "running";
+  const hasSourceErrors = status?.sources.some((source) => source.error) ?? false;
 
   return (
-    <section className="settings-section background-collection" aria-labelledby="background-collection-title">
+    <section className="background-collection" aria-labelledby="background-collection-title">
       <header className="background-collection__header">
         <div>
-          <h2 id="background-collection-title">后台自动采集</h2>
-          <p>每小时全量采集，关闭网页后仍会运行。</p>
+          <h3 id="background-collection-title">后台采集</h3>
         </div>
         <VibeStatusTag tone={status?.state?.error || status?.health === "stopped" ? "warning" : running ? "success" : "muted"}>
           {running ? "近期有检查" : status?.health === "stopped" ? "检查已中断" : "暂无运行记录"}
@@ -61,34 +61,37 @@ export function BackgroundCollectionSettings({ status }: { status: CollectionSta
         </div>
       </dl>
 
-      <dl className="background-collection__timestamps">
-        <div><dt>最近检查</dt><dd>{time(status?.state?.checkedAt ?? null)}</dd></div>
-        <div><dt>最近批次完成</dt><dd>{time(status?.state?.reportAt ?? null)}</dd></div>
-        <div><dt>最近全量成功</dt><dd>{time(status?.state?.lastFullSuccessAt ?? null)}</dd></div>
-        <div><dt>今日首次凑齐</dt><dd>{status?.firstCompleteAt ? time(status.firstCompleteAt) : "尚未形成完整基准"}</dd></div>
-      </dl>
+      <details className="data-maintenance-disclosure" open={hasSourceErrors}>
+        <summary>查看采集记录与来源状态</summary>
+        <dl className="background-collection__timestamps">
+          <div><dt>最近检查</dt><dd>{time(status?.state?.checkedAt ?? null)}</dd></div>
+          <div><dt>最近批次完成</dt><dd>{time(status?.state?.reportAt ?? null)}</dd></div>
+          <div><dt>最近全量成功</dt><dd>{time(status?.state?.lastFullSuccessAt ?? null)}</dd></div>
+          <div><dt>今日首次凑齐</dt><dd>{status?.firstCompleteAt ? time(status.firstCompleteAt) : "尚未形成完整基准"}</dd></div>
+        </dl>
 
-      <div className="background-collection__sources">
-        <div className="background-collection__sources-header">
-          <h3>来源采集状态</h3>
-          <span>上海时间 · 刷新页面查看最新状态</span>
+        <div className="background-collection__sources">
+          <div className="background-collection__sources-header">
+            <h3>来源采集状态</h3>
+            <span>上海时间 · 刷新页面查看最新状态</span>
+          </div>
+          {total ? <ul className="background-collection__source-list">
+            {status?.sources.map(source => <li className="background-collection__source" key={source.id}>
+              <div className="background-collection__source-name">
+                <h4>{source.label}</h4>
+                <VibeStatusTag tone={source.error ? "warning" : "success"}>
+                  {source.error ? "采集异常" : "正常"}
+                </VibeStatusTag>
+              </div>
+              <dl className="background-collection__source-times">
+                <div><dt>今日有效观测</dt><dd>{source.observedAt ? time(source.observedAt) : "今日尚未采集完整数据"}</dd></div>
+                <div><dt>最近成功采集</dt><dd>{time(source.lastSuccessfulAt)}</dd></div>
+              </dl>
+              {source.error ? <p className="background-collection__source-error">{source.error}</p> : null}
+            </li>)}
+          </ul> : <p className="background-collection__empty">暂无自动来源，连接自动来源后可在此查看采集状态。</p>}
         </div>
-        {total ? <ul className="background-collection__source-list">
-          {status?.sources.map(source => <li className="background-collection__source" key={source.id}>
-            <div className="background-collection__source-name">
-              <h4>{source.label}</h4>
-              <VibeStatusTag tone={source.error ? "warning" : "success"}>
-                {source.error ? "采集异常" : "正常"}
-              </VibeStatusTag>
-            </div>
-            <dl className="background-collection__source-times">
-              <div><dt>今日有效观测</dt><dd>{source.observedAt ? time(source.observedAt) : "今日尚未采集完整数据"}</dd></div>
-              <div><dt>最近成功采集</dt><dd>{time(source.lastSuccessfulAt)}</dd></div>
-            </dl>
-            {source.error ? <p className="background-collection__source-error">{source.error}</p> : null}
-          </li>)}
-        </ul> : <p className="background-collection__empty">暂无自动来源，连接自动来源后可在此查看采集状态。</p>}
-      </div>
+      </details>
 
       <details className="background-collection__rules">
         <summary>采集规则与数据口径</summary>

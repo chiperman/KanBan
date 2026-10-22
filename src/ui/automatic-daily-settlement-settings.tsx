@@ -9,8 +9,8 @@ export function AutomaticDailySettlementSettings({ execution, scheduler, backgro
   scheduler: FormalSettlementSchedulerStatus;
 }) {
   return (
-    <section id="automatic-daily-settlement" className="settings-section" aria-labelledby="automatic-daily-settlement-title">
-      <h2 id="automatic-daily-settlement-title">自动日结</h2>
+    <section id="automatic-daily-settlement" className="automatic-daily-settlement" aria-labelledby="automatic-daily-settlement-title">
+      <h3 id="automatic-daily-settlement-title">正式日结</h3>
       <dl className="security-settings__statuses">
         <div><dt>本机调度</dt><dd><VibeStatusTag tone="muted">{backgroundActive ? "由后台采集每十五分钟检查" : settlementSchedulerLabel[scheduler.state]}</VibeStatusTag></dd></div>
         <div><dt>检查时间</dt><dd>{formatShanghaiDateTime(scheduler.checkedAt)}（上海时间）</dd></div>
@@ -21,22 +21,23 @@ export function AutomaticDailySettlementSettings({ execution, scheduler, backgro
           {execution.reason ? <div><dt>原因</dt><dd>{settlementReasonLabel[execution.reason]}</dd></div> : null}
         </> : null}
       </dl>
-      {/* 两段口径说明按「探测范围 / 计价口径」分列，避免糊成一段灰色墙。
-          这两句是读法边界，不是告警，所以留在正文层级而不升级为提示条。 */}
-      <div className="formal-daily-settlement-notes">
-        <p className="formal-daily-settlement-note">
-          <span className="formal-daily-settlement-note__label">探测范围</span>
-          <span>
-            后台采集运行时同时检查正式日结；未检测到后台心跳时，显示独立日结任务的本机调度状态。过去执行成功不代表当前采集正常。
-          </span>
-        </p>
-        <p className="formal-daily-settlement-note">
-          <span className="formal-daily-settlement-note__label">计价口径</span>
-          <span>
-            独立于实时刷新：证券按官方收盘价，加密资产按采集窗口市价。执行日志不纳入备份。
-          </span>
-        </p>
-      </div>
+      <details className="data-maintenance-disclosure">
+        <summary>日结规则与计价口径</summary>
+        <div className="formal-daily-settlement-notes">
+          <p className="formal-daily-settlement-note">
+            <span className="formal-daily-settlement-note__label">探测范围</span>
+            <span>
+              后台采集运行时同时检查正式日结；未检测到后台心跳时，显示独立日结任务的本机调度状态。过去执行成功不代表当前采集正常。
+            </span>
+          </p>
+          <p className="formal-daily-settlement-note">
+            <span className="formal-daily-settlement-note__label">计价口径</span>
+            <span>
+              独立于实时刷新：证券按官方收盘价，加密资产按采集窗口市价。执行日志不纳入备份。
+            </span>
+          </p>
+        </div>
+      </details>
     </section>
   );
 }

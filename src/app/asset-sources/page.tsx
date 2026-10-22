@@ -17,5 +17,5 @@ export default async function AssetSourcesPage({
 
   const services = getServices();
   if ((await services.auth.currentSession()) === null) redirect("/");
-  redirect("/settings?view=data");
+  redirect("/assets?view=sources#asset-sources");
 }

@@ -213,8 +213,8 @@ export function AssetSourceFlow({
     setStep("configure");
   }
 
-  function backToDirectory() {
-    router.push("/settings?view=data");
+  function backToAssets() {
+    router.push("/assets?view=sources#asset-sources");
   }
 
   function backToChoice() {
@@ -358,7 +358,7 @@ export function AssetSourceFlow({
       setError(body?.error ?? "手工资产记录保存失败");
       return;
     }
-    router.push("/settings?view=data");
+    router.push("/assets?view=sources#asset-sources");
     router.refresh();
   }
 
@@ -385,7 +385,7 @@ export function AssetSourceFlow({
     }
     router.push(
       reauthorization === undefined
-        ? "/settings?view=data"
+        ? "/assets?view=sources#asset-sources"
         : `/asset-sources/${encodeURIComponent(reauthorization.sourceId)}`,
     );
     router.refresh();
@@ -419,7 +419,7 @@ export function AssetSourceFlow({
     }
     router.push(
       reauthorization === undefined
-        ? "/settings?view=data"
+        ? "/assets?view=sources#asset-sources"
         : `/asset-sources/${encodeURIComponent(reauthorization.sourceId)}`,
     );
     router.refresh();
@@ -445,7 +445,7 @@ export function AssetSourceFlow({
         return fetch(endpoint, { method: "DELETE" });
       }),
     );
-    backToDirectory();
+    backToAssets();
   }
 
   const ready =
@@ -522,7 +522,7 @@ export function AssetSourceFlow({
               </label>
             ))}
           </fieldset>
-          <VibeButton onClick={backToDirectory} type="button" variant="text">
+          <VibeButton onClick={backToAssets} type="button" variant="text">
             取消返回
           </VibeButton>
         </section>
@@ -563,7 +563,7 @@ export function AssetSourceFlow({
                 !evmServiceStatus.bscRpc.configured) ? (
                 <VibeNotice role="status" tone="info">
                   EVM 钱包依赖全局 CoinGecko、Ethereum RPC 与 BSC RPC 配置。
-                  <VibeLink href="/settings?view=data" variant="text">配置行情与链上服务</VibeLink>
+                  <VibeLink href="/settings?view=data#external-services" variant="text">配置行情与链上服务</VibeLink>
                 </VibeNotice>
               ) : null}
               {selectedProvider.fields.map((field) =>
@@ -636,7 +636,7 @@ export function AssetSourceFlow({
                 上一步
               </VibeButton>
             ) : (
-              <VibeButton disabled={pending} onClick={backToDirectory} type="button" variant="text">
+              <VibeButton disabled={pending} onClick={backToAssets} type="button" variant="text">
                 取消返回
               </VibeButton>
             )}

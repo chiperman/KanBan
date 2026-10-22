@@ -236,7 +236,7 @@ function SourceLifecycleActions({
         await sourceRequest(`/api/asset-sources/${encodeURIComponent(source.id)}`, "DELETE", {
           confirmation: "DELETE_SOURCE_DATA",
         });
-        router.push("/settings?view=data");
+        router.push("/assets?view=sources#asset-sources");
       } else {
         await sourceRequest(`/api/asset-sources/${encodeURIComponent(source.id)}`, "PATCH", {
           action,
@@ -482,7 +482,7 @@ export function AssetSourceDetail({
           eyebrow="SOURCE / DETAIL"
           title={name}
           backLink={view === "manage"
-            ? { href: "/settings?view=data", label: "返回数据与维护" }
+            ? { href: "/assets?view=sources#asset-sources", label: "返回资产" }
             : { href: "/assets", label: "返回资产" }}
           actionsLabel="来源详情快捷操作"
           actions={<>
