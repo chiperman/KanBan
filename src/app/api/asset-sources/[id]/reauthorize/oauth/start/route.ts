@@ -18,6 +18,8 @@ export async function POST(
   if (source?.kind !== "longbridge") {
     return Response.json({ error: "只有长桥来源可使用 OAuth 重新授权" }, { status: 400 });
   }
+  const body = await request.json().catch(() => null) as { mode?: unknown } | null;
+  const connectionMode = body?.mode === "both" ? "both" : "sdk";
   try {
     const callback = new URL(
       "/api/asset-sources/longbridge/oauth/callback",
@@ -25,6 +27,7 @@ export async function POST(
     ).toString();
     const started = await services.longbridge.start(callback);
     services.longbridgeOAuthState.rememberStart(started.state, {
+      connectionMode,
       codeVerifier: started.codeVerifier,
       redirectUri: callback,
       reauthorization: {

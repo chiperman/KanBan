@@ -1,3 +1,5 @@
+import type { LongbridgeConnections } from "@/server/asset-sources/longbridge-connections";
+import type { LongbridgeConnectionMode } from "@/server/asset-sources/longbridge-connection";
 import type {
   AssetSourceConnections,
   BitAuthorizationResult,
@@ -22,7 +24,10 @@ export type AssetSourceAuthorizationInput =
       code: string;
       codeVerifier: string;
       redirectUri: string;
+      connectionMode?: LongbridgeConnectionMode;
+      sourceId?: string;
     }
+  | { provider: "longbridge"; connectionMode: LongbridgeConnectionMode; sourceId?: string }
   | { provider: "binance"; apiKey: string; apiSecret: string }
   | {
       provider: "okx";
@@ -48,6 +53,7 @@ export type AssetSourceAuthorizationInput =
 
 interface ProviderDependencies {
   longbridge: LongbridgeOAuth;
+  longbridgeConnections?: LongbridgeConnections;
   binance: BinanceReadOnly;
   okx: OkxReadOnly;
   bitget: BitgetReadOnly;
@@ -93,6 +99,7 @@ function inputFor<P extends AssetSourceProvider>(
 
 export function createAssetSourceProviderAdapters({
   longbridge,
+  longbridgeConnections,
   binance,
   okx,
   bitget,
@@ -103,9 +110,15 @@ export function createAssetSourceProviderAdapters({
   return [
     {
       provider: "longbridge",
-      async authorize(raw) {
+      async authorize(raw, observedAt) {
         const input = inputFor(raw, "longbridge");
-        const result = await longbridge.finish(input);
+        const result = "code" in input
+          ? longbridgeConnections
+            ? await longbridgeConnections.finishConnection(input, observedAt)
+            : await longbridge.finish(input)
+          : longbridgeConnections
+            ? await longbridgeConnections.previewConnection(input.connectionMode, observedAt, input.sourceId)
+            : (() => { throw new Error("长桥连接管理不可用"); })();
         const authorization = { provider: "longbridge" as const, ...result };
         longbridgePermissions(authorization);
         return authorization;

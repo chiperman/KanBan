@@ -40,6 +40,8 @@ type NativeLongbridgeSdk = {
     symbol: string,
     count: number,
   ): Promise<unknown>;
+  readDailyAsset(clientId: string, callbackPort: number, start: string, end: string): Promise<unknown>;
+  readTradingDays(clientId: string, callbackPort: number, market: string, start: string, end: string): Promise<unknown>;
   forgetAuthorization(clientId: string): void;
 };
 
@@ -130,7 +132,9 @@ function callbackPort(): number {
   return port;
 }
 
+let loadedSdk: NativeLongbridgeSdk | undefined;
 function nativeSdk(): NativeLongbridgeSdk {
+  if (loadedSdk) return loadedSdk;
   const nativePath = path.join(
     process.cwd(),
     "native/longbridge-keychain-sdk/kanban_longbridge_keychain_sdk.node",
@@ -138,9 +142,12 @@ function nativeSdk(): NativeLongbridgeSdk {
   try {
     // Native addon 必须只在服务端运行；避免被 Next 静态分析进浏览器包。
     const dynamicRequire = createRequire(path.join(process.cwd(), "package.json"));
-    return dynamicRequire(nativePath) as NativeLongbridgeSdk;
+    const artifact = dynamicRequire(path.join(process.cwd(), "scripts/native-artifact.mjs")) as { checkNativeArtifact(root: string): void };
+    artifact.checkNativeArtifact(process.cwd());
+    loadedSdk = dynamicRequire(nativePath) as NativeLongbridgeSdk;
+    return loadedSdk;
   } catch {
-    throw new Error("长桥 Keychain SDK 未构建，请先运行 pnpm native:longbridge:build");
+    throw new Error("长桥 SDK 原生产物缺失、过期或不兼容，请运行 pnpm native:longbridge:build");
   }
 }
 
@@ -171,8 +178,8 @@ function parse<T>(value: unknown, message: string): T {
 
 /** 仅暴露 SDK 的 OAuth 状态与只读数据；Token 不会进入 TypeScript 进程。 */
 export class LongbridgeKeychainSdk {
-  private readonly clientId = requiredClientId();
-  private readonly port = callbackPort();
+  private get clientId() { return requiredClientId(); }
+  private get port() { return callbackPort(); }
 
   accountIdentity(): LongbridgeAccountIdentity {
     return parse(nativeSdk().accountIdentity(this.clientId), "长桥账户身份格式无效");
@@ -268,6 +275,14 @@ export class LongbridgeKeychainSdk {
       await nativeSdk().readFiveDayTrend(this.clientId, this.port, symbol, count),
       "长桥近五日走势响应格式无效",
     );
+  }
+
+  async readDailyAsset(query: { start: string; end: string }): Promise<unknown> {
+    return parse(await nativeSdk().readDailyAsset(this.clientId, this.port, query.start, query.end), "长桥每日资产响应无效");
+  }
+
+  async readTradingDays(input: { market: string; start: string; end: string }): Promise<{ trading_days: string[]; half_trading_days: string[] }> {
+    return parse(await nativeSdk().readTradingDays(this.clientId, this.port, input.market, input.start, input.end), "长桥交易日历响应无效");
   }
 
   forgetAuthorization(): void {

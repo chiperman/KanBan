@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -67,19 +68,24 @@ test("Keychain 修复命令依次锁定、解锁并验证 login 钥匙串", () =
   );
 });
 
-test("非交互启动发现 Keychain 不可用时阻止服务启动并提示修复命令", () => {
+test("CLI 启动不检查或修复 SDK Keychain", async () => {
   const fixture = fakeSecurity(false);
-  const result = spawnSync(process.execPath, [START_SCRIPT, "dev"], {
-    encoding: "utf8",
-    env: fixture.env,
+  const occupied = createServer();
+  await new Promise((resolve, reject) => {
+    occupied.once("error", reject);
+    occupied.listen(0, "127.0.0.1", resolve);
   });
-
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /pnpm longbridge:keychain:repair/);
-  assert.deepEqual(
-    readFileSync(fixture.log, "utf8").trim().split("\n"),
-    [
-      `show-keychain-info ${fixture.env.HOME}/Library/Keychains/login.keychain-db`,
-    ],
-  );
+  try {
+    const port = occupied.address().port;
+    const result = spawnSync(process.execPath, [START_SCRIPT, "dev", "--port", String(port)], {
+      encoding: "utf8",
+      env: fixture.env,
+      timeout: 10_000,
+    });
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stderr, /EADDRINUSE/);
+    assert.equal(existsSync(fixture.log), false);
+  } finally {
+    await new Promise(resolve => occupied.close(resolve));
+  }
 });

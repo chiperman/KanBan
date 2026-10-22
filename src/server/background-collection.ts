@@ -47,6 +47,7 @@ export class BackgroundAssetCollection {
     private readonly synchronization: AssetSynchronization,
     private readonly settlement: FormalDailySettlementRunner,
     private readonly clock: Clock,
+    private readonly dailyAssetHistory?: { run(): Promise<void> },
   ) {}
 
   async read(): Promise<CollectionStatus> {
@@ -129,6 +130,7 @@ export class BackgroundAssetCollection {
         await this.settlement.run();
         state.formalCheckedAt = now;
       }
+      await this.dailyAssetHistory?.run();
       state.completedAt = this.clock.now().toISOString();
       state.checkedAt = state.completedAt;
       await this.store.saveCollectionState(state);

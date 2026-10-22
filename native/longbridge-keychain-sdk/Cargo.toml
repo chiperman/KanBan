@@ -9,6 +9,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 base64 = "0.22.1"
+time = "0.3"
 keyring = { version = "3.6.2", features = ["apple-native"] }
 longbridge = "4.4.1"
 longbridge-oauth = "4.4.1"

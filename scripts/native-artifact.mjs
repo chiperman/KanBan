@@ -35,7 +35,7 @@ export function checkNativeArtifact(root = process.cwd(), { load = true } = {}) 
         value.source !== sourceFingerprint(root) || value.binary !== hash(readFileSync(path.join(base, outputName)))) throw new Error("不匹配");
     if (load) {
       const sdk = createRequire(import.meta.url)(path.join(base, outputName));
-      for (const key of ["beginAuthorization", "authorizationStatus", "forgetAuthorization", "readAssets"]) {
+      for (const key of ["beginAuthorization", "authorizationStatus", "forgetAuthorization", "readAssets", "readQuotes", "readDailyAsset", "readTradingDays"]) {
         if (typeof sdk[key] !== "function") throw new Error("接口不匹配");
       }
     }

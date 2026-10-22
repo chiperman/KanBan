@@ -1,6 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createInterface } from "node:readline";
+import { AssetReadError } from "@/server/asset-sync-diagnostics";
 
 import { longbridgeQuoteTime, longbridgeQuotePeriod, type LongbridgeRealtimeQuote } from "@/domain/longbridge-realtime";
 
@@ -132,6 +133,7 @@ export class LongbridgeServeClient {
     resolve: (value: unknown) => void;
     reject: (error: unknown) => void;
     timer: ReturnType<typeof setTimeout>;
+    method: string;
   }>();
   private readonly listeners = new Set<QuoteListener>();
   private readonly disconnectListeners = new Set<(error: unknown) => void>();
@@ -171,9 +173,9 @@ export class LongbridgeServeClient {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error("长桥 serve 请求超时：" + method));
+        reject(new AssetReadError("cli", new DOMException("长桥 serve 请求超时", "TimeoutError"), method));
       }, this.requestTimeoutMs);
-      this.pending.set(id, { resolve, reject, timer });
+      this.pending.set(id, { resolve, reject, timer, method });
       try {
         this.process?.stdin.write(request + "\n");
       } catch (error) {
@@ -248,7 +250,7 @@ export class LongbridgeServeClient {
       child.once("error", disconnected);
       child.stdin.on("error", disconnected);
       child.once("exit", (code, signal) => {
-        disconnected(new Error("长桥 serve 进程退出（" + (signal ?? code ?? "unknown") + "）"));
+        disconnected(Object.assign(new Error("长桥 serve 进程退出（" + (signal ?? code ?? "unknown") + "）"), { code: "EPIPE" }));
       });
       void this.callInternal("initialize", {}).then(
         () => {
@@ -269,9 +271,9 @@ export class LongbridgeServeClient {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error("长桥 serve 请求超时：" + method));
+        reject(new AssetReadError("cli", new DOMException("长桥 serve 请求超时", "TimeoutError"), method));
       }, this.requestTimeoutMs);
-      this.pending.set(id, { resolve, reject, timer });
+      this.pending.set(id, { resolve, reject, timer, method });
       this.process?.stdin.write(request + "\n");
     });
   }
@@ -297,7 +299,9 @@ export class LongbridgeServeClient {
     this.pending.delete(response.id);
     clearTimeout(pending.timer);
     if (response.error) {
-      pending.reject(new Error(response.error.message ?? "长桥 serve 请求失败"));
+      pending.reject(new AssetReadError("cli", Object.assign(new Error(response.error.message ?? "长桥 serve 请求失败"), {
+        code: response.error.code,
+      }), pending.method));
     } else {
       pending.resolve(response.result);
     }
@@ -306,7 +310,7 @@ export class LongbridgeServeClient {
   private failPending(error: unknown): void {
     for (const [id, pending] of this.pending) {
       clearTimeout(pending.timer);
-      pending.reject(error);
+      pending.reject(new AssetReadError("cli", error, pending.method));
       this.pending.delete(id);
     }
   }

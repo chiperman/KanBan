@@ -1,3 +1,6 @@
+import { parseConnection, type LongbridgeTransportStatus } from "@/server/asset-sources/longbridge-connection";
+import { sameAccount } from "@/server/asset-sources/longbridge-cli-identity";
+import type { LongbridgeAccountIdentity } from "@/server/asset-sources/longbridge-keychain-sdk";
 import type { BackgroundCollectionStore, CollectionState } from "@/server/background-collection";
 import { buildDailyAssetSnapshot } from "@/domain/daily-asset-snapshots";
 import type { AssetSourceRefreshGuard } from "@/server/ports";
@@ -6,6 +9,8 @@ import type { InvestmentBookId, InvestmentBookStore } from "@/domain/investment-
 import { InvalidSourceInvestmentRecordError, parseSourceInvestmentRecordInput, type SourceInvestmentRecord, type SourceInvestmentRecordInput } from "@/domain/source-investment-records";
 import type { DatabaseSync } from "node:sqlite";
 import { openSqliteDashboard, type SqliteDashboardComposition } from "./sqlite-database-composition";
+import { SqliteLongbridgeDailyAssets } from "./sqlite-longbridge-daily-assets";
+import type { LongbridgeDailyAsset, LongbridgeDailyAssetsConfig } from "@/server/asset-sources/longbridge-daily-assets";
 
 import { type BusinessDataState } from "@/server/business-data-backup";
 import type { InvestmentCashflowStore } from "@/server/investment-cashflows";
@@ -20,12 +25,56 @@ export class SqliteDashboardDatabase
 {
   private readonly database: DatabaseSync;
   private readonly stores: SqliteDashboardComposition;
+  private readonly longbridgeDailyAssets: SqliteLongbridgeDailyAssets;
 
   constructor(
     databasePath: string,
   ) {
     this.stores = openSqliteDashboard(databasePath);
     this.database = this.stores.database;
+    this.longbridgeDailyAssets = new SqliteLongbridgeDailyAssets(this.stores);
+  }
+
+  async listLongbridgeDailyAssets(now: string) { return this.longbridgeDailyAssets.list(now); }
+  async claimLongbridgeDailyAssets(token: string, now: string) { return this.transaction(() => this.longbridgeDailyAssets.claim(token, now)); }
+  async releaseLongbridgeDailyAssets(token: string) { this.transaction(() => this.longbridgeDailyAssets.release(token)); }
+  async saveLongbridgeDailyAssets(config: LongbridgeDailyAssetsConfig, rows: LongbridgeDailyAsset[], now: string, token?: string) {
+    return this.transaction(() => this.longbridgeDailyAssets.save(config, rows, now, token));
+  }
+
+  longbridgeAccount(sourceId: string): LongbridgeAccountIdentity | null {
+    const source = this.stores.readModel.listSourcesSync().find(source => source.id === sourceId);
+    const bound = parseConnection(source?.credentialReference ?? null)?.account;
+    const daily = this.stores.metadata.get(`longbridge_daily_assets:${sourceId}`);
+    const pinned = this.stores.metadata.get(`longbridge_account:${sourceId}`);
+    return bound ?? (daily ? JSON.parse(daily).account : null) ?? (pinned ? JSON.parse(pinned) : null);
+  }
+
+  pinLongbridgeAccount(sourceId: string, account: LongbridgeAccountIdentity): void {
+    this.transaction(() => {
+      const existing = this.longbridgeAccount(sourceId);
+      if (existing) sameAccount(existing, account);
+      this.stores.metadata.set(`longbridge_account:${sourceId}`, JSON.stringify(account));
+    });
+  }
+
+  longbridgeTransport(sourceId: string): LongbridgeTransportStatus | null {
+    const source = this.stores.readModel.listSourcesSync().find(item => item.id === sourceId);
+    const value = this.stores.metadata.get(`longbridge_transport:${sourceId}`);
+    if (!value) return null;
+    const saved = JSON.parse(value);
+    return saved.reference === source?.credentialReference ? saved.status : null;
+  }
+
+  recordLongbridgeTransport(reference: string, status: LongbridgeTransportStatus): void {
+    this.transaction(() => {
+      const source = this.stores.readModel.listSourcesSync().find(item => item.kind === "longbridge" && item.credentialReference === reference && item.lifecycle !== "disconnected");
+      if (!source) return;
+      const previous = this.longbridgeTransport(source.id);
+      // 同一通道最多每分钟更新一次；切换通道立即记录，不对每个报价写库。
+      if (previous?.transport === status.transport && previous.fallback === status.fallback && Date.parse(status.at) - Date.parse(previous.at) < 60_000) return;
+      this.stores.metadata.set(`longbridge_transport:${source.id}`, JSON.stringify({ reference, status }));
+    });
   }
 
   readonly refreshGuard: AssetSourceRefreshGuard = {
@@ -372,7 +421,22 @@ export class SqliteDashboardDatabase
     credentialReference: string,
     capturedAt: string,
   ): Promise<string | null> {
-    return this.transaction(() => this.stores.sourceConnections.reconnect(sourceId, sourceKind, result, credentialReference));
+    return this.transaction(() => {
+      const connection = sourceKind === "longbridge" ? parseConnection(credentialReference) : null;
+      if (connection) {
+        const previous = this.longbridgeAccount(sourceId);
+        if (previous) sameAccount(previous, connection.account);
+        this.stores.metadata.set(`longbridge_account:${sourceId}`, JSON.stringify(connection.account));
+        const key = `longbridge_daily_assets:${sourceId}`;
+        const daily = this.stores.metadata.get(key);
+        if (daily) {
+          const config = JSON.parse(daily) as LongbridgeDailyAssetsConfig;
+          sameAccount(config.account, connection.account);
+          this.stores.metadata.set(key, JSON.stringify({ ...config, credentialReference }));
+        }
+      }
+      return this.stores.sourceConnections.reconnect(sourceId, sourceKind, result, credentialReference);
+    });
   }
 
   async connectOkx(

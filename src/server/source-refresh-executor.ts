@@ -19,7 +19,7 @@ import type {
   Clock,
   SecretStore,
 } from "@/server/ports";
-import { isMacOSKeychainCredentialReference } from "@/server/asset-sources/longbridge-keychain-sdk";
+import { isLongbridgeExternalReference } from "@/server/asset-sources/longbridge-connection";
 
 export type SourceRefreshOutcome = "success" | "failure" | "superseded";
 
@@ -67,7 +67,7 @@ export class SourceRefreshExecutor {
             const credentialReference = source.credentialReference;
             if (credentialReference === null) throw new Error("只读凭证不可用");
             const usesKeychainReference = source.kind === "longbridge" &&
-              isMacOSKeychainCredentialReference(credentialReference);
+              isLongbridgeExternalReference(credentialReference);
             const credentials = usesKeychainReference
               ? credentialReference
               : await this.secrets.get(credentialReference);

@@ -8,7 +8,7 @@ import process from "node:process";
 import { writeArtifactManifest } from "./native-artifact.mjs";
 
 const rust = execFileSync("rustc", ["--version"], { encoding: "utf8" });
-if (!rust.startsWith("rustc 1.97.1 ")) throw new Error("请使用已验证 Rust 1.97.1 构建原生产物。");
+if (!["rustc 1.97.1 ", "rustc 1.99.0 "].some(version => rust.startsWith(version))) throw new Error("请使用 Rust 1.97.1 或 1.99.0 构建原生产物。");
 const root = process.cwd();
 const nativeRoot = path.join(root, "native", "longbridge-keychain-sdk");
 const manifest = path.join(nativeRoot, "Cargo.toml");

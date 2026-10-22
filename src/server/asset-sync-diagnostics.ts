@@ -19,6 +19,17 @@ const RETRYABLE_NETWORK_CODES = new Set([...NETWORK_CODES].filter((code) => code
 const RETRYABLE_HTTP = new Set([429, 500, 502, 503, 504]);
 const DIAGNOSTIC_STAGES = new Set<AssetSyncDiagnostic["stage"]>(["credentials", "request", "response", "refresh", "persist"]);
 const DIAGNOSTIC_CATEGORIES = new Set<AssetSyncDiagnostic["category"]>(["network", "timeout", "rate-limit", "server", "authentication", "permission", "restricted", "cancelled", "invalid-response", "unknown"]);
+const READ_OPERATIONS: Record<string, string> = {
+  initialize: "连接初始化", "trade.account_balance": "账户余额", "trade.stock_positions": "证券持仓",
+  "trade.fund_positions": "基金持仓", "api.get": "账户数据", "quote.quote": "持仓行情",
+};
+
+/** 原始异常只在内存中传递；持久化时只取白名单字段。 */
+export class AssetReadError extends Error {
+  constructor(readonly transport: "cli" | "sdk", cause: unknown, readonly operation?: string) {
+    super(cause instanceof Error ? cause.message : "资产读取失败", { cause });
+  }
+}
 
 export class AssetRequestError extends Error {
   constructor(
@@ -62,13 +73,24 @@ export function diagnoseAssetSyncError(
   stage: AssetSyncDiagnostic["stage"],
   durationMs: number,
 ): AssetSyncDiagnostic {
+  if (error instanceof AggregateError && error.errors.length === 2 && error.errors.every(item => item instanceof AssetReadError)) {
+    const primary = diagnoseAssetSyncError(error.errors[0], stage, durationMs);
+    const fallback = diagnoseAssetSyncError(error.errors[1], stage, durationMs);
+    return { ...primary, retryable: primary.retryable || fallback.retryable, fallback: failureDetail(fallback) };
+  }
   let code: string | null = null;
   let httpStatus: number | null = null;
+  let transport: AssetSyncDiagnostic["transport"];
+  let operation: string | undefined;
   let name: unknown;
   let node: unknown = error;
   const seen = new Set<unknown>();
   for (let depth = 0; depth < 5 && node && typeof node === "object" && !seen.has(node); depth++) {
     seen.add(node);
+    if (node instanceof AssetReadError) {
+      transport ??= node.transport;
+      if (node.operation && Object.hasOwn(READ_OPERATIONS, node.operation)) operation ??= node.operation;
+    }
     const item = node as { code?: unknown; status?: unknown; statusCode?: unknown; name?: unknown; cause?: unknown };
     code ??= safeCode(item.code);
     const status = node instanceof AssetRequestError ? node.httpStatus : item.status ?? item.statusCode;
@@ -86,17 +108,24 @@ export function diagnoseAssetSyncError(
   else if (httpStatus !== null && httpStatus >= 400) {
     category = httpStatus === 429 ? "rate-limit" : httpStatus >= 500 ? "server" : "invalid-response";
     retryable = RETRYABLE_HTTP.has(httpStatus);
-  } else if (name === "TimeoutError") category = "timeout";
+  } else if (name === "TimeoutError") { category = "timeout"; retryable = true; }
   else if (code && NETWORK_CODES.has(code)) {
     if (stage === "refresh") stage = "request";
     category = code.includes("TIMEOUT") || code === "ETIMEDOUT" ? "timeout" : "network";
     retryable = RETRYABLE_NETWORK_CODES.has(code);
   } else if (stage === "credentials") category = "authentication";
+  else if (transport === "cli" && code === "-32000") { category = "server"; retryable = true; }
+  else if (transport === "cli" && ["-32700", "-32600", "-32601", "-32602"].includes(code ?? "")) category = "invalid-response";
   else if (isFetchNetworkTypeError(error)) { category = "network"; retryable = true; }
   else if (error instanceof SyntaxError || error instanceof AssetRequestError) category = "invalid-response";
   // OAuth/本地凭证或持久化操作不得通过重新执行整个来源盲重试。
   if (stage === "credentials" || stage === "persist") retryable = false;
-  return { stage, category, httpStatus, code, durationMs: Math.max(0, Math.round(durationMs)), retryable };
+  return { stage, category, httpStatus, code, durationMs: Math.max(0, Math.round(durationMs)), retryable,
+    ...(transport ? { transport } : {}), ...(operation ? { operation } : {}) };
+}
+
+function failureDetail({ category, httpStatus, code, retryable, transport, operation }: AssetSyncDiagnostic): NonNullable<AssetSyncDiagnostic["fallback"]> {
+  return { category, httpStatus, code, retryable, ...(transport ? { transport } : {}), ...(operation ? { operation } : {}) };
 }
 
 function isFetchNetworkTypeError(error: unknown): boolean {
@@ -118,11 +147,13 @@ const MESSAGES: Record<AssetSyncDiagnostic["category"], string> = {
 };
 export function assetSyncErrorMessage(diagnostic: AssetSyncDiagnostic): string {
   const detail = [diagnostic.httpStatus === null ? null : 'HTTP ' + diagnostic.httpStatus, diagnostic.code].filter(Boolean);
-  return MESSAGES[diagnostic.category] + (detail.length ? '（' + detail.join(' / ') + '）' : '');
+  const context = [diagnostic.transport?.toUpperCase(), diagnostic.operation ? READ_OPERATIONS[diagnostic.operation] : null].filter(Boolean);
+  const message = (context.length ? context.join(" · ") + "：" : "") + MESSAGES[diagnostic.category] + (detail.length ? '（' + detail.join(' / ') + '）' : '');
+  return message + (diagnostic.fallback ? "；" + assetSyncErrorMessage({ ...diagnostic.fallback, stage: "refresh", durationMs: 0 }) : "");
 }
 
 /** 从旧文件/数据库读取时重新按白名单组装，丢弃任意附加字段。 */
-export function normalizeAssetSyncDiagnostic(value: unknown): AssetSyncDiagnostic | null {
+export function normalizeAssetSyncDiagnostic(value: unknown, includeFallback = true): AssetSyncDiagnostic | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
   const item = value as Record<string, unknown>;
   if (!DIAGNOSTIC_STAGES.has(item.stage as AssetSyncDiagnostic["stage"]) ||
@@ -131,6 +162,8 @@ export function normalizeAssetSyncDiagnostic(value: unknown): AssetSyncDiagnosti
       (item.code !== null && typeof item.code !== "string") ||
       typeof item.durationMs !== "number" || !Number.isFinite(item.durationMs) || item.durationMs < 0 ||
       typeof item.retryable !== "boolean") return null;
+  const fallback = includeFallback && item.fallback && typeof item.fallback === "object"
+    ? normalizeAssetSyncDiagnostic({ ...item.fallback, stage: "refresh", durationMs: 0 }, false) : null;
   return {
     stage: item.stage as AssetSyncDiagnostic["stage"],
     category: item.category as AssetSyncDiagnostic["category"],
@@ -138,6 +171,9 @@ export function normalizeAssetSyncDiagnostic(value: unknown): AssetSyncDiagnosti
     code: safeCode(item.code),
     durationMs: Math.round(item.durationMs),
     retryable: item.retryable,
+    ...(item.transport === "cli" || item.transport === "sdk" ? { transport: item.transport } : {}),
+    ...(typeof item.operation === "string" && Object.hasOwn(READ_OPERATIONS, item.operation) ? { operation: item.operation } : {}),
+    ...(fallback ? { fallback: failureDetail(fallback) } : {}),
   };
 }
 

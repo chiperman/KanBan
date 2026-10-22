@@ -20,6 +20,10 @@ export interface AssetSyncDiagnostic {
   code: string | null;
   durationMs: number;
   retryable: boolean;
+  transport?: "cli" | "sdk";
+  operation?: string;
+  /** 双通道均失败时保留备用通道的安全诊断。 */
+  fallback?: Pick<AssetSyncDiagnostic, "category" | "httpStatus" | "code" | "retryable" | "transport" | "operation">;
 }
 
 export interface AssetSyncAttempt {

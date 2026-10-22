@@ -1,6 +1,6 @@
 import { normalizeAssetSourceDisplayName } from "@/domain/asset-source-display-name";
 import { updateEvmTokenPreferences } from "@/domain/evm-token-preferences";
-import { isMacOSKeychainCredentialReference } from "@/server/asset-sources/longbridge-keychain-sdk";
+import { isLongbridgeExternalReference } from "@/server/asset-sources/longbridge-connection";
 import { SystemClock } from "@/server/clock";
 import type { TransactionalSecretStore } from "@/server/credentials/secret-store";
 import type {
@@ -93,7 +93,7 @@ export class DatabaseAssetSourceLifecycle implements AssetSourceLifecycle {
     }
     if (
       source.credentialReference === null ||
-      (await this.secrets.get(source.credentialReference)) === null
+      (!isLongbridgeExternalReference(source.credentialReference) && (await this.secrets.get(source.credentialReference)) === null)
     ) {
       throw new Error(
         "原连接凭证已不存在，无法直接恢复。请重新输入原公开地址；原卡片和历史数据仍保留。",
@@ -104,7 +104,7 @@ export class DatabaseAssetSourceLifecycle implements AssetSourceLifecycle {
 
   async deleteData(sourceId: string): Promise<void> {
     const reference = await this.database.deleteAssetSourceData(sourceId);
-    if (reference !== null) await this.secrets.remove(reference);
+    if (reference !== null && !isLongbridgeExternalReference(reference)) await this.secrets.remove(reference);
     await this.clearCycleWhenNoRefreshableSources();
   }
 }
@@ -142,7 +142,7 @@ export class DatabaseAssetSourceConnections implements AssetSourceConnections {
     const capturedAt = this.clock.now().toISOString();
     const usesKeychainReference =
       sourceKind === "longbridge" &&
-      isMacOSKeychainCredentialReference(result.credentials);
+      isLongbridgeExternalReference(result.credentials);
     const credentialReference = usesKeychainReference
       ? result.credentials
       : await this.secrets.stage(result.credentials);
@@ -206,7 +206,7 @@ export class DatabaseAssetSourceConnections implements AssetSourceConnections {
     const capturedAt = this.clock.now().toISOString();
     const usesKeychainReference =
       sourceKind === "longbridge" &&
-      isMacOSKeychainCredentialReference(result.credentials);
+      isLongbridgeExternalReference(result.credentials);
     const credentialReference = usesKeychainReference
       ? result.credentials
       : await this.secrets.stage(result.credentials);
@@ -235,7 +235,7 @@ export class DatabaseAssetSourceConnections implements AssetSourceConnections {
     if (
       previousReference !== null &&
       previousReference !== credentialReference &&
-      !isMacOSKeychainCredentialReference(previousReference)
+      !isLongbridgeExternalReference(previousReference)
     ) {
       await this.secrets.remove(previousReference);
     }

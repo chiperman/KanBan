@@ -26,7 +26,8 @@ if (existsSync(destination) || destination.startsWith(source + path.sep) || dest
 if (dataDir === path.join(source, "data") || dataDir.startsWith(source + path.sep) || dataDir === destination || dataDir.startsWith(destination + path.sep)) throw new Error("正式数据必须在开发目录和运行副本之外独立保存");
 const envFile = path.resolve(options["--env-file"] || path.join(source, ".env.local"));
 if (!existsSync(envFile)) throw new Error("请用 --env-file 指定包含服务端加密密钥和来源配置的环境文件");
-checkNativeArtifact();
+const hasSdkArtifact = existsSync(path.join(source, "native/longbridge-keychain-sdk/kanban_longbridge_keychain_sdk.node"));
+if (hasSdkArtifact) checkNativeArtifact();
 const pnpmCli = process.env.npm_execpath;
 if (!pnpmCli) throw new Error("请通过 pnpm runtime:prepare 调用");
 const files = execFileSync("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard"], { cwd: source }).toString().split("\0").filter(Boolean);
@@ -38,7 +39,7 @@ for (const relative of new Set(files)) {
   mkdirSync(path.dirname(output), { recursive: true });
   copyFileSync(original, output);
 }
-for (const name of ["kanban_longbridge_keychain_sdk.node", "artifact.json"]) {
+for (const name of hasSdkArtifact ? ["kanban_longbridge_keychain_sdk.node", "artifact.json"] : []) {
   copyFileSync(path.join(source, "native/longbridge-keychain-sdk", name), path.join(destination, "native/longbridge-keychain-sdk", name));
 }
 copyFileSync(envFile, path.join(destination, ".env.local"));

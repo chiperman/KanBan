@@ -1,5 +1,3 @@
-import { checkNativeArtifact } from "./native-artifact.mjs";
-checkNativeArtifact();
 import { checkToolchain } from "./check-toolchain.mjs";
 checkToolchain();
 import { spawn } from "node:child_process";
@@ -9,12 +7,6 @@ import path from "node:path";
 import { existsSync } from "node:fs";
 import process from "node:process";
 import { resolveNodeNetworkEnvironment } from "./local-network-environment.mjs";
-
-import {
-  checkLongbridgeKeychain,
-  LONGBRIDGE_KEYCHAIN_REPAIR_COMMAND,
-  repairLongbridgeKeychain,
-} from "./longbridge-keychain.mjs";
 
 const [, , mode, ...nextArgs] = process.argv;
 if (mode !== "dev" && mode !== "start") {
@@ -34,26 +26,6 @@ try {
     error.code !== "ENOENT"
   ) {
     throw error;
-  }
-}
-
-if (
-  process.platform === "darwin" &&
-  process.env.LONGBRIDGE_OAUTH_CLIENT_ID &&
-  !checkLongbridgeKeychain()
-) {
-  if (process.stdin.isTTY && process.stdout.isTTY) {
-    console.log("检测到 macOS 登录钥匙串不可用，正在请求交互式解锁…");
-    if (!repairLongbridgeKeychain()) {
-      throw new Error(
-        `macOS 登录钥匙串修复失败，请运行 ${LONGBRIDGE_KEYCHAIN_REPAIR_COMMAND}`,
-      );
-    }
-    console.log("macOS 登录钥匙串已恢复");
-  } else {
-    throw new Error(
-      `macOS 登录钥匙串不可用，请先运行 ${LONGBRIDGE_KEYCHAIN_REPAIR_COMMAND}`,
-    );
   }
 }
 

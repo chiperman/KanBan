@@ -1,5 +1,4 @@
 import { getServices } from "@/server/composition";
-import { getLongbridgeServeQuoteHub } from "@/server/asset-sources/longbridge-serve-client";
 import { readCookie } from "@/server/auth/cookies";
 import { lookupSession, onSessionInvalidated, SESSION_COOKIE } from "@/server/auth/session";
 
@@ -65,7 +64,7 @@ export async function GET(request: Request): Promise<Response> {
       controller.enqueue(event(encoder, "ready", {
         provider: "longbridge",
         symbols,
-        mode: "serve",
+        mode: "configured",
       }));
       if (symbols.length > 0) {
         const send = (name: string, value: unknown) => {
@@ -76,11 +75,20 @@ export async function GET(request: Request): Promise<Response> {
             close();
           }
         };
-        const created = getLongbridgeServeQuoteHub().subscribe(
-          symbols,
-          (quote) => send("quote", quote),
-          (status) => send("stream-status", status),
-        );
+        const subscriptions: { close(): void }[] = [];
+        for (const source of sources) {
+          if (closed) break;
+          if (source.kind !== "longbridge" || source.lifecycle === "disconnected" || !source.credentialReference) continue;
+          try {
+            const item = services.longbridgeConnections?.subscribeQuotes(source,
+              source.snapshot.holdings.map(holding => holding.symbol).filter(symbol => symbols.includes(symbol)),
+              quote => send("quote", quote), status => send("stream-status", status));
+            if (item) subscriptions.push(item);
+          } catch {
+            send("stream-status", { state: "error", code: "unavailable" });
+          }
+        }
+        const created = { close: () => { for (const item of subscriptions) item?.close(); } };
         // subscribe can synchronously replay quotes and invoke a close callback.
         if (closed) created.close(); else subscription = created;
       }

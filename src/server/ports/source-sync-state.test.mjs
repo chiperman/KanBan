@@ -28,6 +28,9 @@ type Diagnostic = {
   code: string | null;
   durationMs: number;
   retryable: boolean;
+  transport?: "cli" | "sdk";
+  operation?: string;
+  fallback?: Pick<Diagnostic, "category" | "httpStatus" | "code" | "retryable" | "transport" | "operation">;
 };
 type Attempt = {
   attemptedAt: string;

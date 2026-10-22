@@ -35,6 +35,8 @@ export async function GET(request: Request) {
       "longbridge",
       {
         provider: "longbridge",
+        connectionMode: started.connectionMode,
+        sourceId: started.reauthorization?.sourceId,
         code,
         codeVerifier: started.codeVerifier,
         redirectUri: started.redirectUri,

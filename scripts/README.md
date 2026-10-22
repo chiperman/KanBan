@@ -8,8 +8,8 @@
 
 | 命令 | 入口与作用 |
 | --- | --- |
-| `pnpm dev` / `pnpm start` | [run-local-next.mjs](run-local-next.mjs)：校验工具链和原生产物，准备本机网络环境，启动 Next.js；`start` 使用已有应用构建 |
-| `pnpm build` | `next build`；`prebuild` 先执行原生扩展构建 |
+| `pnpm dev` / `pnpm start` | [run-local-next.mjs](run-local-next.mjs)：校验工具链、准备本机网络环境并启动 Next.js；SDK 原生产物按需检查，`start` 使用已有应用构建 |
+| `pnpm build` | `next build`；SDK 原生产物按需显式构建 |
 | `pnpm typecheck` | `tsc --noEmit`；首次检出或清除 Next.js 产物后，先按 [开发入口](../README.md#开发入口) 生成路由类型 |
 | `pnpm test:unit` | [run-unit-tests.mjs](run-unit-tests.mjs)：发现 `scripts/` 和 `src/` 中既有 `*.test.ts` / `*.test.mjs`，通过 Node 执行离线单测 |
 | `pnpm test` | 按顺序执行 `typecheck`、`design:lint`、`test:unit`；不启动应用构建或浏览器 |
@@ -22,9 +22,9 @@
 | --- | --- |
 | `pnpm native:longbridge:build` | [build-longbridge-keychain-sdk.mjs](build-longbridge-keychain-sdk.mjs)：编译并签署扩展，写入本机产物清单 |
 | `pnpm native:longbridge:check` | [native-artifact.mjs](native-artifact.mjs)：校验源指纹、产物摘要和运行兼容性；也供构建脚本写清单 |
-| `pnpm longbridge:keychain:repair` | [longbridge-keychain.mjs](longbridge-keychain.mjs)：交互修复 macOS 登录钥匙串；同模块向启动脚本提供检查与修复接口 |
+| `pnpm longbridge:keychain:repair` | [longbridge-keychain.mjs](longbridge-keychain.mjs)：显式交互修复 macOS 登录钥匙串，不由应用启动触发 |
 
-`predev` / `prestart` 执行产物检查；原生源码、补丁与本机生成物的边界见 [原生产物](../docs/operations/toolchain.md#原生产物)。
+首次使用 SDK 时检查原生产物，CLI 模式启动无需 SDK；原生源码、补丁与本机生成物的边界见 [原生产物](../docs/operations/toolchain.md#原生产物)。
 
 ## 设计工具
 

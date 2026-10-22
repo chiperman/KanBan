@@ -39,6 +39,7 @@ export class SourceIsolatedAssetSynchronization
     private readonly sourceTimeoutMs = ASSET_SOURCE_TIMEOUT_MS,
     dailySnapshots: DailyAssetSnapshots,
     private readonly fullRefreshState: AssetFullRefreshState,
+    private readonly dailyAssetHistory?: { run(): Promise<void> },
   ) {
     this.scheduler = new RefreshScheduler((plan) => this.executeJob(plan));
     this.sourceRefreshExecutor = new SourceRefreshExecutor(
@@ -153,6 +154,7 @@ export class SourceIsolatedAssetSynchronization
     }
     if (input.isFullBatch) await this.fullRefreshState.finish(attemptedAt);
     await this.clearCycleWhenNoRefreshableSources();
+    if (input.mode === "all" && sources.some(source => source.kind === "longbridge")) await this.dailyAssetHistory?.run();
 
     return {
       successCount,

@@ -12,8 +12,6 @@ for (const cause of ["logout", "timeout-push", "timeout-heartbeat", "abort", "ca
     const previousEnv = process.env.APP_ENV;
     process.env.APP_ENV = "test";
     resetTestServices();
-    const scope = globalThis as unknown as Record<string, unknown>;
-    const previousHub = scope.__kanban_longbridge_serve_quote_hub__;
     let now = new Date("2026-10-02T00:00:00Z");
     const token = createSession("owner", now);
     const services: AppServices = getTestServices();
@@ -25,10 +23,10 @@ for (const cause of ["logout", "timeout-push", "timeout-heartbeat", "abort", "ca
     } as AssetSourceSummary];
     let send!: (quote: LongbridgeServeQuote) => void;
     let closed = 0;
-    scope.__kanban_longbridge_serve_quote_hub__ = { subscribe(_symbols: string[], callback: typeof send) {
+    services.longbridgeConnections = { subscribeQuotes(_source: AssetSourceSummary, _symbols: string[], callback: typeof send) {
       send = callback;
       return { close() { closed++; } };
-    } };
+    } } as unknown as NonNullable<AppServices["longbridgeConnections"]>;
     const abort = new AbortController();
     if (cause === "timeout-heartbeat") t.mock.timers.enable({ apis: ["setInterval"] });
     const response = await GET(new Request("http://localhost/api/asset-sources/stream", {
@@ -53,7 +51,6 @@ for (const cause of ["logout", "timeout-push", "timeout-heartbeat", "abort", "ca
     } finally {
       await reader.cancel();
       clearAllSessions();
-      scope.__kanban_longbridge_serve_quote_hub__ = previousHub;
       if (previousEnv === undefined) delete process.env.APP_ENV; else process.env.APP_ENV = previousEnv;
     }
   });

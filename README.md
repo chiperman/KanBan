@@ -12,11 +12,10 @@
 
 ```sh
 pnpm install --frozen-lockfile
-pnpm native:longbridge:build
 pnpm dev
 ```
 
-已有兼容原生产物时，日常开发直接运行 `pnpm dev`。本机配置放在已忽略的 `.env.local`，运行时数据保存在 `data/`。
+仅使用长桥 CLI 时无需编译原生扩展；使用 SDK 前运行 `pnpm native:longbridge:build`。日常开发直接运行 `pnpm dev`。本机配置放在已忽略的 `.env.local`，运行时数据保存在 `data/`。
 
 需要 Mac 登录后持续采集时，使用独立生产运行副本和正式数据目录，无需每天手动启动开发服务器；准备、迁移及安装命令见 [后台自动采集](docs/operations/service-composition.md#后台自动采集)。
 

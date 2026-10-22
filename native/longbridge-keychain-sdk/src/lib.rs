@@ -795,3 +795,47 @@ mod tests {
         .is_err());
     }
 }
+
+/// 固定只读端点，保留上海自然日的精确秒边界；不使用 SDK 的 UTC 日期转换。
+#[napi]
+pub async fn read_daily_asset(client_id: String, callback_port: u32, start: String, end: String) -> NapiResult<String> {
+    use longbridge::httpclient::{HttpClient, HttpClientConfig, Json, Method};
+    let port = u16::try_from(callback_port).map_err(|_| napi_error("回调端口无效"))?;
+    let start: i64 = start.parse().map_err(|_| napi_error("资产起始时间无效"))?;
+    let end: i64 = end.parse().map_err(|_| napi_error("资产结束时间无效"))?;
+    if end - start != 86399 { return Err(napi_error("资产日期范围无效")); }
+    let oauth = load_oauth(client_id, port).await.map_err(napi_error)?;
+    let http = HttpClient::new(HttpClientConfig::from_oauth(oauth));
+    let value = http.request(Method::GET, "/v1/portfolio/profit-analysis-summary")
+        .query_params(serde_json::json!({ "start": start, "end": end }))
+        .response::<Json<serde_json::Value>>().send().await
+        .map_err(|error| napi_error(format!("长桥每日资产读取失败：{error}")))?.0;
+    serialize(value)
+}
+
+#[napi]
+pub async fn read_trading_days(client_id: String, callback_port: u32, market: String, start: String, end: String) -> NapiResult<String> {
+    use longbridge::Market;
+    fn date(raw: &str) -> NapiResult<time::Date> {
+        let parts: Vec<&str> = raw.split('-').collect();
+        if parts.len() != 3 { return Err(napi_error("交易日历日期无效")); }
+        let year = parts[0].parse().map_err(|_| napi_error("年份无效"))?;
+        let month: u8 = parts[1].parse().map_err(|_| napi_error("月份无效"))?;
+        let day = parts[2].parse().map_err(|_| napi_error("日期无效"))?;
+        time::Date::from_calendar_date(year, time::Month::try_from(month).map_err(|_| napi_error("月份无效"))?, day)
+            .map_err(|_| napi_error("交易日历日期无效"))
+    }
+    let market = match market.as_str() {
+        "US" => Market::US, "HK" => Market::HK, "CN" | "SH" | "SZ" => Market::CN, "SG" => Market::SG,
+        _ => return Err(napi_error("交易市场无效")),
+    };
+    let port = u16::try_from(callback_port).map_err(|_| napi_error("回调端口无效"))?;
+    let oauth = load_oauth(client_id, port).await.map_err(napi_error)?;
+    let (quote, _) = QuoteContext::new(std::sync::Arc::new(Config::from_oauth(oauth)));
+    let days = quote.trading_days(market, date(&start)?, date(&end)?).await
+        .map_err(|error| napi_error(format!("长桥交易日历读取失败：{error}")))?;
+    serialize(serde_json::json!({
+        "trading_days": days.trading_days.iter().map(ToString::to_string).collect::<Vec<_>>(),
+        "half_trading_days": days.half_trading_days.iter().map(ToString::to_string).collect::<Vec<_>>(),
+    }))
+}

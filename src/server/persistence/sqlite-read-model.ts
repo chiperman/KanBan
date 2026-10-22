@@ -78,17 +78,25 @@ export class SqliteDashboardReadModel {
   readSourceDetail(query: { sourceId: string; from?: string; to?: string }) {
     const investmentHistory = this.investments.getSourceInvestmentHistory(query.sourceId);
     const investmentRecords = this.investments.listSourceInvestmentRecordsSync(query.sourceId);
+    const history = this.observations.listDailyObservationsSync(
+      "daily_asset_trend_observations", "daily_asset_source_trend_observations", undefined, query,
+    );
+    const imported = this.observations.listImportedSourceHistoryObservationsSync()
+      .filter(row => row.sourceId === query.sourceId && row.kind === "longbridge");
+    const byDay = new Map(history.map(row => [row.day, row]));
+    // 返回值只用于该来源页面；不向组合存储补造完整观测。
+    for (const row of imported) {
+      if ((query.from && row.day < query.from) || (query.to && row.day > query.to)) continue;
+      byDay.set(row.day, { day: row.day, capturedAt: row.capturedAt, complete: false, status: "incomplete",
+        total: row.total, sources: [row] });
+    }
     return {
       sources: this.sources.listSourcesSync(query.sourceId),
       manualRecords: this.sources.listManualAssetRecordsSync(query.sourceId),
-      history: this.observations.listDailyObservationsSync(
-        "daily_asset_trend_observations",
-        "daily_asset_source_trend_observations",
-        undefined,
-        query,
-      ),
+      history: [...byDay.values()].sort((a, b) => a.day.localeCompare(b.day)),
       firstDay: [
         this.observations.firstSourceObservationDay(query.sourceId),
+        imported[0]?.day,
         investmentHistory?.openingInvestment.day,
         investmentRecords[0]?.day,
       ].filter((day): day is string => day !== undefined).sort()[0],

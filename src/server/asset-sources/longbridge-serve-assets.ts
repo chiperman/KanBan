@@ -1,14 +1,11 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-
 import { isLongbridgeUsOptionSymbol } from "@/domain/longbridge-symbols";
 import { longbridgeQuoteTime } from "@/domain/longbridge-realtime";
 import { LongbridgeKeychainSdk, type LongbridgeAccountIdentity, type LongbridgeNativeQuote } from "@/server/asset-sources/longbridge-keychain-sdk";
 import { mapLongbridgeSnapshot, snapshotRetainingMissingQuotes, snapshotWithQuotes } from "@/server/asset-sources/longbridge";
 import { LongbridgeServeClient } from "@/server/asset-sources/longbridge-serve-client";
+import { cliIdentity, sameAccount } from "./longbridge-cli-identity";
 import type { AssetSnapshot, AssetSourceRefresher, AssetSourceRefreshResult } from "@/server/ports";
 
-const runFile = promisify(execFile);
 type Serve = Pick<LongbridgeServeClient, "call" | "close">;
 type IdentitySdk = Pick<LongbridgeKeychainSdk, "credentialReference" | "accountIdentity">;
 type RefreshInput = Parameters<AssetSourceRefresher["refresh"]>[0];
@@ -26,22 +23,6 @@ function text(value: unknown): string {
 function list(value: unknown): unknown[] {
   if (!Array.isArray(value)) throw new Error("长桥 CLI 资产列表缺失");
   return value;
-}
-
-async function cliIdentity(signal: AbortSignal): Promise<LongbridgeAccountIdentity> {
-  // auth status 只返回身份/状态，不读取 CLI 的 Token 文件，不接触凭证原文。
-  const { stdout } = await runFile(process.env.LONGBRIDGE_SERVE_BIN ?? "longbridge", ["auth", "status", "--format", "json"], {
-    signal, timeout: 15_000, maxBuffer: 1_048_576,
-  });
-  const account = record(record(JSON.parse(stdout)).account);
-  if (!Number.isSafeInteger(account.member_id) || Number(account.member_id) <= 0) throw new Error("长桥 CLI 账户身份不可用");
-  return { memberId: String(account.member_id), accountChannel: text(account.account_channel) };
-}
-
-function sameAccount(expected: LongbridgeAccountIdentity, actual: LongbridgeAccountIdentity): void {
-  if (!expected.memberId || !expected.accountChannel || expected.memberId !== actual.memberId || expected.accountChannel !== actual.accountChannel) {
-    throw new Error("长桥 CLI 与已连接来源的账户不一致");
-  }
 }
 
 function positions(value: unknown, field: "stock_info" | "fund_info", identity: LongbridgeAccountIdentity): Record<string, unknown>[] {

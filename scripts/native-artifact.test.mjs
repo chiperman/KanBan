@@ -28,8 +28,9 @@ test("原生产物缺失、代码变化和二进制损坏均要求显式重建",
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("开发和生产启动不再执行 Cargo", () => {
+test("CLI 模式启动不依赖原生产物或 Cargo", () => {
   const pkg = JSON.parse(readFileSync("package.json", "utf8"));
-  assert.equal(pkg.scripts.prestart, "pnpm native:longbridge:check");
-  assert.equal(pkg.scripts.predev, "pnpm native:longbridge:check");
+  assert.equal(pkg.scripts.prestart, undefined);
+  assert.equal(pkg.scripts.predev, undefined);
+  assert.equal(pkg.scripts.prebuild, undefined);
 });

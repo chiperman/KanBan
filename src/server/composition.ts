@@ -48,6 +48,10 @@ function hasCurrentServices(
     services.longbridgeBenchmarkCandlesticks !== undefined &&
     services.longbridgeHoldingCandlesticks !== undefined &&
     typeof services.longbridgeHoldingCandlesticks.readFiveDayTrend === "function" &&
+    (isTestEnv() || (
+      typeof services.longbridgeConnections?.status === "function" &&
+      typeof services.longbridgeConnections.subscribeQuotes === "function"
+    )) &&
     typeof services.assetSourceLifecycle.setEvmTokenPreference === "function" &&
     typeof services.manualAssetRecords.record === "function" &&
     typeof services.investmentCashflows?.create === "function" &&

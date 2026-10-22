@@ -28,7 +28,7 @@ import type {
   SecretStore,
   SecuritiesMarket,
 } from "@/server/ports";
-import { isMacOSKeychainCredentialReference } from "@/server/asset-sources/longbridge-keychain-sdk";
+import { isLongbridgeExternalReference } from "@/server/asset-sources/longbridge-connection";
 import { LongbridgeTradingCalendar } from "@/server/asset-sources/longbridge-trading-calendar";
 
 const FORMAL_SETTLEMENT_CAPTURE_WINDOW_MS = 2 * 60 * 60_000;
@@ -426,7 +426,7 @@ export class ReadOnlyFormalSettlementSourceCapture
     const usesKeychainReference =
       input.source.kind === "longbridge" &&
       credentialReference !== null &&
-      isMacOSKeychainCredentialReference(credentialReference);
+      isLongbridgeExternalReference(credentialReference);
     const guard = this.assetSources?.refreshGuard;
     const token = randomUUID();
     const lease = () => ({ sourceId: input.source.id, token, now: new Date().toISOString() });

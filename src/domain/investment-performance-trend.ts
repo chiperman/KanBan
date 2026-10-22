@@ -256,7 +256,7 @@ export function projectAssetSourceTrend(input: {
 }
 
 /**
- * 投影单一来源的实际历史。系统趋势观测覆盖同日外部补录值；
+ * 投影单一来源的实际历史。长桥已结束日采用官方逐日资产，其余系统观测覆盖同日外部补录值；
  * 补录数据始终局限在该来源历史，绝不进入组合或分类投影。
  */
 export function projectAssetSourceHistoryTrend(input: {
@@ -276,6 +276,11 @@ export function projectAssetSourceHistoryTrend(input: {
   for (const observation of input.trendObservations) {
     const source = sourceObservation(observation, input.sourceId);
     if (source !== null) byDay.set(observation.day, source);
+  }
+  for (const observation of input.importedSourceHistoryObservations) {
+    if (observation.sourceId === input.sourceId && observation.kind === "longbridge" && observation.day < input.currentDay) {
+      byDay.set(observation.day, observation);
+    }
   }
   const firstTrendDay = [...byDay.keys()].toSorted()[0];
   const days = rangeDays(

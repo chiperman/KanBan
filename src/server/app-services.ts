@@ -1,3 +1,4 @@
+import type { LongbridgeConnections } from "@/server/asset-sources/longbridge-connections";
 import type { BackgroundAssetCollection } from "@/server/background-collection";
 import type {
   AssetCardStore,
@@ -60,6 +61,7 @@ export interface AssetObservationServices {
 }
 
 export interface MarketServices {
+  longbridgeConnections?: LongbridgeConnections;
   prices: Prices;
   longbridge: LongbridgeOAuth;
   longbridgeBenchmarkCandlesticks: LongbridgeBenchmarkCandlestickReader;

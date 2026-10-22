@@ -18,10 +18,10 @@ export type BookRecord = {
   day: string;
   kind: SourceInvestmentRecordKind;
   amount: string;
-  currency: "USD" | "CNY";
+  currency: "USD" | "CNY" | "HKD";
   note: string;
   recordedAt: string;
-  origin: "import" | "manual" | "legacy";
+  origin: "import" | "manual" | "legacy" | "statement" | "provider";
   originKey: string;
   voidedAt?: string;
   replacesId?: string;
@@ -98,7 +98,10 @@ export function validateInvestmentBookState(value: unknown): InvestmentBookState
     if (!["opening", "deposit", "withdrawal", "valuation"].includes(row.kind)) throw new Error("账本记录类型无效");
     // Imported identities include the external account and may exceed the manual form's ID limit.
     const parsed = parseSourceInvestmentRecordInput({ ...row, id: "validated-book-record", ...(row.origin === "import" ? { kind: "valuation" } : {}) }, row.recordedAt);
-    if (book.currency !== parsed.currency || !["import", "manual", "legacy"].includes(row.origin) ||
+    const pendingStatementFX = row.origin === "statement" && book.id === "us-stocks" &&
+      parsed.currency === "HKD" && (row.kind === "deposit" || row.kind === "withdrawal");
+    if ((book.currency !== parsed.currency && !pendingStatementFX) || !["import", "manual", "legacy", "statement", "provider"].includes(row.origin) ||
+        (row.origin === "provider" && (row.kind !== "valuation" || row.bookId !== "us-stocks")) ||
         typeof row.note !== "string" || row.note.length > 1000) throw new Error("账本币种或记录来源无效");
     text(row.originKey);
     if (ids.has(row.id) || origins.has(row.originKey)) throw new Error("账本记录重复");
@@ -108,7 +111,7 @@ export function validateInvestmentBookState(value: unknown): InvestmentBookState
   for (const book of INVESTMENT_BOOKS) {
     const rows = activeBookRecords(state, book.id);
     const openings = rows.filter(row => row.kind === "opening");
-    if (openings.length > 1 || (openings[0] && rows.some(row => row.day < openings[0].day))) throw new Error("每本账期初本金必须唯一且不晚于其他记录");
+    if (openings.length > 1 || (openings[0] && rows.some(row => row.kind !== "valuation" && row.day < openings[0].day))) throw new Error("每本账期初本金必须唯一且不晚于其他资金记录");
     const days = rows.filter(row => row.kind === "valuation").map(row => row.day);
     if (new Set(days).size !== days.length) throw new Error("同本账同日只能有一条有效资产金额");
   }
@@ -294,7 +297,7 @@ export function analyzeInvestmentBook(input: {
   // Canonical explicit totals replace the day's automatic/manual evidence; never add them together.
   for (const row of records.filter(row => row.kind === "valuation").toSorted((a,b) => a.origin === b.origin ? 0 : a.origin === "import" ? -1 : 1)) {
     if (book.automatic && row.origin === "import" && historyThrough && row.day > historyThrough) continue;
-    values.set(row.day, { day: row.day, amount: row.amount, basis: row.origin === "import" ? "导入历史总额" : "手动账本总额" });
+    values.set(row.day, { day: row.day, amount: row.amount, basis: row.origin === "provider" ? "长桥每日资产" : row.origin === "import" ? "导入历史总额" : "手动账本总额" });
   }
   const historyComparison = [...automaticValues.entries()].filter(([day, amount]) => {
     const historical = values.get(day);
@@ -307,8 +310,17 @@ export function analyzeInvestmentBook(input: {
   }))[0] ?? null;
   const opening = records.find(row => row.kind === "opening");
   const unresolved = input.state.unassignedLegacyIds.length > 0;
+  const pendingFX = records.filter(row => (row.kind === "deposit" || row.kind === "withdrawal") && row.currency !== book.currency);
+  const firstRecordDay = records.map(row => row.day).toSorted()[0] ?? null;
+  const firstAssetPointDay = [...values.values()]
+    .filter(row => row.day <= input.currentDay)
+    .map(row => row.day)
+    .toSorted()[0] ?? null;
+  const firstTrendDay = [firstRecordDay, firstAssetPointDay]
+    .filter((day): day is string => day !== null)
+    .toSorted()[0] ?? null;
   const points: BookPoint[] = [...values.values()].filter(row => row.day <= input.currentDay).sort((a,b) => a.day.localeCompare(b.day)).map(value => {
-    const valid = opening && value.day >= opening.day && !unresolved;
+    const valid = opening && value.day >= opening.day && !unresolved && !pendingFX.some(row => row.day <= value.day);
     const flows = records.filter(row => (row.kind === "deposit" || row.kind === "withdrawal") && row.day <= value.day);
     const signed = (row: BookRecord) => row.kind === "withdrawal" ? `-${row.amount}` : row.amount;
     const netInvestment = valid ? decimalAdd(opening.amount, ...flows.map(signed)) : null;
@@ -320,8 +332,10 @@ export function analyzeInvestmentBook(input: {
     return { day: value.day, total: value.amount, netInvestment, profit, returnRatio, basis: value.basis };
   });
   return {
-    book, opening, records, members, points, current: points.at(-1) ?? null, historyComparison,
+    book, opening, records, members, points, current: points.at(-1) ?? null,
+    firstRecordDay, firstAssetPointDay, firstTrendDay, historyComparison,
     missingReason: unresolved ? "旧资金记录尚有未确认归属，收益暂停计算，避免漏算或重复。" :
+      pendingFX.length ? "结单资金缺少当日参考汇率，已保留原币金额；本账美元本金、盈亏及收益率待补齐。" :
       !opening ? "历史本金待补齐。请导入历史，或填写起点日期、期初本金及之后的入金出金。" :
       points.at(-1)?.total == null ? "资产数据尚未完整。请检查来源同步、计价汇率和账本来源范围。" : null,
   };

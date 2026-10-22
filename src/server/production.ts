@@ -3,6 +3,7 @@ import { SystemClock } from "@/server/clock";
 import { ObservedFormalSettlementRunner } from "@/server/formal-settlement-execution";
 import { LocalFormalSettlementScheduler } from "@/server/formal-settlement-scheduler";
 import path from "node:path";
+import { LongbridgeDailyAssets } from "@/server/asset-sources/longbridge-daily-assets";
 import { existsSync } from "node:fs";
 
 import { AssetSourceOnboarding } from "@/server/asset-source-onboarding";
@@ -11,9 +12,9 @@ import { CoinGeckoUsdtUsdPrices, ProductionBinanceReadOnly, ProductionBinanceSou
 import { ProductionBitReadOnly, ProductionBitSourceRefresher, } from "@/server/asset-sources/bit";
 import { ProductionBitgetReadOnly, ProductionBitgetSourceRefresher, } from "@/server/asset-sources/bitget";
 import { ProductionEvmWatchSourceRefresher, ProductionEvmWatchWallet, } from "@/server/asset-sources/ethereum";
-import { ServeLongbridgeBenchmarkCandlestickReader, ServeLongbridgeFormalSettlementCandleReader, ServeLongbridgeHoldingCandlestickReader, KeychainLongbridgeOAuth, LongbridgeOAuthState } from "@/server/asset-sources/longbridge";
+import { LongbridgeOAuthState } from "@/server/asset-sources/longbridge";
 import { ProductionOkxReadOnly, ProductionOkxSourceRefresher, } from "@/server/asset-sources/okx";
-import { ServeLongbridgeSourceRefresher } from "@/server/asset-sources/longbridge-serve-assets";
+import { LongbridgeConnections } from "@/server/asset-sources/longbridge-connections";
 import { RoutedAssetSourceRefresher } from "@/server/asset-sources/router";
 import { SourceIsolatedAssetSynchronization } from "@/server/asset-synchronization";
 import { SessionOwnerAuth } from "@/server/auth/session-auth";
@@ -79,8 +80,8 @@ export function createProductionServices(
     );
   const prices = new CoinGeckoUsdtUsdPrices(externalServices);
   const evmRefresher = new ProductionEvmWatchSourceRefresher(externalServices);
-  const longbridgeAssets = new ServeLongbridgeSourceRefresher();
-  const longbridge = new KeychainLongbridgeOAuth(undefined, (at) => longbridgeAssets.readSnapshot(at));
+  const longbridge = new LongbridgeConnections(database);
+  const longbridgeDailyAssets = new LongbridgeDailyAssets(database, dataDir, clock, longbridge.readDailyAsset.bind(longbridge));
   const binance = new ProductionBinanceReadOnly(prices);
   const okx = new ProductionOkxReadOnly(prices);
   const bitget = new ProductionBitgetReadOnly(prices);
@@ -96,6 +97,7 @@ export function createProductionServices(
   const assetSourceOnboarding = new AssetSourceOnboarding(
     createAssetSourceProviderAdapters({
       longbridge,
+      longbridgeConnections: longbridge,
       binance,
       okx,
       bitget,
@@ -105,7 +107,7 @@ export function createProductionServices(
     }),
   );
   const sourceRefresher = new RoutedAssetSourceRefresher({
-    longbridge: longbridgeAssets,
+    longbridge,
     binance: new ProductionBinanceSourceRefresher(prices),
     okx: new ProductionOkxSourceRefresher(prices),
     bitget: new ProductionBitgetSourceRefresher(prices),
@@ -116,15 +118,16 @@ export function createProductionServices(
   const formalDailySettlements = new DatabaseFormalDailySettlements(database);
   const formalSettlementExecutions = new DatabaseFormalSettlementExecutions(database);
   const assetSynchronization = new SourceIsolatedAssetSynchronization(
-    assetSources, readySecrets, clock, sourceRefresher, 60_000, dailyAssetSnapshots, fullRefreshState,
+    assetSources, readySecrets, clock, sourceRefresher, 60_000, dailyAssetSnapshots, fullRefreshState, longbridgeDailyAssets,
   );
   const formalDailySettlementRunner = new ObservedFormalSettlementRunner(new MarketCloseFormalDailySettlement(
     assetSources, clock, formalDailySettlements,
     new ReadOnlyFormalSettlementSourceCapture(readySecrets, sourceRefresher, 60_000, assetSources),
-    new ServeLongbridgeFormalSettlementCandleReader(),
+    longbridge.settlementCandles,
+    undefined, longbridge.tradingCalendar,
   ), formalSettlementExecutions, clock);
   return {
-    backgroundCollection: new BackgroundAssetCollection(database, assetSources, dailyAssetSnapshots, fullRefreshState, assetSynchronization, formalDailySettlementRunner, clock),
+    backgroundCollection: new BackgroundAssetCollection(database, assetSources, dailyAssetSnapshots, fullRefreshState, assetSynchronization, formalDailySettlementRunner, clock, longbridgeDailyAssets),
     clock,
     assetCards: new DatabaseAssetCardStore(database),
     assetSources,
@@ -155,8 +158,9 @@ export function createProductionServices(
     ),
     secrets: readySecrets,
     longbridge,
-    longbridgeBenchmarkCandlesticks: new ServeLongbridgeBenchmarkCandlestickReader(),
-    longbridgeHoldingCandlesticks: new ServeLongbridgeHoldingCandlestickReader(),
+    longbridgeConnections: longbridge,
+    longbridgeBenchmarkCandlesticks: longbridge.benchmarkCandlesticks,
+    longbridgeHoldingCandlesticks: longbridge.holdingCandlesticks,
     longbridgeOAuthState: new LongbridgeOAuthState(),
     binance,
     okx,

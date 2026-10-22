@@ -17,7 +17,7 @@
 
 | 来源 | 实现入口 | 读取与解释边界 |
 | --- | --- | --- |
-| 长桥 | [longbridge.ts](../../src/server/asset-sources/longbridge.ts) | 证券、账户现金与账户总额；SDK 读取及身份绑定见 [服务生命周期](service-composition.md) |
+| 长桥 | [连接路由](../../src/server/asset-sources/longbridge-connections.ts) | 证券、账户现金与账户总额；CLI/SDK 选择及身份绑定见 [服务生命周期](service-composition.md) |
 | Binance | [binance.ts](../../src/server/asset-sources/binance.ts) | 按账户及产品读取；Stocks 与普通 Spot 的持仓、报价和成本历史分别处理 |
 | OKX | [okx.ts](../../src/server/asset-sources/okx.ts) | 平台总额与产品覆盖分别解释；Trading Bot 以 `stgyEq` 按币种汇总，不伪造逐策略明细 |
 | Bitget | [bitget.ts](../../src/server/asset-sources/bitget.ts) | 区分 Classic 与 UTA；UTA 现金范围检查会拒绝含合约仓位或挂单的连接 |
@@ -27,6 +27,18 @@
 总额与持仓的权威关系、金额精度及缺失值语义在 CONTEXT 维护。`aggregate-only` 表示明细粒度，不自动代表来源总额不完整；产品明细不能与已包含它的平台总额重复相加。新增产品必须核对当前只读接口、账户范围和去重关系，不能从历史流水反推当前资产。
 
 ## 容易误用的来源细节
+
+### 长桥同步状态
+
+行情连接与资产同步分别显示：实时行情连接成功只证明报价可用，完整资产成功保存后才显示“资产已同步”；失败时保留最后成功资产及其时间。CLI 请求保留白名单方法与 RPC 错误码；按[官方 serve 错误规则](https://open.longbridge.com/docs/cli/serve)，上游故障（`-32000`）、超时与进程意外退出沿用同步器的最多三次、总预算 60 秒重试，参数错误不重试，取消不启动备用读取。CLI/SDK 均失败时保留两路安全诊断，不落盘原始异常、请求参数、URL 或凭证。
+
+### 长桥逐日资产
+
+[逐日读取器](../../src/server/asset-sources/longbridge-daily-assets.ts) 通过连接路由读取 `/v1/portfolio/profit-analysis-summary`：CLI 使用 `serve` 的 `api.get`，SDK 使用官方 SDK HttpClient。每个已结束的上海自然日单独请求；只使用美元 `ending_asset_value`。`invest_amount`、平台收益和当前汇率不用于补本金。日期、截止时间、币种、数据更新时间及当前通道与来源绑定的真实账户身份均需匹配。
+
+逐日补取按数据库中的来源配置显式启用，绑定来源身份、真实账户和首日；网页全量刷新与既有后台检查共用该入口和 SQLite 租约。每轮最多七天、总预算 45 秒，单并发、请求间隔一秒，失败等待至少五分钟后重试；逐日成功持久化，重启后从缺失日继续，不影响已取得的实时快照。未启用的实例不请求该接口；开发版启用不改变正式版。
+
+[持久化入口](../../src/server/persistence/sqlite-longbridge-daily-assets.ts) 在事务内替换同日美股估值与来源历史，删除同日旧资产记录，保留本金和其他账本。仅校准已存在组合观测中的长桥分量，缺少其他币种历史依据时标记受限，不创建缺少其他来源的组合日记录。来源详情和来源历史优先采用逐日美元值；新接口原始响应按账户、日期保存于本实例 `data/provider-history/longbridge/`，重试覆盖同日文件，不保留旧估值副本。
 
 ### Binance Stocks
 

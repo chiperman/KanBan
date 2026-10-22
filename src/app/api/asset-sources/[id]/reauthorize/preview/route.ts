@@ -1,3 +1,4 @@
+import { parseConnectionInput } from "@/server/asset-sources/longbridge-connection";
 import { rejectCrossOrigin } from "@/server/auth/request-origin";
 import type { AssetSourceProviderId } from "@/domain/asset-source-providers";
 import { getServices } from "@/server/composition";
@@ -25,6 +26,7 @@ function providerFor(source: {
 
 function inputFor(provider: AssetSourceProviderId, body: unknown) {
   const value = body as Record<string, unknown> | null;
+  if (provider === "longbridge") return parseConnectionInput(body);
   if (provider === "binance") {
     return typeof value?.apiKey === "string" && typeof value.apiSecret === "string"
       ? { provider, apiKey: value.apiKey, apiSecret: value.apiSecret }
@@ -131,7 +133,7 @@ export async function POST(
     return Response.json(
       await context.services.assetSourceOnboarding.preview(
         context.provider,
-        input,
+        context.provider === "longbridge" ? { ...input, sourceId: context.source.id } : input,
         context.services.clock.now().toISOString(),
         {
           sourceId: context.source.id,

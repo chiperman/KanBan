@@ -129,7 +129,7 @@ function longbridgeQuoteCandidate(
  * 当前证券报价只由 Longbridge 返回的交易状态、盘外候选及其时间戳决定。
  * 不读取本机时间、市场日历或标的后缀来推断报价所属时段。
  */
-function selectLongbridgeQuote(
+export function selectLongbridgeQuote(
   quote: LongbridgeNativeQuote,
 ): LongbridgeQuoteSelection | null {
   const tradeStatus = typeof quote.tradeStatus === "string"
@@ -499,6 +499,7 @@ function multiplyDecimal(left: string, right: string): string {
 }
 
 interface StartedAuthorization {
+  connectionMode?: import("./longbridge-connection").LongbridgeConnectionMode;
   codeVerifier: string;
   redirectUri: string;
   reauthorization?: {

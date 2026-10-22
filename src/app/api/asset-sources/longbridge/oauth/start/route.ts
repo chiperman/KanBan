@@ -10,6 +10,8 @@ export async function POST(request: Request) {
   if ((await services.auth.currentSession()) === null) {
     return Response.json({ error: "需要所有者身份" }, { status: 401 });
   }
+  const body = await request.json().catch(() => null) as { mode?: unknown } | null;
+  const connectionMode = body?.mode === "both" ? "both" : "sdk";
   try {
     const callback = new URL(
       "/api/asset-sources/longbridge/oauth/callback",
@@ -17,6 +19,7 @@ export async function POST(request: Request) {
     ).toString();
     const started = await services.longbridge.start(callback);
     services.longbridgeOAuthState.rememberStart(started.state, {
+      connectionMode,
       codeVerifier: started.codeVerifier,
       redirectUri: callback,
     });
