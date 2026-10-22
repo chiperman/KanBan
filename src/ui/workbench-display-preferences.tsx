@@ -24,6 +24,8 @@ type WorkbenchDisplayPreferences = {
   setShowTrendDots(show: boolean): void;
 };
 
+type SensitiveInfoPreference = "shown" | "hidden";
+
 const WorkbenchDisplayPreferencesContext =
   createContext<WorkbenchDisplayPreferences | null>(null);
 
@@ -50,18 +52,30 @@ function sensitiveInfoIsHidden(): boolean {
   }
 }
 
+function storeSensitiveInfoPreference(showSensitiveInfo: boolean): void {
+  try {
+    document.cookie =
+      `pad-sensitive-info=${showSensitiveInfo ? "shown" : "hidden"}; Path=/; SameSite=Strict`;
+  } catch {
+    // Cookie 不可用时，当前页面状态和旧会话存储仍然有效。
+  }
+}
+
 export function WorkbenchDisplayPreferencesProvider({
   children,
+  initialSensitiveInfoPreference = null,
   persist = true,
 }: {
   children: ReactNode;
+  initialSensitiveInfoPreference?: SensitiveInfoPreference | null;
   persist?: boolean;
 }) {
   const persistenceEnabled = persist && !isDemoModeLocation();
   const [currency, setCurrentCurrency] = useState<ReportingCurrency>("USD");
-  // SSR 与首次 hydration 都先隐藏真实金额，避免读取会话偏好前短暂泄露。
-  // 演示模式的独立 provider 不持久化，仅展示虚构数据。
-  const [showSensitiveInfo, setShowSensitiveInfo] = useState(!persist);
+  // Cookie 缺失时保持安全隐藏，挂载后再迁移旧的会话偏好。
+  const [showSensitiveInfo, setShowSensitiveInfo] = useState(
+    !persist || initialSensitiveInfoPreference === "shown",
+  );
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showTrendDots, setCurrentTrendDots] = useState(true);
 
@@ -75,7 +89,11 @@ export function WorkbenchDisplayPreferencesProvider({
       return;
     }
     setCurrentCurrency(storedCurrency());
-    setShowSensitiveInfo(!sensitiveInfoIsHidden());
+    if (initialSensitiveInfoPreference === null) {
+      const nextShowSensitiveInfo = !sensitiveInfoIsHidden();
+      setShowSensitiveInfo(nextShowSensitiveInfo);
+      storeSensitiveInfoPreference(nextShowSensitiveInfo);
+    }
     try {
       setCurrentTrendDots(window.localStorage.getItem("pad-trend-dots") !== "false");
       const collapsed = window.localStorage.getItem("pad-sidebar-collapsed") === "true";
@@ -84,13 +102,14 @@ export function WorkbenchDisplayPreferencesProvider({
     } catch {
       // 存储不可用时保留默认显示偏好。
     }
-  }, [persistenceEnabled]);
+  }, [initialSensitiveInfoPreference, persistenceEnabled]);
 
   useEffect(() => {
     if (!persistenceEnabled) return;
 
     function resetSensitiveInfo() {
       setShowSensitiveInfo(true);
+      storeSensitiveInfoPreference(true);
       try {
         window.sessionStorage.removeItem("sensitive-info-hidden");
       } catch {
@@ -125,6 +144,7 @@ export function WorkbenchDisplayPreferencesProvider({
       } catch {
         // 会话存储不可用时，仍维持当前页面内的显示选择。
       }
+      storeSensitiveInfoPreference(next);
       return next;
     });
   }, [persistenceEnabled]);
