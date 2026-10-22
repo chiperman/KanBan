@@ -214,7 +214,7 @@ export function AssetSourceFlow({
   }
 
   function backToDirectory() {
-    router.push("/assets?view=sources");
+    router.push("/settings?view=data");
   }
 
   function backToChoice() {
@@ -358,7 +358,7 @@ export function AssetSourceFlow({
       setError(body?.error ?? "手工资产记录保存失败");
       return;
     }
-    router.push("/assets?view=sources");
+    router.push("/settings?view=data");
     router.refresh();
   }
 
@@ -385,7 +385,7 @@ export function AssetSourceFlow({
     }
     router.push(
       reauthorization === undefined
-        ? "/assets?view=sources"
+        ? "/settings?view=data"
         : `/asset-sources/${encodeURIComponent(reauthorization.sourceId)}`,
     );
     router.refresh();
@@ -419,7 +419,7 @@ export function AssetSourceFlow({
     }
     router.push(
       reauthorization === undefined
-        ? "/assets?view=sources"
+        ? "/settings?view=data"
         : `/asset-sources/${encodeURIComponent(reauthorization.sourceId)}`,
     );
     router.refresh();

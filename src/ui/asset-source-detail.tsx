@@ -236,7 +236,7 @@ function SourceLifecycleActions({
         await sourceRequest(`/api/asset-sources/${encodeURIComponent(source.id)}`, "DELETE", {
           confirmation: "DELETE_SOURCE_DATA",
         });
-        router.push("/assets?view=sources");
+        router.push("/settings?view=data");
       } else {
         await sourceRequest(`/api/asset-sources/${encodeURIComponent(source.id)}`, "PATCH", {
           action,
@@ -481,7 +481,9 @@ export function AssetSourceDetail({
           description={realtimeActive ? <LongbridgeRealtimeStatus state={realtimeState} /> : undefined}
           eyebrow="SOURCE / DETAIL"
           title={name}
-          backLink={{ href: "/assets", label: "返回资产" }}
+          backLink={view === "manage"
+            ? { href: "/settings?view=data", label: "返回数据与维护" }
+            : { href: "/assets", label: "返回资产" }}
           actionsLabel="来源详情快捷操作"
           actions={<>
             <VibeSelect

@@ -4,8 +4,3 @@ export const WORKBENCH_DESTINATIONS = [
   { href: "/performance", label: "投资账本", shortLabel: "账本", icon: "performance" },
   { href: "/settings", label: "设置", shortLabel: "设置", icon: "security" },
 ] as const;
-
-export const ASSET_VIEWS = [
-  { href: "/assets", label: "持仓" },
-  { href: "/assets?view=sources", label: "账户与来源" },
-] as const;

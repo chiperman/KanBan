@@ -9,6 +9,9 @@ import {
   type PageSearchParams,
 } from "@/server/auth/canonical-origin";
 import { getServices } from "@/server/composition";
+import { readAssetRefreshState } from "@/server/asset-refresh-state";
+import { shanghaiDay } from "@/domain/daily-asset-snapshots";
+import { AssetSourceDirectory } from "@/ui/asset-source-directory";
 import {
   isProfitColorScheme,
   PROFIT_COLOR_SCHEME_COOKIE_KEY,
@@ -22,6 +25,7 @@ import { SessionGuard } from "@/ui/session-guard";
 import { TrendAppearanceSettings } from "@/ui/trend-appearance-settings";
 import { WorkbenchShell } from "@/ui/workbench-shell";
 import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
+import { VibeLink } from "@/ui/vibe/vibe-button";
 
 export const dynamic = "force-dynamic";
 
@@ -47,15 +51,30 @@ export default async function SettingsPage({
     ? savedProfitColorScheme
     : null;
   const externalServiceStatus = await services.externalServices.status();
-  const [execution, scheduler, collection] = await Promise.all([
+  const [execution, scheduler, collection, storedSources, cards, history, fullRefreshState] = await Promise.all([
     services.formalSettlementExecutions.latest(),
     services.formalSettlementScheduler.read(),
     view === "data" ? services.backgroundCollection?.read() ?? null : null,
+    view === "data" ? services.assetSources.list() : [],
+    view === "data" ? services.assetCards.list() : [],
+    view === "data" ? services.dailyAssetSnapshots.listTrendObservations() : [],
+    view === "data" ? readAssetRefreshState(services) : undefined,
   ]);
 
   return (
     <SessionGuard>
-      <WorkbenchShell refreshEnabled={false}>
+      <WorkbenchShell
+        refreshEnabled={view === "data"}
+        refreshRegistration={fullRefreshState === undefined ? undefined : {
+          ...fullRefreshState,
+          sources: storedSources.map((source) => ({
+            id: source.id,
+            kind: source.kind,
+            lifecycle: source.lifecycle,
+            credentialAvailable: source.credentialReference !== null,
+          })),
+        }}
+      >
         <div className="page page-settings">
           <a className="skip-link" href="#main-content">
             跳到主要内容
@@ -64,6 +83,7 @@ export default async function SettingsPage({
             <WorkbenchPageHeader
               eyebrow="LOCAL / SETTINGS"
               title="设置"
+              actions={view === "data" ? <VibeLink href="/asset-sources/new" variant="primary">新增来源</VibeLink> : undefined}
             />
             <WorkspaceViewNavigation label="设置分类" current={view === "preferences" ? "/settings" : `/settings?view=${view}`} items={[
               { href: "/settings", label: "偏好" },
@@ -102,6 +122,12 @@ export default async function SettingsPage({
               </div>
             </section>
             </> : <>
+              <AssetSourceDirectory
+                cards={cards}
+                currentDay={shanghaiDay(services.clock.now())}
+                history={history}
+                sources={storedSources.map(({ credentialReference: _credential, ...source }) => source)}
+              />
               <BackgroundCollectionSettings status={collection} />
               <AutomaticDailySettlementSettings execution={execution} scheduler={scheduler} backgroundActive={collection?.health === "running"} />
               <BusinessDataBackupSettings />

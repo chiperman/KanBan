@@ -1,7 +1,5 @@
 "use client";
 
-import { WorkspaceViewNavigation } from "@/ui/workspace-view-navigation";
-import { ASSET_VIEWS } from "@/ui/workbench-navigation";
 import { Fragment, useId, useMemo, useState, type ReactNode } from "react";
 
 import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
@@ -370,7 +368,6 @@ export function AssetsHoldingsWorkspace({
         titleId="assets-holdings-title"
       />
 
-      <WorkspaceViewNavigation label="资产视角" items={ASSET_VIEWS} current="/assets" />
       <LongbridgeRealtimeNotice state={realtimeState} retry={retry} />
 
       <section

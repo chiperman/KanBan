@@ -10551,6 +10551,11 @@ body {
   align-items: start;
 }
 
+.workbench-shell .settings-main--data > .data-health-diagnostics {
+  grid-column: 1 / -1;
+  margin-block-start: 0;
+}
+
 .workbench-shell .settings-section,
 .workbench-shell .external-service-settings {
   min-width: 0;

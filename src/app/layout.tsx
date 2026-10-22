@@ -9,6 +9,7 @@ import "./product-layout.css";
 import "./vibe-components.css";
 import { ThemeInitializer } from "@/ui/theme-switcher";
 import { AssetRefreshProvider } from "@/ui/asset-refresh-provider";
+import { DisplayFontPreload } from "@/ui/display-font-preload";
 import {
   WorkbenchDisplayPreferencesProvider,
 } from "@/ui/workbench-display-preferences";
@@ -30,6 +31,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <body>
+        <DisplayFontPreload />
         <WorkbenchDisplayPreferencesProvider
           initialSensitiveInfoPreference={initialSensitiveInfoPreference}
         >

@@ -133,7 +133,7 @@ export function AssetSourceDirectory({ cards, sources, currentDay, history }: {
     <div className="data-health-diagnostics" data-testid="data-health-diagnostics">
       <section aria-label="资产来源列表" className="asset-source-directory">
         <div className="data-health-section-heading">
-          <h2>账户与来源</h2>
+          <h2>来源管理</h2>
           <p aria-label={`共 ${sources.length} 个来源，${sources.length - attentionCount} 个正常，${attentionCount} 个需关注`}>
             {sources.length} 个来源 · {attentionCount > 0 ? `${attentionCount} 个需关注` : "全部正常"}
           </p>

@@ -7,8 +7,8 @@
 
 @font-face {
   font-family: "Doto";
-  src: url("/fonts/nothing-open/Doto-ROND-wght.ttf") format("truetype");
-  font-display: swap;
+  src: url("/fonts/nothing-open/Doto-ROND-wght.woff2") format("woff2");
+  font-display: block;
   font-style: normal;
   font-weight: 100 900;
 }
