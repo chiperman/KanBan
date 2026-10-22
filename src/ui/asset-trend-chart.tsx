@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState, type ComponentProps } from "react";
+import { createContext, useContext, useId, useState, type ComponentProps, type PointerEvent, type ReactNode } from "react";
 import {
   Area,
   CartesianGrid,
@@ -12,7 +12,7 @@ import {
   Tooltip,
   XAxis,
   YAxis,
-  useIsTooltipActive,
+  useActiveTooltipCoordinate,
   usePlotArea,
   type TooltipContentProps,
   type XAxisTickContentProps,
@@ -263,30 +263,60 @@ function percentage(value: number, signed = false): string {
   return `${signed && normalized > 0 ? "+" : ""}${(normalized * 100).toFixed(2)}%`;
 }
 
+const TrendPointerContext = createContext<number | null>(null);
+
+function TrendChartSurface({ children }: { children: ReactNode }) {
+  const [pointerX, setPointerX] = useState<number | null>(null);
+
+  function trackPointer(event: PointerEvent<HTMLDivElement>) {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    if (bounds.width === 0) return;
+    setPointerX((event.clientX - bounds.left) * event.currentTarget.clientWidth / bounds.width);
+  }
+
+  return <div
+    className="total-trend-chart-wrap"
+    onKeyDownCapture={() => setPointerX(null)}
+    onPointerDown={trackPointer}
+    onPointerLeave={() => setPointerX(null)}
+    onPointerMove={trackPointer}
+  >
+    <TrendPointerContext value={pointerX}>{children}</TrendPointerContext>
+  </div>;
+}
+
+function TrendChartCursor() {
+  const pointerX = useContext(TrendPointerContext);
+  const coordinate = useActiveTooltipCoordinate();
+  const plotArea = usePlotArea();
+  if (!plotArea || !coordinate) return null;
+  const x = Math.max(plotArea.x, Math.min(pointerX ?? coordinate.x, plotArea.x + plotArea.width));
+
+  return <line
+    className="recharts-tooltip-cursor"
+    pointerEvents="none"
+    stroke="var(--line-2)"
+    strokeWidth={1}
+    x1={x}
+    x2={x}
+    y1={plotArea.y}
+    y2={plotArea.y + plotArea.height}
+  />;
+}
+
 function TrendChartTooltip(props: ComponentProps<typeof Tooltip>) {
-  const isActive = useIsTooltipActive();
-  const [canAnimate, setCanAnimate] = useState(false);
-
-  useEffect(() => {
-    setCanAnimate(false);
-    if (!isActive) return;
-
-    // Let Recharts measure and paint the initial position before animating moves.
-    let frame = requestAnimationFrame(() => {
-      frame = requestAnimationFrame(() => setCanAnimate(true));
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [isActive]);
-
   return (
     <Tooltip
       {...props}
+      cursor={<TrendChartCursor />}
       filterNull={false}
-      isAnimationActive={isActive && canAnimate ? "auto" : false}
-      animationDuration={200}
-      animationEasing="ease-in-out"
+      isAnimationActive={false}
     />
   );
+}
+
+function hasTrendRecord(point: AssetTrendChartPoint): boolean {
+  return point.observed || point.manualRecordDay === point.day;
 }
 
 function HiddenTrendState({
@@ -322,9 +352,11 @@ function TrendTooltip({
 }) {
   const point = payload?.[0]?.payload as ChartDatum | undefined;
   if (!active || !point) return null;
-  const amount = point.amount ?? point.historicalAmount;
-  const showingHistorical = point.amount === null && point.historicalAmount !== null;
-  const quality = point.status === "expired"
+  const hasRecord = hasTrendRecord(point);
+  const amount = hasRecord ? point.amount ?? point.historicalAmount : point.historicalAmount;
+  const missing = !hasRecord && point.historicalAmount === null;
+  const showingHistorical = amount !== null && (!hasRecord || point.amount === null);
+  const quality = missing ? null : point.status === "expired"
     ? "过期"
     : point.status === "incomplete"
       ? "不完整"
@@ -334,15 +366,12 @@ function TrendTooltip({
     <div className="asset-trend-tooltip">
       <span>{formatDay(point.day)}</span>
       <strong>
-        {amount === null
+        {missing ? "暂无记录" : amount === null
           ? "未估值"
           : `${showingHistorical ? `${point.historicalLabel} ` : ""}${formatAmount(amount)}${showCurrency ? ` ${currency}` : ""}`}
       </strong>
       {showingHistorical ? <small>早期记录</small> : null}
       {quality ? <small>{quality}</small> : null}
-      {point.manualRecordDay && point.manualRecordDay !== point.day ? (
-        <small>{formatDay(point.manualRecordDay)} 记录</small>
-      ) : null}
     </div>
   );
 }
@@ -366,15 +395,16 @@ function BenchmarkTrendTooltip({
 }) {
   const point = payload?.[0]?.payload as BenchmarkChartDatum | undefined;
   if (!active || point === undefined) return null;
+  const missing = !hasTrendRecord(point);
   const assetsLabel = returnComparison ? `${assetScopeLabel}收益率` : assetLabel(assetScopeLabel);
 
   return (
     <div className="asset-trend-tooltip">
       <span>{formatDay(point.day)}</span>
       <strong>
-        我的{assetsLabel} {point.assets === null ? "数据不足" : percentage(point.assets, true)}
+        我的{assetsLabel} {missing ? "暂无记录" : point.assets === null ? "数据不足" : percentage(point.assets, true)}
       </strong>
-      {returnComparison ? null : point.amount === null ? (
+      {returnComparison || missing ? null : point.amount === null ? (
         <small>资产金额未估值</small>
       ) : (
         <small>{formatAmount(point.amount)} {currency}</small>
@@ -607,7 +637,7 @@ export function AssetTrendChart({
       <div className={`asset-trend-comparison asset-trend-comparison--${variant}`}>
         {coveragePresentation !== "disclosure" ? comparisonHeader : null}
         {benchmarkLegend}
-        <div className="total-trend-chart-wrap">
+        <TrendChartSurface>
           <ResponsiveContainer
             width="100%"
             height={chartHeight ?? (variant === "source" ? 168 : 300)}
@@ -656,7 +686,6 @@ export function AssetTrendChart({
                     returnComparison={benchmark.returnComparison}
                   />
                 )}
-                cursor={{ stroke: "var(--line-2)", strokeWidth: 1 }}
               />
               <ReferenceLine stroke="var(--line-2)" strokeWidth={1} y={0} />
               {showDotFill ? <Area
@@ -706,7 +735,7 @@ export function AssetTrendChart({
               ) : null}
             </ComposedChart>
           </ResponsiveContainer>
-        </div>
+        </TrendChartSurface>
         {coveragePresentation === "disclosure" ? comparisonHeader : null}
       </div>
     );
@@ -742,7 +771,7 @@ export function AssetTrendChart({
     <div className={`asset-trend-comparison asset-trend-comparison--${variant}`}>
       {coveragePresentation !== "disclosure" ? comparisonHeader : null}
       {benchmarkLegend}
-      <div className="total-trend-chart-wrap">
+      <TrendChartSurface>
         <ResponsiveContainer
           width="100%"
           height={chartHeight ?? (variant === "source" ? 168 : 300)}
@@ -790,7 +819,6 @@ export function AssetTrendChart({
                   showCurrency={showCurrency}
                 />
               )}
-              cursor={{ stroke: "var(--line-2)", strokeWidth: 1 }}
             />
             {!minimalPlot && today?.amount != null ? (
               <ReferenceLine
@@ -845,7 +873,7 @@ export function AssetTrendChart({
             ) : null}
           </ComposedChart>
         </ResponsiveContainer>
-      </div>
+      </TrendChartSurface>
       {coveragePresentation === "disclosure" ? comparisonHeader : null}
     </div>
   );
