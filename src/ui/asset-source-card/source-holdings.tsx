@@ -12,6 +12,7 @@ import type { ProfitColorScheme } from "@/ui/profit-color-scheme";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeSegmentedBar, VibeStatusTag } from "@/ui/vibe/vibe-data-instrument";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
+import { useTablePagination, VibeTablePagination } from "@/ui/vibe/vibe-table-pagination";
 import { formatShanghaiDateTime } from "@/ui/shanghai-date-time";
 import { sourceSyncStatus } from "@/ui/asset-source-status";
 import { AssetFinancialValue } from "@/ui/asset-financial-value";
@@ -72,6 +73,7 @@ export function AssetSourceHoldings({
     valuationSegments,
     visibleHoldings,
   } = model;
+  const pagination = useTablePagination(searchedHoldings, JSON.stringify([source.id, hideSmallCryptoHoldings, model.holdingsSearchQuery]));
   return (
     <>
       {supportsProductCoverage ? (
@@ -216,7 +218,7 @@ export function AssetSourceHoldings({
                   </tr>
                 </thead>
                 <tbody>
-                  {searchedHoldings.map((holding) => (
+                  {pagination.visibleItems.map((holding) => (
                     <HoldingDetailRow
                       key={assetHoldingKey(holding)}
                       holding={holding}
@@ -240,6 +242,7 @@ export function AssetSourceHoldings({
               </table>
             </div>
           )}
+          <VibeTablePagination label={`${source.label}持仓明细分页`} pagination={pagination.controls} />
         </div>
       </section>
       <UnreadableEvmAssets

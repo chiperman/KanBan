@@ -13,6 +13,7 @@ import { formatShanghaiDayLabel } from "@/ui/shanghai-date-time";
 import { AssetFinancialValue } from "@/ui/asset-financial-value";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeMetric } from "@/ui/vibe/vibe-data-instrument";
+import { useTablePagination, VibeTablePagination } from "@/ui/vibe/vibe-table-pagination";
 
 // 金额始终按十进制字符串格式化，避免大额金额经 Number 转换后丢精度。
 function money(value: string): string {
@@ -35,6 +36,8 @@ export function SourceInvestmentPerformance({ history, sourceId, sourceName, rec
 }) {
   const [curve, setCurve] = useState<"return" | "profit" | "total">("return");
   const analysis = useMemo(() => analyzeSourceInvestmentAccount({history, sourceId, records, observations, source, manualRecords, currentDay}), [history, sourceId, records, observations, source, manualRecords, currentDay]);
+  const manualPagination = useTablePagination(records.toSorted((a,b)=>b.day.localeCompare(a.day)||b.recordedAt.localeCompare(a.recordedAt)), sourceId);
+  const importedPagination = useTablePagination(history?.records.toReversed() ?? [], sourceId);
   const days = rangeDays(range.preset, currentDay, analysis.points[0]?.day, range.customRange);
   const byDay = new Map(analysis.points.map(point => [point.day, point]));
   const firstObservation = analysis.points[0]?.day;
@@ -94,7 +97,7 @@ export function SourceInvestmentPerformance({ history, sourceId, sourceName, rec
     {showSensitiveInfo && records.length ? <details className="daily-trend-details source-performance__records">
       <summary>手动记账记录（{records.length} 条）</summary>
       <ol className="manual-asset-history-list">
-        {records.toSorted((a,b)=>b.day.localeCompare(a.day)||b.recordedAt.localeCompare(a.recordedAt)).map(record=><li key={record.id}>
+        {manualPagination.visibleItems.map(record=><li key={record.id}>
           <span>{record.day}</span><span>{{opening:"期初本金",deposit:"投入",withdrawal:"取出",valuation:"当天资产金额"}[record.kind]}</span>
           <strong><AssetFinancialValue unit={record.currency}>{money(record.amount)}</AssetFinancialValue></strong>
           {onEdit && onDelete ? <div className="source-performance__record-actions">
@@ -103,17 +106,19 @@ export function SourceInvestmentPerformance({ history, sourceId, sourceName, rec
           </div> : null}
         </li>)}
       </ol>
+      <VibeTablePagination label="手动记账记录分页" pagination={manualPagination.controls} />
     </details> : null}
     {showSensitiveInfo && history ? <details className="daily-trend-details">
       <summary>导入记账记录（{history.records.length} 条）</summary>
       <p className="trend-note">{history.accountName} · 期初本金 {history.openingInvestment.day}：<AssetFinancialValue unit={history.currency}>{money(history.openingInvestment.amount)}</AssetFinancialValue>。{history.openingBasis}。</p>
       <ol className="manual-asset-history-list">
-        {history.records.toReversed().map(record => <li key={record.id}>
+        {importedPagination.visibleItems.map(record => <li key={record.id}>
           <span>{record.day}</span>
           <span>{record.kind === "valuation" ? "当天资产金额" : record.kind === "deposit" ? "投入" : "取出"}</span>
           <strong><AssetFinancialValue unit={history.currency}>{money(record.amount)}</AssetFinancialValue></strong>
         </li>)}
       </ol>
+      <VibeTablePagination label="导入记账记录分页" pagination={importedPagination.controls} />
     </details> : null}
     </div>
   </section>;

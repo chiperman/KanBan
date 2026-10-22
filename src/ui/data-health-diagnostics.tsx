@@ -22,6 +22,7 @@ import type {
 } from "@/server/ports";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeSelect } from "@/ui/vibe/vibe-field";
+import { useTablePagination, VibeTablePagination } from "@/ui/vibe/vibe-table-pagination";
 
 export type DataHealthSource = Omit<
   AssetSourceSummary,
@@ -276,6 +277,7 @@ export function DataHealthDiagnostics({
       : entry.state !== "complete"),
   );
   const incompleteCount = entries.filter((entry) => entry.state === "incomplete").length;
+  const pagination = useTablePagination(filteredEntries, JSON.stringify([range, sourceId, completeness]));
   const gapCount = entries.filter((entry) => entry.state === "gap").length;
   const rangeLabel = TIME_RANGE_OPTIONS.find((option) => option.value === range)?.label;
 
@@ -345,7 +347,7 @@ export function DataHealthDiagnostics({
             </div>
           ) : (
             <ol className="data-health-history__list">
-              {filteredEntries.map((entry) => (
+              {pagination.visibleItems.map((entry) => (
                 <li data-state={entry.state} key={entry.day}>
                   <p>{entry.day} · {historyStatusLabel(entry.state)}</p>
                   <span>{entry.detail}</span>
@@ -353,6 +355,7 @@ export function DataHealthDiagnostics({
               ))}
             </ol>
           )}
+          <VibeTablePagination label="历史覆盖分页" pagination={pagination.controls} />
         </div>
       ) : null}
     </section>

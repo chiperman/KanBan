@@ -118,6 +118,7 @@ export function assetSourceHoldingsModel({
     compactProfitColumns: source.kind === "longbridge",
     hasHoldingsSearchQuery: !isManual && normalizedQuery.length > 0,
     hiddenSmallHoldingCount,
+    holdingsSearchQuery,
     includedAssetKeys,
     isManual,
     quoteUnavailableCount,

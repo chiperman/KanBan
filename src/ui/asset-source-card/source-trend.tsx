@@ -9,6 +9,7 @@ import { AssetTrendPanel, useAssetTrendRange, type AssetTrendRange } from "@/ui/
 import { rangeDays } from "@/domain/investment-performance-trend";
 import { formatShanghaiDayLabel, formatShanghaiFullDayLabel } from "@/ui/shanghai-date-time";
 import { AssetFinancialValue } from "@/ui/asset-financial-value";
+import { useTablePagination, VibeTablePagination } from "@/ui/vibe/vibe-table-pagination";
 import { assetSourceTrendModel } from "./source-trend-model";
 import type { AssetSourceView } from "./types";
 
@@ -67,6 +68,7 @@ export function AssetSourceTrend({
     trendDays,
     trendRange: "all",
   });
+  const pagination = useTablePagination(sourceTrend.sourceDailyDetails, JSON.stringify([source.id, selection.preset, selection.customRange]));
   return (
     <section
       className="asset-trend source-trend"
@@ -101,7 +103,7 @@ export function AssetSourceTrend({
               <summary>每日总额（{sourceTrend.sourceDailyDetails.length}）</summary>
               <div className="daily-trend-details-content">
                 <ol className="daily-trend-detail-list">
-                  {sourceTrend.sourceDailyDetails.map((observation) => {
+                  {pagination.visibleItems.map((observation) => {
                     const observationStatus =
                       sourceTrendObservationStatus(observation);
                     const observationAmount =
@@ -135,6 +137,7 @@ export function AssetSourceTrend({
                     );
                   })}
                 </ol>
+                <VibeTablePagination label={`${heading.title}每日总额分页`} pagination={pagination.controls} />
               </div>
             </details>
           ) : null}

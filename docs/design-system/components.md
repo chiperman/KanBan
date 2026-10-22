@@ -73,6 +73,7 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 - 标签：`--f-mono`、`--vibe-type-micro`（10px）、全大写、字距 `.12em`、色 `--secondary`。
 - 输入框：1px `--line-2` 边框、`--r-sm` 圆角、透明底、`--primary` 文字、`--f-mono`。
 - 当前输入配方至少 48px 高，字号 `--vibe-type-body`（16px）。
+- `VibeField density="compact"` 用于工具条的短数字输入：44px 高、字号 `--vibe-type-body-xs`（13px），收紧字距并隐藏数字步进按钮；其他字段保持默认配方。
 - **聚焦只把边框色改为 `--primary`**：没有发光、没有强调色、没有阴影。
 - 占位符 `--muted`；禁用 `opacity .3`。
 - 多行变体 `textarea.vibe-field__input` 最小高 112px，字距收到 `.02em`，行高 1.55。
@@ -246,6 +247,8 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 - 单元格默认 `--f-mono` `--vibe-type-label`（11px）、下边界 `--line`、数值右对齐、文本左对齐；持仓明细的字号与双行布局遵守 [金融信息与隐私](patterns.md#金融信息与隐私)。
 - **无斑马纹。** 需要区分时用更多留白或分组细线。
 - 不可读或未估值必须在文案上如实说明（“未估值”／“数据不足”），状态前景可用 `--error`，不以整行色底代替文字。使用表头与单元格语义，窄屏滚动及数值完整性见页面模式。
+
+分页复用 [VibeTablePagination / useTablePagination](../../src/ui/vibe/vibe-table-pagination.tsx)，不在页面重建控件或页码校验；组合行为见 [页面模式](patterns.md#金融信息与隐私)。
 
 ## 数据行与预览列表
 

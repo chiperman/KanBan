@@ -13,13 +13,14 @@ interface VibeFieldProps
   extends Omit<InputHTMLAttributes<HTMLInputElement>, "className" | "id"> {
   fieldId: string;
   label: string;
+  density?: "regular" | "compact";
   ref?: Ref<HTMLInputElement>;
 }
 
-export function VibeField({ fieldId, label, ref, ...inputProps }: VibeFieldProps) {
+export function VibeField({ fieldId, label, density = "regular", ref, ...inputProps }: VibeFieldProps) {
   return (
     <label
-      className="vibe-field"
+      className={density === "compact" ? "vibe-field vibe-field--compact" : "vibe-field"}
       data-testid={`vibe-field-${fieldId}`}
       data-vibe-component="field"
       htmlFor={fieldId}

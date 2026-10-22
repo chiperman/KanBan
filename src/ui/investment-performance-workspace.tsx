@@ -1,5 +1,7 @@
 "use client";
 
+import { useTablePagination, VibeTablePagination } from "@/ui/vibe/vibe-table-pagination";
+
 import { formatAssetAmount } from "@/ui/asset-price-display";
 import { AssetFinancialValue } from "@/ui/asset-financial-value";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
@@ -472,6 +474,7 @@ export function InvestmentPerformanceWorkspace({
     }, {} as CurrentTotals);
   }, [liveSources, currentExchangeRates, currentObservedAt]);
   const [cashflows, setCashflows] = useState(() => sortCashflows(initialCashflows));
+  const cashflowPagination = useTablePagination(cashflows);
   const {
     currency,
     setCurrency,
@@ -890,7 +893,7 @@ export function InvestmentPerformanceWorkspace({
               <span>操作</span>
             </div>
             <ol className="investment-performance__cashflow-list" role="list">
-              {cashflows.map((cashflow) => {
+              {cashflowPagination.visibleItems.map((cashflow) => {
                 const convertedAmount = cashflow.amounts[currency];
                 const needsConversion = cashflow.currency !== currency;
                 const conversionEvidence = cashflow.exchangeRates.find(
@@ -982,6 +985,7 @@ export function InvestmentPerformanceWorkspace({
                 );
               })}
             </ol>
+            <VibeTablePagination label="投资资金进出分页" pagination={cashflowPagination.controls} />
             {/* 表尾小计：与上方「累计净投入」同源同值，是「账目对得上」的核验点 */}
             <p className="investment-performance__ledger-total">
               <span className="investment-performance__ledger-total-label">累计净投入</span>

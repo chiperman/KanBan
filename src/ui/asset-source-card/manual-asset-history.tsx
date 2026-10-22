@@ -6,6 +6,7 @@ import { formatShanghaiDateTime } from "@/ui/shanghai-date-time";
 import { AssetFinancialValue } from "@/ui/asset-financial-value";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeStatusTag } from "@/ui/vibe/vibe-data-instrument";
+import { useTablePagination, VibeTablePagination } from "@/ui/vibe/vibe-table-pagination";
 import type { AssetSourceView } from "./types";
 
 export function ManualAssetHistory({
@@ -26,6 +27,7 @@ export function ManualAssetHistory({
   const heading = { title: assetSourceDisplayName(source) };
   const hasManualRecord = source.hasManualRecord !== false;
   const manualRecords = source.manualRecords ?? [];
+  const pagination = useTablePagination(manualRecords, source.id);
   return (
     <>
       <VibeStatusTag className="asset-sync-status" tone="muted">
@@ -44,7 +46,7 @@ export function ManualAssetHistory({
           <p className="trend-empty">尚无历史记录</p>
         ) : (
           <ol className="manual-asset-history-list">
-            {manualRecords.map((record) => (
+            {pagination.visibleItems.map((record) => (
               <li key={record.day}>
                 <span>{record.day}</span>
                 <strong>
@@ -88,6 +90,7 @@ export function ManualAssetHistory({
             ))}
           </ol>
         )}
+        <VibeTablePagination label={`${heading.title}历史记录分页`} pagination={pagination.controls} />
       </section>
     </>
   );

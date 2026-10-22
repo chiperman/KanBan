@@ -10928,8 +10928,7 @@ body {
 }
 
 .investment-books__section-heading,
-.investment-books__record-filters,
-.investment-books__pagination {
+.investment-books__record-filters {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -11195,11 +11194,6 @@ body {
   justify-content: flex-end;
   gap: var(--vibe-space-2);
   max-width: calc(var(--vibe-space-24) * 2);
-}
-
-.investment-books__pagination {
-  color: var(--secondary);
-  font-size: var(--vibe-type-caption);
 }
 
 @media (max-width: 1023px) {

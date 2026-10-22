@@ -50,6 +50,7 @@ import { LongbridgeRealtimeNotice, LongbridgeRealtimeStatus } from "@/ui/longbri
 import { useLongbridgeRealtime } from "@/ui/use-longbridge-realtime";
 import { AssetGlobalRefreshControl } from "@/ui/asset-refresh-controls";
 import { CURRENCY_OPTIONS } from "@/ui/reporting-currency-options";
+import { useTablePagination, VibeTablePagination } from "@/ui/vibe/vibe-table-pagination";
 
 type WorkspaceSource = Omit<
   AssetSourceSummary,
@@ -340,6 +341,8 @@ export function AssetsHoldingsWorkspace({
     ],
   );
 
+  const holdingsPagination = useTablePagination(filteredObservations, JSON.stringify([sourceId, searchQuery, assetClass, valuation]));
+
   return (
     <section
       className="assets-holdings"
@@ -436,7 +439,7 @@ export function AssetsHoldingsWorkspace({
                 </tr>
               </thead>
               <tbody>
-                {filteredObservations.map(({ holding, source }) => {
+                {holdingsPagination.visibleItems.map(({ holding, source }) => {
                   const sourceRates = sourceReportingConversionRates(
                     source,
                     reportingRates,
@@ -580,6 +583,8 @@ export function AssetsHoldingsWorkspace({
             </table>
           </div>
         )}
+
+        <VibeTablePagination label="资产持仓分页" pagination={holdingsPagination.controls} />
 
         <VibeNotice tone="info">
           价格变化采用来源可用行情；平台盈亏沿用平台原生口径。

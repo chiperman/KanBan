@@ -31,6 +31,7 @@ import { VibeDialog } from "@/ui/vibe/vibe-dialog";
 import { VibeField, VibeSelectField, VibeTextAreaField } from "@/ui/vibe/vibe-field";
 import { VibeDateField } from "@/ui/vibe/vibe-date-field";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
+import { useTablePagination, VibeTablePagination } from "@/ui/vibe/vibe-table-pagination";
 
 export type InvestmentBookSource = Omit<AssetSourceSummary, "credentialReference" | "permissions">;
 const labels = { opening: "期初本金", deposit: "入金", withdrawal: "出金", valuation: "资产金额" };
@@ -134,7 +135,6 @@ export function InvestmentBooksWorkspace({ state, initialBookId = "us-stocks", v
 }) {
   const bookId = initialBookId;
   const [recordFilter, setRecordFilter] = useState<"all" | "funds" | "valuations">("all");
-  const [recordPage, setRecordPage] = useState(1);
   const [curve, setCurve] = useState<"return" | "total">("return");
   const [enabledSymbols, setEnabledSymbols] = useState<MarketBenchmarkSymbol[]>([...DEFAULT_MARKET_BENCHMARK_SYMBOLS]);
   const trendRange = useAssetTrendRange();
@@ -177,10 +177,8 @@ export function InvestmentBooksWorkspace({ state, initialBookId = "us-stocks", v
     ...analysis.records.filter(row => row.kind !== "valuation").map(row => ({ key: row.id, day: row.day, label: labels[row.kind], kind: row.kind, amount: row.amount, basis: row.origin === "statement" ? (row.currency === analysis.book.currency ? "长桥结单" : "长桥结单 · 待补当日汇率") : row.origin === "import" ? "导入历史" : row.origin === "legacy" ? "旧资金原件" : "手动记录", record: row })),
   ].toSorted((a, b) => b.day.localeCompare(a.day) || a.key.localeCompare(b.key));
   const filteredTimeline = timeline.filter(row => recordFilter === "all" || (recordFilter === "valuations" ? row.kind === "valuation" : row.kind !== "valuation"));
-  const pageSize = 20;
-  const pageCount = Math.max(1, Math.ceil(filteredTimeline.length / pageSize));
-  const currentPage = Math.min(recordPage, pageCount);
-  const visibleTimeline = filteredTimeline.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const recordPagination = useTablePagination(filteredTimeline, JSON.stringify([bookId, recordFilter]));
+  const correctionPagination = useTablePagination(state.records.filter(row => row.bookId === bookId && (row.voidedAt || row.replacesId)), bookId);
   const pendingMembers = analysis.members.filter(row => !row.confirmed);
   const unassignedCashflows = cashflows.filter(flow => state.unassignedLegacyIds.includes(flow.id));
   const bookHref = (id: InvestmentBookId, section = view) => `/performance?book=${id}&view=${section}`;
@@ -254,17 +252,13 @@ export function InvestmentBooksWorkspace({ state, initialBookId = "us-stocks", v
     {view === "records" ? <>
     <section className="source-performance" aria-label="统一记账记录"><header className="investment-books__section-heading"><div><h2>记账记录</h2><p className="trend-note">历史和新记录按日期排列，入金出金独立列出。资产同日仅展示生效总额。</p></div><VibeButton type="button" variant="outline" onClick={() => setDialog("import")}>导入历史记账</VibeButton></header>
       <div className="investment-books__record-filters" role="group" aria-label="记账记录类型">
-        {([ ["all", "全部记录"], ["funds", "资金记录"], ["valuations", "资产估值"] ] as const).map(([value, label]) => <VibeButton key={value} type="button" size="compact" aria-pressed={recordFilter === value} variant={recordFilter === value ? "primary" : "outline"} onClick={() => { setRecordFilter(value); setRecordPage(1); }}>{label}</VibeButton>)}
+        {([ ["all", "全部记录"], ["funds", "资金记录"], ["valuations", "资产估值"] ] as const).map(([value, label]) => <VibeButton key={value} type="button" size="compact" aria-pressed={recordFilter === value} variant={recordFilter === value ? "primary" : "outline"} onClick={() => setRecordFilter(value)}>{label}</VibeButton>)}
       </div>
       {showSensitiveInfo && filteredTimeline.length === 0 ? <p className="trend-note">暂无{recordFilter === "funds" ? "资金" : recordFilter === "valuations" ? "资产估值" : "记账"}记录。</p> : null}
-      {showSensitiveInfo ? <ol className="manual-asset-history-list investment-books__record-list">{visibleTimeline.map(row => <li key={row.key} title={row.record?.note}><span>{row.day}</span><span>{row.label}<small className="investment-books__basis">{row.basis}</small></span><strong><InvestmentBookRecordAmount amount={row.amount} currency={row.record?.currency ?? analysis.book.currency} record={row.record} /></strong>{row.record ? <div className="source-performance__record-actions">{row.record.currency === analysis.book.currency ? <VibeButton type="button" variant="text" size="compact" onClick={() => setEditing(row.record!)} aria-label={`更正 ${row.day} ${row.label}`}>更正</VibeButton> : null}<VibeButton type="button" variant="text" size="compact" tone="danger" onClick={() => setVoiding(row.record!)} aria-label={`作废 ${row.day} ${row.label}`}>作废</VibeButton></div> : row.basis === "手动资产金额" ? <VibeButton type="button" variant="text" size="compact" onClick={() => { setAssetDay(row.day); setDialog("asset"); }}>更新资产</VibeButton> : null}</li>)}</ol> : <p className="trend-note">金额及记录已隐藏。</p>}
-      {showSensitiveInfo && filteredTimeline.length > 0 ? <nav aria-label="记账记录分页" className="investment-books__pagination">
-        <VibeButton type="button" variant="outline" disabled={currentPage === 1} onClick={() => setRecordPage(currentPage - 1)}>上一页</VibeButton>
-        <span role="status">第 {currentPage} / {pageCount} 页 · 共 {filteredTimeline.length} 条</span>
-        <VibeButton type="button" variant="outline" disabled={currentPage === pageCount} onClick={() => setRecordPage(currentPage + 1)}>下一页</VibeButton>
-      </nav> : null}
+      {showSensitiveInfo ? <ol className="manual-asset-history-list investment-books__record-list">{recordPagination.visibleItems.map(row => <li key={row.key} title={row.record?.note}><span>{row.day}</span><span>{row.label}<small className="investment-books__basis">{row.basis}</small></span><strong><InvestmentBookRecordAmount amount={row.amount} currency={row.record?.currency ?? analysis.book.currency} record={row.record} /></strong>{row.record ? <div className="source-performance__record-actions">{row.record.currency === analysis.book.currency ? <VibeButton type="button" variant="text" size="compact" onClick={() => setEditing(row.record!)} aria-label={`更正 ${row.day} ${row.label}`}>更正</VibeButton> : null}<VibeButton type="button" variant="text" size="compact" tone="danger" onClick={() => setVoiding(row.record!)} aria-label={`作废 ${row.day} ${row.label}`}>作废</VibeButton></div> : row.basis === "手动资产金额" ? <VibeButton type="button" variant="text" size="compact" onClick={() => { setAssetDay(row.day); setDialog("asset"); }}>更新资产</VibeButton> : null}</li>)}</ol> : <p className="trend-note">金额及记录已隐藏。</p>}
+      {showSensitiveInfo ? <VibeTablePagination label="记账记录分页" pagination={recordPagination.controls} /> : null}
     </section>
-    <details className="daily-trend-details"><summary>原件与更正记录</summary>{showSensitiveInfo ? <div className="daily-trend-details-content"><p>保留 {state.imports.filter(history => state.records.some(row => row.bookId === bookId && row.originKey.startsWith(`${bookHistoryPrefix(history)}:`))).length} 份导入原件；{state.legacyLinks.filter(link => state.records.some(row => row.id === link.recordId && row.bookId === bookId)).length} 笔旧资金已关联，仅计算一次。</p><ol className="manual-asset-history-list">{state.records.filter(row => row.bookId === bookId && (row.voidedAt || row.replacesId)).map(row => <li key={row.id}><span>{row.day}</span><span>{labels[row.kind]} · {row.voidedAt ? "已作废 / 更正前" : "更正后"}</span><strong><AssetFinancialValue unit={row.currency}>{bookMoney(row.amount)}</AssetFinancialValue></strong></li>)}</ol></div> : <p>记录已隐藏。</p>}</details>
+    <details className="daily-trend-details"><summary>原件与更正记录</summary>{showSensitiveInfo ? <div className="daily-trend-details-content"><p>保留 {state.imports.filter(history => state.records.some(row => row.bookId === bookId && row.originKey.startsWith(`${bookHistoryPrefix(history)}:`))).length} 份导入原件；{state.legacyLinks.filter(link => state.records.some(row => row.id === link.recordId && row.bookId === bookId)).length} 笔旧资金已关联，仅计算一次。</p><ol className="manual-asset-history-list">{correctionPagination.visibleItems.map(row => <li key={row.id}><span>{row.day}</span><span>{labels[row.kind]} · {row.voidedAt ? "已作废 / 更正前" : "更正后"}</span><strong><AssetFinancialValue unit={row.currency}>{bookMoney(row.amount)}</AssetFinancialValue></strong></li>)}</ol><VibeTablePagination label="原件与更正记录分页" pagination={correctionPagination.controls} /></div> : <p>记录已隐藏。</p>}</details>
     </> : null}
     {dialog === "fund" || editing ? <FundDialog initialBookId={bookId} state={state} currentDay={currentDay} record={editing ?? undefined} onClose={() => { setDialog(null); setEditing(null); }} /> : null}
     {dialog === "asset" ? <AssetDialog state={state} sources={sources} manualRecords={manualRecords} currentDay={currentDay} initialDay={assetDay} onClose={() => { setDialog(null); setAssetDay(undefined); }} /> : null}
