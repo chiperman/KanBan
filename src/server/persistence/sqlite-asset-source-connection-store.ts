@@ -141,6 +141,10 @@ export class SqliteAssetSourceConnectionStore {
       .prepare("DELETE FROM imported_asset_source_history_observations WHERE source_id = ?")
       .run(sourceId);
     this.database.prepare("DELETE FROM asset_sources WHERE id = ?").run(sourceId);
+    // 永久删除仍清除全部历史引用；断开和隐藏不会执行此路径。
+    this.database.prepare(`UPDATE daily_asset_trend_observations
+      SET source_scope_json = (SELECT json_group_array(value) FROM json_each(source_scope_json) WHERE value != ?)
+      WHERE source_scope_json IS NOT NULL`).run(sourceId);
     compactPositions(this.database, "asset_sources");
     for (const { day } of baselineDays) {
       this.observations.recalculate(day as string, {

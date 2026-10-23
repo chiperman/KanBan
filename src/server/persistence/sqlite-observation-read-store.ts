@@ -88,6 +88,8 @@ export class SqliteObservationReadStore {
         HKD: row.total_hkd as string | null,
       },
       exchangeRates: JSON.parse((row.exchange_rates_json as string | null) ?? "[]"),
+      ...(typeof row.source_scope_json === "string"
+        ? { sourceScope: JSON.parse(row.source_scope_json) as string[] } : {}),
       sources: (byDay.get(row.day as string) ?? []).map((source) => ({
         sourceId: source.source_id as string,
         label: source.label as string,

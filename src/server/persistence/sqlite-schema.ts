@@ -112,7 +112,8 @@ export class DashboardSchema {
         total_usd TEXT,
         total_cny TEXT,
         total_hkd TEXT,
-        exchange_rates_json TEXT NOT NULL CHECK (json_valid(exchange_rates_json))
+        exchange_rates_json TEXT NOT NULL CHECK (json_valid(exchange_rates_json)),
+        source_scope_json TEXT CHECK (source_scope_json IS NULL OR json_valid(source_scope_json))
       ) STRICT;
       CREATE TABLE IF NOT EXISTS daily_asset_source_trend_observations (
         day TEXT NOT NULL REFERENCES daily_asset_trend_observations(day) ON DELETE CASCADE,

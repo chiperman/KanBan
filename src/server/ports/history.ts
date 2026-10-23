@@ -51,6 +51,8 @@ interface DailyAssetObservation {
   capturedAt: string;
   /** 用于本次三币种折算的原始汇率观察；旧记录可缺省。 */
   exchangeRates?: AssetExchangeRate[];
+  /** 观测时应覆盖的来源；旧记录缺省时不能仅凭已出现的分量认定完整。 */
+  sourceScope?: string[];
   complete: boolean;
   /** 旧记录可能缺省；读取时按 complete 安全回退。 */
   status?: "complete" | "incomplete" | "expired";

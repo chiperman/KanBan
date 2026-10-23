@@ -49,8 +49,17 @@ export class SqliteBusinessDataStore {
     state.dailyAssetSnapshots.forEach((snapshot) =>
       this.observations.insertBaseline(migrateDailyObservation(snapshot)),
     );
+    const legacyScope = state.assetSources.filter(source =>
+      source.kind !== "manual" || source.hasManualRecord !== false ||
+      ("manualAssetRecords" in state && state.manualAssetRecords.some(record => record.sourceId === source.id)),
+    ).map(source => source.id);
     state.dailyAssetTrendObservations.forEach((observation) =>
-      this.observations.upsertTrend(migrateDailyObservation(observation)),
+      this.observations.upsertTrend(migrateDailyObservation({
+        ...observation,
+        sourceScope: observation.sourceScope ?? [...new Set([
+          ...legacyScope, ...observation.sources.map(source => source.sourceId),
+        ])],
+      })),
     );
 
     const importedHistory = "importedAssetSourceHistoryObservations" in state

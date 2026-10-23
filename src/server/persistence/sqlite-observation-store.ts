@@ -1,6 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { buildDailyAssetSnapshot, mergeDailyTrendObservation, shanghaiDay } from "@/domain/daily-asset-snapshots";
 import { decimalAdd } from "@/domain/decimal";
+import { hasManualAssetRecord } from "@/domain/manual-asset-records";
 import { manualDailySource } from "@/server/persistence/observations";
 import type { SqliteDashboardReadModel } from "@/server/persistence/sqlite-read-model";
 import type { AssetSourceSummary, DailyAssetSnapshot, DailyAssetSourceSnapshot, DailyAssetTrendObservation, ImportedAssetSourceHistoryObservation, ManualAssetRecord } from "@/server/ports";
@@ -11,6 +12,13 @@ export class SqliteObservationStore {
     private readonly database: DatabaseSync,
     private readonly readModel: SqliteDashboardReadModel,
   ) {}
+
+  private knownSourceScope(sourceIds: string[]): string[] {
+    return [...new Set([
+      ...this.readModel.listSourcesSync().filter(hasManualAssetRecord).map(source => source.id),
+      ...sourceIds,
+    ])];
+  }
 
   insertBaseline(snapshot: DailyAssetSnapshot): boolean {
     const inserted = this.database
@@ -92,8 +100,8 @@ export class SqliteObservationStore {
       .prepare(`
         INSERT INTO daily_asset_trend_observations (
           day, captured_at, complete, status, total_usd, total_cny, total_hkd,
-          exchange_rates_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          exchange_rates_json, source_scope_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(day) DO UPDATE SET
           captured_at = excluded.captured_at,
           complete = excluded.complete,
@@ -101,7 +109,8 @@ export class SqliteObservationStore {
           total_usd = excluded.total_usd,
           total_cny = excluded.total_cny,
           total_hkd = excluded.total_hkd,
-          exchange_rates_json = excluded.exchange_rates_json
+          exchange_rates_json = excluded.exchange_rates_json,
+          source_scope_json = excluded.source_scope_json
       `)
       .run(
         snapshot.day,
@@ -112,6 +121,7 @@ export class SqliteObservationStore {
         snapshot.total.CNY,
         snapshot.total.HKD ?? null,
         JSON.stringify(snapshot.exchangeRates ?? []),
+        JSON.stringify(snapshot.sourceScope ?? this.knownSourceScope(snapshot.sources.map(source => source.sourceId))),
       );
     this.database
       .prepare("DELETE FROM daily_asset_source_trend_observations WHERE day = ?")
@@ -246,8 +256,8 @@ export class SqliteObservationStore {
         .prepare(`
           INSERT INTO daily_asset_trend_observations (
             day, captured_at, complete, status, total_usd, total_cny, total_hkd,
-            exchange_rates_json
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            exchange_rates_json, source_scope_json
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `)
         .run(
           record.day,
@@ -258,6 +268,7 @@ export class SqliteObservationStore {
           manualSource.total.CNY,
           manualSource.total.HKD ?? null,
           "[]",
+          JSON.stringify(this.knownSourceScope([source.id])),
         );
       this.upsertSource(
         "daily_asset_source_trend_observations",
@@ -265,6 +276,11 @@ export class SqliteObservationStore {
         manualSource,
       );
     } else {
+      // 补记资产明确了该日存在此来源；删除金额时仍保留范围，避免缺失被算成零。
+      this.database.prepare(`UPDATE daily_asset_trend_observations
+        SET source_scope_json = (SELECT json_group_array(value) FROM (
+          SELECT value FROM json_each(source_scope_json) UNION SELECT ?
+        )) WHERE day = ?`).run(source.id, record.day);
       this.upsertSource(
         "daily_asset_source_trend_observations",
         record.day,

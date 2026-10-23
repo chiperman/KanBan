@@ -206,6 +206,7 @@ export function buildDailyAssetSnapshot(
     day: shanghaiDay(capturedAt),
     capturedAt,
     exchangeRates,
+    sourceScope: recordedSources.map(source => source.id),
     complete,
     status: sourceSnapshots.some((source) => source.status === "expired")
       ? "expired"

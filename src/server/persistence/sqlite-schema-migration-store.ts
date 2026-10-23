@@ -103,6 +103,26 @@ export class SqliteSchemaMigrationStore {
       this.database.prepare("UPDATE schema_metadata SET value = '21' WHERE key = 'schema_version'").run();
       schemaVersion = "21";
     }
+    if (schemaVersion === "21") {
+      this.transaction(() => {
+        const columns = this.database.prepare("PRAGMA table_info(daily_asset_trend_observations)")
+          .all() as Array<{ name: string }>;
+        if (!columns.some(column => column.name === "source_scope_json")) {
+          this.database.exec(`ALTER TABLE daily_asset_trend_observations
+            ADD COLUMN source_scope_json TEXT CHECK (source_scope_json IS NULL OR json_valid(source_scope_json))`);
+        }
+        // 旧记录没有历史加入日期：冻结已知范围，不将首次采集或当前断开状态当成日期证据。
+        this.database.exec(`UPDATE daily_asset_trend_observations AS observation
+          SET source_scope_json = (SELECT json_group_array(id) FROM (
+            SELECT id FROM asset_sources WHERE kind != 'manual' OR has_manual_record = 1
+              OR EXISTS (SELECT 1 FROM manual_asset_records WHERE source_id = asset_sources.id)
+            UNION SELECT source_id FROM daily_asset_source_trend_observations WHERE day = observation.day
+            ORDER BY 1
+          )) WHERE source_scope_json IS NULL`);
+        this.database.prepare("UPDATE schema_metadata SET value = '22' WHERE key = 'schema_version'").run();
+      });
+      schemaVersion = "22";
+    }
     if (schemaVersion !== String(SQLITE_SCHEMA_VERSION)) {
       throw new Error(`不支持的 SQLite schema 版本: ${schemaVersion}`);
     }

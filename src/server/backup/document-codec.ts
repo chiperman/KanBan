@@ -651,6 +651,14 @@ function validateReferences(state: BusinessDataState): void {
     }
   }
   for (const observation of state.dailyAssetTrendObservations) {
+    if (observation.sourceScope !== undefined) {
+      assertArray(observation.sourceScope, "趋势来源范围");
+      for (const sourceId of observation.sourceScope) {
+        assertString(sourceId, "趋势来源范围 ID");
+        if (!sourceIds.has(sourceId)) throw new Error("趋势来源范围引用了不存在的来源");
+      }
+      assertUnique(observation.sourceScope, "趋势来源范围重复");
+    }
     assertUnique(
       observation.sources.map(({ sourceId }) => sourceId),
       `${observation.day} 的趋势来源观测重复`,

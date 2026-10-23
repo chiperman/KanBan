@@ -247,8 +247,9 @@ export function DailyOverviewWorkspace({
   const totalTrendObservations = useMemo(
     () => projectTotalAssetTrendObservations({
       observations: trendObservations, sources, manualRecords, importedHistory,
+      members: investmentBooks?.members,
     }),
-    [trendObservations, sources, manualRecords, importedHistory],
+    [trendObservations, sources, manualRecords, importedHistory, investmentBooks],
   );
   const recordedSources = useMemo(
     () => liveSources.filter(hasManualAssetRecord),

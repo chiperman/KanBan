@@ -13,7 +13,7 @@ export interface DashboardState {
 }
 
 export const DASHBOARD_SCHEMA_VERSION = 9 as const;
-export const SQLITE_SCHEMA_VERSION = 21;
+export const SQLITE_SCHEMA_VERSION = 22;
 
 /** 卡片布局持久化所需的最小接口。 */
 export interface AssetCardDatabase {
