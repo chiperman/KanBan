@@ -37,6 +37,7 @@ const stableId = (account: LongbridgeAccountIdentity) => `longbridge:${createHas
 export class LongbridgeConnections implements LongbridgeOAuth, AssetSourceRefresher {
   private readonly sdk = new LongbridgeKeychainSdk();
   private login: Promise<void> | null = null;
+  private cliMarket: { reference: string; reader: LongbridgeServeMarketData } | null = null;
   constructor(private readonly store: ConnectionStore) {}
 
   private binding(source: AssetSourceSummary): LongbridgeConnection {
@@ -123,7 +124,10 @@ export class LongbridgeConnections implements LongbridgeOAuth, AssetSourceRefres
 
   private async check(connection: LongbridgeConnection, transport: "cli" | "sdk", signal: AbortSignal) {
     signal.throwIfAborted();
-    if (transport === "cli") sameAccount(connection.account, await cliIdentity(signal));
+    if (transport === "cli") {
+      try { sameAccount(connection.account, await cliIdentity(signal)); }
+      catch (error) { this.closeCliMarket(); throw error; }
+    }
     else {
       if (connection.sdkReference !== this.sdk.credentialReference() || this.sdk.authorizationStatus().status !== "authorized") throw new Error("长桥 SDK 授权不可用");
       sameAccount(connection.account, this.sdk.accountIdentity());
@@ -141,12 +145,14 @@ export class LongbridgeConnections implements LongbridgeOAuth, AssetSourceRefres
 
   renewSdkAuthorization() { return this.sdk.renewAuthorization(); }
 
-  private async read<T>(reference: string, connection: LongbridgeConnection, cli: () => Promise<T>, sdk: () => Promise<T>, signal = AbortSignal.timeout(60_000)): Promise<T> {
-    const attempt = async (transport: "cli" | "sdk", operation: () => Promise<T>, fallback: boolean) => {
+  private async read<T>(reference: string, connection: LongbridgeConnection, cli: (signal: AbortSignal) => Promise<T>, sdk: (signal: AbortSignal) => Promise<T>, signal = AbortSignal.timeout(60_000), attemptTimeoutMs?: number): Promise<T> {
+    const attempt = async (transport: "cli" | "sdk", operation: (signal: AbortSignal) => Promise<T>, fallback: boolean) => {
+      const attemptSignal = attemptTimeoutMs === undefined ? signal
+        : AbortSignal.any([signal, AbortSignal.timeout(attemptTimeoutMs)]);
       try {
-        await this.check(connection, transport, signal);
-        const value = await abortable(operation, signal);
-        await this.check(connection, transport, signal);
+        await this.check(connection, transport, attemptSignal);
+        const value = await abortable(() => operation(attemptSignal), attemptSignal);
+        await this.check(connection, transport, attemptSignal);
         this.store.recordLongbridgeTransport(reference, { transport, fallback, at: new Date().toISOString() });
         return value;
       } catch (error) { throw new AssetReadError(transport, error); }
@@ -186,9 +192,23 @@ export class LongbridgeConnections implements LongbridgeOAuth, AssetSourceRefres
     return source;
   }
 
+  private closeCliMarket() {
+    const current = this.cliMarket;
+    this.cliMarket = null;
+    if (current) void current.reader.close();
+  }
+
   private async market<T>(source: AssetSourceSummary, operation: (reader: LongbridgeServeMarketData | LongbridgeKeychainSdk) => Promise<T>) {
     const reference = source.credentialReference!;
-    return this.read(reference, this.binding(source), () => operation(new LongbridgeServeMarketData()), () => operation(this.sdk));
+    if (this.cliMarket?.reference !== reference) this.closeCliMarket();
+    return this.read(reference, this.binding(source), async signal => {
+      if (this.cliMarket?.reference !== reference) this.closeCliMarket();
+      const current = this.cliMarket ??= { reference, reader: new LongbridgeServeMarketData(undefined, 60_000) };
+      const close = () => { void current.reader.close(); };
+      signal.addEventListener("abort", close, { once: true });
+      try { signal.throwIfAborted(); return await operation(current.reader); }
+      finally { signal.removeEventListener("abort", close); }
+    }, () => operation(this.sdk), AbortSignal.timeout(60_000), 25_000);
   }
 
   readonly holdingCandlesticks: LongbridgeHoldingCandlestickReader = {
@@ -316,11 +336,32 @@ export class LongbridgeConnections implements LongbridgeOAuth, AssetSourceRefres
     return { close };
   }
 
-  async status(sourceId?: string) {
+  private async statusSource(sourceId?: string) {
     const source = sourceId ? (await this.store.listSources()).find(source => source.id === sourceId && source.kind === "longbridge") : undefined;
     if (sourceId && !source) throw new Error("长桥来源不存在");
-    const bound = source ? this.binding(source) : null;
+    return source;
+  }
+
+  private async cliConnectionStatus(account: LongbridgeAccountIdentity | null) {
     const cli = await this.cliStatus();
+    return { installed: cli.installed, version: cli.version, authorized: cli.account !== null,
+      account: cli.account ? label(cli.account) : null,
+      matches: !account || !cli.account || (account.memberId === cli.account.memberId && account.accountChannel === cli.account.accountChannel), error: cli.error };
+  }
+
+  async checkCli(sourceId?: string) {
+    const source = await this.statusSource(sourceId);
+    const connection = source ? parseConnection(source.credentialReference ?? "") : null;
+    if (connection && connection.accountId !== source?.accountId) throw new Error("长桥账户绑定已改变");
+    const account = source ? connection?.account ?? this.store.longbridgeAccount(source.id) : null;
+    if (source && !account) throw new Error("长桥账户绑定不可用，请重新打开连接设置");
+    return this.cliConnectionStatus(account);
+  }
+
+  async status(sourceId?: string) {
+    const source = await this.statusSource(sourceId);
+    const bound = source ? this.binding(source) : null;
+    const cli = await this.cliConnectionStatus(bound?.account ?? null);
     let sdk: { authorized: boolean; account?: string; matches?: boolean; error?: string };
     try {
       const authorized = this.sdk.authorizationStatus().status === "authorized";
@@ -329,9 +370,7 @@ export class LongbridgeConnections implements LongbridgeOAuth, AssetSourceRefres
     } catch (error) { sdk = { authorized: false, error: error instanceof Error ? error.message : "SDK 不可用" }; }
     return { mode: bound?.mode ?? "cli", account: bound ? label(bound.account) : null,
       lastUsed: source ? this.store.longbridgeTransport(source.id) : null,
-      cli: { installed: cli.installed, version: cli.version, authorized: cli.account !== null,
-        account: cli.account ? label(cli.account) : null,
-        matches: !bound || !cli.account || (bound.account.memberId === cli.account.memberId && bound.account.accountChannel === cli.account.accountChannel), error: cli.error }, sdk };
+      cli, sdk };
   }
 
   private async cliStatus() {

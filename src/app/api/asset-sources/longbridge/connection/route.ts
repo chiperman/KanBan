@@ -9,8 +9,12 @@ export async function GET(request: Request) {
   if (!(await services.auth.currentSession())) return Response.json({ error: "需要所有者身份" }, { status: 401 });
   if (!services.longbridgeConnections) return Response.json({ error: "长桥连接管理不可用" }, { status: 503 });
   try {
-    const sourceId = new URL(request.url).searchParams.get("sourceId") ?? undefined;
-    return Response.json(await services.longbridgeConnections.status(sourceId), { headers: { "cache-control": "no-store" } });
+    const query = new URL(request.url).searchParams;
+    const sourceId = query.get("sourceId") ?? undefined;
+    const result = query.get("transport") === "cli"
+      ? { cli: await services.longbridgeConnections.checkCli(sourceId) }
+      : await services.longbridgeConnections.status(sourceId);
+    return Response.json(result, { headers: { "cache-control": "no-store" } });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "长桥检测失败" }, { status: 400 });
   }

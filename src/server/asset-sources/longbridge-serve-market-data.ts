@@ -33,7 +33,41 @@ function candlestick(value: unknown): LongbridgeSdkCandlestick {
 
 /** 所有 K 线通过 CLI serve 读取；Keychain 仅保留已绑定来源的本地引用。 */
 export class LongbridgeServeMarketData {
-  constructor(private readonly createClient: () => Serve = () => new LongbridgeServeClient()) {}
+  private shared: { client: Serve; readers: number; timer?: ReturnType<typeof setTimeout> } | null = null;
+
+  constructor(
+    private readonly createClient: () => Serve = () => new LongbridgeServeClient(),
+    private readonly idleTimeoutMs = 0,
+  ) {}
+
+  async close(): Promise<void> {
+    const shared = this.shared;
+    this.shared = null;
+    if (shared?.timer) clearTimeout(shared.timer);
+    await shared?.client.close();
+  }
+
+  private async withClient<T>(read: (client: Serve) => Promise<T>): Promise<T> {
+    if (this.idleTimeoutMs <= 0) {
+      const client = this.createClient();
+      try { return await read(client); }
+      finally { await client.close(); }
+    }
+    const shared = this.shared ??= { client: this.createClient(), readers: 0 };
+    if (shared.timer) clearTimeout(shared.timer);
+    shared.readers++;
+    try { return await read(shared.client); }
+    catch (error) {
+      if (this.shared === shared) await this.close();
+      throw error;
+    } finally {
+      shared.readers--;
+      if (this.shared === shared && shared.readers === 0) {
+        shared.timer = setTimeout(() => { void this.close(); }, this.idleTimeoutMs);
+        shared.timer.unref();
+      }
+    }
+  }
 
   credentialReference(): string {
     return new LongbridgeKeychainSdk().credentialReference();
@@ -46,27 +80,17 @@ export class LongbridgeServeMarketData {
   }
 
   async readCandlesticks(symbol: string, period: LongbridgeHoldingCandlestickPeriod, count: number): Promise<LongbridgeSdkCandlestick[]> {
-    const client = this.createClient();
-    try {
-      return await this.candles(client, symbol, period === "min-1" ? "1m" : period, count);
-    } finally {
-      await client.close();
-    }
+    return this.withClient(client => this.candles(client, symbol, period === "min-1" ? "1m" : period, count));
   }
 
   async readFiveDayTrend(symbol: string, count: number): Promise<LongbridgeSdkTrendPoint[]> {
-    const client = this.createClient();
-    try {
-      return (await this.candles(client, symbol, "5m", count)).map(({ timestamp, close }) => ({ timestamp, close }));
-    } finally {
-      await client.close();
-    }
+    return this.withClient(async client =>
+      (await this.candles(client, symbol, "5m", count)).map(({ timestamp, close }) => ({ timestamp, close })));
   }
 
   async readDailyCandles(symbols: string[]): Promise<LongbridgeSdkDailyCandle[]> {
     if (!symbols.length) return [];
-    const client = this.createClient();
-    try {
+    return this.withClient(async client => {
       const result: LongbridgeSdkDailyCandle[] = [];
       for (const symbol of symbols) {
         const candles = await this.candles(client, symbol, "day", 3);
@@ -76,8 +100,6 @@ export class LongbridgeServeMarketData {
         result.push({ symbol, close: latest.close, timestamp: latest.timestamp, tradeSession: "intraday" });
       }
       return result;
-    } finally {
-      await client.close();
-    }
+    });
   }
 }
