@@ -8,18 +8,24 @@
 
 ## 状态映射
 
-状态先有可辨识标记与明确文字，再用颜色增强。下表是业务状态到视觉色调的映射建议，不是组件状态枚举，也不替代领域状态机。
+状态先有可辨识标记与明确文字，再用颜色增强。业务状态统一按下表映射视觉色调；映射不替代领域状态机。
 
 | 业务状态 | 标签色调 | 用于 |
 |---|---|---|
-| 空闲 / 待分类 | `muted` | 未开始、无待处理信号 |
+| 空闲 / 未配置 | `muted` | 未开始、未配置、尚未检测、主动断开或停止、普通元信息 |
 | 运行中 | `live` | 同步中、刷新中 |
-| 需要输入 | `signal` | 需要决策、需要授权 |
-| 完成 | `success` | 已完成、已刷新 |
-| 待确认 | `warning` | 需要注意或核定 |
-| 失败 | `error` | 失败、不可读 |
+| 需要输入 | `signal` | 需要决策的操作提示 |
+| 正常 / 完成 | `success` | 正常、已连接、已启用、已授权、已完成、已刷新 |
+| 待确认 / 待更新 | `warning` | 覆盖待核定、过期或保留行情、延迟行情、重连中、等待行情 |
+| 失败 / 不可用 | `error` | 同步或采集失败、授权失效、账户不一致、行情不可用、不可读、未估值、总额不完整、日结不完整或错过窗口 |
 
 实际 `VibeStatusTag.tone` 为 `muted | live | signal | success | warning | error`，默认 `muted`，接口位于 [vibe-data-instrument.tsx](../../src/ui/vibe/vibe-data-instrument.tsx)。不要把色调当作供应商、同步或授权状态。
+
+- 同一事实在标签、通知与设置摘要中使用同一语义色。明确失败不能降为黄色或普通信息；尚未配置不当作失败。异常中断使用红色，主动断开使用灰色。
+- 汇总先展示明确错误，其次待确认；没有异常且有正常证据时使用绿色，没有来源或尚无记录时使用灰色。不能仅凭没有错误字段推断成功。
+- 完整总额中的“部分产品仅汇总”可使用绿色；“持仓行情未接入，账户总额已包含”是灰色能力说明，总额有效但明细待对账使用黄色。尚未关注资产的读取限制以待确认为主，已关注资产无法读取使用红色。
+- 连接生命周期、同步结果和实时通道检测各自着色；“已连接”不证明同步或实时检测成功，详见 [来源连接与管理](patterns.md#来源连接与管理)。
+- 页面不得用遗留状态类或高优先级颜色覆盖共享组件的 `tone`。
 
 ---
 
@@ -123,7 +129,8 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 
 - 可见高 24px，1px `--line-2` 边框，`--r-sm` 圆角，`--f-mono` `--vibe-type-micro`，全大写，字距 `.06em`。
 - 内含 6px 圆点作为状态载体。
-- **色调分工**：`muted` 与 `success` 的文字保持次级灰，**只有圆点承担颜色**；`signal` 与 `error` 才让整个标签上色。
+- **色调分工**：`muted` 与 `success` 的文字保持次级灰，`success` 用绿点标记正常；`signal`、`warning` 与 `error` 的圆点及文字使用对应语义色。
+- 长桥授权页的账户行使用无框、随内容收拢的状态文字，保留圆点与色调；文字采用 `--f-ui`、`--vibe-type-body-sm` 和原始大小写，版本说明沿用次级小字。
 
 这是本产品"先形状与标签、后颜色"原则最直接的体现。
 
@@ -168,7 +175,7 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 ## 内联通知 · `.vibe-notice`
 
 ```
-<div class="vibe-notice vibe-notice--{error|success|info}">
+<div class="vibe-notice vibe-notice--{error|success|warning|info}">
   <span class="vibe-notice__marker" aria-hidden="true"></span>
   <div class="vibe-notice__content">
     <strong class="vibe-notice__code">SYNC FAILED</strong>
@@ -177,9 +184,9 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 </div>
 ```
 
-- [VibeNotice](../../src/ui/vibe/vibe-notice.tsx) 接口为 `tone="error" | "success" | "info"`、可选 `code` 与正文 `children`。
+- [VibeNotice](../../src/ui/vibe/vibe-notice.tsx) 接口为 `tone="error" | "success" | "warning" | "info"`、可选 `code` 与正文 `children`。
 - 状态标记遵守 [项目适配](../../DESIGN.md#项目适配)，边界保持中性。可保留约 9% 的局部语义底色（`color-mix`）；`info` 使用 `--raised`，不增加彩色强调。
-- 使用 6px 实心圆点配合正文或 `code` 中的明确状态文字；`error` / `success` 圆点使用对应状态色，`info` 使用 `--primary`。圆点对读屏隐藏，保留原图标占位与内容对齐。
+- 使用 6px 实心圆点配合正文或 `code` 中的明确状态文字；`error` / `success` / `warning` 圆点使用对应状态色，`info` 使用 `--primary`。圆点对读屏隐藏，保留原图标占位与内容对齐。
 - `--compact` 变体用于卡片内，宽度收缩为 `max-content`。
 - 当前组件不自动声明 live region。调用者按消息紧急程度传入 `role="status"` / `aria-live`，确需即时错误播报时使用 `role="alert"`，避免重复播报。
 

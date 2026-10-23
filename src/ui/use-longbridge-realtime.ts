@@ -20,12 +20,17 @@ export type LongbridgeRealtimeState =
   | "unavailable";
 
 type RealtimeSource = Pick<AssetSourceSummary, "id" | "kind" | "lifecycle" | "snapshot">;
-type ReceivedQuote = { quote: LongbridgeRealtimeQuote; observedAt: string };
+export type ReceivedQuote = { quote: LongbridgeRealtimeQuote; observedAt: string };
 type QuoteBatch = { key: string; quotes: Map<string, ReceivedQuote> };
+const EMPTY_QUOTES: ReadonlyMap<string, ReceivedQuote> = new Map();
 // 给 1.2 秒金额动画留出播放与停顿时间。
 const QUOTE_BATCH_MS = 2_000;
 
-export function useLongbridgeRealtime<T extends RealtimeSource>(sources: T[], enabled = true) {
+export function useLongbridgeRealtime<T extends RealtimeSource>(
+  sources: T[],
+  enabled = true,
+  { immediateInitialQuotes = false }: { immediateInitialQuotes?: boolean } = {},
+) {
   const [state, setState] = useState<LongbridgeRealtimeState>("idle");
   const [retryKey, setRetryKey] = useState(0);
   const [batch, setBatch] = useState<QuoteBatch>(() => ({ key: "", quotes: new Map() }));
@@ -71,9 +76,17 @@ export function useLongbridgeRealtime<T extends RealtimeSource>(sources: T[], en
           }
           if (previous.last_done === quote.last_done && previous.timestamp === quote.timestamp &&
             previous.prev_close === quote.prev_close && previous.trade_status === quote.trade_status &&
-            previous.trade_session === quote.trade_session) return;
+            previous.trade_session === quote.trade_session && previous.open === quote.open &&
+            previous.high === quote.high && previous.low === quote.low &&
+            previous.volume === quote.volume && previous.turnover === quote.turnover) return;
         }
         latest.current.quotes.set(quote.symbol, { quote, observedAt: new Date().toISOString() });
+        // 持仓表首条行情或首次补齐参考价时立即显示，后续仍按固定窗口合并。
+        if (immediateInitialQuotes &&
+          (!previous || (previous.prev_close === undefined && quote.prev_close !== undefined))) {
+          setBatch({ key: subscriptionKey, quotes: new Map(latest.current.quotes) });
+          return;
+        }
         // 固定窗口合并行情，持续推送时也按时显示最新值。重连保留已收到的行情。
         if (timer === undefined) {
           timer = setTimeout(() => {
@@ -113,7 +126,7 @@ export function useLongbridgeRealtime<T extends RealtimeSource>(sources: T[], en
       stream.removeEventListener("error", handleError);
       stream.close();
     };
-  }, [subscriptionKey, symbolsKey, retryKey]);
+  }, [subscriptionKey, symbolsKey, retryKey, immediateInitialQuotes]);
 
   const liveSources = useMemo(() => {
     if (batch.key !== subscriptionKey || batch.quotes.size === 0) return sources;
@@ -129,6 +142,7 @@ export function useLongbridgeRealtime<T extends RealtimeSource>(sources: T[], en
   return {
     active: subscriptionKey !== "",
     liveSources,
+    quotes: batch.key === subscriptionKey ? batch.quotes as ReadonlyMap<string, ReceivedQuote> : EMPTY_QUOTES,
     state,
     retry: () => {
       setState("connecting");

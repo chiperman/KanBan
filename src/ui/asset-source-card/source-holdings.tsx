@@ -224,7 +224,6 @@ export function AssetSourceHoldings({
                       holding={holding}
                       onShowCandlesticks={
                         source.kind === "longbridge" &&
-                        showSensitiveInfo &&
                         holding.assetClass === "securities" &&
                         supportsLongbridgeCandlesticks(holding.symbol)
                           ? onShowCandlesticks
@@ -242,7 +241,11 @@ export function AssetSourceHoldings({
               </table>
             </div>
           )}
-          <VibeTablePagination label={`${source.label}持仓明细分页`} pagination={pagination.controls} />
+          {pagination.controls.pageCount > 1 ? (
+            <div className="asset-holdings-pagination">
+              <VibeTablePagination label={`${source.label}持仓明细分页`} pagination={pagination.controls} />
+            </div>
+          ) : null}
         </div>
       </section>
       <UnreadableEvmAssets
@@ -252,10 +255,23 @@ export function AssetSourceHoldings({
         assetScopeHref={assetScopeHref}
       />
       <div className="asset-source-footer">
-        {unvaluedCount > 0 || quoteUnavailableCount > 0 ? (
+        <div className="asset-source-footer__meta">
+          {pagination.controls.pageCount === 1 ? (
+            <p className="asset-source-footer__count" role="status">
+              共 {pagination.controls.total} 项持仓
+            </p>
+          ) : null}
+          <p className="asset-updated">
+            <span>{source.kind === "longbridge" ? "资产同步时间" : "最后更新"}</span>
+            <time dateTime={source.snapshot.syncedAt}>
+              {formatShanghaiDateTime(source.snapshot.syncedAt)}
+            </time>
+          </p>
+        </div>
+        {unvaluedCount > 0 || quoteUnavailableCount > 0 || source.lifecycle === "disconnected" || source.sync.status === "expired" ? (
           <div className="asset-source-footer__statuses">
             {unvaluedCount > 0 ? (
-              <VibeStatusTag className="asset-sync-status" tone="warning">
+              <VibeStatusTag className="asset-sync-status" tone="error">
                 含 {unvaluedCount} 项未估值资产
               </VibeStatusTag>
             ) : null}
@@ -264,28 +280,17 @@ export function AssetSourceHoldings({
                 {quoteUnavailableCount} 项期权行情未接入 · 账户总额已包含
               </VibeStatusTag>
             ) : null}
+            {source.lifecycle === "disconnected" ? (
+              <VibeStatusTag className="asset-sync-status" tone="muted">
+                已断开 · 历史数据保留
+              </VibeStatusTag>
+            ) : source.sync.status === "expired" ? (
+              <VibeStatusTag className="asset-sync-status" tone="warning">
+                过期数据
+              </VibeStatusTag>
+            ) : null}
           </div>
         ) : null}
-        <div className="asset-source-footer__meta">
-          <p className="asset-updated">
-            <span>{source.kind === "longbridge" ? "资产同步时间" : "最后更新"}</span>
-            <time dateTime={source.snapshot.syncedAt}>
-              {formatShanghaiDateTime(source.snapshot.syncedAt)}
-            </time>
-          </p>
-          {source.lifecycle === "disconnected" ? (
-            <VibeStatusTag className="asset-sync-status expired" tone="muted">
-              已断开 · 历史数据保留
-            </VibeStatusTag>
-          ) : (
-            <VibeStatusTag
-              className={`asset-sync-status ${source.sync.status}`}
-              tone={source.sync.status === "expired" ? "warning" : "muted"}
-            >
-              {source.sync.status === "expired" ? "过期数据" : source.kind === "longbridge" ? "资产已同步" : "数据当前"}
-            </VibeStatusTag>
-          )}
-        </div>
         {source.sync.error ? (
           <VibeNotice className="asset-sync-error" role="alert" tone="error">
             {sourceSyncStatus(source)?.label}

@@ -18,8 +18,8 @@ export function BackgroundCollectionSettings({ status }: { status: CollectionSta
         <div>
           <h3 id="background-collection-title">后台采集</h3>
         </div>
-        <VibeStatusTag tone={status?.state?.error || status?.health === "stopped" ? "warning" : running ? "success" : "muted"}>
-          {running ? "近期有检查" : status?.health === "stopped" ? "检查已中断" : "暂无运行记录"}
+        <VibeStatusTag tone={status?.state?.error || status?.health === "stopped" ? "error" : running ? "success" : "muted"}>
+          {status?.state?.error ? "最近执行失败" : running ? "近期有检查" : status?.health === "stopped" ? "检查已中断" : "暂无运行记录"}
         </VibeStatusTag>
       </header>
 
@@ -86,8 +86,8 @@ export function BackgroundCollectionSettings({ status }: { status: CollectionSta
             {status?.sources.map(source => <li className="background-collection__source" key={source.id}>
               <div className="background-collection__source-name">
                 <h4>{source.label}</h4>
-                <VibeStatusTag tone={source.error ? "warning" : "success"}>
-                  {source.error ? "采集异常" : "正常"}
+                <VibeStatusTag tone={source.error ? "error" : source.observedAt || source.lastSuccessfulAt ? "success" : "muted"}>
+                  {source.error ? "采集异常" : source.observedAt || source.lastSuccessfulAt ? "正常" : "尚未采集"}
                 </VibeStatusTag>
               </div>
               <dl className="background-collection__source-times">

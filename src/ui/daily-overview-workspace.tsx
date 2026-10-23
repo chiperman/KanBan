@@ -77,10 +77,10 @@ function amount(value: string): string {
 
 function sourceHealth(source: OverviewSource): {
   label: string;
-  tone: "error" | "success" | "warning";
+  tone: "error" | "success" | "warning" | "muted";
 } {
   if (source.lifecycle === "disconnected") {
-    return { label: "已断开 · 保留最后快照", tone: "warning" };
+    return { label: "已断开 · 保留最后快照", tone: "muted" };
   }
   const sync = sourceSyncStatus(source);
   if (sync !== null) return sync;
@@ -650,7 +650,6 @@ export function DailyOverviewWorkspace({
                 range={{ ...trendRange, currentDay, firstDay: trend.firstDay }}
                 ariaLabel="总资产趋势"
                 chartHeight={320}
-                coveragePresentation="none"
                 currency={currency}
                 dateAxisPresentation="compact"
                 formatAmount={amount}
@@ -764,9 +763,7 @@ export function DailyOverviewWorkspace({
             </VibeLink>
           )}
         </header>
-        {!showSensitiveInfo ? (
-          <p className="daily-overview__hidden-sources">已隐藏 {recordedSources.length} 个来源。</p>
-        ) : sourceSummaries.length === 0 ? (
+        {sourceSummaries.length === 0 ? (
           <div className="empty-state">
             <p className="empty-title">尚未接入资产来源</p>
             <VibeLink href="/asset-sources/new" variant="primary">
@@ -794,18 +791,13 @@ export function DailyOverviewWorkspace({
                   <article>
                     <div className="daily-overview__source-identity">
                       <p>{assetSourceDisplayName(source)}</p>
-                      {/* 健康来源不挂彩色标签，只留一行静默说明；只有异常来源才需要被看见 */}
-                      {health.tone === "success" ? (
-                        <span className="daily-overview__source-state">
-                          {health.label}
-                        </span>
-                      ) : (
-                        <VibeStatusTag tone={health.tone}>{health.label}</VibeStatusTag>
-                      )}
+                      <VibeStatusTag tone={health.tone}>{health.label}</VibeStatusTag>
                     </div>
                     <div className="daily-overview__source-value">
                       <strong className="daily-overview__source-total">
-                        {sourceAmount === null
+                        {!showSensitiveInfo
+                          ? <AssetFinancialValue>••••••</AssetFinancialValue>
+                          : sourceAmount === null
                           ? "无法折算"
                           : (
                             <AssetFinancialValue unit={currency}>
@@ -815,9 +807,16 @@ export function DailyOverviewWorkspace({
                       </strong>
                       <div
                         className="daily-overview__source-change"
-                        data-comparison-state={comparison.state}
+                        data-comparison-state={showSensitiveInfo ? comparison.state : undefined}
                       >
-                        {comparison.state === "changed" ? (
+                        {!showSensitiveInfo ? (
+                          <div className="daily-overview__source-change-today">
+                            <span className="daily-overview__source-column-label">
+                              较昨日变化
+                            </span>
+                            <VibeMetric animate={false} unit="" value="••••••" />
+                          </div>
+                        ) : comparison.state === "changed" ? (
                           <div className="daily-overview__source-change-today">
                             <span className="daily-overview__source-column-label">
                               较昨日变化
@@ -837,7 +836,16 @@ export function DailyOverviewWorkspace({
                         )}
                       </div>
                       <div className="daily-overview__source-yesterday">
-                        {comparison.state === "changed" ? (
+                        {!showSensitiveInfo ? (
+                          <small>
+                            <span className="daily-overview__source-column-label">
+                              昨日金额
+                            </span>{" "}
+                            <AssetFinancialValue>
+                              <span className="daily-overview__source-yesterday-amount">••••••</span>
+                            </AssetFinancialValue>
+                          </small>
+                        ) : comparison.state === "changed" ? (
                           <small>
                             <span className="daily-overview__source-column-label">
                               昨日金额

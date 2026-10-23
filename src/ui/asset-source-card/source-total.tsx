@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import type { ReportingCurrency } from "@/domain/valuation";
 import { VibeMetric } from "@/ui/vibe/vibe-data-instrument";
 import type { AssetSourceView } from "./types";
@@ -25,6 +26,9 @@ export function AssetSourceTotal({
           animationKey={totalAnimationKey}
           className="asset-total"
           data-testid="asset-source-total"
+          style={{
+            "--asset-total-value-width": `${Math.max(6, sourceTotal?.length ?? 8)}ch`,
+          } as CSSProperties}
           unit={reportingCurrency}
           value={showSensitiveInfo ? sourceTotal ?? "无法折算" : "••••••"}
         />

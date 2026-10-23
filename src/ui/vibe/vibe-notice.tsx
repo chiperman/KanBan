@@ -1,6 +1,6 @@
 import type { HTMLAttributes, ReactNode } from "react";
 
-type VibeNoticeTone = "error" | "info" | "success";
+type VibeNoticeTone = "error" | "info" | "success" | "warning";
 
 interface VibeNoticeProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;

@@ -26,8 +26,6 @@ export interface AssetSourceTrendModel {
   missingDayCount: number;
   notice: string;
   points: AssetTrendChartPoint[];
-  sourceDailyDetails: SourceTrendObservation[];
-  sourceHistory: SourceTrendObservation[];
   unavailablePoints: AssetTrendChartPoint[];
 }
 
@@ -189,10 +187,6 @@ export function assetSourceTrendModel({
     missingDayCount,
     notice,
     points,
-    sourceDailyDetails: [...sourceHistory].sort((left, right) =>
-      right.day.localeCompare(left.day)
-    ),
-    sourceHistory,
     unavailablePoints,
   };
 }

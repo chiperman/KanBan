@@ -1,27 +1,14 @@
 "use client";
 
 import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
-import { sourceTrendObservationStatus } from "@/domain/daily-trend-observations";
 import type { MarketBenchmarkComparison, MarketBenchmarkSymbol } from "@/domain/market-benchmark";
 import type { ReportingCurrency } from "@/domain/valuation";
 import type { DailyAssetTrendObservation } from "@/server/ports";
 import { AssetTrendPanel, useAssetTrendRange, type AssetTrendRange } from "@/ui/asset-trend-panel";
 import { rangeDays } from "@/domain/investment-performance-trend";
-import { formatShanghaiDayLabel, formatShanghaiFullDayLabel } from "@/ui/shanghai-date-time";
-import { AssetFinancialValue } from "@/ui/asset-financial-value";
-import { useTablePagination, VibeTablePagination } from "@/ui/vibe/vibe-table-pagination";
+import { formatShanghaiDayLabel } from "@/ui/shanghai-date-time";
 import { assetSourceTrendModel } from "./source-trend-model";
 import type { AssetSourceView } from "./types";
-
-function sourceTrendStatusLabel(
-  status: "complete" | "incomplete" | "expired",
-): string {
-  return status === "expired"
-    ? "过期"
-    : status === "incomplete"
-      ? "不完整"
-      : "完整";
-}
 
 export function AssetSourceTrend({
   source,
@@ -68,7 +55,6 @@ export function AssetSourceTrend({
     trendDays,
     trendRange: "all",
   });
-  const pagination = useTablePagination(sourceTrend.sourceDailyDetails, JSON.stringify([source.id, selection.preset, selection.customRange]));
   return (
     <section
       className="asset-trend source-trend"
@@ -93,56 +79,6 @@ export function AssetSourceTrend({
         emptyMessage={selection.firstDay === undefined ? (isManual ? "等待首条记录" : "等待首次同步") : "所选区间无可用趋势"}
         variant="source"
       />
-      {showSensitiveInfo && sourceTrend.sourceHistory.length > 0 ? (
-        <>
-          {!isManual ? (
-            <details
-              className="daily-trend-details source-daily-trend-details"
-              data-testid={`asset-source-daily-details-${source.id}`}
-            >
-              <summary>每日总额（{sourceTrend.sourceDailyDetails.length}）</summary>
-              <div className="daily-trend-details-content">
-                <ol className="daily-trend-detail-list">
-                  {pagination.visibleItems.map((observation) => {
-                    const observationStatus =
-                      sourceTrendObservationStatus(observation);
-                    const observationAmount =
-                      observation.total[reportingCurrency] ?? null;
-                    const abnormal =
-                      observationStatus !== "complete" ||
-                      observationAmount === null;
-                    return (
-                      <li
-                        key={observation.day}
-                        data-testid={`asset-source-daily-detail-${source.id}`}
-                      >
-                        <time dateTime={observation.day}>
-                          {formatShanghaiFullDayLabel(observation.day)}
-                        </time>
-                        <strong>
-                          {observationAmount === null
-                            ? "未估值"
-                            : <AssetFinancialValue unit={reportingCurrency}>
-                                {formatAmount(observationAmount)}
-                              </AssetFinancialValue>}
-                        </strong>
-                        {abnormal ? (
-                          <span>
-                            {observationAmount === null
-                              ? `未估值 · ${sourceTrendStatusLabel(observationStatus)}`
-                              : sourceTrendStatusLabel(observationStatus)}
-                          </span>
-                        ) : null}
-                      </li>
-                    );
-                  })}
-                </ol>
-                <VibeTablePagination label={`${heading.title}每日总额分页`} pagination={pagination.controls} />
-              </div>
-            </details>
-          ) : null}
-        </>
-      ) : null}
       {showSensitiveInfo && sourceTrend.notice ? (
         <p className="trend-note">{sourceTrend.notice}</p>
       ) : null}

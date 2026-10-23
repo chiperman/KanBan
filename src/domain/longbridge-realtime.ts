@@ -11,6 +11,11 @@ import type { AssetQuoteSession, AssetSourceSummary } from "@/server/ports";
 export interface LongbridgeRealtimeQuote {
   symbol: string;
   last_done: string;
+  open?: string;
+  high?: string;
+  low?: string;
+  volume?: string | number;
+  turnover?: string;
   prev_close?: string;
   timestamp?: number | string;
   trade_status?: string;

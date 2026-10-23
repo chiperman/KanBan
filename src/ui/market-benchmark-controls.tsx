@@ -16,12 +16,14 @@ function assetLabel(assetScopeLabel: string): string {
 function BenchmarkState({
   children,
   title,
+  tone,
 }: {
   children?: string;
   title: string;
+  tone: "error" | "warning" | "muted";
 }) {
   return (
-    <div className="investment-performance__benchmark-state" role="status">
+    <div className="investment-performance__benchmark-state" data-vibe-tone={tone} role="status">
       <strong>{title}</strong>
       {children ? <span>{children}</span> : null}
     </div>
@@ -118,7 +120,7 @@ export function MarketBenchmarkControls({
           );
         })}
       </div>
-      <BenchmarkState title={stateTitle}>{stateDescription}</BenchmarkState>
+      <BenchmarkState title={stateTitle} tone={enabledSymbols.length > 0 && dataState.kind === "failed" ? "error" : enabledSymbols.length > 0 && dataState.kind === "ready" && !comparisonReady ? "warning" : "muted"}>{stateDescription}</BenchmarkState>
     </div>
   );
 }

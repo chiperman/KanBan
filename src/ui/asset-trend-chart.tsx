@@ -155,7 +155,11 @@ function TrendEffects({ dotsId, glowId }: { dotsId: string; glowId: string }) {
   );
 }
 
-function TrendExtentLabels({ minimum, maximum }: { minimum: string; maximum: string }) {
+function TrendExtentLabels({ minimum, maximum, isSensitiveHidden }: {
+  minimum: string;
+  maximum: string;
+  isSensitiveHidden: boolean;
+}) {
   const plotArea = usePlotArea();
   if (!plotArea) return null;
   return <g
@@ -165,8 +169,8 @@ function TrendExtentLabels({ minimum, maximum }: { minimum: string; maximum: str
     fontSize={12}
     fontWeight={500}
   >
-    <text x={plotArea.x} y={plotArea.y - 12}>{maximum}</text>
-    {minimum !== maximum ? <text x={plotArea.x} y={plotArea.y + plotArea.height + 20}>{minimum}</text> : null}
+    <text x={plotArea.x} y={plotArea.y - 12}>{isSensitiveHidden ? "••••••" : maximum}</text>
+    {minimum !== maximum ? <text x={plotArea.x} y={plotArea.y + plotArea.height + 20}>{isSensitiveHidden ? "••••••" : minimum}</text> : null}
   </g>;
 }
 
@@ -399,31 +403,15 @@ function TrendTooltipSurface({ rows, sizing }: {
   );
 }
 
-function HiddenTrendState({
-  variant,
-}: {
-  variant: "source" | "total";
-}) {
-  return (
-    <div
-      className={`asset-trend-private asset-trend-private--${variant}`}
-      role="status"
-    >
-      <div className="asset-trend-private-copy">
-        <p>趋势已隐藏</p>
-        <strong aria-hidden="true">••••••</strong>
-      </div>
-    </div>
-  );
-}
-
 function trendTooltipRows(point: ChartDatum, {
   currency,
   formatAmount,
+  isSensitiveHidden,
   showCurrency,
 }: {
   currency: string;
   formatAmount(value: string): string;
+  isSensitiveHidden: boolean;
   showCurrency: boolean;
 }): TrendTooltipRow[] {
   const hasRecord = hasTrendRecord(point) || (point.events?.length ?? 0) > 0;
@@ -435,7 +423,7 @@ function trendTooltipRows(point: ChartDatum, {
     : point.status === "incomplete"
       ? point.amount === null && point.events?.length ? "暂无资产估值" : "不完整"
       : null;
-  const formattedAmount = amount === null ? null : formatAmount(amount);
+  const formattedAmount = amount === null ? null : isSensitiveHidden ? "••••••" : formatAmount(amount);
   const prefix = showingHistorical ? `${point.historicalLabel} ` : undefined;
 
   return [
@@ -443,30 +431,31 @@ function trendTooltipRows(point: ChartDatum, {
     { tag: "strong", text: missing ? "暂无记录" : formattedAmount === null
       ? "—"
       : `${prefix ?? ""}${formattedAmount}`,
-      counter: formattedAmount === null ? undefined : { value: formattedAmount, prefix },
+      counter: formattedAmount === null || isSensitiveHidden ? undefined : { value: formattedAmount, prefix },
       unit: showCurrency && !missing ? currency : undefined },
     { tag: "small", text: [!missing && amount === null ? "未估值" : null, showingHistorical ? "早期记录" : null, quality].filter(Boolean).join(" · ") },
-    ...fundingEventRows(point.events, formatAmount),
+    ...fundingEventRows(point.events, formatAmount, isSensitiveHidden),
   ];
 }
 
 function fundingEventRows(
   events: AssetTrendEvent[] | undefined,
   formatAmount: (value: string) => string,
+  isSensitiveHidden: boolean,
 ): TrendTooltipRow[] {
   return (events ?? []).flatMap(event => {
     const original = event.originalAmount ?? event;
-    const sign = event.kind === "opening" ? "" : event.kind === "deposit" ? "+" : "-";
-    const tone = event.kind === "opening" ? undefined : event.kind;
+    const sign = isSensitiveHidden || event.kind === "opening" ? "" : event.kind === "deposit" ? "+" : "-";
+    const tone = isSensitiveHidden || event.kind === "opening" ? undefined : event.kind;
     const rows: TrendTooltipRow[] = [{
       tag: "small",
-      text: `${event.kind === "opening" ? "期初本金" : event.kind === "deposit" ? "入金" : "出金"} ${sign}${formatAmount(original.amount)}`,
+      text: `${event.kind === "opening" ? "期初本金" : event.kind === "deposit" ? "入金" : "出金"} ${sign}${isSensitiveHidden ? "••••••" : formatAmount(original.amount)}`,
       unit: original.currency,
       tone,
     }];
     if (event.originalAmount) rows.push({
       tag: "small",
-      text: `折合 ${sign}${formatAmount(event.amount)}`,
+      text: `折合 ${sign}${isSensitiveHidden ? "••••••" : formatAmount(event.amount)}`,
       unit: event.currency,
       tone,
     });
@@ -517,14 +506,14 @@ function FundingEventLegend({ points }: { points: AssetTrendChartPoint[] }) {
   );
 }
 
-function benchmarkTooltipReturnRow(label: string, value: number | null, series?: "spx" | "ndx"): TrendTooltipRow {
-  const formattedValue = value === null ? null : percentage(value, true).slice(0, -1);
+function benchmarkTooltipReturnRow(label: string, value: number | null, isSensitiveHidden: boolean, series?: "spx" | "ndx"): TrendTooltipRow {
+  const formattedValue = value === null ? null : isSensitiveHidden ? "••••••" : percentage(value, true).slice(0, -1);
   const prefix = `${label} `;
   return {
     tag: "strong",
-    text: `${prefix}${formattedValue === null ? "数据不足" : `${formattedValue}%`}`,
+    text: `${prefix}${formattedValue === null ? "数据不足" : `${formattedValue}${isSensitiveHidden ? "" : "%"}`}`,
     series,
-    counter: formattedValue === null ? undefined : { value: formattedValue, prefix, suffix: "%" },
+    counter: formattedValue === null || isSensitiveHidden ? undefined : { value: formattedValue, prefix, suffix: "%" },
   };
 }
 
@@ -533,12 +522,14 @@ function benchmarkTooltipRows(point: BenchmarkChartDatum, {
   currency,
   enabledSymbols,
   formatAmount,
+  isSensitiveHidden,
   returnComparison,
 }: {
   assetScopeLabel: string;
   currency: string;
   enabledSymbols: MarketBenchmarkSymbol[];
   formatAmount(value: string): string;
+  isSensitiveHidden: boolean;
   returnComparison?: boolean;
 }): TrendTooltipRow[] {
   const missing = !hasTrendRecord(point) && (point.events?.length ?? 0) === 0;
@@ -546,20 +537,21 @@ function benchmarkTooltipRows(point: BenchmarkChartDatum, {
 
   const rows: TrendTooltipRow[] = [
     { tag: "span", text: formatTrendTooltipDay(point.day) },
-    missing ? { tag: "strong", text: `我的${assetsLabel} 暂无记录` } : benchmarkTooltipReturnRow(`我的${assetsLabel}`, point.assets),
+    missing ? { tag: "strong", text: `我的${assetsLabel} 暂无记录` } : benchmarkTooltipReturnRow(`我的${assetsLabel}`, point.assets, isSensitiveHidden),
   ];
   if (!returnComparison) {
-    const formattedAmount = missing || point.amount === null ? null : formatAmount(point.amount);
+    const formattedAmount = missing || point.amount === null ? null : isSensitiveHidden ? "••••••" : formatAmount(point.amount);
     rows.push({ tag: "small", text: missing ? "" : formattedAmount ?? "—", unit: missing ? undefined : currency,
-      counter: formattedAmount === null ? undefined : { value: formattedAmount } });
+      counter: formattedAmount === null || isSensitiveHidden ? undefined : { value: formattedAmount } });
     rows.push({ tag: "small", text: !missing && point.amount === null ? "资产金额未估值" : "" });
   }
   for (const symbol of enabledSymbols) rows.push(benchmarkTooltipReturnRow(
     marketBenchmarkLabel(symbol),
     point[symbol],
+    isSensitiveHidden,
     symbol === ".SPX.US" ? "spx" : "ndx",
   ));
-  rows.push(...fundingEventRows(point.events, formatAmount));
+  rows.push(...fundingEventRows(point.events, formatAmount, isSensitiveHidden));
   return rows;
 }
 
@@ -572,50 +564,14 @@ function TrendTooltip<Point,>({ active, payload, rowsForPoint, sizing }: Tooltip
   return <TrendTooltipSurface rows={rowsForPoint(point)} sizing={sizing} />;
 }
 
-function QualitySummary({
-  historicalLabel,
-  historicalObserved,
-  incompleteCount,
-  missingCount,
-  observed,
-  total,
-  unavailableCount,
-}: {
-  historicalLabel?: string | null;
-  historicalObserved?: number;
-  incompleteCount: number;
-  missingCount: number;
-  observed: number;
-  total: number;
-  unavailableCount: number;
-}) {
-  return (
-    <p
-      className="asset-trend-quality"
-      data-coverage={`${observed}/${total}`}
-    >
-      完整 {observed} / {total} 天
-      {historicalObserved && historicalLabel
-        ? ` · ${historicalLabel} ${historicalObserved} 条`
-        : ""}
-      {incompleteCount > 0 ? ` · ${incompleteCount} 天不完整或过期` : ""}
-      {unavailableCount > 0 ? ` · ${unavailableCount} 天未估值` : ""}
-      {missingCount > 0 ? ` · 缺少 ${missingCount} 天观测` : ""}
-    </p>
-  );
-}
-
 export function AssetTrendChart({
   ariaLabel,
   benchmark,
   chartHeight,
-  coverageNote,
-  coveragePresentation = "default",
   currency,
   dateAxisPresentation = "default",
   formatAmount,
   formatDay,
-  incompleteCount,
   isSensitiveHidden = false,
   historicalSeries = null,
   emptyMessage = "无可用趋势",
@@ -624,19 +580,15 @@ export function AssetTrendChart({
   showDotFill = true,
   lineType = "monotone",
   plotPresentation = "default",
-  unavailableCount,
   variant = "total",
 }: {
   ariaLabel: string;
   benchmark?: AssetTrendBenchmark | null;
   chartHeight?: number;
-  coverageNote?: string;
-  coveragePresentation?: "default" | "disclosure" | "none";
   currency: string;
   dateAxisPresentation?: "default" | "compact";
   formatAmount(value: string): string;
   formatDay(day: string): string;
-  incompleteCount: number;
   isSensitiveHidden?: boolean;
   historicalSeries?: {
     label: string;
@@ -648,15 +600,10 @@ export function AssetTrendChart({
   showDotFill?: boolean;
   lineType?: "linear" | "monotone" | "stepAfter";
   plotPresentation?: "default" | "minimal";
-  unavailableCount: number;
   variant?: "source" | "total";
 }) {
   const dotFillId = `asset-trend-dots-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const glowId = `${dotFillId}-glow`;
-
-  if (isSensitiveHidden) {
-    return <HiddenTrendState variant={variant} />;
-  }
 
   const historicalByDay = new Map(
     historicalSeries?.points.map((point) => [point.day, point]) ?? [],
@@ -675,9 +622,6 @@ export function AssetTrendChart({
       value: point.amount === null ? null : Number(point.amount),
     };
   });
-  const observed = data.filter((point) => (point.observed || point.manualRecordDay) && point.amount !== null && point.status === "complete").length;
-  const missingCount = data.filter((point) => !point.observed && !point.manualRecordDay &&
-    (point.events?.length ?? 0) === 0 && point.historicalAmount === null).length;
   const historicalObserved = data.filter((point) => point.historicalValue !== null).length;
   const eventPoints = data.filter(point => point.value !== null && (point.events?.length ?? 0) > 0);
   const today = data.at(-1);
@@ -686,27 +630,6 @@ export function AssetTrendChart({
     ...(point.historicalAmount === null ? [] : [point.historicalAmount]),
   ]);
   const values = amounts.map(Number);
-  const qualitySummary = <QualitySummary
-    historicalLabel={historicalSeries?.label ?? null}
-    historicalObserved={historicalObserved}
-    incompleteCount={incompleteCount}
-    missingCount={missingCount}
-    observed={observed}
-    total={points.length}
-    unavailableCount={unavailableCount}
-  />;
-  const comparisonHeader = coveragePresentation === "none" ? null : coveragePresentation === "disclosure" ? (
-    <details className="asset-trend-coverage">
-      <summary>数据覆盖{missingCount + incompleteCount + unavailableCount > 0 ? " · 存在缺测或不完整记录" : ""}</summary>
-      {coverageNote ? <p className="asset-trend-coverage-note">{coverageNote}</p> : null}
-      {qualitySummary}
-    </details>
-  ) : (
-    <header className="asset-trend-comparison-header">
-      {coverageNote ? <p className="asset-trend-coverage-note">{coverageNote}</p> : null}
-      {qualitySummary}
-    </header>
-  );
   const benchmarkVisible = benchmark?.comparison?.reason === null &&
     benchmark.enabledSymbols.length > 0;
   const minimalPlot = plotPresentation === "minimal" && !benchmarkVisible;
@@ -794,13 +717,13 @@ export function AssetTrendChart({
       currency,
       enabledSymbols: benchmark.enabledSymbols,
       formatAmount,
+      isSensitiveHidden,
       returnComparison: benchmark.returnComparison,
     });
     const tooltipSizing = trendTooltipSizing(benchmarkData.map(tooltipRows));
 
     return (
       <div className={`asset-trend-comparison asset-trend-comparison--${variant}`}>
-        {coveragePresentation !== "disclosure" ? comparisonHeader : null}
         {benchmarkLegend}
         <TrendChartSurface>
           <ResponsiveContainer
@@ -836,7 +759,7 @@ export function AssetTrendChart({
                   fontSize: 10,
                   fontWeight: 500,
                 }}
-                tickFormatter={(value: number) => percentage(value)}
+                tickFormatter={(value: number) => isSensitiveHidden ? "••••••" : percentage(value)}
                 tickLine={false}
                 width={56}
               />
@@ -911,7 +834,6 @@ export function AssetTrendChart({
           </ResponsiveContainer>
         </TrendChartSurface>
         <FundingEventLegend points={benchmarkEventPoints} />
-        {coveragePresentation === "disclosure" ? comparisonHeader : null}
       </div>
     );
   }
@@ -919,9 +841,7 @@ export function AssetTrendChart({
   if (values.length === 0) {
     return (
       <div className={`asset-trend-comparison asset-trend-comparison--${variant}`}>
-        {coveragePresentation !== "disclosure" ? comparisonHeader : null}
         <p className="trend-empty">{emptyMessage}</p>
-        {coveragePresentation === "disclosure" ? comparisonHeader : null}
       </div>
     );
   }
@@ -933,19 +853,18 @@ export function AssetTrendChart({
     : (maximum - minimum) * 0.08;
   const axisMinimum = minimum - padding;
   const axisMaximum = maximum + padding;
-  const axisValue = (value: number) => currency === "%"
+  const axisValue = (value: number) => isSensitiveHidden ? "••••••" : currency === "%"
     ? `${formatAmount(String(value))}%`
     : formatAmount(String(value));
   const lastValueIndex = data.reduce(
     (lastIndex, point, index) => point.value === null ? lastIndex : index,
     -1,
   );
-  const tooltipRows = (point: ChartDatum) => trendTooltipRows(point, { currency, formatAmount, showCurrency });
+  const tooltipRows = (point: ChartDatum) => trendTooltipRows(point, { currency, formatAmount, isSensitiveHidden, showCurrency });
   const tooltipSizing = trendTooltipSizing(data.map(tooltipRows));
 
   return (
     <div className={`asset-trend-comparison asset-trend-comparison--${variant}`}>
-      {coveragePresentation !== "disclosure" ? comparisonHeader : null}
       {benchmarkLegend}
       <TrendChartSurface>
         <ResponsiveContainer
@@ -1044,6 +963,7 @@ export function AssetTrendChart({
               type={lineType}
             />
             {minimalPlot ? <TrendExtentLabels
+              isSensitiveHidden={isSensitiveHidden}
               maximum={formatAmount(amounts[values.indexOf(maximum)])}
               minimum={formatAmount(amounts[values.indexOf(minimum)])}
             /> : null}
@@ -1061,7 +981,6 @@ export function AssetTrendChart({
         </ResponsiveContainer>
       </TrendChartSurface>
       {!minimalPlot ? <FundingEventLegend points={eventPoints} /> : null}
-      {coveragePresentation === "disclosure" ? comparisonHeader : null}
     </div>
   );
 }

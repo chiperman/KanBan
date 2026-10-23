@@ -436,7 +436,7 @@ export function AssetSourceDetail({
     showSensitiveInfo,
   } = useWorkbenchDisplayPreferences();
   const realtimeSources = useMemo(() => [source], [source]);
-  const { active: realtimeActive, liveSources, state: realtimeState, retry } = useLongbridgeRealtime(realtimeSources);
+  const { active: realtimeActive, liveSources, quotes: realtimeQuotes, state: realtimeState, retry } = useLongbridgeRealtime(realtimeSources);
   const [editingRecord, setEditingRecord] = useState<ManualAssetRecord | null | undefined>(
     null,
   );
@@ -519,6 +519,9 @@ export function AssetSourceDetail({
         {bookId ? <p className="trend-note">本来源提供资产余额。<VibeLink href={`/performance?book=${bookId}`} variant="text">查看所属账本的本金与收益</VibeLink></p> : null}
         <LongbridgeRealtimeNotice state={realtimeState} retry={retry} />
         <AssetSourceCard
+          realtimeQuotes={realtimeQuotes}
+          realtimeState={realtimeState}
+          onRetryRealtime={retry}
           showAssetTrend={bookMode || (investmentHistory === null && !openingRecord)}
           trendContent={bookMode ? undefined : <SourceInvestmentPerformance
             range={trendRange}
@@ -587,10 +590,10 @@ export function AssetSourceDetail({
           <section aria-labelledby="source-connection-heading" className="asset-source-detail__setting-section">
             <h2 id="source-connection-heading">连接与授权</h2>
             <div className="asset-source-detail__setting-content">
-              <VibeStatusTag tone="muted">
+              <VibeStatusTag tone={source.lifecycle === "disconnected" ? "muted" : "success"}>
                 {authorizationStatus(source)}
               </VibeStatusTag>
-              {syncNotice ? <VibeNotice tone={syncNotice.tone === "warning" ? "info" : syncNotice.tone}>{syncNotice.label}</VibeNotice> : null}
+              {syncNotice ? <VibeNotice tone={syncNotice.tone}>{syncNotice.label}</VibeNotice> : null}
               {source.kind === "longbridge" ? (
                 <LongbridgeConnectionSummary
                   sourceId={source.id}

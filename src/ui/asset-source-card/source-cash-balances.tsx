@@ -28,11 +28,9 @@ export function SourceCashBalances({
               >
                 <span>{balance.currency} CASH</span>
                 <strong>
-                  {showSensitiveInfo
-                    ? <AssetFinancialValue unit={balance.currency}>
-                        {formatAmount(balance.amount)}
-                      </AssetFinancialValue>
-                    : "••••••"}
+                  <AssetFinancialValue unit={balance.currency}>
+                    {showSensitiveInfo ? formatAmount(balance.amount) : "••••••"}
+                  </AssetFinancialValue>
                 </strong>
               </li>
             ))}

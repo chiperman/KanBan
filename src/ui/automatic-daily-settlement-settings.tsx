@@ -12,12 +12,12 @@ export function AutomaticDailySettlementSettings({ execution, scheduler, backgro
     <section id="automatic-daily-settlement" className="automatic-daily-settlement" aria-labelledby="automatic-daily-settlement-title">
       <h3 id="automatic-daily-settlement-title">正式日结</h3>
       <dl className="security-settings__statuses">
-        <div><dt>本机调度</dt><dd><VibeStatusTag tone="muted">{backgroundActive ? "由后台采集每十五分钟检查" : settlementSchedulerLabel[scheduler.state]}</VibeStatusTag></dd></div>
+        <div><dt>本机调度</dt><dd><VibeStatusTag tone={backgroundActive || scheduler.state === "loaded" ? "success" : scheduler.state === "not-loaded" || scheduler.state === "query-failed" ? "error" : "muted"}>{backgroundActive ? "由后台采集每十五分钟检查" : settlementSchedulerLabel[scheduler.state]}</VibeStatusTag></dd></div>
         <div><dt>检查时间</dt><dd>{formatShanghaiDateTime(scheduler.checkedAt)}（上海时间）</dd></div>
         <div><dt>最近执行</dt><dd>{execution ? formatShanghaiDateTime(execution.startedAt) + "（上海时间）" : "暂无执行记录"}</dd></div>
         {execution ? <>
-          <div><dt>执行结果</dt><dd>{settlementOutcomeLabel[execution.outcome]}</dd></div>
-          {execution.settlementStatus ? <div><dt>日结质量</dt><dd>{settlementQualityLabel[execution.settlementStatus]}</dd></div> : null}
+          <div><dt>执行结果</dt><dd><VibeStatusTag tone={execution.outcome === "error" ? "error" : execution.outcome === "waiting" ? "warning" : execution.outcome === "not-due" ? "muted" : "success"}>{settlementOutcomeLabel[execution.outcome]}</VibeStatusTag></dd></div>
+          {execution.settlementStatus ? <div><dt>日结质量</dt><dd><VibeStatusTag tone={execution.settlementStatus === "complete" ? "success" : "error"}>{settlementQualityLabel[execution.settlementStatus]}</VibeStatusTag></dd></div> : null}
           {execution.reason ? <div><dt>原因</dt><dd>{settlementReasonLabel[execution.reason]}</dd></div> : null}
         </> : null}
       </dl>

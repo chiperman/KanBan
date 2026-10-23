@@ -50,7 +50,7 @@ export function UnreadableEvmAssets({
                     <small>{token.sourceAsset}</small>
                   </div>
                   <div className="evm-unreadable-assets__status">
-                    <VibeStatusTag tone="warning">
+                    <VibeStatusTag tone={isIncluded ? "error" : "warning"}>
                       {isIncluded ? "已关注 · 数量无法读取" : "待确认 · 数量无法读取"}
                     </VibeStatusTag>
                     <p>{token.reason}</p>

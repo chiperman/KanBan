@@ -20,7 +20,7 @@ export function LongbridgeRealtimeStatus({ state }: { state: LongbridgeRealtimeS
       aria-atomic="true"
       className="longbridge-realtime-status"
       role="status"
-      tone={connecting ? "muted" : state === "ready" ? "success" : "warning"}
+      tone={connecting ? "muted" : state === "ready" ? "success" : state === "reconnecting" ? "warning" : "error"}
     >
       LB / {label}
     </VibeStatusTag>
@@ -73,7 +73,7 @@ export function LongbridgeRealtimeNotice({ state, retry }: {
         className="assets-holdings__realtime-notice"
         code="LONGBRIDGE / RECONNECTING"
         role="status"
-        tone="info"
+        tone="warning"
       >
         <p>实时行情连接中断，正在自动重连。当前页面仍保留已有数据。</p>
         <div className="assets-holdings__realtime-actions">{retryButton}</div>

@@ -213,8 +213,12 @@ export function AssetSourceFlow({
     setStep("configure");
   }
 
-  function backToAssets() {
-    router.push("/assets?view=sources#asset-sources");
+  function leaveFlow() {
+    router.push(
+      reauthorization === undefined
+        ? "/assets?view=sources#asset-sources"
+        : `/asset-sources/${encodeURIComponent(reauthorization.sourceId)}?view=manage`,
+    );
   }
 
   function backToChoice() {
@@ -383,11 +387,7 @@ export function AssetSourceFlow({
       setError(body?.error ?? `保存 ${provider.label} 来源失败`);
       return;
     }
-    router.push(
-      reauthorization === undefined
-        ? "/assets?view=sources#asset-sources"
-        : `/asset-sources/${encodeURIComponent(reauthorization.sourceId)}`,
-    );
+    leaveFlow();
     router.refresh();
   }
 
@@ -417,11 +417,7 @@ export function AssetSourceFlow({
       }
       remaining.shift();
     }
-    router.push(
-      reauthorization === undefined
-        ? "/assets?view=sources#asset-sources"
-        : `/asset-sources/${encodeURIComponent(reauthorization.sourceId)}`,
-    );
+    leaveFlow();
     router.refresh();
   }
 
@@ -445,7 +441,7 @@ export function AssetSourceFlow({
         return fetch(endpoint, { method: "DELETE" });
       }),
     );
-    backToAssets();
+    leaveFlow();
   }
 
   const ready =
@@ -522,7 +518,7 @@ export function AssetSourceFlow({
               </label>
             ))}
           </fieldset>
-          <VibeButton onClick={backToAssets} type="button" variant="text">
+          <VibeButton onClick={leaveFlow} type="button" variant="text">
             取消返回
           </VibeButton>
         </section>
@@ -636,7 +632,7 @@ export function AssetSourceFlow({
                 上一步
               </VibeButton>
             ) : (
-              <VibeButton disabled={pending} onClick={backToAssets} type="button" variant="text">
+              <VibeButton disabled={pending} onClick={leaveFlow} type="button" variant="text">
                 取消返回
               </VibeButton>
             )}

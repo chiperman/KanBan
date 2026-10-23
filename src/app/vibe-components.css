@@ -794,6 +794,14 @@ textarea.vibe-field__input {
   color: var(--success);
 }
 
+.vibe-notice--warning {
+  background: color-mix(in srgb, var(--warning) 9%, transparent);
+}
+
+.vibe-notice--warning > .vibe-notice__marker {
+  color: var(--warning);
+}
+
 .vibe-notice--info {
   background: var(--raised);
 }
@@ -1319,6 +1327,17 @@ body:has(.page-locked)::before {
 
 .source-field-help {
   margin-top: 12px;
+}
+
+.longbridge-connection-settings__copy > .vibe-status-tag {
+  gap: var(--vibe-space-2);
+  padding: 0;
+  border: 0;
+  font-family: var(--f-ui);
+  font-size: var(--vibe-type-body-sm);
+  letter-spacing: normal;
+  line-height: 1.5;
+  text-transform: none;
 }
 
 .vibe-preview-list {

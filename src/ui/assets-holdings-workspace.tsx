@@ -6,6 +6,8 @@ import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
 import { longbridgeReferenceRates } from "@/domain/investment-performance";
 import {
   decimalCompare,
+  decimalMultiply,
+  decimalSubtract,
   decimalToFixed,
 } from "@/domain/decimal";
 import { activeSourceHoldings } from "@/domain/evm-token-preferences";
@@ -30,6 +32,9 @@ import {
   formatAssetUnitPrice,
 } from "@/ui/asset-price-display";
 import { sourceSyncStatus } from "@/ui/asset-source-status";
+import { holdingTodayProfit } from "@/ui/asset-source-card/holding-detail-model";
+import { profitDirection, type ProfitColorScheme } from "@/ui/profit-color-scheme";
+import { signedAmount } from "@/ui/signed-amount";
 import { formatShanghaiDateTime } from "@/ui/shanghai-date-time";
 import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
 import { VibeEntityLink } from "@/ui/vibe/vibe-entity-link";
@@ -48,7 +53,6 @@ import { LongbridgeRealtimeNotice, LongbridgeRealtimeStatus } from "@/ui/longbri
 import { useLongbridgeRealtime } from "@/ui/use-longbridge-realtime";
 import { AssetGlobalRefreshControl } from "@/ui/asset-refresh-controls";
 import { CURRENCY_OPTIONS } from "@/ui/reporting-currency-options";
-import { useTablePagination, VibeTablePagination } from "@/ui/vibe/vibe-table-pagination";
 
 type WorkspaceSource = Omit<
   AssetSourceSummary,
@@ -98,24 +102,18 @@ function HoldingValue({ value, unit }: { value: string; unit?: string }) {
   );
 }
 
-function displayAmount(
-  value: string | null,
-  fromCurrency: string,
-  reportingCurrency: ReportingCurrency,
-  rates: WorkspaceSource["snapshot"]["exchangeRates"],
-  hidden: boolean,
-): ReactNode {
-  if (hidden) return "••••••";
-  if (value === null) return "数据不足";
-  const converted = convertCurrencyAmount(
-    value,
-    fromCurrency,
-    reportingCurrency,
-    rates,
+function holdingFloatingProfit(holding: AssetHolding): string | null {
+  if (
+    holding.currentPrice === null ||
+    holding.costPrice === null ||
+    holding.currentPrice.currency !== holding.currency
+  ) {
+    return null;
+  }
+  return decimalMultiply(
+    decimalSubtract(holding.currentPrice.amount, holding.costPrice),
+    holding.quantity,
   );
-  return converted === null
-    ? "无法折算"
-    : <HoldingValue value={money(converted)} unit={reportingCurrency} />;
 }
 
 function displayPrice(
@@ -200,13 +198,13 @@ function sourceStatuses(source: WorkspaceSource): {
 
 function holdingStatus(holding: AssetHolding): {
   label: string;
-  tone: "success" | "warning" | "error";
+  tone: "success" | "warning" | "error" | "muted";
 } {
   if (holding.valuation.status === "unvalued") {
     return { label: "未估值", tone: "error" };
   }
   if (holding.valuation.status === "quote-unavailable") {
-    return { label: "行情不可用", tone: "warning" };
+    return { label: "持仓行情未接入", tone: "muted" };
   }
   if (holding.quoteEvidence?.freshness === "retained") {
     return {
@@ -245,8 +243,10 @@ function priceEvidence(holding: AssetHolding): string {
 
 export function AssetsHoldingsWorkspace({
   sources,
+  profitColorScheme,
 }: {
   sources: WorkspaceSource[];
+  profitColorScheme: ProfitColorScheme;
 }) {
   const {
     currency,
@@ -259,7 +259,9 @@ export function AssetsHoldingsWorkspace({
   const [valuation, setValuation] = useState<ValuationFilter>("all");
   const [expandedEvidenceKeys, setExpandedEvidenceKeys] = useState<string[]>([]);
   const evidencePrefix = useId();
-  const { active: realtimeActive, liveSources, state: realtimeState, retry } = useLongbridgeRealtime(sources);
+  const { active: realtimeActive, liveSources, state: realtimeState, retry } = useLongbridgeRealtime(
+    sources, true, { immediateInitialQuotes: true },
+  );
   const selectedSource = liveSources.find((source) => source.id === sourceId);
 
   const recordedSources = useMemo(
@@ -340,8 +342,6 @@ export function AssetsHoldingsWorkspace({
       valuation,
     ],
   );
-
-  const holdingsPagination = useTablePagination(filteredObservations, JSON.stringify([sourceId, searchQuery, assetClass, valuation]));
 
   return (
     <section
@@ -444,12 +444,12 @@ export function AssetsHoldingsWorkspace({
                   <th scope="col">市值</th>
                   <th scope="col">现价 / 数量</th>
                   <th scope="col">价格变化</th>
-                  <th scope="col">平台盈亏</th>
+                  <th scope="col">持仓浮盈亏</th>
                   <th scope="col">数据状态</th>
                 </tr>
               </thead>
               <tbody>
-                {holdingsPagination.visibleItems.map(({ holding, source }) => {
+                {filteredObservations.map(({ holding, source }) => {
                   const sourceRates = sourceReportingConversionRates(
                     source,
                     reportingRates,
@@ -467,12 +467,10 @@ export function AssetsHoldingsWorkspace({
                       money(holding.sourceMarketValue.amount) !== money(marketValue)
                     );
                   const status = holdingStatus(holding);
-                  const platformProfit = displayAmount(
-                    holding.platformProfit,
-                    holding.currency,
-                    currency,
-                    sourceRates,
-                    !showSensitiveInfo,
+                  const priceChange = holding.changePercent ?? holdingTodayProfit(holding)?.percent ?? null;
+                  const floatingProfit = holdingFloatingProfit(holding);
+                  const convertedProfit = floatingProfit === null ? null : convertCurrencyAmount(
+                    floatingProfit, holding.currency, currency, sourceRates,
                   );
                   const observationKey = `${source.id}:${assetHoldingKey(holding)}`;
                   const evidenceId = `${evidencePrefix}-${encodeURIComponent(observationKey)}`;
@@ -504,7 +502,7 @@ export function AssetsHoldingsWorkspace({
                                   ? "未估值"
                                   : "数据不足"
                                 : <HoldingValue value={money(marketValue)} unit={currency} />
-                              : "••••••"}
+                              : <HoldingValue value="••••••" />}
                           </strong>
                           {showSourceMarketValue && holding.sourceMarketValue ? (
                             <span>
@@ -529,30 +527,44 @@ export function AssetsHoldingsWorkspace({
                                   holding.assetClass,
                                 )
                                 : "现价不可用"
-                              : "••••••"}
+                              : <HoldingValue value="••••••" />}
                           </strong>
                           <div className="assets-holdings__price-meta">
                             <span>
                               {showSensitiveInfo
                                 ? `${formatAssetQuantity(holding.quantity)} ${holding.symbol}`
-                                : "••••••"}
+                                : <HoldingValue value="••••••" />}
                             </span>
                           </div>
                         </td>
                         <td data-label="价格变化">
-                          <strong>
-                            {holding.changePercent === null
-                              ? "数据不足"
-                              : showSensitiveInfo
-                                ? <HoldingValue value={signedPercent(holding.changePercent)} />
-                                : "••••••"}
+                          <strong
+                            className="profit-color-value"
+                            data-profit-color-scheme={profitColorScheme}
+                            data-profit-direction={showSensitiveInfo && priceChange !== null
+                              ? profitDirection(priceChange) : "neutral"}
+                          >
+                            {showSensitiveInfo
+                              ? priceChange === null
+                                ? "数据不足"
+                                : <HoldingValue value={signedPercent(priceChange)} />
+                              : <HoldingValue value="••••••" />}
                           </strong>
                         </td>
-                        <td data-label="平台盈亏">
-                          <strong>
-                            {showSensitiveInfo && holding.platformProfit === null
-                              ? "平台未提供"
-                              : platformProfit}
+                        <td data-label="持仓浮盈亏">
+                          <strong
+                            className="profit-color-value"
+                            data-profit-color-scheme={profitColorScheme}
+                            data-profit-direction={showSensitiveInfo && convertedProfit !== null
+                              ? profitDirection(convertedProfit) : "neutral"}
+                          >
+                            {showSensitiveInfo
+                              ? floatingProfit === null
+                                ? "数据不足"
+                                : convertedProfit === null
+                                  ? "无法折算"
+                                  : <HoldingValue value={signedAmount(convertedProfit, money)} unit={currency} />
+                              : <HoldingValue value="••••••" />}
                           </strong>
                         </td>
                         <td data-label="数据状态">
@@ -594,10 +606,8 @@ export function AssetsHoldingsWorkspace({
           </div>
         )}
 
-        <VibeTablePagination label="资产持仓分页" pagination={holdingsPagination.controls} />
-
         <VibeNotice tone="info">
-          价格变化采用来源可用行情；平台盈亏沿用平台原生口径。
+          价格变化采用来源可用行情；持仓浮盈亏按现价、成本与数量计算。
         </VibeNotice>
       </section>
 

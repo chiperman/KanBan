@@ -173,7 +173,11 @@ export function AssetProductCoverage({
               : " is-incomplete"
           }`}
           data-testid={`${sourceKind}-coverage-status`}
-          tone="warning"
+          tone={coverage?.status === "partial" && !coverage.totalIsAuthoritative
+            ? "error"
+            : coverage?.status === "complete" && !coverage.unexplainedValue && coverage.excludedPositiveAccounts.length === 0
+              ? "success"
+              : "warning"}
         >
           {label}
           {coverage?.unexplainedValue ? (

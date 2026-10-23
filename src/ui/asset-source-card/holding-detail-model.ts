@@ -81,10 +81,9 @@ function hasLegacyLongbridgeQuote(holding: AssetHolding): boolean {
 
 export function holdingQuoteSessionText(
   holding: AssetHolding,
-  showSensitiveInfo: boolean,
   includeQuoteTime = true,
 ): string | null {
-  if (!showSensitiveInfo || holding.currentPrice === null) return null;
+  if (holding.currentPrice === null) return null;
   const evidence = holding.quoteEvidence;
   const legacyLongbridgeQuote = hasLegacyLongbridgeQuote(holding);
   if (holding.assetClass !== "crypto" && evidence === undefined && !legacyLongbridgeQuote) {

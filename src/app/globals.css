@@ -387,7 +387,6 @@ body {
   margin-top: 8px;
 }
 
-.asset-sync-status.expired,
 .asset-sync-error {
   color: var(--accent-text);
 }

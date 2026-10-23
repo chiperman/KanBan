@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 
 import {
   redirectLoopbackIpToLocalhost,
@@ -7,6 +8,11 @@ import {
 import { getServices } from "@/server/composition";
 import { readAssetRefreshState } from "@/server/asset-refresh-state";
 import { AssetsHoldingsWorkspace } from "@/ui/assets-holdings-workspace";
+import {
+  DEFAULT_PROFIT_COLOR_SCHEME,
+  isProfitColorScheme,
+  PROFIT_COLOR_SCHEME_COOKIE_KEY,
+} from "@/ui/profit-color-scheme";
 import { SessionGuard } from "@/ui/session-guard";
 import { WorkbenchShell } from "@/ui/workbench-shell";
 
@@ -43,6 +49,11 @@ export default async function AssetsPage({
         : [],
     }),
   );
+  const savedProfitColorScheme =
+    (await cookies()).get(PROFIT_COLOR_SCHEME_COOKIE_KEY)?.value ?? null;
+  const profitColorScheme = isProfitColorScheme(savedProfitColorScheme)
+    ? savedProfitColorScheme
+    : DEFAULT_PROFIT_COLOR_SCHEME;
 
   return (
     <SessionGuard>
@@ -63,7 +74,7 @@ export default async function AssetsPage({
             跳到主要内容
           </a>
           <main id="main-content">
-            <AssetsHoldingsWorkspace sources={sources} />
+            <AssetsHoldingsWorkspace sources={sources} profitColorScheme={profitColorScheme} />
           </main>
         </div>
       </WorkbenchShell>

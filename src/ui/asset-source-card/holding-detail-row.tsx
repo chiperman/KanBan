@@ -7,6 +7,27 @@ import { VibeStatusTag } from "@/ui/vibe/vibe-data-instrument";
 import { signedAmount, signedDisplayAmount } from "@/ui/signed-amount";
 import { amount, holdingProfit, holdingTodayProfit, holdingQuoteSessionText, holdingValuationDetail } from "./holding-detail-model";
 
+function HoldingSensitiveValue({
+  value,
+  showSensitiveInfo,
+  financial = true,
+}: {
+  value: string;
+  showSensitiveInfo: boolean;
+  financial?: boolean;
+}) {
+  // 只预留字符宽度，隐藏状态不把真实读数留在 DOM 中。
+  const style = { minInlineSize: `${Math.max(6, value.length)}ch` };
+  const text = showSensitiveInfo ? value : "••••••";
+  return financial ? (
+    <AssetFinancialValue className="holding-sensitive-value" style={style}>
+      {text}
+    </AssetFinancialValue>
+  ) : (
+    <span className="holding-sensitive-value" style={style}>{text}</span>
+  );
+}
+
 function displayDirection(
   value: string,
   showSensitiveInfo: boolean,
@@ -30,7 +51,6 @@ function HoldingProfitSummaryCell({
   showSensitiveInfo: boolean;
   formatDisplayMoney: (value: string, currency: string) => string | null;
 }) {
-  const masked = "••••••";
   const displayedAmount = profit === null
     ? null
     : formatDisplayMoney(profit.amount, currency);
@@ -48,20 +68,20 @@ function HoldingProfitSummaryCell({
         <strong>
           {profit === null
             ? "—"
-            : !showSensitiveInfo
-              ? masked
-              : displayedAmount === null
-                ? "无法折算"
-                : <AssetFinancialValue>
-                    {signedDisplayAmount(profit.amount, displayedAmount)}
-                  </AssetFinancialValue>}
+            : displayedAmount === null
+              ? "无法折算"
+              : <HoldingSensitiveValue
+                  showSensitiveInfo={showSensitiveInfo}
+                  value={signedDisplayAmount(profit.amount, displayedAmount)}
+                />}
         </strong>
         <span>
           {profit === null
             ? "—"
-            : showSensitiveInfo
-              ? <AssetFinancialValue>{signedAmount(profit.percent, amount)}%</AssetFinancialValue>
-              : masked}
+            : <HoldingSensitiveValue
+                showSensitiveInfo={showSensitiveInfo}
+                value={`${signedAmount(profit.percent, amount)}%`}
+              />}
         </span>
       </div>
     </td>
@@ -79,7 +99,6 @@ function HoldingMarketValueQuantityCell({
   showSensitiveInfo: boolean;
   formatDisplayMoney: (value: string, currency: string) => string | null;
 }) {
-  const masked = "••••••";
   const displayedMarketValue = holding.marketValue === null
     ? null
     : formatDisplayMoney(holding.marketValue, holding.currency);
@@ -91,13 +110,13 @@ function HoldingMarketValueQuantityCell({
             ? quoteUnavailable
               ? "期权行情未接入"
               : "未估值"
-            : !showSensitiveInfo
-              ? masked
-              : displayedMarketValue === null
-                ? "无法折算"
-                : <AssetFinancialValue>{displayedMarketValue}</AssetFinancialValue>}
+            : displayedMarketValue === null
+              ? "无法折算"
+              : <HoldingSensitiveValue showSensitiveInfo={showSensitiveInfo} value={displayedMarketValue} />}
         </strong>
-        <span>{showSensitiveInfo ? amount(holding.quantity) : masked}</span>
+        <span>
+          <HoldingSensitiveValue financial={false} showSensitiveInfo={showSensitiveInfo} value={amount(holding.quantity)} />
+        </span>
       </div>
     </td>
   );
@@ -117,7 +136,6 @@ function HoldingCostPrice({
   ) => string | null;
 }) {
   if (holding.costPrice === null) return "—";
-  if (!showSensitiveInfo) return "••••••";
   const price = formatDisplayPrice(
     holding.costPrice,
     holding.currency,
@@ -126,7 +144,7 @@ function HoldingCostPrice({
   if (price === null) return "无法折算";
   return (
     <>
-      <AssetFinancialValue>{price}</AssetFinancialValue>
+      <HoldingSensitiveValue showSensitiveInfo={showSensitiveInfo} value={price} />
       {holding.costPriceSource ? (
         <span className="holding-price-source"> · {holding.costPriceSource}</span>
       ) : null}
@@ -149,7 +167,6 @@ function HoldingCurrentPrice({
     assetClass: AssetHolding["assetClass"],
   ) => string | null;
 }) {
-  const masked = "••••••";
   const formattedCurrentPrice = holding.currentPrice
     ? formatDisplayPrice(
       holding.currentPrice.amount,
@@ -158,25 +175,23 @@ function HoldingCurrentPrice({
     )
     : null;
   const currentPrice = holding.currentPrice
-    ? !showSensitiveInfo
-      ? masked
-      : formattedCurrentPrice ?? "无法折算"
+    ? "无法折算"
     : quoteUnavailable
       ? "现价不可用"
       : holding.valuation.status === "unvalued"
         ? "未估值"
         : "—";
-  const session = holdingQuoteSessionText(holding, showSensitiveInfo, false);
+  const session = holdingQuoteSessionText(holding, false);
   return (
     <div className="holding-current-quote">
       {session ? (
-        <VibeStatusTag title={holdingQuoteSessionText(holding, showSensitiveInfo) ?? undefined}>
+        <VibeStatusTag title={holdingQuoteSessionText(holding) ?? undefined}>
           {session}
         </VibeStatusTag>
       ) : null}
       <strong className={`holding-current-price${holding.currentPrice === null ? " holding-value-unavailable" : ""}`}>
-        {formattedCurrentPrice !== null && showSensitiveInfo
-          ? <AssetFinancialValue>{formattedCurrentPrice}</AssetFinancialValue>
+        {formattedCurrentPrice !== null
+          ? <HoldingSensitiveValue showSensitiveInfo={showSensitiveInfo} value={formattedCurrentPrice} />
           : currentPrice}
       </strong>
     </div>
@@ -242,7 +257,6 @@ export function HoldingDetailRow({
     assetClass: AssetHolding["assetClass"],
   ) => string | null;
 }) {
-  const masked = "••••••";
   const quoteUnavailable = holding.valuation.status === "quote-unavailable";
   const valuationDetail = holdingValuationDetail(holding);
   const profit = holdingProfit(holding);
@@ -258,6 +272,7 @@ export function HoldingDetailRow({
           {onShowCandlesticks ? (
             <VibeButton
               className="holding-candlestick-trigger"
+              disabled={!showSensitiveInfo}
               onClick={() => onShowCandlesticks(holding)}
               type="button"
               variant="text"
@@ -303,7 +318,9 @@ export function HoldingDetailRow({
         </>
       ) : (
         <>
-          <td>{showSensitiveInfo ? amount(holding.quantity) : masked}</td>
+          <td>
+            <HoldingSensitiveValue financial={false} showSensitiveInfo={showSensitiveInfo} value={amount(holding.quantity)} />
+          </td>
           <td className="holding-current-price-cell">
             <HoldingCurrentPrice
               formatDisplayPrice={formatDisplayPrice}
@@ -317,13 +334,11 @@ export function HoldingDetailRow({
               ? quoteUnavailable
                 ? "期权行情未接入"
                 : "未估值"
-              : !showSensitiveInfo
-                ? masked
-                : (() => {
+              : (() => {
                   const value = formatDisplayMoney(holding.marketValue, holding.currency);
                   return value === null
                     ? "无法折算"
-                    : <AssetFinancialValue>{value}</AssetFinancialValue>;
+                    : <HoldingSensitiveValue showSensitiveInfo={showSensitiveInfo} value={value} />;
                 })()}
           </td>
           <td>
@@ -337,13 +352,11 @@ export function HoldingDetailRow({
             <td>
               {holding.platformProfit === null
                 ? "—"
-                : !showSensitiveInfo
-                  ? masked
-                  : (() => {
+                : (() => {
                     const value = formatDisplayMoney(holding.platformProfit, holding.currency);
                     return value === null
                       ? "无法折算"
-                      : <AssetFinancialValue>{value}</AssetFinancialValue>;
+                      : <HoldingSensitiveValue showSensitiveInfo={showSensitiveInfo} value={value} />;
                   })()}
             </td>
           ) : null}
@@ -358,15 +371,14 @@ export function HoldingDetailRow({
           >
             {profit === null
               ? "—"
-              : !showSensitiveInfo
-                ? masked
-                : (() => {
+              : (() => {
                   const displayed = formatDisplayMoney(profit.amount, holding.currency);
                   return displayed === null
                     ? "无法折算"
-                    : <AssetFinancialValue>
-                        {signedDisplayAmount(profit.amount, displayed)}
-                      </AssetFinancialValue>;
+                    : <HoldingSensitiveValue
+                        showSensitiveInfo={showSensitiveInfo}
+                        value={signedDisplayAmount(profit.amount, displayed)}
+                      />;
                 })()}
           </td>
           <td
@@ -380,9 +392,10 @@ export function HoldingDetailRow({
           >
             {profit === null
               ? "—"
-              : showSensitiveInfo
-                ? <AssetFinancialValue>{signedAmount(profit.percent, amount)}%</AssetFinancialValue>
-                : masked}
+              : <HoldingSensitiveValue
+                  showSensitiveInfo={showSensitiveInfo}
+                  value={`${signedAmount(profit.percent, amount)}%`}
+                />}
           </td>
         </>
       )}

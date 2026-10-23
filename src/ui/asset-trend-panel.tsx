@@ -7,7 +7,6 @@ import {
   type InvestmentPerformanceIntervalPreset,
 } from "@/domain/investment-performance-trend";
 import { AssetTrendChart } from "@/ui/asset-trend-chart";
-import { formatShanghaiDayLabel } from "@/ui/shanghai-date-time";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeDateField } from "@/ui/vibe/vibe-date-field";
 import { VibeDialog } from "@/ui/vibe/vibe-dialog";
@@ -53,10 +52,9 @@ export function AssetTrendPanel({
   metricControls,
   children,
   emptyMessage,
-  coveragePresentation,
   title,
   ...chart
-}: Omit<ComponentProps<typeof AssetTrendChart>, "incompleteCount" | "unavailableCount" | "showDotFill"> & {
+}: Omit<ComponentProps<typeof AssetTrendChart>, "showDotFill"> & {
   range: AssetTrendRange;
   metricControls?: ReactNode;
   children?: ReactNode;
@@ -68,14 +66,6 @@ export function AssetTrendPanel({
   const [editing, setEditing] = useState(false);
   const [startDay, setStartDay] = useState(range.currentDay);
   const [endDay, setEndDay] = useState(range.currentDay);
-  const actualDays = [...new Set([
-    ...chart.points,
-    ...(chart.historicalSeries?.points ?? []),
-  ].flatMap(point => point.events?.length
-    ? [point.day]
-    : point.manualRecordDay
-    ? [point.manualRecordDay]
-    : point.observed ? [point.day] : []))].toSorted();
   const validRange = startDay !== "" && endDay !== "" &&
     startDay <= endDay && endDay <= range.currentDay;
   const rangeControl = (
@@ -134,15 +124,7 @@ export function AssetTrendPanel({
     <AssetTrendChart
       {...chart}
       showDotFill={showTrendDots}
-      coverageNote={!chart.isSensitiveHidden
-        ? actualDays.length
-          ? `实际记录 ${formatShanghaiDayLabel(actualDays[0]!)} 至 ${formatShanghaiDayLabel(actualDays.at(-1)!)}`
-          : "所选区间暂无实际记录"
-        : undefined}
-      coveragePresentation={coveragePresentation ?? "disclosure"}
       emptyMessage={emptyMessage}
-      incompleteCount={chart.points.filter(point => (point.observed || point.manualRecordDay) && point.status !== "complete").length}
-      unavailableCount={chart.points.filter(point => (point.observed || point.manualRecordDay) && point.amount === null).length}
     />
     {rangeControl}
     {editing ? <VibeDialog

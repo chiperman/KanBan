@@ -116,7 +116,7 @@ export function ExternalServiceSettings({
                   {/* 状态与字段同处一行，读作「这个字段现在是什么状态」 */}
                   <dd
                     className="external-service-statuses__state"
-                    data-vibe-tone={service.configured ? "success" : "warning"}
+                    data-vibe-tone={service.configured ? "success" : "muted"}
                   >
                     {stateText(service.configured, service.verifiedAt)}
                   </dd>

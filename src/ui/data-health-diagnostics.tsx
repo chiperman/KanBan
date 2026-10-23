@@ -43,7 +43,7 @@ type HistoryEntry = {
 export type DiagnosticSource = {
   manualWithoutRecord: boolean;
   name: string;
-  reasons: string[];
+  reasons: { label: string; tone: "error" | "warning" | "muted" | "success" }[];
   source: DataHealthSource;
   valuation: ReturnType<typeof valuationSummary>;
 };
@@ -86,11 +86,13 @@ function valuationSummary(
 ): {
   label: string;
   reasons: string[];
+  tone: "error" | "warning" | "muted" | "success";
 } {
   if (!hasManualAssetRecord(source)) {
     return {
       label: "尚无估值",
       reasons: ["尚未添加首条手工记录"],
+      tone: "muted",
     };
   }
 
@@ -107,11 +109,12 @@ function valuationSummary(
   ) ?? [];
 
   if (reasons.length > 0) {
-    return { label: "估值不完整 · 未估值", reasons };
+    return { label: "估值不完整 · 未估值", reasons, tone: "error" };
   }
   if (valuation.incomplete) {
     return {
       label: "估值不完整",
+      tone: coverage?.status === "unknown" ? "warning" : "error",
       reasons: [
         coverage?.status === "partial"
           ? "来源覆盖不完整"
@@ -126,21 +129,24 @@ function valuationSummary(
     return {
       label: "估值基于过期数据",
       reasons: ["最后成功数据已过期", ...coverageReasons],
+      tone: "warning",
     };
   }
   if (coverage?.status === "partial") {
     return {
       label: "总额估值完整 · 持仓明细不全",
       reasons: ["持仓明细覆盖不足", ...coverageReasons],
+      tone: "warning",
     };
   }
   if (coverage?.status === "unknown") {
     return {
       label: "总额估值完整 · 覆盖待确认",
       reasons: ["尚未确认来源总额覆盖", ...coverageReasons],
+      tone: "warning",
     };
   }
-  return { label: "估值完整", reasons: [] };
+  return { label: "估值完整", reasons: [], tone: "success" };
 }
 
 function observationDetail(
@@ -227,10 +233,10 @@ function historyEntries(
 function sourceDiagnosticReasons(
   source: DataHealthSource,
   valuation: ReturnType<typeof valuationSummary>,
-): string[] {
+): DiagnosticSource["reasons"] {
   return [
-    ...(source.sync.error === null ? [] : [`上次同步失败：${source.sync.error}`]),
-    ...valuation.reasons,
+    ...(source.sync.error === null ? [] : [{ label: `上次同步失败：${source.sync.error}`, tone: "error" as const }]),
+    ...valuation.reasons.map(label => ({ label, tone: valuation.tone })),
   ];
 }
 

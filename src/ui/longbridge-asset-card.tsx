@@ -23,6 +23,7 @@ import type {
 } from "@/server/ports";
 import { assetHoldingDisplayName } from "@/ui/asset-product-coverage";
 import { HoldingCandlestickChart } from "@/ui/holding-candlestick-chart";
+import type { LongbridgeRealtimeState, ReceivedQuote } from "@/ui/use-longbridge-realtime";
 import { formatAssetAmount, formatAssetUnitPrice } from "@/ui/asset-price-display";
 import type { ProfitColorScheme } from "@/ui/profit-color-scheme";
 import { assetSourceHoldingsModel } from "@/ui/asset-source-card/holdings-model";
@@ -60,7 +61,13 @@ export function AssetSourceCard({
   assetScopeHref,
   profitColorScheme,
   showSensitiveInfo,
+  realtimeQuotes,
+  realtimeState,
+  onRetryRealtime,
 }: {
+  realtimeQuotes?: ReadonlyMap<string, ReceivedQuote>;
+  realtimeState?: LongbridgeRealtimeState;
+  onRetryRealtime?: () => void;
   trendContent?: import("react").ReactNode;
   showAssetTrend?: boolean;
   totalAnimationKey?: string;
@@ -89,6 +96,7 @@ export function AssetSourceCard({
   const [hideSmallCryptoHoldings, setHideSmallCryptoHoldings] = useState(true);
   const [holdingsDetailExpanded, setHoldingsDetailExpanded] = useState(true);
   const [candlestickHolding, setCandlestickHolding] = useState<AssetHolding | null>(null);
+  const chartHolding = source.snapshot.holdings.find((holding) => holding.symbol === candlestickHolding?.symbol);
   useEffect(() => {
     if (!showSensitiveInfo) setCandlestickHolding(null);
   }, [showSensitiveInfo]);
@@ -214,12 +222,17 @@ export function AssetSourceCard({
           />
         )}
       </div>
-      {candlestickHolding !== null && showSensitiveInfo ? (
+      {chartHolding && showSensitiveInfo ? (
         <HoldingCandlestickChart
-          name={assetHoldingDisplayName(candlestickHolding)}
+          currency={chartHolding.currency}
+          name={assetHoldingDisplayName(chartHolding)}
           onClose={() => setCandlestickHolding(null)}
+          onRetryRealtime={onRetryRealtime}
+          profitColorScheme={profitColorScheme}
+          realtimeQuote={realtimeQuotes?.get(chartHolding.symbol)?.quote}
+          realtimeState={realtimeState}
           sourceId={source.id}
-          symbol={candlestickHolding.symbol}
+          symbol={chartHolding.symbol}
         />
       ) : null}
     </>

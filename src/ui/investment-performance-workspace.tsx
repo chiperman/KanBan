@@ -731,8 +731,7 @@ export function InvestmentPerformanceWorkspace({
             <h2>我的资产走势</h2>
           </div>
           {chartStartDay && chartEndDay ? (
-            /* 日期区间是事实描述而非告警：覆盖不足由下方脚注与「完整 N / M 天」承担，
-               避免读数前先被一枚橙色标签定性。 */
+            /* 日期区间是事实描述，覆盖不足由下方脚注说明。 */
             <VibeStatusTag tone="muted">
               {formatShanghaiDayLabel(chartStartDay)} 至 {formatShanghaiDayLabel(chartEndDay)}
             </VibeStatusTag>
