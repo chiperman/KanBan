@@ -519,9 +519,26 @@ textarea.vibe-field__input {
   cursor: wait;
 }
 
+.vibe-button[aria-busy="true"] .workbench-navigation-skeleton {
+  opacity: 1;
+  animation: workbench-navigation-skeleton-pulse 1.2s var(--ease) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vibe-button[aria-busy="true"] .workbench-navigation-skeleton {
+    animation: none;
+  }
+}
+
 .vibe-button--compact {
   min-height: var(--vibe-control-height-compact);
   padding-block: 7px;
+}
+
+@keyframes workbench-navigation-skeleton-pulse {
+  50% {
+    opacity: 0.45;
+  }
 }
 
 .vibe-button--square {

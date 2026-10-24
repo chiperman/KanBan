@@ -3,7 +3,9 @@
 import { usePathname } from "next/navigation";
 import {
   type ReactNode,
+  useCallback,
   useEffect,
+  useState,
 } from "react";
 
 import { WORKBENCH_DESTINATIONS } from "@/ui/workbench-navigation";
@@ -84,17 +86,23 @@ function WorkbenchDestinationLinks({
   destinations = PRIMARY_DESTINATIONS,
   mobile = false,
   compact = false,
+  pendingHref,
+  onNavigate,
 }: {
   destinations?: readonly WorkbenchDestination[];
   mobile?: boolean;
   compact?: boolean;
+  pendingHref?: string | null;
+  onNavigate?: (href: string, pending: boolean) => void;
 }) {
   const pathname = usePathname();
 
   return (
     <>
       {destinations.map(({ href, icon, label, shortLabel }) => {
+        const pending = pendingHref === href && href !== pathname;
         const link = <VibeLink
+          aria-busy={pending || undefined}
           aria-label={label}
           aria-current={
             isCurrentDestination(pathname, href) ? "page" : undefined
@@ -102,9 +110,13 @@ function WorkbenchDestinationLinks({
           className="workbench-navigation-link"
           href={href}
           key={href}
+          onClick={(event) => {
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+            onNavigate?.(href, true);
+          }}
           variant="text"
         >
-          <WorkbenchNavigationIcon name={icon} />
+          {pending ? <span className="workbench-navigation-skeleton" /> : <WorkbenchNavigationIcon name={icon} />}
           <span className="workbench-navigation-link__label">{mobile ? shortLabel : label}</span>
         </VibeLink>;
         return compact ? <VibeTooltip key={href} label={label} side="right">{link}</VibeTooltip> : link;
@@ -179,6 +191,24 @@ export function WorkbenchShell({
 }) {
   const { register } = useAssetRefresh();
   const { sidebarCollapsed, toggleSidebar } = useWorkbenchDisplayPreferences();
+  const pathname = usePathname();
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+
+  // App Router 无加载反馈；点击侧栏后保持该反馈，直到 pathname 真正变化或超时兜底。
+  const setNavigationPending = useCallback((href: string, pending: boolean) => {
+    setPendingHref(pending ? href : null);
+  }, []);
+
+  useEffect(() => {
+    if (pendingHref === null) return;
+    if (pathname !== pendingHref) {
+      setNavigationPending(pendingHref, false);
+      return;
+    }
+    const timer = window.setTimeout(() => setNavigationPending(pendingHref, false), 8000);
+    return () => window.clearTimeout(timer);
+  }, [pendingHref, pathname, setNavigationPending]);
+
   useEffect(() => {
     if (refreshRegistration !== undefined) register(refreshRegistration);
   }, [refreshRegistration, register]);
@@ -224,11 +254,18 @@ export function WorkbenchShell({
             <WorkbenchDestinationLinks
               destinations={PRIMARY_DESTINATIONS.slice(0, 3)}
               compact={sidebarCollapsed}
+              pendingHref={pendingHref}
+              onNavigate={setNavigationPending}
             />
           </div>
         </nav>
         <nav aria-label="设置导航" className="workbench-navigation workbench-desktop-navigation workbench-settings-navigation">
-          <WorkbenchDestinationLinks destinations={[PRIMARY_DESTINATIONS[3]]} compact={sidebarCollapsed} />
+          <WorkbenchDestinationLinks
+            destinations={[PRIMARY_DESTINATIONS[3]]}
+            compact={sidebarCollapsed}
+            pendingHref={pendingHref}
+            onNavigate={setNavigationPending}
+          />
         </nav>
         <WorkbenchUtilities
           commandMenu={commandMenu}
@@ -245,7 +282,11 @@ export function WorkbenchShell({
         className="workbench-navigation workbench-mobile-navigation"
         data-testid="workbench-mobile-navigation"
       >
-        <WorkbenchDestinationLinks mobile />
+        <WorkbenchDestinationLinks
+          mobile
+          pendingHref={pendingHref}
+          onNavigate={setNavigationPending}
+        />
       </nav>
     </div>
   );

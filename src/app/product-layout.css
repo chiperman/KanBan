@@ -2673,6 +2673,14 @@ body {
   gap: var(--vibe-space-3);
 }
 
+.workbench-navigation-skeleton {
+  height: var(--vibe-space-5);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  opacity: 0;
+  pointer-events: none;
+}
+
 .workbench-navigation-label {
   margin: 0;
   color: var(--secondary);
