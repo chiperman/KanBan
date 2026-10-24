@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    // 记录本次 security 升级来源，供 Next.js 升级工具识别。
+    agentUpgrade: "security",
+  },
   // 浏览器验收可写入独立构建目录，避免覆盖正在运行的本地开发服务。
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
   // 允许通过当前设备的 Tailscale HTTPS 入口使用开发服务器。
