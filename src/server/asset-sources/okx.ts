@@ -26,7 +26,12 @@ import type {
 } from "@/server/ports";
 import { assetResponseError } from "@/server/asset-sync-diagnostics";
 import { positiveDecimal } from "@/server/asset-sources/value-guards";
-import { compareSourceHoldingValue, effectiveUsdtUsdQuote, preserveNewerPrices } from "@/server/asset-sources/valuation-policy";
+import {
+  compareSourceHoldingValue,
+  effectiveUsdtUsdQuote,
+  preserveNewerPrices,
+  usdtUsdValuation,
+} from "@/server/asset-sources/valuation-policy";
 
 type OkxFetch = (
   input: string | URL | Request,
@@ -375,20 +380,6 @@ function nativeUsdtUsdQuote(
   return { symbol: "USDT", currency: "USD", price, quotedAt };
 }
 
-async function readUsdtUsdQuote(input: {
-  instruments: unknown;
-  tickers: unknown;
-  observedAt: string;
-  prices: Prices;
-}): Promise<{ quote: PriceQuote | null; source: string | null }> {
-  const native = nativeUsdtUsdQuote(
-    input.instruments,
-    input.tickers,
-    input.observedAt,
-  );
-  if (native) return { quote: native, source: "OKX 现货 USDT-USD" };
-  return { quote: await input.prices.quote("USDT"), source: null };
-}
 
 function valuePositions(input: {
   positions: OkxPosition[];
@@ -688,9 +679,9 @@ async function readFullSnapshot(input: {
     input.client.instruments(),
     input.client.tickers(),
   ]);
-  const usdtUsd = await readUsdtUsdQuote({
-    instruments,
-    tickers,
+  const usdtUsd = await usdtUsdValuation({
+    native: nativeUsdtUsdQuote(instruments, tickers, input.observedAt),
+    nativeSource: "OKX 现货 USDT-USD",
     observedAt: input.observedAt,
     prices: input.prices,
   });
@@ -803,9 +794,9 @@ export class ProductionOkxSourceRefresher implements AssetSourceRefresher {
         client.instruments(),
         client.tickers(),
       ]);
-      const usdtUsd = await readUsdtUsdQuote({
-        instruments,
-        tickers,
+      const usdtUsd = await usdtUsdValuation({
+        native: nativeUsdtUsdQuote(instruments, tickers, attemptedAt),
+        nativeSource: "OKX 现货 USDT-USD",
         observedAt: attemptedAt,
         prices: this.prices,
       });

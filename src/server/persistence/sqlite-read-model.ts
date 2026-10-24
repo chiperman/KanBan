@@ -99,6 +99,7 @@ export class SqliteDashboardReadModel {
         this.observations.firstSourceObservationDay(query.sourceId),
         imported[0]?.day,
         manualRecords.at(-1)?.day,
+        investmentRecords[0]?.day,
       ].filter((day): day is string => day !== undefined).sort()[0],
       investmentHistory,
       investmentRecords,

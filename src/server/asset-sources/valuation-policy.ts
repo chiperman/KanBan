@@ -1,5 +1,10 @@
 import { decimalAdd, decimalCompare, decimalMultiply } from "@/domain/decimal";
-import type { AssetHolding, AssetSnapshot, PriceQuote } from "@/server/ports";
+import type {
+  AssetHolding,
+  AssetSnapshot,
+  PriceQuote,
+  Prices,
+} from "@/server/ports";
 
 /** 仅排序已处于同一来源计价货币的明细；未估值项稳定地放在末尾。 */
 export function compareSourceHoldingValue(left: AssetHolding, right: AssetHolding): number {
@@ -25,6 +30,23 @@ export function effectiveUsdtUsdQuote(quote: PriceQuote | null | undefined, obse
 
   // 保留引用身份，调用方据此区分真实报价与必须明确标注的固定兜底。
   return { symbol: "USDT", currency: "USD", price: "1", quotedAt: new Date(observedAt) };
+}
+
+export interface UsdtUsdValuation {
+  quote: PriceQuote | null;
+  /** Null means the fallback reference price was unavailable. */
+  source: string | null;
+}
+
+export async function usdtUsdValuation(input: {
+  native: PriceQuote | null;
+  nativeSource: string;
+  observedAt: string;
+  prices: Pick<Prices, "quote">;
+}): Promise<UsdtUsdValuation> {
+  if (input.native) return { quote: input.native, source: input.nativeSource };
+  const quote = await input.prices.quote("USDT");
+  return { quote, source: null };
 }
 
 function positionKey(holding: AssetHolding): string {

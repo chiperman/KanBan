@@ -29,7 +29,11 @@ import type {
 } from "@/server/ports";
 import { assetResponseError } from "@/server/asset-sync-diagnostics";
 import { positiveDecimal } from "@/server/asset-sources/value-guards";
-import { compareSourceHoldingValue, effectiveUsdtUsdQuote } from "@/server/asset-sources/valuation-policy";
+import {
+  compareSourceHoldingValue,
+  effectiveUsdtUsdQuote,
+  usdtUsdValuation,
+} from "@/server/asset-sources/valuation-policy";
 
 type BinanceFetch = (
   input: string | URL | Request,
@@ -1011,21 +1015,6 @@ function nativeUsdtUsdQuote(
   };
 }
 
-async function readUsdtUsdQuote(input: {
-  exchangeInfo: unknown;
-  tickers: unknown;
-  observedAt: string;
-  prices: Prices;
-}): Promise<{ quote: PriceQuote | null; source: string | null }> {
-  const native = nativeUsdtUsdQuote(
-    input.exchangeInfo,
-    input.tickers,
-    input.observedAt,
-  );
-  if (native) return { quote: native, source: "Binance 现货 USDTUSD" };
-  return { quote: await input.prices.quote("USDT"), source: null };
-}
-
 async function readBinanceStocksMarketData(input: {
   client: BinanceClient;
   positions: readonly BinancePosition[];
@@ -1850,9 +1839,9 @@ async function readFullSnapshot(input: {
     input.client.exchangeInfo(),
     input.client.tickers(),
   ]);
-  const usdtUsd = await readUsdtUsdQuote({
-    exchangeInfo,
-    tickers,
+  const usdtUsd = await usdtUsdValuation({
+    native: nativeUsdtUsdQuote(exchangeInfo, tickers, input.observedAt),
+    nativeSource: "Binance 现货 USDTUSD",
     observedAt: input.observedAt,
     prices: input.prices,
   });
@@ -1992,9 +1981,9 @@ export class ProductionBinanceSourceRefresher
         client.exchangeInfo(),
         client.tickers(),
       ]);
-      const usdtUsd = await readUsdtUsdQuote({
-        exchangeInfo,
-        tickers,
+      const usdtUsd = await usdtUsdValuation({
+        native: nativeUsdtUsdQuote(exchangeInfo, tickers, attemptedAt),
+        nativeSource: "Binance 现货 USDTUSD",
         observedAt: attemptedAt,
         prices: this.prices,
       });

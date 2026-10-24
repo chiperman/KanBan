@@ -28,51 +28,18 @@ import type {
   SecretStore,
   SecuritiesMarket,
 } from "@/server/ports";
+import {
+  SETTLEMENT_MARKET_DETAILS,
+  anchorForSecurities,
+  cryptoCutoffAnchor,
+  expectedTradingDay,
+  localSettlementDay,
+  settlementMarketForSymbol,
+} from "@/domain/formal-settlement-schedule";
 import { isLongbridgeExternalReference } from "@/server/asset-sources/longbridge-connection";
 import { LongbridgeTradingCalendar } from "@/server/asset-sources/longbridge-trading-calendar";
 
 const FORMAL_SETTLEMENT_CAPTURE_WINDOW_MS = 2 * 60 * 60_000;
-
-const MARKET_DETAILS: Record<
-  SecuritiesMarket,
-  { timeZone: string; closeHour: number; closeMinute: number; halfCloseHour?: number; priority: number }
-> = {
-  US: {
-    timeZone: "America/New_York",
-    closeHour: 16,
-    closeMinute: 0,
-    halfCloseHour: 13,
-    priority: 5,
-  },
-  SG: {
-    timeZone: "Asia/Singapore",
-    closeHour: 17,
-    // SGX closing price is fixed at the end of its six-minute closing routine.
-    closeMinute: 6,
-    halfCloseHour: 12,
-    priority: 4,
-  },
-  HK: {
-    timeZone: "Asia/Hong_Kong",
-    closeHour: 16,
-    // Wait through HKEX's closing auction (random close by :10).
-    closeMinute: 10,
-    halfCloseHour: 12,
-    priority: 3,
-  },
-  SH: {
-    timeZone: "Asia/Shanghai",
-    closeHour: 15,
-    closeMinute: 0,
-    priority: 2,
-  },
-  SZ: {
-    timeZone: "Asia/Shanghai",
-    closeHour: 15,
-    closeMinute: 0,
-    priority: 2,
-  },
-};
 
 type SecurityCandidate = {
   source: AssetSourceSummary;
@@ -91,75 +58,6 @@ type ConfirmedClose = SecurityCandidate & {
   tradingDay: string;
 };
 
-function localDateParts(value: Date, timeZone: string): {
-  year: number;
-  month: number;
-  day: number;
-  hour: number;
-  minute: number;
-  second: number;
-} {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(value);
-  const part = (type: Intl.DateTimeFormatPartTypes) =>
-    Number(parts.find((item) => item.type === type)?.value);
-  return {
-    year: part("year"),
-    month: part("month"),
-    day: part("day"),
-    hour: part("hour"),
-    minute: part("minute"),
-    second: part("second"),
-  };
-}
-
-function localDay(value: Date, timeZone: string): string {
-  const { year, month, day } = localDateParts(value, timeZone);
-  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-}
-
-function offsetAt(value: Date, timeZone: string): number {
-  const parts = localDateParts(value, timeZone);
-  return Date.UTC(
-    parts.year,
-    parts.month - 1,
-    parts.day,
-    parts.hour,
-    parts.minute,
-    parts.second,
-  ) - value.getTime();
-}
-
-function zonedDateTime(
-  day: string,
-  timeZone: string,
-  hour: number,
-  minute: number,
-): Date {
-  const [year, month, date] = day.split("-").map(Number);
-  const base = Date.UTC(year, month - 1, date, hour, minute);
-  let value = new Date(base - offsetAt(new Date(base), timeZone));
-  value = new Date(base - offsetAt(value, timeZone));
-  return value;
-}
-
-function marketForSymbol(symbol: string): SecuritiesMarket | null {
-  const match = /\.([A-Za-z]+)$/.exec(symbol);
-  const suffix = match?.[1]?.toUpperCase();
-  return suffix === "US" || suffix === "HK" || suffix === "SH" ||
-      suffix === "SZ" || suffix === "SG"
-    ? suffix
-    : null;
-}
-
 function holdingKey(sourceId: string, holding: Pick<AssetHolding, "symbol" | "sourceAsset">): string {
   return `${sourceId}:${holding.sourceAsset ?? holding.symbol}`;
 }
@@ -172,7 +70,7 @@ function securityCandidates(sources: AssetSourceSummary[]): SecurityCandidate[] 
           if (holding.assetClass !== "securities" || decimalCompare(holding.quantity, "0") === 0) {
             return [];
           }
-          const market = marketForSymbol(holding.symbol);
+          const market = settlementMarketForSymbol(holding.symbol);
           return market ? [{ source, holding, market }] : [];
         }),
   );
@@ -184,69 +82,10 @@ function hasUnsupportedSecurities(sources: AssetSourceSummary[]): boolean {
       (holding) =>
         holding.assetClass === "securities" &&
         decimalCompare(holding.quantity, "0") !== 0 &&
-        (source.kind !== "longbridge" || marketForSymbol(holding.symbol) === null),
+        (source.kind !== "longbridge" ||
+          settlementMarketForSymbol(holding.symbol) === null),
     ),
   );
-}
-
-function marketClose(day: string, market: SecuritiesMarket, calendar: MarketTradingDays): Date {
-  const details = MARKET_DETAILS[market];
-  const halfDay = calendar.halfTradingDays.includes(day);
-  if (halfDay && details.halfCloseHour === undefined) {
-    throw new Error("无法确认该市场半日市收盘时间");
-  }
-  return zonedDateTime(day, details.timeZone, halfDay ? details.halfCloseHour! : details.closeHour, details.closeMinute);
-}
-
-async function anchorForSecurities(
-  now: Date,
-  securities: SecurityCandidate[],
-  reader: FormalSettlementTradingCalendar,
-): Promise<{ anchor: FormalSettlementAnchor | null; calendars: Map<SecuritiesMarket, MarketTradingDays> }> {
-  const markets = [...new Set(securities.map((security) => security.market))]
-    .toSorted((left, right) =>
-      MARKET_DETAILS[right].priority - MARKET_DETAILS[left].priority ||
-      left.localeCompare(right),
-    );
-  // One cycle uses the date in the latest-closing held market, even while Asia
-  // has crossed midnight. On that market's holiday, another held market can anchor it.
-  const tradingDay = localDay(now, MARKET_DETAILS[markets[0]!].timeZone);
-  const start = new Date(Date.parse(tradingDay) - 28 * 86_400_000).toISOString().slice(0, 10);
-  const calendars = new Map(await Promise.all(markets.map(async market => [
-    market, await reader.readTradingDays({ market, start, end: tradingDay }),
-  ] as const)));
-  const candidates = markets.flatMap(market => {
-    const calendar = calendars.get(market)!;
-    if (!calendar.tradingDays.includes(tradingDay) && !calendar.halfTradingDays.includes(tradingDay)) return [];
-    return [{ market, scheduledCloseAt: marketClose(tradingDay, market, calendar).toISOString() }];
-  }).sort((left, right) => right.scheduledCloseAt.localeCompare(left.scheduledCloseAt));
-  if (!candidates.length) return { anchor: null, calendars };
-  const { market, scheduledCloseAt } = candidates[0];
-  return { calendars, anchor: {
-    key: `securities-close:${market}:${tradingDay}`,
-    kind: "securities-close",
-    market,
-    tradingDay,
-    scheduledCloseAt,
-  } };
-}
-
-function cryptoCutoffAnchor(now: Date): FormalSettlementAnchor {
-  const day = localDay(now, "Asia/Shanghai");
-  return {
-    key: `crypto-cutoff:${day}`,
-    kind: "crypto-cutoff",
-    market: null,
-    tradingDay: day,
-    scheduledCloseAt: zonedDateTime(day, "Asia/Shanghai", 0, 5).toISOString(),
-  };
-}
-
-function expectedTradingDay(anchor: FormalSettlementAnchor, market: SecuritiesMarket, calendar: MarketTradingDays | undefined): string | null {
-  if (!calendar) return null;
-  return [...new Set([...calendar.tradingDays, ...calendar.halfTradingDays])]
-    .filter(day => marketClose(day, market, calendar).getTime() <= Date.parse(anchor.scheduledCloseAt))
-    .sort().at(-1) ?? null;
 }
 
 function sourceTotals(
@@ -529,18 +368,7 @@ export class MarketCloseFormalDailySettlement
 
     const scheduledAt = Date.parse(anchor.scheduledCloseAt);
     if (now.getTime() < scheduledAt) return { outcome: "not-due", reason: "before-window" };
-    if (now.getTime() > scheduledAt + this.captureWindowMs) {
-      return this.recordIfAbsent({
-        anchor,
-        capturedAt: null,
-        status: "missed",
-        diagnostic: "采集窗口内未形成正式日结，未使用之后的实时数据补写",
-        total: { USD: null, CNY: null, HKD: null },
-        exchangeRates: [],
-        sources: [],
-        holdings: [],
-      });
-    }
+    if (now.getTime() > scheduledAt + this.captureWindowMs) return this.recordMissed(anchor);
 
     if (hasUnsupportedSecurities(sources)) {
       return this.recordIfAbsent({
@@ -611,16 +439,7 @@ export class MarketCloseFormalDailySettlement
       const recorded = (await this.settlements.list()).find(value => value.anchor.key === anchor.key);
       if (recorded) return { outcome: "already-recorded", settlementStatus: recorded.status };
       if (now.getTime() > Date.parse(anchor.scheduledCloseAt) + this.captureWindowMs) {
-        return this.recordIfAbsent({
-          anchor,
-          capturedAt: null,
-          status: "missed",
-          diagnostic: "采集窗口内未形成正式日结，未使用之后的实时数据补写",
-          total: { USD: null, CNY: null, HKD: null },
-          exchangeRates: [],
-          sources: [],
-          holdings: [],
-        });
+        return this.recordMissed(anchor);
       }
     }
     const closeErrors: string[] = [];
@@ -648,7 +467,10 @@ export class MarketCloseFormalDailySettlement
             const expectedDay = expectedTradingDay(anchor, security.market, calendars.get(security.market));
             const tradingDay = candle === undefined
               ? null
-              : localDay(new Date(candle.timestamp), MARKET_DETAILS[security.market].timeZone);
+              : localSettlementDay(
+                new Date(candle.timestamp),
+                SETTLEMENT_MARKET_DETAILS[security.market].timeZone,
+              );
             if (
               expectedDay === null || candle === undefined ||
               candle.tradeSession !== "intraday" ||
@@ -680,7 +502,7 @@ export class MarketCloseFormalDailySettlement
     if (candleReadFailed) return { outcome: "error", reason: "candle-read-failed" };
     if (closeErrors.length > 0) return { outcome: "waiting", reason: "official-close-pending" };
 
-    const valuationSources = captures.flatMap((capture) => {
+    const revaluedCaptures = captures.flatMap((capture) => {
       if (capture.snapshot === null) return [];
       const revalued = revalueSecurities(
         capture.source,
@@ -688,23 +510,21 @@ export class MarketCloseFormalDailySettlement
         confirmedCloses,
         attemptedAt,
       );
-      return [sourceWithSnapshot(capture.source, revalued.snapshot)];
+      return [{
+        source: sourceWithSnapshot(capture.source, revalued.snapshot),
+        captureDiagnostic: capture.diagnostic,
+        diagnostics: revalued.diagnostics,
+      }];
     });
+    const valuationSources = revaluedCaptures.map((capture) => capture.source);
     const formalSources: FormalSettlementSource[] = [];
     const holdings: FormalSettlementHolding[] = [];
     const valuationDiagnostics: string[] = [];
-    for (const capture of captures) {
-      if (capture.snapshot === null) continue;
-      const revalued = revalueSecurities(
-        capture.source,
-        capture.snapshot,
-        confirmedCloses,
-        attemptedAt,
-      );
-      const source = sourceWithSnapshot(capture.source, revalued.snapshot);
+    for (const capture of revaluedCaptures) {
+      const source = capture.source;
       const sourceDiagnostic = formatDiagnostics([
-        ...(capture.diagnostic === null ? [] : [capture.diagnostic]),
-        ...revalued.diagnostics,
+        ...(capture.captureDiagnostic === null ? [] : [capture.captureDiagnostic]),
+        ...capture.diagnostics,
       ]);
       const complete =
         sourceDiagnostic === null && sourceIsComplete(source, valuationSources);
@@ -782,8 +602,19 @@ export class MarketCloseFormalDailySettlement
         actual?.status === "incomplete" ? { reason: "incomplete-evidence" as const } : {}),
     };
   }
-}
 
-export function settlementMarketForSymbol(symbol: string): SecuritiesMarket | null {
-  return marketForSymbol(symbol);
+  private async recordMissed(
+    anchor: FormalSettlementAnchor,
+  ): Promise<FormalSettlementRunResult> {
+    return this.recordIfAbsent({
+      anchor,
+      capturedAt: null,
+      status: "missed",
+      diagnostic: "采集窗口内未形成正式日结，未使用之后的实时数据补写",
+      total: { USD: null, CNY: null, HKD: null },
+      exchangeRates: [],
+      sources: [],
+      holdings: [],
+    });
+  }
 }
