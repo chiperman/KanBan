@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" class="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -7,9 +7,9 @@
       name="description"
       content="KanBan 是一个本地优先、单所有者、只读的个人投资资产看板，用三本投资账统一查看美股、A 股与虚拟货币。"
     />
-    <meta name="theme-color" content="#000000" />
+    <meta name="theme-color" content="#111111" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="KanBan · 个人投资资产看板" />
+    <meta property="og:title" content="KanBan，个人投资资产看板" />
     <meta
       property="og:description"
       content="把散落在不同账户里的资产，收进一个只属于你的本地看板。"
@@ -19,7 +19,7 @@
       property="og:image"
       content="https://chiperman.github.io/KanBan/assets/icon.svg"
     />
-    <title>KanBan · 本地优先的个人投资资产看板</title>
+    <title>KanBan，本地优先的个人投资资产看板</title>
     <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="styles.css" />
   </head>
@@ -36,7 +36,6 @@
           />
           <span class="brand__copy">
             <span class="brand__name">KANBAN</span>
-            <span class="brand__tag">PERSONAL ASSET DASHBOARD</span>
           </span>
         </a>
         <nav class="site-nav" aria-label="页面导航">
@@ -70,11 +69,8 @@
     <main id="top">
       <section class="hero shell" aria-labelledby="hero-title">
         <div class="hero__copy">
-          <p class="eyebrow">
-            <span class="signal-dot" aria-hidden="true"></span>LOCAL-FIRST
-          </p>
           <h1 id="hero-title">
-            你的资产，<span>不必散落。</span>
+            个人资产看板
           </h1>
           <p class="hero__lede">
             把美股、A 股与虚拟货币放进同一个看板。
@@ -99,27 +95,15 @@
               <span>先看功能</span>
             </a>
           </div>
-          <ul class="hero__facts" aria-label="产品关键事实">
-            <li><span>01</span>只读连接</li>
-            <li><span>02</span>本机数据</li>
-            <li><span>03</span>单一所有者</li>
-          </ul>
         </div>
 
         <div class="hero__visual">
-          <div class="orbit orbit--one" aria-hidden="true"></div>
-          <div class="orbit orbit--two" aria-hidden="true"></div>
-          <div class="hero-stamp" aria-hidden="true">
-            <span>ASSET</span>
-            <strong>VIEW</strong>
-            <span>001</span>
-          </div>
           <figure class="device-shell">
             <div class="device-shell__bar">
               <span class="window-dots" aria-hidden="true">
                 <i></i><i></i><i></i>
               </span>
-              <span class="device-shell__label">KANBAN / OVERVIEW</span>
+              <span class="device-shell__label">资产看板</span>
               <span class="device-shell__time">09:41</span>
             </div>
             <div class="dashboard mock-dashboard">
@@ -133,14 +117,13 @@
               <div class="mock-dashboard__content">
                 <div class="mock-dashboard__heading">
                   <div>
-                    <p class="mock-label">TOTAL ASSETS / 2026.10.19</p>
+
                     <p class="mock-title">今日总览</p>
                   </div>
-                  <span class="mock-status"><i></i>STATUS // LOCAL</span>
                 </div>
                 <div class="mock-dashboard__main">
                   <article class="mock-total">
-                    <p class="mock-label">全资产估值 · USD</p>
+                    <p class="mock-label">总资产（USD）</p>
                     <p class="mock-total__value">$248,630<span>.42</span></p>
                     <p class="mock-total__delta">+ 1,284.60 <span>今日</span></p>
                     <div class="mock-chart" aria-hidden="true">
@@ -191,90 +174,39 @@
             </div>
             <figcaption class="mock-caption">
               <span>图示为虚构示例，不代表真实账户或在线数据。</span>
-              <span>UI MOCKUP / 001</span>
+
             </figcaption>
           </figure>
-          <p class="hero-annotation" aria-hidden="true">
-            <span class="hero-annotation__line"></span>
-            <span class="hero-annotation__copy">
-              <span>ONE VIEW</span>
-              <span>THREE LEDGERS</span>
-            </span>
-          </p>
         </div>
       </section>
 
       <section class="section shell" id="preview" aria-labelledby="preview-title">
         <div class="section__intro">
-          <p class="eyebrow">01 / WHAT YOU SEE</p>
-          <h2 id="preview-title">资产全貌，一眼清楚。</h2>
+          <h2 id="preview-title">总览与资产记录</h2>
           <p>
             总览看全貌，投资账看本金与盈亏，历史趋势看变化。每个数字都能追溯来源，缺失的数据也清楚标明。
           </p>
         </div>
 
         <div class="principles">
-          <article class="principle-card principle-card--wide">
-            <div class="principle-card__top">
-              <span class="index-mark">01</span>
-              <span class="mono-label">TOTAL VIEW</span>
-            </div>
-            <h3>一个总览，不丢原币种</h3>
+          <article class="principle-card">
+            <h3>总资产与原币种</h3>
             <p>
               首页按选定展示币种汇总总资产，同时保留美股、A 股、虚拟货币三本账各自的本金与盈亏。
             </p>
-            <div class="mini-summary" aria-hidden="true">
-              <div class="mini-summary__total">
-                <span>TOTAL / USD</span>
-                <strong>$248,630.42</strong>
-                <small>+ 1,284.60</small>
-              </div>
-              <div class="mini-summary__books">
-                <span><b>US</b>$124,820.10</span>
-                <span><b>CN</b>¥531,204.18</span>
-                <span><b>CR</b>$46,512.08</span>
-              </div>
-            </div>
-          </article>
+            </article>
           <article class="principle-card">
-            <div class="principle-card__top">
-              <span class="index-mark">02</span>
-              <span class="mono-label">HISTORY</span>
-            </div>
-            <h3>知道数字从哪里来</h3>
+            <h3>历史观测</h3>
             <p>
               趋势使用真实观测，并标注实际记录覆盖。没有数据时明确显示“数据不足”，不把空白伪装成零。
             </p>
-            <div class="coverage" aria-hidden="true">
-              <div class="coverage__bars">
-                <i style="height: 34%"></i><i style="height: 46%"></i
-                ><i style="height: 41%"></i><i style="height: 58%"></i
-                ><i style="height: 66%"></i><i style="height: 60%"></i
-                ><i style="height: 76%"></i><i style="height: 72%"></i
-                ><i style="height: 88%"></i><i style="height: 82%"></i
-                ><i style="height: 96%"></i><i style="height: 91%"></i>
-              </div>
-              <div class="coverage__legend">
-                <span>JUL</span><span>ACTUAL OBSERVATIONS</span><span>OCT</span>
-              </div>
-            </div>
-          </article>
+            </article>
           <article class="principle-card">
-            <div class="principle-card__top">
-              <span class="index-mark">03</span>
-              <span class="mono-label">CONTROL</span>
-            </div>
-            <h3>只读，不碰你的交易</h3>
+            <h3>只读连接</h3>
             <p>
               连接用于读取资产，不提供交易、转账或调仓入口。凭证不回显，权限状态在来源管理中可见。
             </p>
-            <div class="readonly-lock" aria-hidden="true">
-              <span class="dot-lock">
-                <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-              </span>
-              <span><b>READ ONLY</b><small>NO TRADING</small></span>
-            </div>
-          </article>
+            </article>
         </div>
       </section>
 
@@ -285,49 +217,36 @@
       >
         <div class="section__intro section__intro--split">
           <div>
-            <p class="eyebrow">02 / CAPABILITIES</p>
-            <h2 id="capabilities-title">从接入到复盘，清楚有序。</h2>
+            <h2 id="capabilities-title">主要功能</h2>
           </div>
           <p>
-            从接入来源到日常查看，从历史覆盖到备份恢复，只做一件事：让你看见并理解自己的资产。
+            连接资产来源，查看历史记录，并备份本机数据。
           </p>
         </div>
         <div class="capability-list">
           <article>
-            <span class="capability-list__index">01</span>
             <h3>统一资产视图</h3>
             <p>可切换 USD、CNY、HKD 展示币种，三本投资账仍保留各自原币种。</p>
-            <span class="capability-list__code">OVERVIEW</span>
           </article>
           <article>
-            <span class="capability-list__index">02</span>
             <h3>来源与持仓</h3>
             <p>查看每个账户的总额、连接状态、同步诊断和持仓明细。</p>
-            <span class="capability-list__code">SOURCES</span>
           </article>
           <article>
-            <span class="capability-list__index">03</span>
             <h3>历史趋势</h3>
             <p>按近期、月度、年度或自定义区间查看变化，也可展开全部历史。</p>
-            <span class="capability-list__code">TREND</span>
           </article>
           <article>
-            <span class="capability-list__index">04</span>
             <h3>本金与收益</h3>
             <p>结合资金流与资产记录计算收益，数据不完整时明确标注。</p>
-            <span class="capability-list__code">PERFORMANCE</span>
           </article>
           <article>
-            <span class="capability-list__index">05</span>
             <h3>备份与恢复</h3>
             <p>完整导出本机业务数据，并在需要时恢复和校验。</p>
-            <span class="capability-list__code">BACKUP</span>
           </article>
           <article>
-            <span class="capability-list__index">06</span>
             <h3>私有访问</h3>
             <p>使用 Passkey 登录，可配置 TOTP 备用认证；没有公开注册入口。</p>
-            <span class="capability-list__code">SECURITY</span>
           </article>
         </div>
       </section>
@@ -335,8 +254,7 @@
       <section class="section shell" id="sources" aria-labelledby="sources-title">
         <div class="sources-panel">
           <div class="sources-panel__intro">
-            <p class="eyebrow">03 / SUPPORTED SOURCES</p>
-            <h2 id="sources-title">已有账户，接进来看。</h2>
+            <h2 id="sources-title">支持的资产来源</h2>
             <p>
               连接证券、数字货币账户与观察钱包，也能手动记录资产。每个来源的权限、同步状态和金额都可单独查看。
             </p>
@@ -359,42 +277,34 @@
           </div>
           <div class="source-matrix" role="list" aria-label="支持的资产来源">
             <div role="listitem">
-              <span class="source-matrix__code">LB</span>
               <strong>长桥 Longbridge</strong>
               <span>证券账户</span>
             </div>
             <div role="listitem">
-              <span class="source-matrix__code">BN</span>
               <strong>Binance</strong>
               <span>数字货币账户</span>
             </div>
             <div role="listitem">
-              <span class="source-matrix__code">OKX</span>
               <strong>OKX</strong>
               <span>数字货币账户</span>
             </div>
             <div role="listitem">
-              <span class="source-matrix__code">BG</span>
               <strong>Bitget</strong>
               <span>数字货币账户</span>
             </div>
             <div role="listitem">
-              <span class="source-matrix__code">BIT</span>
               <strong>BIT / Matrixport</strong>
               <span>数字货币账户</span>
             </div>
             <div role="listitem">
-              <span class="source-matrix__code">ETH</span>
               <strong>Ethereum</strong>
               <span>观察钱包</span>
             </div>
             <div role="listitem">
-              <span class="source-matrix__code">BSC</span>
               <strong>BNB Smart Chain</strong>
               <span>观察钱包</span>
             </div>
             <div role="listitem">
-              <span class="source-matrix__code">MAN</span>
               <strong>手工资产记录</strong>
               <span>维护资产总额</span>
             </div>
@@ -405,8 +315,7 @@
       <section class="section shell" id="start" aria-labelledby="start-title">
         <div class="start-grid">
           <div class="start-copy">
-            <p class="eyebrow">04 / GET STARTED</p>
-            <h2 id="start-title">在自己的机器上，<br />跑起来。</h2>
+            <h2 id="start-title">本地部署</h2>
             <p>
               KanBan 面向本地运行。首次启动需要 Node.js、pnpm 与 Rust；当前验收基线是
               macOS arm64。
@@ -427,7 +336,7 @@
           </div>
           <div class="terminal" aria-label="首次启动命令">
             <div class="terminal__bar">
-              <span>TERMINAL / SETUP</span>
+              <span>启动命令</span>
               <button
                 class="copy-button"
                 type="button"
@@ -451,9 +360,7 @@
 <span class="terminal__prompt">$</span> pnpm install --frozen-lockfile
 <span class="terminal__prompt">$</span> pnpm native:longbridge:build
 <span class="terminal__prompt">$</span> pnpm dev</code></pre>
-            <p class="terminal__hint">命令可横向滚动，也可一键复制。</p>
             <div class="terminal__next">
-              <span class="mono-label">THEN</span>
               <p>
                 打开 <code>http://localhost:3000/setup</code> 预置 Passkey，之后从
                 <code>/</code> 查看资产。
@@ -462,36 +369,12 @@
             <p class="sr-only" id="copy-status" role="status" aria-live="polite"></p>
           </div>
         </div>
-
-        <div class="steps">
-          <article>
-            <span class="step-number">01</span>
-            <h3>准备环境</h3>
-            <p>安装 Node.js 24.15.0、pnpm 11.25.0 与 Rust。</p>
-          </article>
-          <article>
-            <span class="step-number">02</span>
-            <h3>启动本地服务</h3>
-            <p>克隆仓库，安装依赖，构建原生产物后运行开发服务。</p>
-          </article>
-          <article>
-            <span class="step-number">03</span>
-            <h3>预置所有者</h3>
-            <p>在 <code>/setup</code> 注册 Passkey，再进入看板添加资产来源。</p>
-          </article>
-          <article>
-            <span class="step-number">04</span>
-            <h3>日常查看</h3>
-            <p>从总览开始，按需查看持仓、投资账与历史覆盖。</p>
-          </article>
-        </div>
       </section>
 
       <section class="section shell" id="boundaries" aria-labelledby="boundaries-title">
         <div class="boundary-panel">
           <div class="boundary-panel__copy">
-            <p class="eyebrow">05 / BOUNDARIES</p>
-            <h2 id="boundaries-title">边界清楚，数字才可信。</h2>
+            <h2 id="boundaries-title">数据与权限</h2>
             <p>
               KanBan 专注个人投资资产的查看与记录。它不是交易终端，也不是完整的个人财务或税务系统。
             </p>
@@ -523,8 +406,7 @@
 
       <section class="section shell faq" id="faq" aria-labelledby="faq-title">
         <div class="section__intro">
-          <p class="eyebrow">06 / QUESTIONS</p>
-          <h2 id="faq-title">开始之前。</h2>
+          <h2 id="faq-title">常见问题</h2>
         </div>
         <div class="faq-list">
           <details>
@@ -559,35 +441,6 @@
           </details>
         </div>
       </section>
-
-      <section class="final-cta shell" aria-labelledby="final-title">
-        <div class="final-cta__panel">
-          <div>
-            <p class="eyebrow">READY WHEN YOU ARE</p>
-            <h2 id="final-title">把资产看板留在自己手里。</h2>
-            <p>克隆仓库，完成一次本地部署，再开始接入你的资产来源。</p>
-          </div>
-          <div class="final-cta__actions">
-            <a
-              class="button button--primary"
-              href="https://github.com/chiperman/KanBan"
-              target="_blank"
-              rel="noreferrer"
-            >
-              <span>前往 GitHub</span>
-              <svg
-                class="icon"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-                focusable="false"
-              >
-                <path d="M5 12h13M14 7l5 5-5 5" />
-              </svg>
-            </a>
-            <a class="button button--text" href="#start">回到部署步骤</a>
-          </div>
-        </div>
-      </section>
     </main>
 
     <footer class="site-footer">
@@ -601,9 +454,9 @@
             aria-hidden="true"
           />
           <strong>KANBAN</strong>
-          <span>Personal Asset Dashboard</span>
+
         </div>
-        <p>本地优先 · 单所有者 · 只读资产看板</p>
+
         <div class="site-footer__links">
           <a
             href="https://github.com/chiperman/KanBan"
@@ -612,7 +465,7 @@
             >GitHub</a
           >
           <a href="#start">开始使用</a>
-          <a href="#faq">FAQ</a>
+          <a href="#faq">常见问题</a>
         </div>
       </div>
     </footer>

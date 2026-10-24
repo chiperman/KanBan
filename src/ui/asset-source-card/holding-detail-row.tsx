@@ -146,7 +146,7 @@ function HoldingCostPrice({
     <>
       <HoldingSensitiveValue showSensitiveInfo={showSensitiveInfo} value={price} />
       {holding.costPriceSource ? (
-        <span className="holding-price-source"> · {holding.costPriceSource}</span>
+        <span className="holding-price-source">，{holding.costPriceSource}</span>
       ) : null}
     </>
   );

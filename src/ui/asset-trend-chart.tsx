@@ -106,8 +106,8 @@ function CurveLine({
       dot={dot}
       filter={filter}
       animationDuration={TREND_CHART_ANIMATION_DURATION}
-      animationEasing="ease-in-out"
-      isAnimationActive="auto"
+      animationEasing="ease-out"
+      isAnimationActive={false}
       name={name}
       stroke={stroke}
       strokeDasharray={strokeDasharray}
@@ -182,7 +182,7 @@ export function AssetTrendDateTick({ x, y, index, visibleTicksCount, payload, ti
     dy="0.71em"
     fill="var(--muted)"
     fontFamily="var(--f-display)"
-    fontSize={10}
+    fontSize={12}
     textAnchor={visibleTicksCount === 1 ? "middle" : index === 0 ? "start" : index === visibleTicksCount - 1 ? "end" : "middle"}
   >{tickFormatter ? tickFormatter(payload.value, index) : payload.value}</text>;
 }
@@ -362,7 +362,9 @@ function TrendChartTooltip(props: ComponentProps<typeof Tooltip>) {
       cursor={<TrendChartCursor />}
       filterNull={false}
       offset={TREND_TOOLTIP_OFFSET}
-      isAnimationActive={false}
+      isAnimationActive="auto"
+      animationDuration={250}
+      animationEasing="ease-out"
     />
   );
 }
@@ -433,7 +435,7 @@ function trendTooltipRows(point: ChartDatum, {
       : `${prefix ?? ""}${formattedAmount}`,
       counter: formattedAmount === null || isSensitiveHidden ? undefined : { value: formattedAmount, prefix },
       unit: showCurrency && !missing ? currency : undefined },
-    { tag: "small", text: [!missing && amount === null ? "未估值" : null, showingHistorical ? "早期记录" : null, quality].filter(Boolean).join(" · ") },
+    { tag: "small", text: [!missing && amount === null ? "未估值" : null, showingHistorical ? "早期记录" : null, quality].filter(Boolean).join("，") },
     ...fundingEventRows(point.events, formatAmount, isSensitiveHidden),
   ];
 }
@@ -756,7 +758,7 @@ export function AssetTrendChart({
                 tick={{
                   fill: "var(--muted)",
                   fontFamily: "var(--f-display)",
-                  fontSize: 10,
+                  fontSize: 12,
                   fontWeight: 500,
                 }}
                 tickFormatter={(value: number) => isSensitiveHidden ? "••••••" : percentage(value)}
@@ -791,8 +793,8 @@ export function AssetTrendChart({
                 fill={`url(#${dotFillId})`}
                 fillOpacity={1}
                 animationDuration={TREND_CHART_ANIMATION_DURATION}
-                animationEasing="ease-in-out"
-                isAnimationActive="auto"
+                animationEasing="ease-out"
+                isAnimationActive={false}
                 stroke="none"
                 type={lineType}
               /> : null}
@@ -898,7 +900,7 @@ export function AssetTrendChart({
               tick={{
                 fill: "var(--muted)",
                 fontFamily: "var(--f-display)",
-                fontSize: 10,
+                fontSize: 12,
                 fontWeight: 500,
               }}
               tickFormatter={axisValue}
@@ -949,8 +951,8 @@ export function AssetTrendChart({
               fill={`url(#${dotFillId})`}
               fillOpacity={1}
               animationDuration={TREND_CHART_ANIMATION_DURATION}
-              animationEasing="ease-in-out"
-              isAnimationActive="auto"
+              animationEasing="ease-out"
+              isAnimationActive={false}
               stroke="none"
               type={lineType}
             /> : null}

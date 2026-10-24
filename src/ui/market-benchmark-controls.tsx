@@ -37,6 +37,7 @@ export function MarketBenchmarkControls({
   formatDay,
   onEnabledSymbolsChange,
   returnComparison = false,
+  returnLabel = "累计收益率",
 }: {
   assetScopeLabel: string;
   dataState: MarketBenchmarkDataState;
@@ -44,6 +45,7 @@ export function MarketBenchmarkControls({
   formatDay(day: string): string;
   onEnabledSymbolsChange(symbols: MarketBenchmarkSymbol[]): void;
   returnComparison?: boolean;
+  returnLabel?: string;
 }) {
   const assetsLabel = assetLabel(assetScopeLabel);
 
@@ -58,7 +60,7 @@ export function MarketBenchmarkControls({
   const comparisonReady = enabledSymbols.length > 0 &&
     dataState.kind === "ready" && dataState.comparison.reason === null;
   const stateTitle = returnComparison
-    ? comparisonReady ? "区间收益率" : "累计收益率"
+    ? comparisonReady ? "区间收益率" : returnLabel
     : comparisonReady ? "资产变化率" : "资产金额";
   let stateDescription: string | undefined;
   if (enabledSymbols.length === 0) {
@@ -120,7 +122,7 @@ export function MarketBenchmarkControls({
           );
         })}
       </div>
-      <BenchmarkState title={stateTitle} tone={enabledSymbols.length > 0 && dataState.kind === "failed" ? "error" : enabledSymbols.length > 0 && dataState.kind === "ready" && !comparisonReady ? "warning" : "muted"}>{stateDescription}</BenchmarkState>
+      {!returnComparison || stateDescription ? <BenchmarkState title={stateTitle} tone={enabledSymbols.length > 0 && dataState.kind === "failed" ? "error" : enabledSymbols.length > 0 && dataState.kind === "ready" && !comparisonReady ? "warning" : "muted"}>{stateDescription}</BenchmarkState> : null}
     </div>
   );
 }

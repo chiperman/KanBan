@@ -60,7 +60,7 @@ export function AssetSourceTrend({
       className="asset-trend source-trend"
       data-testid={`asset-source-trend-${source.id}`}
     >
-      <p className="card-label">资产金额趋势{trendCurrency !== reportingCurrency ? ` · ${trendCurrency}` : ""}</p>
+      <p className="card-label">资产金额趋势{trendCurrency !== reportingCurrency ? `，${trendCurrency}` : ""}</p>
       {hasTrendContent ? <p className="trend-note">资产金额变化包含资金进出，不能作为收益率。</p> : null}
       <AssetTrendPanel
         range={selection}

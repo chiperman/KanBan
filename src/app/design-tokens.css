@@ -1,5 +1,18 @@
+@import "@radix-ui/colors/gray.css";
+@import "@radix-ui/colors/gray-dark.css";
+@import "@radix-ui/colors/red.css";
+@import "@radix-ui/colors/red-dark.css";
+@import "@radix-ui/colors/green.css";
+@import "@radix-ui/colors/green-dark.css";
+@import "@radix-ui/colors/amber.css";
+@import "@radix-ui/colors/amber-dark.css";
+@import "@radix-ui/colors/blue.css";
+@import "@radix-ui/colors/blue-dark.css";
+@import "@radix-ui/colors/black-alpha.css";
+@import "@radix-ui/colors/white-alpha.css";
+
 /*
- * Runtime adaptation of the pinned Vibe-Nothing-UI token contract.
+ * Product tokens: Radix Colors, existing local font assets and shared component roles.
  * Reference: https://github.com/wangbh030722/vibe-nothing-ui-design/blob/
  * 46661e55ae04537215a229be49f2ac1bd37a4255/css/tokens.css
  * Pinned upstream: 46661e55ae04537215a229be49f2ac1bd37a4255
@@ -53,62 +66,42 @@
   font-weight: 400;
 }
 
-:root,
-[data-theme="dark"] {
-  --black: #000000;
-  --dark-grey: #171717;
-  --grey: #2a2a2a;
-  --light-grey: #5a5a5a;
-  --white: #ffffff;
-  --bg: #000000;
-  --surface: #0c0c0c;
-  --raised: #171717;
-  --line: #262626;
-  --line-2: #3a3a3a;
-  --muted: #5a5a5a;
-  --secondary: #8c8c8c;
-  --primary: #ededed;
-  --display: #ffffff;
-  --accent: #d71921;
-  --accent-ink: #ffffff;
-  --accent-text: #ff4438;
-  --success: #5bc96b;
-  --warning: #f2c94c;
-  --error: #ff5247;
-  --benchmark-spx: #63b9f2;
-  --benchmark-ndx: #f2b95e;
-  --dotbg: rgba(255, 255, 255, 0.48);
-  --glass: rgba(16, 16, 16, 0.9);
-  --glass-brd: rgba(255, 255, 255, 0.09);
-  --restricted-dot: rgba(255, 255, 255, 0.12);
-  --overlay: rgba(0, 0, 0, 0.88);
-  color-scheme: dark;
+:root {
+  /* Radix: 1–2 canvas, 3–5 interactions, 6–8 boundaries, 9–10 fills, 11–12 text. */
+  --black: var(--black-a12);
+  --dark-grey: var(--gray-3);
+  --grey: var(--gray-5);
+  --light-grey: var(--gray-11);
+  --white: var(--white-a12);
+  --bg: var(--gray-1);
+  --surface: var(--gray-2);
+  --raised: var(--gray-3);
+  --line: var(--gray-6);
+  --line-2: var(--gray-8);
+  --muted: var(--gray-11);
+  --secondary: var(--gray-11);
+  --primary: var(--gray-12);
+  --display: var(--black-a12);
+  --accent: var(--red-9);
+  --accent-ink: var(--white-a12);
+  --accent-text: var(--red-11);
+  --success: var(--green-11);
+  --warning: var(--amber-11);
+  --error: var(--red-11);
+  --benchmark-spx: var(--blue-11);
+  --benchmark-ndx: var(--amber-11);
+  --dotbg: var(--gray-6);
+  --glass: var(--gray-2);
+  --glass-brd: var(--gray-6);
+  --restricted-dot: var(--gray-6);
+  --overlay: var(--black-a8);
+  --mask-ink: var(--white-a12);
+  color-scheme: light;
 }
 
-[data-theme="light"] {
-  --bg: #f2f2f2;
-  --surface: #ffffff;
-  --raised: #ededed;
-  --line: #e2e2e2;
-  --line-2: #cfcfcf;
-  --muted: #9a9a9a;
-  --secondary: #585a5a;
-  --primary: #1c1c1c;
-  --display: #000000;
-  --accent: #d71921;
-  --accent-ink: #ffffff;
-  --accent-text: #c2141c;
-  --success: #247e37;
-  --warning: #9c6b00;
-  --error: #d23b30;
-  --benchmark-spx: #1769aa;
-  --benchmark-ndx: #9b5d00;
-  --dotbg: rgba(0, 0, 0, 0.42);
-  --glass: rgba(255, 255, 255, 0.96);
-  --glass-brd: rgba(0, 0, 0, 0.08);
-  --restricted-dot: rgba(0, 0, 0, 0.14);
-  --overlay: rgba(242, 242, 242, 0.9);
-  color-scheme: light;
+[data-theme="dark"] {
+  --display: var(--white-a12);
+  color-scheme: dark;
 }
 
 :root {
@@ -117,37 +110,25 @@
   --f-mono: "Geist Mono", "SF Mono", ui-monospace, monospace;
   --f-head: "Geist", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
   --f-editorial: "Newsreader", Georgia, serif;
-  --r-sm: 6px;
+  --r-sm: 4px;
   --r-md: 8px;
   --r-pill: 999px;
-  --ease: ease-in-out;
+  --ease: ease-out;
 
-  /* KanBan layout scale. Visual semantics continue to come from upstream tokens.
-   *
-   * 字号分两族，不要混用：
-   *   文字族（display-* / heading / subheading / title / body* / caption / label / micro）
-   *     用来排句子与标签，步长在 10–24px 之间密集。
-   *   展示族（display-*）用来排「一屏一个的大数字」，步长在 26–72px 之间。
-   * 每个档位都必须有真实使用点；没有使用点的档位不写进来。见 docs/design-system/foundations.md 的排版级差。 */
-  --vibe-type-display-xl: 72px;
-  --vibe-type-display-lg: 48px;
-  --vibe-type-display-md: 36px;
-  /* 展示族最小一档。被 .asset-trend-yesterday > strong 等趋势数字使用。 */
-  --vibe-type-display-sm: 26px;
+  /* Four UI sizes. Legacy role names are aliases, never additional sizes. */
+  --vibe-type-display-xl: 24px;
+  --vibe-type-display-lg: 24px;
+  --vibe-type-display-md: 24px;
+  --vibe-type-display-sm: 24px;
   --vibe-type-heading: 24px;
-  --vibe-type-subheading: 18px;
-  /* 小标题与仪表数字共用的一档（身份名、锁定时钟、验证码格、趋势区间数字）。
-     上游的 20px 档位。 */
-  --vibe-type-title: 20px;
+  --vibe-type-subheading: 16px;
+  --vibe-type-title: 16px;
   --vibe-type-body: 16px;
   --vibe-type-body-sm: 14px;
-  /* 小正文：产品的正文基准。body 元素本身用的就是这一档，
-     对话框正文、下拉触发器、日历格、次级按钮文字、空态提示同属这一层。 */
-  --vibe-type-body-xs: 13px;
+  --vibe-type-body-xs: 14px;
   --vibe-type-caption: 12px;
-  --vibe-type-label: 11px;
-  /* 微标签：等宽大写、字距 .08–.14em 的最小一层（字段标签、表头、眉标、快捷键提示）。 */
-  --vibe-type-micro: 10px;
+  --vibe-type-label: 12px;
+  --vibe-type-micro: 12px;
   --vibe-space-0: 2px;
   --vibe-space-1: 4px;
   --vibe-space-2: 8px;
@@ -163,6 +144,6 @@
   --vibe-control-height-compact: 40px;
   --vibe-control-height: 44px;
   --vibe-control-padding-inline: var(--vibe-space-4);
-  --vibe-duration-fast: 200ms;
-  --vibe-duration-theme: 350ms;
+  --vibe-duration-fast: 250ms;
+  --vibe-duration-theme: 0ms;
 }

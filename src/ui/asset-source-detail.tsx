@@ -82,7 +82,7 @@ function permissionSummary(permissions: AssetPermission[]): string {
     transfer: "划转权限",
     withdraw: "提现权限",
   };
-  return permissions.map((permission) => labels[permission]).join(" · ");
+  return permissions.map((permission) => labels[permission]).join("，");
 }
 
 function authorizationStatus(source: DetailSource): string {
@@ -147,7 +147,6 @@ function ManualRecordDeleteDialog({
       }
       aria-label={`删除 ${name} ${record.day} 数据`}
       description="将显示上一条保留记录。"
-      eyebrow="MANUAL / DELETE"
       onClose={onClose}
       title={`删除 ${name} ${record.day} 数据`}
       titleId="manual-record-delete-dialog-title"
@@ -236,7 +235,7 @@ function SourceLifecycleActions({
         await sourceRequest(`/api/asset-sources/${encodeURIComponent(source.id)}`, "DELETE", {
           confirmation: "DELETE_SOURCE_DATA",
         });
-        router.push("/assets?view=sources#asset-sources");
+        router.push("/settings?view=data#asset-sources");
       } else {
         await sourceRequest(`/api/asset-sources/${encodeURIComponent(source.id)}`, "PATCH", {
           action,
@@ -343,7 +342,6 @@ function SourceLifecycleActions({
             </>
           }
           description="停止同步；历史数据保留。"
-          eyebrow="DANGEROUS / DISCONNECT"
           onClose={() => setConfirmDisconnect(false)}
           title={`确认断开 ${name}`}
           titleId="source-disconnect-dialog-title"
@@ -365,7 +363,6 @@ function SourceLifecycleActions({
             </>
           }
           description="将永久删除来源及全部历史数据，无法恢复。"
-          eyebrow="DANGEROUS / DELETE"
           onClose={() => setDeleteStep(null)}
           title="永久删除来源数据"
           titleId="source-delete-dialog-title"
@@ -385,7 +382,6 @@ function SourceLifecycleActions({
             </>
           }
           description={`将永久删除 ${name} 及全部历史数据。`}
-          eyebrow="DANGEROUS / FINAL CONFIRMATION"
           onClose={() => setDeleteStep(null)}
           title="第二次确认永久删除"
           titleId="source-delete-confirmation-dialog-title"
@@ -473,17 +469,16 @@ export function AssetSourceDetail({
 
   const openingRecord = investmentRecords.find(record => record.kind === "opening");
   const investmentCurrency = investmentHistory?.currency ?? investmentRecords[0]?.currency ?? null;
+  const unrecordedManual = manual && source.hasManualRecord === false &&
+    investmentRecords.length === 0 && investmentHistory === null;
 
   return (
     <>
       <section className="asset-source-detail__header">
         <WorkbenchPageHeader
           description={realtimeActive ? <LongbridgeRealtimeStatus state={realtimeState} /> : undefined}
-          eyebrow="SOURCE / DETAIL"
           title={name}
-          backLink={view === "manage"
-            ? { href: "/assets?view=sources#asset-sources", label: "返回资产" }
-            : { href: "/assets", label: "返回资产" }}
+          backLink={{ href: "/settings?view=data#asset-sources", label: "返回资产来源" }}
           actionsLabel="来源详情快捷操作"
           actions={<>
             <VibeSelect
@@ -491,7 +486,7 @@ export function AssetSourceDetail({
               label="计价货币"
               onValueChange={setCurrency}
               options={CURRENCY_OPTIONS}
-            value={currency}
+              value={currency}
               variant="compact"
             />
             {manual ? (
@@ -522,8 +517,8 @@ export function AssetSourceDetail({
           realtimeQuotes={realtimeQuotes}
           realtimeState={realtimeState}
           onRetryRealtime={retry}
-          showAssetTrend={bookMode || (investmentHistory === null && !openingRecord)}
-          trendContent={bookMode ? undefined : <SourceInvestmentPerformance
+          showAssetTrend={!unrecordedManual && (bookMode || (investmentHistory === null && !openingRecord))}
+          trendContent={bookMode || unrecordedManual ? undefined : <SourceInvestmentPerformance
             range={trendRange}
             history={investmentHistory}
             sourceId={source.id}
@@ -581,7 +576,7 @@ export function AssetSourceDetail({
             ) : null}
             <details className="asset-source-detail__disclosure">
               <summary>来源标识</summary>
-              <p>{source.label}</p>
+<p>{source.label.replace(/\s+[·・]\s+/g, "，")}</p>
             </details>
           </div>
         </section>

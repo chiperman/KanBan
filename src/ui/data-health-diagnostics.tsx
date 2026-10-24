@@ -109,7 +109,7 @@ function valuationSummary(
   ) ?? [];
 
   if (reasons.length > 0) {
-    return { label: "估值不完整 · 未估值", reasons, tone: "error" };
+    return { label: "估值不完整，未估值", reasons, tone: "error" };
   }
   if (valuation.incomplete) {
     return {
@@ -134,14 +134,14 @@ function valuationSummary(
   }
   if (coverage?.status === "partial") {
     return {
-      label: "总额估值完整 · 持仓明细不全",
+      label: "总额估值完整，持仓明细不全",
       reasons: ["持仓明细覆盖不足", ...coverageReasons],
       tone: "warning",
     };
   }
   if (coverage?.status === "unknown") {
     return {
-      label: "总额估值完整 · 覆盖待确认",
+      label: "总额估值完整，覆盖待确认",
       reasons: ["尚未确认来源总额覆盖", ...coverageReasons],
       tone: "warning",
     };
@@ -298,8 +298,8 @@ export function DataHealthDiagnostics({
         <div>
           <h3>历史覆盖</h3>
           <p className="data-health-history__summary">
-            {rangeLabel} · {incompleteCount > 0 || gapCount > 0
-              ? `不完整历史 ${incompleteCount} 天 · 数据缺口 ${gapCount} 天`
+            {rangeLabel}，{incompleteCount > 0 || gapCount > 0
+              ? `不完整历史 ${incompleteCount} 天，数据缺口 ${gapCount} 天`
               : "观测完整"}
           </p>
         </div>
@@ -354,7 +354,7 @@ export function DataHealthDiagnostics({
             <ol className="data-health-history__list">
               {pagination.visibleItems.map((entry) => (
                 <li data-state={entry.state} key={entry.day}>
-                  <p>{entry.day} · {historyStatusLabel(entry.state)}</p>
+                  <p>{entry.day}，{historyStatusLabel(entry.state)}</p>
                   <span>{entry.detail}</span>
                 </li>
               ))}

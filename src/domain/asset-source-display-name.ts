@@ -12,7 +12,7 @@ export function assetSourceDefaultDisplayName(
   source: Pick<AssetSourceDisplayIdentity, "kind" | "label">,
 ): string {
   if (source.kind === "longbridge") return "长桥账户";
-  return source.label;
+  return source.label.replace(/\s+[·・]\s+/g, "，");
 }
 
 export function assetSourceDisplayName(

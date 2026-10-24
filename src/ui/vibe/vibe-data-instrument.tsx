@@ -97,7 +97,7 @@ interface VibeMetricProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 export function VibeMetric({
-  animate = true,
+  animate = false,
   animationKey,
   className,
   unit,

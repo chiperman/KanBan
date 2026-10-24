@@ -53,6 +53,7 @@ export function AssetTrendPanel({
   children,
   emptyMessage,
   title,
+  showRangeControls = true,
   ...chart
 }: Omit<ComponentProps<typeof AssetTrendChart>, "showDotFill"> & {
   range: AssetTrendRange;
@@ -60,8 +61,31 @@ export function AssetTrendPanel({
   children?: ReactNode;
   emptyMessage?: string;
   title?: string;
+  showRangeControls?: boolean;
 }) {
   const { showTrendDots } = useWorkbenchDisplayPreferences();
+  return <div
+    className="asset-trend-panel"
+    aria-busy={range.pending || undefined}
+  >
+    {metricControls}
+    {title ? <header className="asset-trend-panel__toolbar">
+      {title ? <h2>{title}</h2> : null}
+    </header> : null}
+    {children}
+    <AssetTrendChart
+      {...chart}
+      showDotFill={showTrendDots}
+      emptyMessage={emptyMessage}
+    />
+    {showRangeControls ? <AssetTrendRangeControls range={range} /> : null}
+  </div>;
+}
+
+export function AssetTrendRangeControls({ range, showCustomRangeLabel = true }: {
+  range: AssetTrendRange;
+  showCustomRangeLabel?: boolean;
+}) {
   const id = useId();
   const [editing, setEditing] = useState(false);
   const [startDay, setStartDay] = useState(range.currentDay);
@@ -109,23 +133,10 @@ export function AssetTrendPanel({
     setEditing(true);
   }
 
-  return <div
-    className="asset-trend-panel"
-    aria-busy={range.pending || undefined}
-  >
-    {metricControls}
-    {title ? <header className="asset-trend-panel__toolbar">
-      {title ? <h2>{title}</h2> : null}
-    </header> : null}
-    {range.preset === "custom" && range.customRange ? <p className="investment-performance__custom-range-label">
+  return <>
+    {showCustomRangeLabel && range.preset === "custom" && range.customRange ? <p className="investment-performance__custom-range-label">
       {range.customRange.startDay} 至 {range.customRange.endDay}
     </p> : null}
-    {children}
-    <AssetTrendChart
-      {...chart}
-      showDotFill={showTrendDots}
-      emptyMessage={emptyMessage}
-    />
     {rangeControl}
     {editing ? <VibeDialog
       aria-label="自定义分析区间"
@@ -149,5 +160,5 @@ export function AssetTrendPanel({
         <VibeDateField fieldId={`${id}-end`} label="结束日期" min={startDay} max={range.currentDay} value={endDay} onValueChange={setEndDay} />
       </div>
     </VibeDialog> : null}
-  </div>;
+  </>;
 }

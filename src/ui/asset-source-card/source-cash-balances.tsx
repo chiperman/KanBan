@@ -19,14 +19,14 @@ export function SourceCashBalances({
           className="asset-cash-balances"
           data-testid="asset-cash-balances"
         >
-          <p className="card-label">CASH BALANCE</p>
+          <p className="card-label">现金</p>
           <ol className="holding-top-list">
             {cashBalances.map((balance) => (
               <li
                 className="vibe-data-row"
                 key={`${balance.currency}:${balance.amount}`}
               >
-                <span>{balance.currency} CASH</span>
+                <span>{balance.currency}</span>
                 <strong>
                   <AssetFinancialValue unit={balance.currency}>
                     {showSensitiveInfo ? formatAmount(balance.amount) : "••••••"}

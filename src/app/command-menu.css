@@ -20,16 +20,16 @@
   padding: min(14vh, 120px) 20px 20px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  background: color-mix(in srgb, var(--bg) 76%, transparent);
+  background: var(--overlay);
 }
 
 .command-menu-panel {
   width: min(620px, 100%);
   overflow: hidden;
-  border: 1px solid var(--line-2);
-  border-radius: 10px;
+  border: 0.5px solid var(--line-2);
+  border-radius: var(--r-md);
   background: var(--surface);
-  box-shadow: 0 18px 60px color-mix(in srgb, var(--primary) 16%, transparent);
+  box-shadow: none;
 }
 
 .command-menu-head {
@@ -38,11 +38,10 @@
   justify-content: space-between;
   gap: 16px;
   padding: 16px 18px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 0.5px solid var(--line);
 }
 
 .command-menu-eyebrow,
-.command-menu-hint,
 .command-menu-empty {
   margin: 0;
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -50,18 +49,11 @@
 
 .command-menu-eyebrow {
   color: var(--primary);
-  font-size: 11px;
+  font-size: var(--vibe-type-caption);
   letter-spacing: 0.1em;
 }
 
-.command-menu-hint {
-  margin-top: 3px;
-  color: var(--secondary);
-  font-size: var(--vibe-type-micro);
-}
-
 .command-menu-close {
-
   flex: 0 0 auto;
   padding: 6px 12px;
 }
@@ -71,14 +63,14 @@
   gap: 6px;
   padding: 16px 18px 10px;
   color: var(--secondary);
-  font-size: 11px;
+  font-size: var(--vibe-type-caption);
 }
 
 .command-menu-search input {
   width: 100%;
   min-height: 44px;
-  border: 1px solid var(--line-2);
-  border-radius: 6px;
+  border: 0.5px solid var(--line-2);
+  border-radius: var(--r-sm);
   background: var(--bg);
   color: var(--primary);
   font: inherit;
@@ -95,17 +87,11 @@
 }
 
 .command-menu-item {
-
   display: flex;
-
   align-items: center;
-
   justify-content: space-between;
-
   gap: 18px;
-
   min-height: 46px;
-
   padding: 9px 10px;
   text-align: left;
 }
@@ -117,17 +103,14 @@
 .command-menu-empty {
   padding: 22px 10px;
   color: var(--secondary);
-  font-size: 11px;
+  font-size: var(--vibe-type-caption);
   text-align: center;
 }
 
 [data-command-target]:focus-visible,
 [data-command-highlight="true"] {
-  outline: 2px solid var(--display);
+  outline: 0.5px solid var(--display);
   outline-offset: 3px;
-}
-
-@media (hover: hover) {
 }
 
 @media (max-width: 639px) {
@@ -148,8 +131,5 @@
 
   .command-menu-item {
     align-items: flex-start;
-}
-}
-
-@media (prefers-reduced-motion: reduce) {
+  }
 }

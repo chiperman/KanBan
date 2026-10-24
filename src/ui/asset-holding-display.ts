@@ -27,12 +27,13 @@ const HOLDING_PRODUCT_LABELS: Record<string, string> = {
 };
 
 export function assetHoldingDisplayName(holding: AssetHolding): string {
+  const name = holding.name.replace(/\s+[·・]\s+/g, "，");
   if (
     holding.sourceProduct === "dcp" &&
     holding.providerPositionId !== undefined &&
     holding.providerPositionId !== "aggregate"
   ) {
-    return holding.name;
+    return name;
   }
   const productLabel = holding.sourceProduct
     ? HOLDING_PRODUCT_LABELS[holding.sourceProduct]
@@ -46,5 +47,5 @@ export function assetHoldingDisplayName(holding: AssetHolding): string {
   ) {
     return `${productLabel} #${holding.providerPositionId}`;
   }
-  return productLabel ? `${holding.symbol} · ${productLabel}` : holding.name;
+  return productLabel ? `${holding.symbol}（${productLabel}）` : name;
 }

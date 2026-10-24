@@ -22,7 +22,7 @@ export function LongbridgeRealtimeStatus({ state }: { state: LongbridgeRealtimeS
       role="status"
       tone={connecting ? "muted" : state === "ready" ? "success" : state === "reconnecting" ? "warning" : "error"}
     >
-      LB / {label}
+      长桥{label}
     </VibeStatusTag>
   );
 }
@@ -38,18 +38,17 @@ export function LongbridgeRealtimeNotice({ state, retry }: {
       type="button"
       variant="outline"
     >
-      重新检测
+      重试连接
     </VibeButton>
   );
   if (state === "authentication-required") {
     return (
       <VibeNotice
         className="assets-holdings__realtime-notice"
-        code="LONGBRIDGE / LOGIN"
         role="alert"
         tone="error"
       >
-        <p>未检测到当前电脑的 Longbridge CLI 登录状态。请先完成一次 <code>longbridge auth login</code>，然后回到这里重新检测。</p>
+        <p>长桥尚未登录。在此电脑运行 <code>longbridge auth login</code> 后重试连接。</p>
         <div className="assets-holdings__realtime-actions">{retryButton}</div>
       </VibeNotice>
     );
@@ -58,11 +57,10 @@ export function LongbridgeRealtimeNotice({ state, retry }: {
     return (
       <VibeNotice
         className="assets-holdings__realtime-notice"
-        code="LONGBRIDGE / CLI"
         role="alert"
         tone="error"
       >
-        <p>未找到 Longbridge CLI，暂时无法建立实时行情连接。请安装或配置 CLI 后重新检测。</p>
+        <p>未找到 Longbridge CLI。安装并完成连接配置后重试。</p>
         <div className="assets-holdings__realtime-actions">{retryButton}</div>
       </VibeNotice>
     );
@@ -71,11 +69,10 @@ export function LongbridgeRealtimeNotice({ state, retry }: {
     return (
       <VibeNotice
         className="assets-holdings__realtime-notice"
-        code="LONGBRIDGE / RECONNECTING"
         role="status"
         tone="warning"
       >
-        <p>实时行情连接中断，正在自动重连。当前页面仍保留已有数据。</p>
+        <p>实时行情中断，正在重连。当前显示已有数据。</p>
         <div className="assets-holdings__realtime-actions">{retryButton}</div>
       </VibeNotice>
     );
@@ -83,11 +80,10 @@ export function LongbridgeRealtimeNotice({ state, retry }: {
   return (
     <VibeNotice
       className="assets-holdings__realtime-notice"
-      code="LONGBRIDGE / UNAVAILABLE"
       role="alert"
       tone="error"
     >
-      <p>长桥实时行情暂时不可用。当前页面仍可查看最近一次完整数据。</p>
+      <p>长桥实时行情不可用，当前显示最近一次完整数据。</p>
       <div className="assets-holdings__realtime-actions">{retryButton}</div>
     </VibeNotice>
   );

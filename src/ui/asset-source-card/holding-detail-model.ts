@@ -115,7 +115,7 @@ export function holdingQuoteSessionText(
         ? "时间不可用"
         : `行情 ${formatShanghaiDateTime(quotedAt)}`
       : null,
-  ].filter(Boolean).join(" · ");
+  ].filter(Boolean).join("，");
 }
 
 export function holdingValuationDetail(holding: AssetHolding): string {
@@ -125,7 +125,7 @@ export function holdingValuationDetail(holding: AssetHolding): string {
       ? null
       : holding.valuation.pricedAt
     : holding.quoteEvidence.quotedAt;
-  return `${holding.valuation.priceSource} · ${
+  return `${holding.valuation.priceSource}，${
     quotedAt === null ? "时间不可用" : formatShanghaiDateTime(quotedAt)
   }`;
 }

@@ -105,7 +105,7 @@ export function OwnerPasskeySettings({
             {configuredNow ? "已启用" : "尚未配置"}
             {configuredNow && boundAtNow ? (
               <span className="security-settings__bound-at">
-                {` · 绑定于 ${boundAtNow.slice(0, 10)}`}
+                {`，绑定于 ${boundAtNow.slice(0, 10)}`}
               </span>
             ) : null}
           </dd>
@@ -175,7 +175,6 @@ export function OwnerPasskeySettings({
             </>
           }
           description={<>移除后只能用 TOTP 登录；可在登录后于设置页重新绑定。</>}
-          eyebrow="SETTINGS / PASSKEY"
           onClose={() => setConfirmRemove(false)}
           title="移除 Passkey"
           titleId="passkey-remove-title"

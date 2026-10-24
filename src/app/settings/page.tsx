@@ -25,6 +25,10 @@ import { SessionGuard } from "@/ui/session-guard";
 import { TrendAppearanceSettings } from "@/ui/trend-appearance-settings";
 import { WorkbenchShell } from "@/ui/workbench-shell";
 import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
+import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
+import { VibeLink } from "@/ui/vibe/vibe-button";
+import { VibeEntityLink } from "@/ui/vibe/vibe-entity-link";
+import { VibeStatusTag } from "@/ui/vibe/vibe-data-instrument";
 
 export const dynamic = "force-dynamic";
 
@@ -79,7 +83,6 @@ export default async function SettingsPage({
           </a>
           <main className={`settings-main settings-main--${view}`} id="main-content">
             <WorkbenchPageHeader
-              eyebrow="LOCAL / SETTINGS"
               title="设置"
             />
             <WorkspaceViewNavigation label="设置分类" current={view === "preferences" ? "/settings" : `/settings?view=${view}`} items={[
@@ -90,16 +93,9 @@ export default async function SettingsPage({
             {view === "preferences" ? <>
             <section
               className="settings-section"
-              aria-labelledby="default-preferences-title"
+              aria-label="显示偏好"
             >
-              <h2 id="default-preferences-title">默认偏好</h2>
               <ProfitColorSettings initialScheme={initialProfitColorScheme} />
-            </section>
-            <section
-              className="settings-section"
-              aria-labelledby="personalization-title"
-            >
-              <h2 id="personalization-title">个性化</h2>
               <TrendAppearanceSettings />
             </section>
             </> : view === "security" ? <>
@@ -119,6 +115,33 @@ export default async function SettingsPage({
               </div>
             </section>
             </> : <div className="data-maintenance-panel">
+              <section id="asset-sources" className="data-maintenance-section" aria-labelledby="asset-sources-title">
+                <h2 id="asset-sources-title">资产来源</h2>
+                <div className="settings-sources">
+                  <VibeLink href="/asset-sources/new" variant="outline">新增来源</VibeLink>
+                  {storedSources.length === 0 ? <p>尚未接入资产来源</p> : (
+                    <ul className="settings-sources__list">
+                      {storedSources.map((source) => {
+                        const disconnected = source.lifecycle === "disconnected";
+                        const failed = source.kind !== "manual" && source.sync.error !== null;
+                        const attention = source.kind === "manual"
+                          ? source.hasManualRecord === false
+                          : source.sync.status === "expired";
+                        const status = disconnected ? "已断开"
+                          : source.kind === "manual" ? source.hasManualRecord === false ? "待记录" : "手工记录"
+                          : failed ? "同步失败"
+                          : attention ? "待更新" : "已连接";
+                        return (
+                          <li key={source.id}>
+                            <VibeEntityLink href={`/asset-sources/${encodeURIComponent(source.id)}`}>{assetSourceDisplayName(source)}</VibeEntityLink>
+                            <VibeStatusTag tone={disconnected ? "muted" : failed ? "error" : attention ? "warning" : "muted"}>{status}</VibeStatusTag>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              </section>
               <section className="data-maintenance-section" aria-labelledby="collection-settlement-title">
                 <h2 id="collection-settlement-title">自动采集与日结</h2>
                 <div className="data-maintenance-section__content">

@@ -57,11 +57,11 @@ try {
   assert.match(challengeHeader, /HttpOnly/);
   assert.match(challengeHeader, /SameSite=Strict/);
   await expect(page.getByRole('status')).toContainText('预置完成');
-  assert.ok(!(await context.cookies()).some(cookie => cookie.name === 'pad_webauthn_challenge'));
+  assert.ok(!(await context.cookies()).some(cookie => cookie.name === 'pad_webauthn_challenge_' + appPort));
   await page.getByRole('link', { name: '返回所有者登录' }).click();
   await page.getByRole('button', { name: '使用 Passkey 登录' }).click();
   await expect(page.getByTestId('workbench-shell')).toBeVisible();
-  const session = (await context.cookies()).find(cookie => cookie.name === 'pad_session');
+  const session = (await context.cookies()).find(cookie => cookie.name === 'pad_session_' + appPort);
   assert.ok(session?.secure && session.httpOnly && session.sameSite === 'Lax');
   assert.equal(session.expires, -1);
   const failed = await page.request.post('/api/auth/login/verify', { data: {} });
@@ -70,7 +70,7 @@ try {
   const logout = await page.request.post('/api/auth/logout');
   assert.ok(logout.ok());
   assert.match(logout.headers()['set-cookie'], /Secure/);
-  assert.ok(!(await context.cookies()).some(cookie => cookie.name === 'pad_session'));
+  assert.ok(!(await context.cookies()).some(cookie => cookie.name === 'pad_session_' + appPort));
   await page.reload();
   await expect(page.getByRole('heading', { name: '看板已锁定' })).toBeVisible();
   console.info('HTTPS 注册、登录、失败清理、退出与会话删除通过（临时证书和虚拟认证器）');

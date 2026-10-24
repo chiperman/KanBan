@@ -4,7 +4,7 @@
 
 HTTP 仅支持 localhost、127.0.0.1、[::1]。非本机部署使用 HTTPS；反向代理须阻止外部直接访问后端 HTTP 端口。切换主机名不能跨 RP-ID 复用凭证。
 
-会话 Cookie 为 HttpOnly、SameSite=Lax、浏览器会话有效期；挑战 Cookie 为 HttpOnly、SameSite=Strict、五分钟有效期。HTTPS 下设置与删除均携带 Secure。登录失败会清理挑战 Cookie；服务端单次消费独立约束重放。会话与挑战保存在单进程内存中，重启失效；不支持无共享状态的多实例认证部署。
+会话 Cookie 为 HttpOnly、SameSite=Lax、浏览器会话有效期；挑战 Cookie 为 HttpOnly、SameSite=Strict、五分钟有效期。认证 Cookie 名称分别为 `pad_session_<port>` 和 `pad_webauthn_challenge_<port>`，使用 Next 设置的实际监听端口 `PORT`（未设置时为 3000），使同一主机上不同端口的本地实例独立登录、退出和处理挑战。读取、设置与清除均使用相同名称，不读取或清除旧的无端口 Cookie；首次切换须重新登录，不改变账户凭证、RP-ID 或资产数据。HTTPS 下设置与删除均携带 Secure。登录失败会清理挑战 Cookie；服务端单次消费独立约束重放。会话与挑战保存在单进程内存中，重启失效；不支持同一访问入口后无共享状态的多实例认证部署。
 
 写接口在解析请求或修改状态前拒绝异源 `Origin` 和 `Sec-Fetch-Site: cross-site`，防止同站点不同端口的页面借用会话。允许的 origin 优先取上述 `PAD_PUBLIC_ORIGIN`，未配置时使用请求 URL 的 origin；不带浏览器来源头的本机客户端仍须通过各接口原有的认证和校验。OAuth 回调按原有 state 与 PKCE 流程验证。
 

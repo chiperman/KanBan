@@ -63,7 +63,7 @@ function zeroValue(style: ParsedCounterValue): ParsedCounterValue {
 }
 
 export function VibeLiveCounter({
-  animate = true,
+  animate = false,
   animationKey,
   paused = false,
   resetKey,

@@ -28,7 +28,6 @@ export default async function SetupPage({
           className="setup-panel vibe-auth-surface"
           data-vibe-surface="auth-panel"
         >
-          <p className="card-label">OWNER PROVISION / CLOSED</p>
           <h1 className="setup-title">入口已关闭</h1>
           <p className="setup-copy">
             首次预置完成后，请登录并在设置与安全页管理 Passkey
@@ -48,7 +47,6 @@ export default async function SetupPage({
         className="setup-panel vibe-auth-surface"
         data-vibe-surface="auth-panel"
       >
-        <p className="card-label">OWNER PROVISION</p>
         <h1 className="setup-title">预置唯一所有者的 Passkey</h1>
         <p className="setup-copy">仅可预置一次</p>
         <SetupPasskey />

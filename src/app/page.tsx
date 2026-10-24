@@ -51,17 +51,17 @@ export default async function AssetDashboardPage({
           <div className="header-title">
             <p className="header-label">
               <span className="header-wordmark" lang="en">
-                PERSONAL ASSET DASHBOARD
+                资产看板
               </span>
             </p>
             <span data-testid="view-mode" hidden>
-              演示模式 · 虚构数据 · 无需登录
+              演示模式，虚构数据，无需登录
             </span>
           </div>
           <div className="header-side">
             <div className="page-header__context">
               <span className="header-system demo-mode-indicator">
-                DEMO DATA / NO PERSISTENCE
+                演示数据
               </span>
               <LocalClock initialTime={now.toISOString()} compact />
             </div>

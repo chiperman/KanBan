@@ -80,7 +80,7 @@ export function BackgroundCollectionSettings({ status }: { status: CollectionSta
         <div className="background-collection__sources">
           <div className="background-collection__sources-header">
             <h3>来源采集状态</h3>
-            <span>上海时间 · 刷新页面查看最新状态</span>
+            <span>上海时间，刷新页面查看最新状态</span>
           </div>
           {total ? <ul className="background-collection__source-list">
             {status?.sources.map(source => <li className="background-collection__source" key={source.id}>

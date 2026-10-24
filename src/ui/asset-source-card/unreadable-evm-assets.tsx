@@ -25,7 +25,6 @@ export function UnreadableEvmAssets({
         >
           <div className="evm-unreadable-assets__head">
             <div>
-              <p className="card-label">EVM / READ LIMITED</p>
               <h3 id={`evm-unreadable-assets-title-${sourceId}`}>
                 读取受限资产
               </h3>
@@ -51,7 +50,7 @@ export function UnreadableEvmAssets({
                   </div>
                   <div className="evm-unreadable-assets__status">
                     <VibeStatusTag tone={isIncluded ? "error" : "warning"}>
-                      {isIncluded ? "已关注 · 数量无法读取" : "待确认 · 数量无法读取"}
+                      {isIncluded ? "已关注，数量无法读取" : "待确认，数量无法读取"}
                     </VibeStatusTag>
                     <p>{token.reason}</p>
                   </div>

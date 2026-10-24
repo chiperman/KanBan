@@ -40,7 +40,7 @@ const SERVICE_FIELDS = [
 
 function stateText(configured: boolean, verifiedAt: string | null): string {
   if (!configured) return "未配置";
-  return verifiedAt ? `已验证 · ${verifiedAt.slice(0, 16).replace("T", " ")}` : "已配置";
+  return verifiedAt ? `已验证，${verifiedAt.slice(0, 16).replace("T", " ")}` : "已配置";
 }
 
 export function ExternalServiceSettings({

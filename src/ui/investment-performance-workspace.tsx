@@ -307,7 +307,6 @@ function CashflowEditor({
       }
       className="investment-performance__editor"
       description="记录外部本金进出，保存后计入累计净投入，并用于计算组合投资盈亏。"
-      eyebrow="INVESTMENT / CASHFLOW"
       onClose={onClose}
       onSubmit={submit}
       title={editing === null ? "新增资金记录" : "编辑资金记录"}
@@ -428,7 +427,6 @@ function CashflowDeleteDialog({
         </>
       }
       description={`将永久删除 ${cashflowKindLabel(cashflow.kind)}记录。`}
-      eyebrow="DANGER / CASHFLOW"
       onClose={onClose}
       title="永久删除资金记录"
       titleId="cashflow-delete-title"
@@ -688,19 +686,16 @@ export function InvestmentPerformanceWorkspace({
           </VibeButton>
           </>
         }
-        eyebrow="PORTFOLIO / PERFORMANCE"
         title="投资账本"
       />
 
       <LongbridgeRealtimeNotice state={realtimeState} retry={retry} />
       <section className="investment-performance__current" aria-label="当前组合结论">
         <article data-testid="performance-current-total">
-          <p className="card-label">CURRENT / TOTAL</p>
           <h2>当前总资产</h2>
           <MetricValue amount={current?.amount ?? null} currency={currency} hidden={showSensitiveInfo === false} />
         </article>
         <article data-testid="performance-net-investment">
-          <p className="card-label">PRINCIPAL / NET</p>
           <h2>累计净投入</h2>
           <MetricValue
             amount={currentAnalysis.cumulativeNetInvestment}
@@ -711,7 +706,6 @@ export function InvestmentPerformanceWorkspace({
           {currency !== "USD" ? <p>按当前汇率折算</p> : null}
         </article>
         <article data-testid="performance-current-profit">
-          <p className="card-label">PERFORMANCE / CURRENT</p>
           <h2>组合投资盈亏</h2>
           <MetricValue
             amount={currentAnalysis.investmentProfit}
@@ -727,7 +721,6 @@ export function InvestmentPerformanceWorkspace({
       <section className="investment-performance__trend" data-testid="performance-trend">
         <header>
           <div>
-            <p className="card-label">HISTORY / ACTUAL OBSERVATIONS</p>
             <h2>我的资产走势</h2>
           </div>
           {chartStartDay && chartEndDay ? (
@@ -785,7 +778,6 @@ export function InvestmentPerformanceWorkspace({
       <section className="investment-performance__interval" data-testid="performance-interval">
         <header>
           <div>
-            <p className="card-label">INTERVAL / EXPLAINED CHANGE</p>
             <h2>区间结论</h2>
           </div>
           {portfolioTrend.startDay && portfolioTrend.endDay ? (
@@ -851,7 +843,6 @@ export function InvestmentPerformanceWorkspace({
       <section className="investment-performance__ledger" aria-label="投资资金进出账本">
         <header>
           <div>
-            <p className="card-label">LEDGER / INVESTMENT BOUNDARY</p>
             {/* tabIndex=-1 只为承接「删除后的焦点」，不进入 Tab 序列 */}
             <h2 ref={ledgerHeadingRef} tabIndex={-1}>投资资金进出</h2>
           </div>
@@ -952,7 +943,7 @@ export function InvestmentPerformanceWorkspace({
                                 </span>
                                 {conversionEvidence === undefined ? null : (
                                   <span>
-                                    {`${conversionEvidence.source} · ${conversionEvidence.observedAt}`}
+                                    {`${conversionEvidence.source}，${conversionEvidence.observedAt}`}
                                   </span>
                                 )}
                               </>

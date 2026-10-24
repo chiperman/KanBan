@@ -27,7 +27,9 @@ function resolveTheme(choice: ThemeChoice): "light" | "dark" {
 }
 
 function applyTheme(choice: ThemeChoice): void {
-  document.documentElement.dataset.theme = resolveTheme(choice);
+  const resolved = resolveTheme(choice);
+  document.documentElement.dataset.theme = resolved;
+  document.documentElement.classList.toggle("dark", resolved === "dark");
   document.documentElement.dataset.themeChoice = choice;
 }
 

@@ -1,4 +1,4 @@
-import { decimalAdd, decimalCompare, decimalDivide, decimalMultiply, decimalSubtract } from "@/domain/decimal";
+import { decimalAdd, decimalCompare, decimalDivide, decimalMultiply, decimalSubtract, decimalToFixed } from "@/domain/decimal";
 import { shanghaiDay } from "@/domain/daily-asset-snapshots";
 import { parseSourceInvestmentRecordInput, type SourceInvestmentRecord, type SourceInvestmentRecordKind } from "@/domain/source-investment-records";
 import { buildTotalValuation, type ValuationSource } from "@/domain/valuation";
@@ -245,6 +245,38 @@ export type BookPoint = {
   basis: string;
 };
 export type BookValuation = { day: string; amount: string | null; basis: string };
+
+/** 日末估值之间的区间表现；起点当日资金已包含在起点资产内，不重复扣除。 */
+export function analyzeInvestmentBookInterval(input: {
+  points: BookPoint[];
+  state: InvestmentBookState;
+  bookId: InvestmentBookId;
+  startDay: string;
+  endDay: string;
+}) {
+  const start = input.points.find(point => point.day === input.startDay);
+  const end = input.points.find(point => point.day === input.endDay);
+  const records = activeBookRecords(input.state, input.bookId).filter(record => record.day <= input.endDay);
+  const opening = records.find(record => record.kind === "opening");
+  const currency = investmentBook(input.bookId).currency;
+  const flows = records.filter(record =>
+    (record.kind === "deposit" || record.kind === "withdrawal") &&
+    record.day > input.startDay);
+  const signed = (record: BookRecord) => record.kind === "withdrawal" ? decimalSubtract("0", record.amount) : record.amount;
+  const fundingComplete = opening !== undefined && opening.day <= input.startDay &&
+    input.state.unassignedLegacyIds.length === 0 && records.every(record =>
+      (record.kind !== "deposit" && record.kind !== "withdrawal") || record.currency === currency);
+  const netCashflow = fundingComplete ? decimalAdd(...flows.map(signed)) : null;
+  const span = Date.parse(input.endDay) - Date.parse(input.startDay);
+  const profit = span <= 0 || start?.total == null || end?.total == null || netCashflow === null
+    ? null : decimalSubtract(decimalSubtract(end.total, start.total), netCashflow);
+  const denominator = profit === null || start?.total == null ? null : decimalAdd(start.total, ...flows.map(record =>
+    decimalMultiply(signed(record), decimalDivide(String(Date.parse(input.endDay) - Date.parse(record.day)), String(span)))));
+  const returnRatio = profit === null || denominator === null || decimalCompare(denominator, "0") <= 0
+    ? null : decimalDivide(profit, denominator);
+  return { total: end?.total ?? null, netCashflow, profit, returnRatio };
+}
+
 export function analyzeInvestmentBook(input: {
   state: InvestmentBookState;
   bookId: InvestmentBookId;
@@ -309,7 +341,7 @@ export function analyzeInvestmentBook(input: {
     const historical = values.get(day);
     return day <= input.currentDay && historyThrough && day <= historyThrough &&
       amount !== null && importedValuationDays.has(day) && historical?.amount != null &&
-      decimalCompare(amount, historical.amount) !== 0;
+      decimalCompare(decimalToFixed(amount, 2), decimalToFixed(historical.amount, 2)) !== 0;
   }).toSorted(([a], [b]) => b.localeCompare(a)).map(([day, amount]) => ({
     day, historicalTotal: values.get(day)!.amount!, automaticTotal: amount!,
     difference: decimalSubtract(amount!, values.get(day)!.amount!),
@@ -337,13 +369,18 @@ export function analyzeInvestmentBook(input: {
       denominator !== null && decimalCompare(denominator, "0") > 0 ? decimalDivide(profit, denominator) : null;
     return { day: value.day, total: value.amount, netInvestment, profit, returnRatio, basis: value.basis };
   });
-  return {
-    book, opening, records, members, points, current: points.at(-1) ?? null,
-    firstRecordDay, firstAssetPointDay, firstTrendDay, historyComparison,
-    missingReason: unresolved ? "旧资金记录尚有未确认归属，收益暂停计算，避免漏算或重复。" :
+  const current = points.at(-1) ?? null;
+  // A summary keeps one actual valuation date; daily points and interval endpoints stay strict.
+  const summary = points.findLast(point => point.total !== null) ?? current;
+  const fundingMissingReason = unresolved ? "旧资金记录尚有未确认归属，收益暂停计算，避免漏算或重复。" :
       pendingFX.length ? "结单资金缺少当日参考汇率，已保留原币金额；本账美元本金、盈亏及收益率待补齐。" :
-      !opening ? "历史本金待补齐。请导入历史，或填写起点日期、期初本金及之后的入金出金。" :
-      points.at(-1)?.total == null ? "资产数据尚未完整。请检查来源同步、计价汇率和账本来源范围。" : null,
+      !opening ? "历史本金待补齐。请导入历史，或填写起点日期、期初本金及之后的入金出金。" : null;
+  const assetMissingReason = "资产数据尚未完整。请检查来源同步、计价汇率和账本来源范围。";
+  return {
+    book, opening, records, members, points, current, summary,
+    firstRecordDay, firstAssetPointDay, firstTrendDay, historyComparison, fundingMissingReason,
+    missingReason: fundingMissingReason ?? (current?.total == null ? assetMissingReason : null),
+    summaryMissingReason: fundingMissingReason ?? (summary?.total == null ? assetMissingReason : null),
   };
 }
 

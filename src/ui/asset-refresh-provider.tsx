@@ -119,9 +119,7 @@ export function AssetRefreshProvider({ children }: { children: ReactNode }) {
   }, [clear, coordinator]);
 
   useEffect(() => {
-    if (coordinator.feedback !== "manual" ||
-        coordinator.state === "idle" || coordinator.state === "refreshing" ||
-        coordinator.state === "planning") return;
+    if (coordinator.feedback !== "manual" || coordinator.state !== "success") return;
     const timer = window.setTimeout(() => coordinator.dismissFeedback(), 2_400);
     return () => window.clearTimeout(timer);
   }, [coordinator, coordinator.feedback, coordinator.state]);

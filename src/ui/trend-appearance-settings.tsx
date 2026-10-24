@@ -11,13 +11,11 @@ const OPTIONS = [
     value: "dots",
     showDots: true,
     label: "显示点阵",
-    description: "在曲线下方显示点阵填充",
   },
   {
     value: "line",
     showDots: false,
     label: "仅显示曲线",
-    description: "隐藏点阵填充，保留曲线",
   },
 ];
 
@@ -34,7 +32,6 @@ export function TrendAppearanceSettings() {
           <label className="settings-choice" key={option.value}>
             <input
               aria-labelledby={`${id}-${option.value}-label`}
-              aria-describedby={`${id}-${option.value}-description`}
               type="radio"
               name={`${id}-trend-appearance`}
               value={option.value}
@@ -43,7 +40,6 @@ export function TrendAppearanceSettings() {
             />
             <span className="settings-choice-copy">
               <strong id={`${id}-${option.value}-label`}>{option.label}</strong>
-              <span id={`${id}-${option.value}-description`}>{option.description}</span>
             </span>
             <span aria-hidden="true" className="settings-choice-preview settings-trend-preview">
               <svg className="settings-trend-preview__chart" viewBox="0 0 320 104">
@@ -65,7 +61,6 @@ export function TrendAppearanceSettings() {
                 />
                 <circle cx={316} cy={12} fill="var(--raised)" r={3} stroke="var(--display)" strokeWidth={2} />
               </svg>
-              <span>示例曲线</span>
             </span>
           </label>
         ))}

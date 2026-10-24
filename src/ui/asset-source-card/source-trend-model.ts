@@ -177,10 +177,10 @@ export function assetSourceTrendModel({
           unavailablePoints.length > 0
             ? `${unavailablePoints.length} 天未估值`
             : null,
-        ].filter(Boolean).join(" · ")
+        ].filter(Boolean).join("，")
       }`
       : null,
-  ].filter(Boolean).join(" · ");
+  ].filter(Boolean).join("，");
 
   return {
     abnormalPoints,

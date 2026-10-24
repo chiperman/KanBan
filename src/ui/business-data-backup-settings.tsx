@@ -69,7 +69,7 @@ function backupOptions(backups: BackupSummary[], selected: string, loading: bool
       ? [{ label: selected, value: selected }]
       : []),
     ...backups.map((backup) => ({
-      label: `${backup.fileName} · ${
+      label: `${backup.fileName}，${
         backup.modifiedAt ? formatShanghaiDateTime(backup.modifiedAt) : "时间未知"
       }`,
       value: backup.fileName,
@@ -340,7 +340,6 @@ export function BusinessDataBackupSettings() {
                 {preview.omittedHistory ? omittedHistorySummary(preview.omittedHistory) : null}
               </>
             }
-            eyebrow="LOCAL BACKUP / RESTORE"
             onClose={() => setConfirmOpen(false)}
             onSubmit={restore}
             title="确认恢复业务数据"

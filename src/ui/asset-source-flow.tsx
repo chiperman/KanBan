@@ -216,7 +216,7 @@ export function AssetSourceFlow({
   function leaveFlow() {
     router.push(
       reauthorization === undefined
-        ? "/assets?view=sources#asset-sources"
+        ? "/settings?view=data#asset-sources"
         : `/asset-sources/${encodeURIComponent(reauthorization.sourceId)}?view=manage`,
     );
   }
@@ -362,7 +362,7 @@ export function AssetSourceFlow({
       setError(body?.error ?? "手工资产记录保存失败");
       return;
     }
-    router.push("/assets?view=sources#asset-sources");
+    router.push("/settings?view=data#asset-sources");
     router.refresh();
   }
 
@@ -473,18 +473,17 @@ export function AssetSourceFlow({
   return (
     <section className="asset-source-flow" aria-label={flowTitle}>
       <WorkbenchPageHeader
-        eyebrow={isReauthorizing ? "SOURCE / REAUTHORIZE" : "SOURCE / ONBOARDING"}
         title={flowTitle}
       />
 
       <ol aria-label="来源接入步骤" className="asset-source-flow__steps">
         {!isReauthorizing ? (
           <li data-current={step === "choose" ? "true" : undefined}>
-            {stepLabel("choose", step, "1 选来源")}
+            {stepLabel("choose", step, "1 来源")}
           </li>
         ) : null}
         <li data-current={step === "configure" ? "true" : undefined}>
-          {stepLabel("configure", step, isReauthorizing ? "1 填授权" : "2 填授权")}
+          {stepLabel("configure", step, isReauthorizing ? "1 配置" : "2 配置")}
         </li>
         <li data-current={step === "preview" ? "true" : undefined}>
           {stepLabel("preview", step, isReauthorizing ? "2 确认" : "3 确认")}
@@ -500,24 +499,20 @@ export function AssetSourceFlow({
       {step === "choose" ? (
         <section aria-labelledby="source-flow-choose-title" className="asset-source-flow__panel">
           <h2 id="source-flow-choose-title">选择来源类型</h2>
-          <fieldset aria-label="来源类型" className="source-provider-list">
+          <div aria-label="来源类型" className="source-provider-list" role="group">
             {PROVIDER_OPTIONS.map((description) => (
-              <label
-                className="source-option vibe-choice"
-                data-vibe-component="choice"
+              <VibeButton
+                className="source-provider-button"
                 key={description.id}
+                onClick={() => chooseProvider(description.id)}
+                type="button"
+                variant="outline"
               >
-                <input
-                  type="radio"
-                  name="asset-provider"
-                  value={description.id}
-                  checked={providerId === description.id}
-                  onChange={() => chooseProvider(description.id)}
-                />
                 <span>{description.label}</span>
-              </label>
+                <span aria-hidden="true">→</span>
+              </VibeButton>
             ))}
-          </fieldset>
+          </div>
           <VibeButton onClick={leaveFlow} type="button" variant="text">
             取消返回
           </VibeButton>
@@ -527,15 +522,7 @@ export function AssetSourceFlow({
       {step === "configure" && selectedProvider !== null ? (
         <section aria-labelledby="source-flow-configure-title" className="asset-source-flow__panel">
           <h2 id="source-flow-configure-title">{configurationTitle}</h2>
-          <p>
-            {providerId === "longbridge" ? "仅执行账户、持仓和行情读取。" : providerId === "manual"
-              ? "无凭证；确认后创建。"
-              : isReauthorizing && isEvm
-                ? "仅接受公开地址。"
-                : isEvm
-                  ? "仅接受公开地址。"
-                  : "仅接受只读权限。"}
-          </p>
+          {providerId !== "manual" ? <p>{providerId === "longbridge" ? "仅连接只读账户权限。" : isEvm ? "仅使用公开地址，无需私钥。" : "仅使用具有读取权限的授权。"}</p> : null}
           {providerId === "longbridge" ? (
             <LongbridgeConnectionSettings sourceId={reauthorization?.sourceId} mode={longbridgeMode} onMode={setLongbridgeMode} onReady={setLongbridgeReady} onAuthorizeSdk={() => void startOAuth()} pending={pending} />
           ) : providerId === "manual" ? (
@@ -652,24 +639,23 @@ export function AssetSourceFlow({
       {step === "preview" ? (
         <section aria-labelledby="source-flow-preview-title" className="asset-source-flow__panel">
           <h2 id="source-flow-preview-title">
-            {providerId === "manual" ? "确认手工来源" : "校验与范围预览"}
+            {providerId === "manual" ? "确认手工来源" : "确认资产来源"}
           </h2>
           {providerId === "manual" ? (
             <>
               <dl className="source-preview-list vibe-preview-list">
                 <div className="vibe-data-row">
-                  <dt>来源能力</dt>
-                  <dd>无凭证来源</dd>
+                  <dt>资产名称</dt>
+                  <dd>{manualLabel}</dd>
                 </div>
                 <div className="vibe-data-row">
-                  <dt>数据边界</dt>
+                  <dt>记录方式</dt>
                   <dd>仅记录总额</dd>
                 </div>
               </dl>
             </>
           ) : (
             <>
-              <p>已验证；确认后保存。</p>
               <dl className="source-preview-list vibe-preview-list">
                 {previews.map((current) => {
                   const description = assetSourceProvider(current.provider);
@@ -677,7 +663,7 @@ export function AssetSourceFlow({
                     <div className="vibe-data-row" key={current.id}>
                       <dt>{description.label}</dt>
                       <dd>
-                        {description.previewScope(current.accountMode)} ·{" "}
+                        {description.previewScope(current.accountMode)}，{" "}
                         <AssetFinancialValue unit={current.total.currency}>
                           {formatAmount(
                             current.total.amount,

@@ -98,7 +98,7 @@ export function AssetSourceHoldings({
         />
       </div>
       <p className="source-meter-caption">
-        <span>{String(visibleHoldings.length).padStart(2, "0")} POSITIONS</span>
+        <span>{visibleHoldings.length} 项持仓</span>
         <span className={unvaluedCount > 0 ? "is-incomplete" : undefined}>
           {valuationCaption}
         </span>
@@ -189,7 +189,11 @@ export function AssetSourceHoldings({
               data-testid="asset-holdings-search-empty"
               role="status"
             >
-              无匹配持仓
+              {hasHoldingsSearchQuery
+                ? "无匹配持仓"
+                : hiddenSmallHoldingCount > 0
+                  ? "持仓已按金额筛选"
+                  : "暂无持仓"}
             </p>
           ) : (
             <div className="asset-table-wrap">
@@ -277,7 +281,7 @@ export function AssetSourceHoldings({
             ) : null}
             {quoteUnavailableCount > 0 ? (
               <VibeStatusTag className="asset-sync-status" tone="muted">
-                {quoteUnavailableCount} 项期权行情未接入 · 账户总额已包含
+                {quoteUnavailableCount} 项期权行情未接入，账户总额已包含
               </VibeStatusTag>
             ) : null}
             {source.lifecycle === "disconnected" ? (

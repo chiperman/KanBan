@@ -9,8 +9,10 @@ import { SESSION_IDLE_TIMEOUT_MS } from "@/shared/session-policy";
  * 会话 Cookie 不设置过期时间，浏览器关闭即结束；服务重启同样要求重新验证。
  */
 
-export const SESSION_COOKIE = "pad_session";
-export const CHALLENGE_COOKIE = "pad_webauthn_challenge";
+// Cookie 不按端口隔离；Next 在加载服务端模块前设置实际监听端口。
+const cookiePort = process.env.PORT || "3000";
+export const SESSION_COOKIE = `pad_session_${cookiePort}`;
+export const CHALLENGE_COOKIE = `pad_webauthn_challenge_${cookiePort}`;
 const RECOVERY_FAILURE_WINDOW_MS = 5 * 60 * 1000;
 const RECOVERY_MAX_ATTEMPTS = 5;
 

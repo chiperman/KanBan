@@ -56,8 +56,9 @@ export function SourceInvestmentPerformance({ history, sourceId, sourceName, rec
   return <section aria-label={`${sourceName}投资收益`} className="source-performance" data-testid="source-investment-performance">
     <header className="source-performance__heading">
       <h3>投资表现</h3>
-      <p>{sourceName}独立账户{analysis.currency ? ` · ${analysis.currency}` : ""} · {showSensitiveInfo ? current ? `截至 ${current.day}` : "暂无收益记录" : "金额及趋势已隐藏"}</p>
+      {showSensitiveInfo && current ? <p>截至 {current.day}</p> : null}
     </header>
+    {analysis.points.length === 0 ? <p className="trend-empty" role="status">{showSensitiveInfo ? analysis.missingReason ?? "暂无收益记录" : "金额及趋势已隐藏"}</p> : <>
     <div className="source-performance__metrics">
       {metrics.map(metric => <article key={metric.label}>
         <p className="card-label">{metric.label}</p>
@@ -80,11 +81,11 @@ export function SourceInvestmentPerformance({ history, sourceId, sourceName, rec
       variant="source"
     >
       <div className="source-performance__chart-caption">
-        <span>{curve === "return" ? "累计资金加权收益率 · %" : `${curve === "total" ? "资产总额" : "累计收益"} · ${analysis.currency ?? "账户原币"}`}</span>
-        <span>{curve === "return" ? "Modified Dietz · 不年化" : curve === "total" ? "含资金进出与估值变化" : "资产金额 − 累计净投入"}</span>
+        <span>{curve === "return" ? "累计资金加权收益率，%" : `${curve === "total" ? "资产总额" : "累计收益"}，${analysis.currency ?? "账户原币"}`}</span>
+        <span>{curve === "return" ? "Modified Dietz，不年化" : curve === "total" ? "含资金进出与估值变化" : "资产金额 − 累计净投入"}</span>
       </div>
-      {showSensitiveInfo && analysis.missingReason && curve !== "total" ? <p className="trend-note" role="status">{analysis.missingReason}</p> : null}
     </AssetTrendPanel>
+    </>}
     <div className="source-performance__details">
     <details className="daily-trend-details source-performance__method">
       <summary>计算口径与数据规则</summary>
@@ -110,7 +111,7 @@ export function SourceInvestmentPerformance({ history, sourceId, sourceName, rec
     </details> : null}
     {showSensitiveInfo && history ? <details className="daily-trend-details">
       <summary>导入记账记录（{history.records.length} 条）</summary>
-      <p className="trend-note">{history.accountName} · 期初本金 {history.openingInvestment.day}：<AssetFinancialValue unit={history.currency}>{money(history.openingInvestment.amount)}</AssetFinancialValue>。{history.openingBasis}。</p>
+      <p className="trend-note">{history.accountName}，期初本金 {history.openingInvestment.day}：<AssetFinancialValue unit={history.currency}>{money(history.openingInvestment.amount)}</AssetFinancialValue>。{history.openingBasis}。</p>
       <ol className="manual-asset-history-list">
         {importedPagination.visibleItems.map(record => <li key={record.id}>
           <span>{record.day}</span>

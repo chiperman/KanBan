@@ -219,7 +219,6 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
             <header className="command-menu-head">
               <div>
                 <p className="command-menu-eyebrow">快捷命令</p>
-                <p className="command-menu-hint">⌘K · Ctrl K · Esc 关闭</p>
               </div>
               <VibeButton
                 type="button"

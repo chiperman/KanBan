@@ -135,27 +135,22 @@ export function AssetProductCoverage({
     : coverage?.status === "unknown"
       ? "当前总额未验证"
       : aggregateOnlyCount > 0
-        ? "当前总额完整 · 部分产品仅汇总"
+        ? "当前总额完整，部分产品仅汇总"
         : null;
-  const currentProductCount = coverage?.products.filter(
-    ({ freshness }) => freshness === "current",
+  const expiredProductCount = coverage?.products.filter(
+    ({ freshness }) => freshness === "expired",
   ).length ?? 0;
-  const expiredProductCount = (coverage?.products.length ?? 0) - currentProductCount;
   const summary = (
     <>
       <span className="vibe-coverage-summary-label">产品覆盖</span>
       <strong className="vibe-coverage-summary-count">
-        {String(coverage?.products.length ?? 0).padStart(2, "0")} PRODUCTS
+        {coverage?.products.length ?? 0} 项
+        {expiredProductCount > 0 ? (
+          <span className="vibe-coverage-summary-freshness">
+            {expiredProductCount} 项待更新
+          </span>
+        ) : null}
       </strong>
-      <span
-        className="vibe-coverage-summary-freshness"
-        data-freshness={expiredProductCount > 0 ? "expired" : "current"}
-      >
-        {String(currentProductCount).padStart(2, "0")} CURRENT
-        {expiredProductCount > 0
-          ? ` / ${String(expiredProductCount).padStart(2, "0")} STALE`
-          : ""}
-      </span>
       <span aria-hidden="true" className="vibe-coverage-summary-toggle" />
     </>
   );
@@ -182,14 +177,14 @@ export function AssetProductCoverage({
           {label}
           {coverage?.unexplainedValue ? (
             <>
-              {` · ${coverage.totalIsAuthoritative ? "明细差额" : "未解释"} `}
+              {`，${coverage.totalIsAuthoritative ? "明细差额" : "未解释"} `}
               <AssetFinancialValue unit={coverage.unexplainedValue.currency}>
                 {money(coverage.unexplainedValue.amount)}
               </AssetFinancialValue>
             </>
           ) : ""}
           {coverage && coverage.excludedPositiveAccounts.length > 0
-            ? ` · 未纳入 ${coverage.excludedPositiveAccounts.join("、")}`
+            ? `，未纳入 ${coverage.excludedPositiveAccounts.join("、")}`
             : ""}
         </VibeStatusTag>
       ) : null}
@@ -253,25 +248,19 @@ export function AssetProductCoveragePanel({
       className={["vibe-coverage-panel", className].filter(Boolean).join(" ")}
       id={id}
     >
-      {capabilityGroups.map(({ capability, products }, groupIndex) => (
+      {capabilityGroups.map(({ capability, products }) => (
         <section
           className="vibe-coverage-group"
           data-capability={capability}
           key={capability}
         >
           <header className="vibe-coverage-group-head">
-            <span>{String(groupIndex + 1).padStart(2, "0")}</span>
             <strong>{CAPABILITY_LABELS[capability]}</strong>
-            <span>
-              {String(products.length).padStart(2, "0")} PRODUCTS
-            </span>
+            <span>{products.length} 项</span>
           </header>
           <ul className="vibe-coverage-products">
-            {products.map((product, productIndex) => (
+            {products.map((product) => (
               <li className="vibe-coverage-product" key={product.product}>
-                <span className="vibe-coverage-product-index">
-                  {String(productIndex + 1).padStart(2, "0")}
-                </span>
                 <div className="vibe-coverage-product-copy">
                   <div className="vibe-coverage-product-head">
                     <strong>
@@ -279,11 +268,13 @@ export function AssetProductCoveragePanel({
                     </strong>
                     {product.freshness === "expired" ? (
                       <span className="vibe-coverage-product-stale">
-                        STALE
+                        待更新
                       </span>
                     ) : null}
                   </div>
-                  {product.message ? <p>{product.message}</p> : null}
+                  {product.message ? (
+                    <p>{product.message.replace(/\s+[·・]\s+/g, "，")}</p>
+                  ) : null}
                 </div>
               </li>
             ))}

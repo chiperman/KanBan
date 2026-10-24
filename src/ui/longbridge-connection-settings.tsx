@@ -149,7 +149,7 @@ export function LongbridgeConnectionSettings({ sourceId, mode, onMode, onReady, 
       <div className="longbridge-connection-settings__copy">
         <h3 id="longbridge-cli-heading">CLI</h3>
         <VibeStatusTag role="status" tone={cliChecking ? "muted" : cliReady ? "success" : cliError || error || (status && (sourceId || status.cli.installed)) ? "error" : "muted"}>{cliChecking ? "正在检测 CLI…" : cliError || (status?.cli.matches === false ? "CLI 账户与此来源不一致，请连接原账户。" : status?.cli.authorized ? status.cli.account : status?.cli.error ?? "尚未检测到 CLI")}</VibeStatusTag>
-        <p className="source-field-help">{status?.cli.version ? `${status.cli.version} · KanBan 所在机器` : "检测 KanBan 所在机器的 CLI，无需手动启动服务。"}</p>
+        <p className="source-field-help">{status?.cli.version ? `${status.cli.version}，KanBan 所在机器` : "检测 KanBan 所在机器的 CLI，无需手动启动服务。"}</p>
       </div>
       <VibeButton type="button" variant="outline" disabled={cliChecking || pending || loginPending || !status} onClick={() => void reloadCli()}>{cliChecking ? "检测中…" : "重新检测 CLI"}</VibeButton>
       {status && !status.cli.installed ? <VibeLink href="https://open.longbridge.com/docs/cli" target="_blank" rel="noreferrer" variant="text">查看 CLI 安装说明</VibeLink> : null}

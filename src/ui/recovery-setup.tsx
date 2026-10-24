@@ -133,7 +133,6 @@ export function RecoverySetup({ configured }: RecoverySetupProps) {
               添加密钥并输入验证码确认；密钥仅本次显示。
             </>
           }
-          eyebrow="LOCAL RECOVERY / TOTP"
           onClose={closeDialog}
           onSubmit={save}
           title="配置 TOTP 登录"
@@ -211,7 +210,6 @@ export function RecoverySetup({ configured }: RecoverySetupProps) {
               将生成新密钥，请注意防窥。
             </>
           }
-          eyebrow="LOCAL RECOVERY / TOTP"
           onClose={closeDialog}
           title="配置 TOTP 登录"
           titleId="recovery-setup-title"

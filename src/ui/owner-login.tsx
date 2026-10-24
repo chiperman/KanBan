@@ -4,7 +4,6 @@ import { startAuthentication } from "@simplewebauthn/browser";
 import {
   useRef,
   useState,
-  useSyncExternalStore,
   type FormEvent,
 } from "react";
 
@@ -33,7 +32,6 @@ const LOCKED_FLOW_FADE_DURATION = 0.03;
 const LOCKED_FLOW_DIM_START = 0.92;
 const LOCKED_FLOW_MASK_HOLD = 0.949;
 const LOCKED_FLOW_RESET = 0.95;
-const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
 const LOCKED_FLOW_SOURCES = [
   {
@@ -101,28 +99,6 @@ const LOCKED_FLOW_CONTINUATION = [
 ] as const;
 
 const LOCKED_FLOW_ROUTES = [...LOCKED_FLOW_SOURCES, ...LOCKED_FLOW_CONTINUATION];
-
-function subscribeReducedMotion(onStoreChange: () => void) {
-  const mediaQuery = window.matchMedia(REDUCED_MOTION_QUERY);
-  mediaQuery.addEventListener("change", onStoreChange);
-  return () => mediaQuery.removeEventListener("change", onStoreChange);
-}
-
-function getReducedMotionSnapshot() {
-  return window.matchMedia(REDUCED_MOTION_QUERY).matches;
-}
-
-function getServerReducedMotionSnapshot() {
-  return true;
-}
-
-function useReducedMotion() {
-  return useSyncExternalStore(
-    subscribeReducedMotion,
-    getReducedMotionSnapshot,
-    getServerReducedMotionSnapshot,
-  );
-}
 
 interface LockedFlowOpacityProps {
   activeAt: number;
@@ -210,7 +186,7 @@ function LockedFlowRoute({ reducedMotion, route }: LockedFlowRouteProps) {
 }
 
 function LockedProductFlow() {
-  const reducedMotion = useReducedMotion();
+  const reducedMotion = true;
 
   return (
     <LockedComputer reducedMotion={reducedMotion}>
@@ -459,16 +435,16 @@ export function OwnerLogin({
       data-vibe-surface="auth-panel"
     >
       <div className="login-auth-column">
-        <h1 id="login-title">个人投资<br />资产看板</h1>
+        <h1 id="login-title">资产看板</h1>
         <div className="login-flow" key={locked ? mode : "setup"}>
           {state === "failed" ? (
-            <VibeNotice className="login-error" code="ERROR" role="alert" tone="error">
-              验证失败或已取消。
+            <VibeNotice className="login-error" role="alert" tone="error">
+              验证未完成，请重试。
             </VibeNotice>
           ) : null}
           {state === "unavailable" ? (
-            <VibeNotice className="login-error" code="ERROR" role="alert" tone="error">
-              请先预置登录凭证。
+            <VibeNotice className="login-error" role="alert" tone="error">
+              登录暂时不可用，请重试。
             </VibeNotice>
           ) : null}
           {!locked ? (
@@ -529,7 +505,6 @@ export function OwnerLogin({
               {recoveryError ? (
                 <VibeNotice
                   className="login-error"
-                  code="ERROR"
                   id="recovery-totp-error"
                   role="alert"
                   tone="error"

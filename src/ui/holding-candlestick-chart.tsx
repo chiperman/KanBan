@@ -234,7 +234,7 @@ export function HoldingCandlestickChart({ currency, name, onClose, onRetryRealti
       }
       aria-label={`查看 ${name} K线`}
       className="holding-candlestick-dialog"
-      description={`${symbol} · ${currency} · 常规盘 · 未复权 · ${symbol.endsWith(".US") ? "纽约时间" : "交易所时间"}`}
+      description={`${symbol}，${currency}，常规盘，未复权，${symbol.endsWith(".US") ? "纽约时间" : "交易所时间"}`}
       headerActions={
         <VibeButton aria-label="关闭K线" onClick={onClose} shape="square" size="compact" title="关闭" type="button" variant="text"><svg aria-hidden="true" className="vibe-icon" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.5" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18" /></svg></VibeButton>
       }

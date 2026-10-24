@@ -26,6 +26,9 @@ export default async function AssetsPage({
   await redirectLoopbackIpToLocalhost("/assets", searchParams);
   const services = getServices();
   if ((await services.auth.currentSession()) === null) redirect("/");
+  if ((await searchParams)?.view === "sources") {
+    redirect("/settings?view=data#asset-sources");
+  }
   const [storedSources, manualRecords, cards, fullRefreshState] = await Promise.all([
     services.assetSources.list(),
     services.manualAssetRecords.list(),

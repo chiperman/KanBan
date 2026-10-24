@@ -64,7 +64,6 @@ export function SetupPasskey() {
       {state === "failed" ? (
         <VibeNotice
           className="login-error setup-feedback-message"
-          code="ERROR"
           role="alert"
           tone="error"
         >
@@ -75,7 +74,6 @@ export function SetupPasskey() {
         <>
           <VibeNotice
             className="login-error setup-feedback-message"
-            code="UNSUPPORTED"
             role="alert"
             tone="error"
           >

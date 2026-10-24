@@ -1,26 +1,10 @@
 "use client";
 
 import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
-import { assetSourceKindMetadata } from "@/domain/asset-source-kinds";
 import { AssetSourceRefreshButton } from "@/ui/asset-refresh-controls";
 import { sourceSyncStatus } from "@/ui/asset-source-status";
 import { VibeStatusTag } from "@/ui/vibe/vibe-data-instrument";
 import type { AssetSourceView } from "./types";
-
-function providerCardLabel(source: AssetSourceView): string {
-  return assetSourceKindMetadata(source.kind)?.title ?? "资产来源";
-}
-
-function providerCode(source: AssetSourceView): string {
-  return assetSourceKindMetadata(source.kind)?.code ?? "SRC";
-}
-
-function sourceHeading(source: AssetSourceView): {
-  title: string;
-  metadata: string | null;
-} {
-  return { title: assetSourceDisplayName(source), metadata: null };
-}
 
 export function AssetSourceHeader({
   source,
@@ -34,45 +18,34 @@ export function AssetSourceHeader({
   onReadOnlyAction?: () => void;
 }) {
   const isManual = source.kind === "manual";
-  const heading = sourceHeading(source);
   const longbridge = source.kind === "longbridge";
-  const sourceState = isManual
-    ? { label: null, tone: "muted" as const }
-    : source.lifecycle === "disconnected"
-    ? { label: longbridge ? "已断开" : "OFFLINE", tone: "muted" as const }
+  if (isManual) return null;
+  const sourceState = source.lifecycle === "disconnected"
+    ? { label: "已断开", tone: "muted" as const }
     : source.sync.error
-      ? { label: longbridge ? "上次资产同步失败" : "ERROR", tone: "error" as const }
+      ? { label: "同步失败", tone: "error" as const }
       : source.sync.status === "expired"
-        ? { label: longbridge ? "资产待更新" : "STALE", tone: "warning" as const }
-        : { label: longbridge ? "资产已同步" : "CURRENT", tone: "success" as const };
+        ? { label: "待更新", tone: "warning" as const }
+        : { label: "已同步", tone: "success" as const };
   return (
-    <>
-      <header className="asset-source-head">
-        <p className="card-label">{providerCardLabel(source)}</p>
-        <div className="asset-source-head-actions">
-          <VibeStatusTag
-            className={`source-live-state ${source.sync.status}`}
-            tone={sourceState.tone}
-            title={longbridge ? sourceSyncStatus(source)?.label : undefined}
-          >
-            {sourceState.label
-              ? `${providerCode(source)} / ${sourceState.label}`
-              : providerCode(source)}
-          </VibeStatusTag>
-          {showRefreshControl && !isManual && source.lifecycle !== "disconnected" ? (
-            <AssetSourceRefreshButton
-              disabled={refreshDisabled}
-              onDisabledClick={onReadOnlyAction}
-              sourceId={source.id}
-              sourceName={heading.title}
-            />
-          ) : null}
-        </div>
-      </header>
-      <h2 className="asset-source-title">{heading.title}</h2>
-      {heading.metadata ? (
-        <p className="asset-source-meta">{heading.metadata}</p>
-      ) : null}
-    </>
+    <header className="asset-source-head">
+      <div className="asset-source-head-actions">
+        <VibeStatusTag
+          className={`source-live-state ${source.sync.status}`}
+          tone={sourceState.tone}
+          title={longbridge ? sourceSyncStatus(source)?.label : undefined}
+        >
+          {sourceState.label}
+        </VibeStatusTag>
+        {showRefreshControl && source.lifecycle !== "disconnected" ? (
+          <AssetSourceRefreshButton
+            disabled={refreshDisabled}
+            onDisabledClick={onReadOnlyAction}
+            sourceId={source.id}
+            sourceName={assetSourceDisplayName(source)}
+          />
+        ) : null}
+      </div>
+    </header>
   );
 }

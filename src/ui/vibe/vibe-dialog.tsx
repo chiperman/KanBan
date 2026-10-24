@@ -26,8 +26,7 @@ interface VibeDialogProps
   extends Omit<HTMLAttributes<HTMLDivElement>, "onSubmit" | "title"> {
   actions: ReactNode;
   children?: ReactNode;
-  description: ReactNode;
-  eyebrow?: string;
+  description?: ReactNode;
   headerActions?: ReactNode;
   onClose: () => void;
   onSubmit?: FormEventHandler<HTMLFormElement>;
@@ -40,7 +39,6 @@ export function VibeDialog({
   children,
   className,
   description,
-  eyebrow,
   headerActions,
   onClose,
   onSubmit,
@@ -118,7 +116,6 @@ export function VibeDialog({
     <>
       <header className="vibe-dialog__header">
         <div className="vibe-dialog__heading">
-          {eyebrow ? <p className="vibe-dialog__eyebrow">{eyebrow}</p> : null}
           <h2 id={titleId}>{title}</h2>
         </div>
         {headerActions ? (
@@ -126,7 +123,7 @@ export function VibeDialog({
         ) : null}
       </header>
       <div className="vibe-dialog__body">
-        <p className="vibe-dialog__copy">{description}</p>
+        {description ? <p className="vibe-dialog__copy">{description}</p> : null}
         {children}
       </div>
       <footer className="vibe-dialog__footer">{actions}</footer>

@@ -215,10 +215,10 @@ export function BusinessDataBackupDropzone({
             <p className="business-data-dropzone__name">{phase.fileName}</p>
             <p className="business-data-dropzone__meta">
               {phase.kind === "done"
-                ? `已保存 · ${fmt(phase.size)}`
+                ? `已保存，${fmt(phase.size)}`
                 : phase.progress >= 1
                   ? "正在校验并保存…"
-                  : `正在上传 · ${Math.round(phase.progress * 100)}%`}
+                  : `正在上传，${Math.round(phase.progress * 100)}%`}
             </p>
             <span className="business-data-dropzone__track">
               <span

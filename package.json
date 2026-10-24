@@ -24,6 +24,7 @@
     "runtime:update": "node scripts/update-runtime.mjs"
   },
   "dependencies": {
+    "@radix-ui/colors": "^3.0.0",
     "@simplewebauthn/browser": "^13.3.0",
     "@simplewebauthn/server": "^13.3.2",
     "next": "^16.3.6",

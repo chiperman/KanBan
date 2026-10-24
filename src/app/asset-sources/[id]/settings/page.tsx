@@ -53,7 +53,6 @@ export default async function AssetSourceSettingsPage({
                   返回来源详情
                 </VibeLink>
               )}
-              eyebrow="WALLET / ASSET SCOPE"
               title="管理资产范围"
             />
             <EvmTokenPreferenceSettings

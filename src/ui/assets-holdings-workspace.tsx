@@ -162,17 +162,17 @@ function sourceStatuses(source: WorkspaceSource): {
     return [{ label: "尚未添加首条记录", tone: "warning" }];
   }
   if (source.lifecycle === "disconnected") {
-    statuses.push({ label: "已断开 · 保留最后快照", tone: "warning" });
+    statuses.push({ label: "已断开，保留最后快照", tone: "warning" });
   }
   const sync = sourceSyncStatus(source);
   if (sync !== null) statuses.push(sync);
   const coverage = source.snapshot.coverage;
   if (coverage?.status === "unknown") {
-    statuses.push({ label: "总额可读 · 覆盖待确认", tone: "warning" });
+    statuses.push({ label: "总额可读，覆盖待确认", tone: "warning" });
   } else if (coverage?.status === "partial") {
     statuses.push({
       label: coverage.totalIsAuthoritative
-        ? "总额为准 · 明细覆盖不完整"
+        ? "总额为准，明细覆盖不完整"
         : "总额覆盖不完整",
       tone: "warning",
     });
@@ -182,7 +182,7 @@ function sourceStatuses(source: WorkspaceSource): {
         capability === "aggregate-only" && freshness === "current",
     )
   ) {
-    statuses.push({ label: "总额完整 · 部分产品仅汇总", tone: "warning" });
+    statuses.push({ label: "总额完整，部分产品仅汇总", tone: "warning" });
   }
   if (coverage?.products.some(({ freshness }) => freshness === "expired")) {
     statuses.push({ label: "含过期产品数据", tone: "warning" });
@@ -209,7 +209,7 @@ function holdingStatus(holding: AssetHolding): {
   if (holding.quoteEvidence?.freshness === "retained") {
     return {
       label: holding.quoteEvidence.delivery === "delayed"
-        ? "保留行情 · 延迟行情"
+        ? "保留行情，延迟行情"
         : "保留行情",
       tone: "warning",
     };
@@ -238,7 +238,7 @@ function priceEvidence(holding: AssetHolding): string {
     observedAt ? formatShanghaiDateTime(observedAt) : "时间不可用",
   ]
     .filter(Boolean)
-    .join(" · ");
+    .join("，");
 }
 
 export function AssetsHoldingsWorkspace({
@@ -365,7 +365,6 @@ export function AssetsHoldingsWorkspace({
           <VibeLink href="/asset-sources/new" variant="primary">新增来源</VibeLink>
           </>
         }
-        eyebrow="PORTFOLIO / HOLDINGS"
         title="资产"
         titleId="assets-holdings-title"
       />
@@ -379,11 +378,10 @@ export function AssetsHoldingsWorkspace({
       >
         <header>
           <div>
-            <p className="card-label">HOLDINGS / OBSERVATION</p>
-            <h2 id="holding-observations-title">持仓价格与市值观察</h2>
+            <h2 id="holding-observations-title">持仓</h2>
           </div>
           <p className="assets-holdings__count" data-testid="assets-holdings-count">
-            显示 {filteredObservations.length} 项观察
+            {filteredObservations.length} 项
           </p>
         </header>
 
@@ -433,7 +431,10 @@ export function AssetsHoldingsWorkspace({
 
         {filteredObservations.length === 0 ? (
           <div className="empty-state" data-testid="assets-holdings-empty">
-            <p className="empty-title">无匹配持仓</p>
+            <p className="empty-title">{observations.length === 0 ? "暂无持仓" : "无匹配持仓"}</p>
+            {sourceId !== "all" || searchQuery || assetClass !== "all" || valuation !== "all" ? (
+              <VibeButton type="button" variant="outline" onClick={() => { setSourceId("all"); setSearchQuery(""); setAssetClass("all"); setValuation("all"); }}>清除筛选</VibeButton>
+            ) : liveSources.length === 0 ? <VibeLink href="/asset-sources/new" variant="primary">新增来源</VibeLink> : null}
           </div>
         ) : (
           <div className="assets-holdings__table-wrap">
@@ -592,7 +593,7 @@ export function AssetsHoldingsWorkspace({
                         <tr className="assets-holdings__evidence-row">
                           <td colSpan={6}>
                             <div className="assets-holdings__price-evidence" id={evidenceId}>
-                              <span>{assetHoldingDisplayName(holding)} · 行情依据</span>
+                              <span>{assetHoldingDisplayName(holding)}，行情依据</span>
                               <p>{priceEvidence(holding)}</p>
                             </div>
                           </td>

@@ -31,6 +31,8 @@
 
 import { readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
 
 const TOKENS_FILE = "src/app/design-tokens.css";
 const CSS_DIR = "src/app";
@@ -194,8 +196,8 @@ function readTypeScale(source) {
   for (const match of source.matchAll(/--vibe-type-[a-z-]+:\s*([\d.]+)px/g)) {
     scale.add(Number.parseFloat(match[1]));
   }
-  if (scale.size < 5) {
-    throw new Error(`从 ${TOKENS_FILE} 只解析到 ${scale.size} 档字号，刻度表可能已被破坏`);
+  if (scale.size < 3 || scale.size > 4 || Math.min(...scale) < 12) {
+    throw new Error(`${TOKENS_FILE} 必须使用 3–4 档字号，且最小为 12px`);
   }
   return scale;
 }
@@ -403,6 +405,10 @@ const allSourceFiles = listSources("src").sort();
 
 function collectDefinedTokens() {
   const defined = new Set();
+  for (const match of tokensSource.matchAll(/@import "(@radix-ui\/colors\/[^" ]+\.css)"/g)) {
+    const palette = readFileSync(require.resolve(match[1]), "utf8");
+    for (const definition of palette.matchAll(CSS_TOKEN_DEFINITION)) defined.add(definition[1]);
+  }
   for (const file of [...cssFiles, ...allSourceFiles]) {
     const source = readFileSync(file, "utf8");
     for (const match of source.matchAll(file.endsWith(".css") ? CSS_TOKEN_DEFINITION : JS_TOKEN_DEFINITION)) {

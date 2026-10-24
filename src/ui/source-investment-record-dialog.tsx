@@ -44,8 +44,8 @@ export function SourceInvestmentRecordDialog({sourceId,sourceName,currentDay,cur
     } catch (e) {setError(e instanceof Error ? e.message : "保存记录失败");}
     finally {setPending(false);}
   }
-  return <VibeDialog aria-label={`记录 ${sourceName} 数据`} title={`${record || manualRecord ? "编辑记录" : "添加记录"} · ${sourceName}`} titleId="investment-record-title" eyebrow="MANUAL / RECORD"
-    description={assetOnly ? "更新本来源资产总额。入金出金请到投资账本选择账本记录。" : "记录本来源的资产总额、期初本金或资金进出。"} onClose={()=>{if(!pending)onClose();}} onSubmit={e=>{e.preventDefault();void save();}}
+  return <VibeDialog aria-label={`记录 ${sourceName} 数据`} title={`${record || manualRecord ? "编辑记录" : "添加记录"}，${sourceName}`} titleId="investment-record-title"
+    onClose={()=>{if(!pending)onClose();}} onSubmit={e=>{e.preventDefault();void save();}}
     actions={<><VibeButton type="button" variant="text" disabled={pending} onClick={onClose}>取消</VibeButton><VibeButton type="submit" variant="primary" disabled={pending||!amount.trim()}>保存数据</VibeButton></>}>
     <VibeSelectField disabled={pending || manualRecord !== undefined || assetOnly} fieldId="investment-record-kind" label="记录类型" value={kind} onValueChange={value=>setKind(value as typeof kind)} options={kinds.filter(option=>assetOnly ? option.value==="valuation" : option.value!=="opening"||!hasOpening||record?.kind==="opening")} />
     <VibeDateField disabled={pending || manualRecord !== undefined} fieldId="investment-record-day" label="记录日期" max={currentDay} value={day} onValueChange={setDay} />
@@ -59,7 +59,7 @@ export function SourceInvestmentRecordDialog({sourceId,sourceName,currentDay,cur
 export function SourceInvestmentRecordDeleteDialog({sourceName,record,onClose}:{sourceName:string;record:SourceInvestmentRecord;onClose():void}) {
   const router=useRouter(); const [pending,setPending]=useState(false); const [error,setError]=useState("");
   async function remove(){setPending(true);setError("");try{await request(record.sourceId,"DELETE",{action:"investment-record",recordId:record.id});router.refresh();onClose();}catch(e){setError(e instanceof Error?e.message:"删除失败");}finally{setPending(false);}}
-  return <VibeDialog aria-label="删除手动记账记录" title="删除这条记录？" titleId="investment-record-delete-title" eyebrow="ACCOUNT / DELETE" description={`${sourceName} · ${record.day} · ${kinds.find(option=>option.value===record.kind)!.label} · ${record.amount} ${record.currency}`} onClose={()=>{if(!pending)onClose();}}
+  return <VibeDialog aria-label="删除手动记账记录" title="删除这条记录？" titleId="investment-record-delete-title" description={`${sourceName}，${record.day}，${kinds.find(option=>option.value===record.kind)!.label}，${record.amount} ${record.currency}`} onClose={()=>{if(!pending)onClose();}}
     actions={<><VibeButton type="button" variant="text" disabled={pending} onClick={onClose}>取消</VibeButton><VibeButton type="button" variant="primary" disabled={pending} onClick={()=>void remove()}>确认删除</VibeButton></>}>
     <p>删除后将重算账户收益。</p>{error?<VibeNotice tone="error" role="alert">{error}</VibeNotice>:null}
   </VibeDialog>;

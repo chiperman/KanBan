@@ -10,7 +10,6 @@ export function WorkbenchPageHeader({
   actionsLabel,
   backLink,
   description,
-  eyebrow,
   title,
   titleId,
 }: {
@@ -18,7 +17,6 @@ export function WorkbenchPageHeader({
   actionsLabel?: string;
   backLink?: { href: string; label: string };
   description?: ReactNode;
-  eyebrow: string;
   title: string;
   titleId?: string;
 }) {
@@ -38,13 +36,11 @@ export function WorkbenchPageHeader({
               </VibeLink>
             </VibeTooltip>
             <div className="workbench-page-header__title-copy">
-              <p className="card-label">{eyebrow}</p>
               <h1 id={titleId}>{title}</h1>
             </div>
           </div>
         ) : (
           <>
-            <p className="card-label">{eyebrow}</p>
             <h1 id={titleId}>{title}</h1>
           </>
         )}

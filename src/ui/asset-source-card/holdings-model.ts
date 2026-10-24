@@ -134,12 +134,12 @@ export function assetSourceHoldingsModel({
       ? `${valuedCount} 项已估值，${unvaluedCount} 项未估值，${quoteUnavailableCount} 项行情未接入`
       : `${valuedCount} 项已估值，${unvaluedCount} 项未估值`,
     valuationCaption: unvaluedCount > 0
-      ? `${unvaluedCount} UNVALUED${
-        quoteUnavailableCount > 0 ? ` · ${quoteUnavailableCount} QUOTE N/A` : ""
+      ? `${unvaluedCount} 项未估值${
+        quoteUnavailableCount > 0 ? `，${quoteUnavailableCount} 项行情未接入` : ""
       }`
       : quoteUnavailableCount > 0
-        ? `${quoteUnavailableCount} QUOTE N/A`
-        : "VALUATION / COMPLETE",
+        ? `${quoteUnavailableCount} 项行情未接入`
+        : "已全部估值",
     valuationSegments: visibleHoldings.map((holding) => ({
       key: assetHoldingKey(holding),
       tone:

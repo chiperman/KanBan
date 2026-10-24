@@ -77,3 +77,34 @@ The application font licenses remain beside the font files under
 [public/fonts/nothing-open/](../public/fonts/nothing-open/). The standalone
 landing page ships its own font files and the same OFL notices under
 [landing/assets/fonts/](../landing/assets/fonts/).
+
+## Radix Colors
+
+- Source: <https://github.com/radix-ui/colors>
+- Version: `3.0.0`
+- License: MIT
+- Usage: all product color scales via `@radix-ui/colors`; the standalone landing bundles unchanged official scales in `landing/assets/radix/`.
+
+```text
+MIT License
+
+Copyright (c) 2021 Radix
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```

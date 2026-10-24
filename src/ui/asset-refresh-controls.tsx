@@ -1,7 +1,7 @@
 "use client";
 
 import { useAssetRefresh } from "@/ui/asset-refresh-provider";
-import { VibeButton } from "@/ui/vibe/vibe-button";
+import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
 import { VibeStatusTag } from "@/ui/vibe/vibe-data-instrument";
 
 function resultLabel(state: "success" | "partial" | "error"): string {
@@ -51,7 +51,7 @@ export function AssetGlobalRefreshControl() {
     >
       <VibeButton
         aria-busy={pending}
-        aria-label="立即刷新资产"
+        aria-label={global.state === "error" || global.state === "partial" ? "重试刷新资产" : "立即刷新资产"}
         className="asset-refresh-button"
         disabled={pending}
         onClick={() => void refresh.request({ reason: "manual-global" })}
@@ -60,18 +60,23 @@ export function AssetGlobalRefreshControl() {
         variant="outline"
       >
         <AssetRefreshIcon className="asset-global-refresh-icon" />
-        <span>{pending ? "刷新中…" : "刷新资产"}</span>
+        <span>{pending ? "刷新中…" : global.state === "error" || global.state === "partial" ? "重试刷新" : "刷新资产"}</span>
       </VibeButton>
       {showStatus ? (
         <VibeStatusTag
           className="asset-refresh-status is-visible"
           data-testid="asset-refresh-status"
           role="status"
-          title={global.state === "error" ? global.message : undefined}
-          tone={global.state === "success" ? "success" : "error"}
+          tone={global.state === "success" ? "success" : global.state === "partial" ? "warning" : "error"}
         >
           {status}
         </VibeStatusTag>
+      ) : null}
+      {showStatus && (global.state === "error" || global.state === "partial") ? (
+        <div className="asset-refresh-recovery">
+          {global.state === "error" ? <p>{global.message}</p> : null}
+          <VibeLink href="/settings?view=data#source-checks-title" variant="text" size="compact">检查资产来源</VibeLink>
+        </div>
       ) : null}
     </div>
   );
@@ -126,7 +131,7 @@ export function AssetSourceRefreshButton({
         variant="outline"
       >
         <AssetRefreshIcon className="asset-source-refresh-icon" />
-        <span>{pending ? "刷新中…" : "刷新"}</span>
+        <span>{pending ? "刷新中…" : current.state === "error" || current.state === "partial" ? "重试刷新" : "刷新"}</span>
       </VibeButton>
       {pending || terminal ? (
         <span
@@ -134,11 +139,10 @@ export function AssetSourceRefreshButton({
           data-refresh-state={state}
           data-testid={`asset-source-refresh-status-${sourceId}`}
           role="status"
-          title={current.state === "error" ? current.message : undefined}
         >
           {pending
             ? "正在刷新…"
-            : resultLabel(current.state as "success" | "partial" | "error")}
+            : current.state === "error" ? current.message : resultLabel(current.state as "success" | "partial" | "error")}
         </span>
       ) : null}
     </div>

@@ -50,16 +50,17 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 | `--outline` | `--line-2` 边框 | 次级操作（**默认变体**） |
 | `--text` | 仅文字，水平内边距收到 4px | 取消、更多操作 |
 
-- 标签用 `--f-mono`，字距 `.04em`，字号 `--vibe-type-label`（11px）。
-- 圆角 `--r-sm`（6px），标准高 44px。
-- 悬停 `opacity .8`；按下 `.6`；禁用 `.3`。**悬停永不变色。**
-- 焦点环：`outline: 2px solid var(--primary)`，`offset 3px`。
+- 标签用 `--f-mono`，字距 `.04em`，字号 `--vibe-type-label`（12px）。
+- 圆角 `--r-sm`（4px），标准高 44px。
+- 主操作、导航与区间按钮的选中态统一黑白反转：深色为白底黑字，浅色为黑底白字，不使用灰色填充表示选中。
+- 悬停 `opacity .8`；按下 `.6`；禁用 `.55`。常规操作保持中性色。
+- 焦点环：`outline: 0.5px solid var(--primary)`，`offset 3px`。
 
 **禁止**：红色按钮。主按钮不是红色——红色是信号位，不是操作位。
 
 页面与组件的样式归属见 [设计契约](../../DESIGN.md#源码归属)；`display` 等布局属性允许页面处理，不借此覆盖按钮视觉。`tone="danger"` 允许语义前景色，仍不使用红色填充。
 
-### 名称链接 · `VibeEntityLink`
+### 名称链接 `VibeEntityLink`
 
 账户、来源名称进入详情时使用 [VibeEntityLink](../../src/ui/vibe/vibe-entity-link.tsx)，共享 `.vibe-entity-link` 配方。名称始终带下划线，末尾使用同套线形右箭头，不依赖悬停或颜色表达可点击；键盘焦点环与按钮一致，长名称可换行，箭头不压缩。名称使用正文排版，执行操作继续使用 `VibeButton` / `VibeLink`。
 
@@ -76,15 +77,15 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 </div>
 ```
 
-- 标签：`--f-mono`、`--vibe-type-micro`（10px）、全大写、字距 `.12em`、色 `--secondary`。
-- 输入框：1px `--line-2` 边框、`--r-sm` 圆角、透明底、`--primary` 文字、`--f-mono`。
+- 标签：`--f-mono`、`--vibe-type-micro`（12px）、西文大写、正常字距、色 `--secondary`。
+- 输入框：0.5px `--line-2` 边框、`--r-sm` 圆角、透明底、`--primary` 文字、`--f-mono`。
 - 当前输入配方至少 48px 高，字号 `--vibe-type-body`（16px）。
-- `VibeField density="compact"` 用于工具条的短数字输入：44px 高、字号 `--vibe-type-body-xs`（13px），收紧字距并隐藏数字步进按钮；其他字段保持默认配方。
+- `VibeField density="compact"` 用于工具条的短数字输入：44px 高、字号 `--vibe-type-body`（16px），隐藏数字步进按钮；其他字段保持默认配方。
 - **聚焦只把边框色改为 `--primary`**：没有发光、没有强调色、没有阴影。
-- 占位符 `--muted`；禁用 `opacity .3`。
+- 占位符 `--muted`；禁用 `opacity .55`。
 - 多行变体 `textarea.vibe-field__input` 最小高 112px，字距收到 `.02em`，行高 1.55。
 
-### 下拉选择 · `.vibe-select`
+### 下拉选择 `.vibe-select`
 
 ```
 <div class="vibe-select vibe-select--compact|--wide">
@@ -95,7 +96,7 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 </div>
 ```
 
-- 触发器至少 44px 高，字号 `--vibe-type-body-xs`（13px）；展开时底色转 `--raised`，边框转 `--primary`，箭头旋转 180°。输入与选择器的密度取舍见 backlog，不把二者写成已经统一。
+- 触发器至少 44px 高，字号 `--vibe-type-body`（16px）；展开时底色转 `--raised`，边框转 `--primary`，箭头旋转 180°。
 - 选中项底色 `--raised`，右侧 6×6 方块用 `--accent` 标记。这是沿用上游的限定例外，不扩展到按钮、标签页或整个选项填充。
 - 面板挂在 portal 中，`z-index: 101`。
 - 键盘支持 `Enter` / `Space` 展开、方向键移动、`Esc` 收起；标签、展开状态和选中状态可被读屏识别。
@@ -114,7 +115,7 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 
 - 一组使用 `fieldset.settings-choice-group` 与 `legend`，选项放入 `.settings-choice-list`；每张卡片由 `label.settings-choice` 包裹同组 `name` 的原生 `input type="radio"`，整张卡片可点击，并保留原生键盘与焦点行为。
 - 单选圆点为 18×18，使用 `accent-color: var(--display)`；选中时卡片边框为 `--display`、底色为 `--raised`，未选中时为 `--line` 边框与透明底。各项复用同一配方，不通过强调色区分选中态。
-- `.settings-choice-copy` 承载选项名称与说明；`.settings-choice-preview` 展示该选项对应的固定示例，选中与未选中的选项均保留各自预览，便于直接比较。示例不读取真实资产数据，对读屏隐藏，选项含义由可访问的名称与说明表达。
+- `.settings-choice-copy` 仅承载选项名称；`.settings-choice-preview` 展示该选项对应的固定示例，选中与未选中的选项均保留各自预览，便于直接比较。示例不读取真实资产数据，对读屏隐藏，选项含义由可访问名称表达，不重复解释预览。
 - 复用 [现有布局](../../src/app/product-layout.css) 的双列与窄屏单列规则，不为单个偏好另设尺寸、边框或选中态。实际调用者为 [盈亏颜色](../../src/ui/profit-color-settings.tsx) 与 [走势图点阵](../../src/ui/trend-appearance-settings.tsx)。
 
 ---
@@ -127,7 +128,7 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 </span>
 ```
 
-- 可见高 24px，1px `--line-2` 边框，`--r-sm` 圆角，`--f-mono` `--vibe-type-micro`，全大写，字距 `.06em`。
+- 可见高 24px，0.5px `--line-2` 边框，`--r-sm` 圆角，`--f-mono` `--vibe-type-micro`，全大写，字距 `.06em`。
 - 内含 6px 圆点作为状态载体。
 - **色调分工**：`muted` 与 `success` 的文字保持次级灰，`success` 用绿点标记正常；`signal`、`warning` 与 `error` 的圆点及文字使用对应语义色。
 - 长桥授权页的账户行使用无框、随内容收拢的状态文字，保留圆点与色调；文字采用 `--f-ui`、`--vibe-type-body-sm` 和原始大小写，版本说明沿用次级小字。
@@ -163,8 +164,8 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 ```
 
 - 数值用 `--f-display`（Doto）、`tabular-nums`、字重 500、字距 `-.045em`、行高 .95。
-- 单位回落到 `--f-mono` `--vibe-type-label`（11px）、色 `--secondary`。
-- 计数动画：1200ms、三次缓动、`IntersectionObserver` 阈值 0.6、遵守减弱动效偏好。
+- 单位回落到 `--f-mono` `--vibe-type-label`（12px）、色 `--secondary`。
+- 金额计数默认静态显示最终值；不以滚动过程延迟用户读取。
 - `VibeLiveCounter` 可用 `paused` 暂停并保留当前显示值，解除后从该值接续；默认不暂停。
 - `aria-label` 必须是**最终值**，而不是动画中间值。
 
@@ -194,7 +195,7 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 
 ---
 
-## 对话框 · `.vibe-dialog`
+## 对话框 `.vibe-dialog`
 
 复用 [VibeDialog](../../src/ui/vibe/vibe-dialog.tsx)。
 
@@ -208,15 +209,15 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 </div>
 ```
 
-- 遮罩 `--overlay`，面板 1px `--line-2`、`--r-md`、`--surface`、**无阴影**。
-- 标题 `--f-head` / 600，字号 `--vibe-type-subheading`（18px）；eyebrow 用 `--vibe-type-micro` 等宽大写。
+- 遮罩 `--overlay`，面板 0.5px `--line-2`、`--r-md`、`--surface`、**无阴影**。
+- 标题 `--f-head` / 600，字号 `--vibe-type-subheading`（16px）；不使用 eyebrow，description 可选，仅在影响决策时提供。
 - 页脚 = `.vibe-button--text` 取消 + `.vibe-button--primary` 确认。
 - 行为：`Esc` 关闭、遮罩内焦点循环、打开时把焦点移入、关闭后归还原元素、锁定 body 滚动。
 - 移动端（≤639px）遮罩贴底、面板 `max-height: calc(100dvh - 24px)`；来源向导类对话框升为全屏，页头页脚吸顶。
 
 ---
 
-## 下拉菜单 · `.vibe-menu`
+## 下拉菜单 `.vibe-menu`
 
 复用 [VibeMenu](../../src/ui/vibe/vibe-menu.tsx)。触发器用 `.vibe-button--text` + `.vibe-menu__trigger`（紧凑高 40px）。面板 `--surface` + `--line-2` + `--r-sm`，`z-index: 30`。
 
@@ -230,7 +231,7 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 
 - 默认向下、水平居中；`data-align="end"` 靠右对齐。
 - `--floating` 变体（`side="right"`）挂到 body，`z-index: 120`，滚动/缩放/`Esc` 即消失。
-- 内容用 `--f-mono` `--vibe-type-label`（11px），底色 `--raised`，`--r-sm`。
+- 内容用 `--f-mono` `--vibe-type-label`（12px），底色 `--raised`，`--r-sm`。
 - 触发器必须带 `aria-describedby` 指向提示节点。
 
 ## 验证码分格输入 · `.vibe-verification-code`
@@ -242,7 +243,7 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 
 ## 日期字段 · `.vibe-date-field`
 
-- 触发器 48px 高、`--r-sm`、Doto 数字、字距 `.12em`。
+- 触发器 48px 高、`--r-sm`、Doto 数字、正常字距。
 - 日历：`--surface` + `--line-2` + `--r-md`，日期用 Doto，**今天 = 反转填充**，已选 = `--display` 描边。
 - 服务于"按上海自然日保存"的手工记录。日历本身不写入任何数据。
 - 移动端 `max-width: calc(100vw - 24px)`。
@@ -251,7 +252,7 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 ## 数据表 · `.vibe-data-table`
 
 - 表头 `--vibe-type-micro` 等宽大写、`--muted`、下边界 `--line-2`。
-- 单元格默认 `--f-mono` `--vibe-type-label`（11px）、下边界 `--line`、数值右对齐、文本左对齐；持仓明细的字号与双行布局遵守 [金融信息与隐私](patterns.md#金融信息与隐私)。
+- 单元格默认 `--f-mono` `--vibe-type-label`（12px）、下边界 `--line`、数值右对齐、文本左对齐；持仓明细的字号与双行布局遵守 [金融信息与隐私](patterns.md#金融信息与隐私)。
 - **无斑马纹。** 需要区分时用更多留白或分组细线。
 - 不可读或未估值必须在文案上如实说明（“未估值”／“数据不足”），状态前景可用 `--error`，不以整行色底代替文字。使用表头与单元格语义，窄屏滚动及数值完整性见页面模式。
 
@@ -260,7 +261,7 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 ## 数据行与预览列表
 
 - `.vibe-data-row`：下边界 `--line`，最后一行自动去掉边界。
-- `.vibe-preview-list`：`dt` 用 `--vibe-type-micro` 等宽大写 `--muted`，`dd` 用 `--vibe-type-label`（11px）等宽 `--primary`。用于来源详情的授权摘要——**这里绝不回显凭证原文**，只显示授权范围与校验时间。
+- `.vibe-preview-list`：`dt` 用 `--vibe-type-micro` 等宽大写 `--muted`，`dd` 用 `--vibe-type-label`（12px）等宽 `--primary`。用于来源详情的授权摘要——**这里绝不回显凭证原文**，只显示授权范围与校验时间。
 
 ## 认证玻璃面 · `.vibe-auth-surface`
 
@@ -276,7 +277,13 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 
 - 使用原生按钮、链接与输入语义，Tab 顺序与视觉顺序一致，无键盘陷阱；所有操作均可键盘完成，拖拽提供等价的非拖拽路径。
 - 图标有相邻文字时隐藏装饰语义；纯图标按钮必须有可访问名称。装饰 SVG 使用 `aria-hidden="true"` 与 `focusable="false"`。
-- 不使用 `outline: none` 移除焦点而没有同等可见的替代。按钮焦点用 2px `--primary` 轮廓、外偏移 3px；菜单项用 2px 内轮廓，下拉选项用 1px 内轮廓；字段沿用聚焦配方。
+- 不使用 `outline: none` 移除焦点而没有同等可见的替代。按钮焦点用 0.5px `--primary` 轮廓、外偏移 3px；菜单项用 0.5px 内轮廓，下拉选项用 0.5px 内轮廓；字段沿用聚焦配方。
 - 命中区按 [基础规范](foundations.md#7-控件尺寸) 执行，触控目标之间至少留出 8px；不让轻薄轮廓缩小实际可点范围。
 - 异步状态保留清楚的可见标签，按需增加读屏播报，不重复制造可见提示。错误不用抖动表达。
 - 新组件先查现有组合；分段条、复选行和内联通知可继续承担已有场景。只有真实需求无法满足时才新增，并遵守同一 Token、语义与交互合同。
+
+## 来源接入与刷新反馈
+
+来源类型是进入配置的按钮列表，不使用一经选择就跳页的单选框。配置与确认保留只读权限、公开地址和真实预览；不重复说明“确认后保存”。
+
+刷新失败或部分失败后，原按钮提供“重试刷新”；原因直接可见，整体刷新提供“检查资产来源”。部分失败使用 warning，不把全部数据标成错误。错误区域可换行并使用 status/alert，不能只藏在 title 中。

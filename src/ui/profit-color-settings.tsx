@@ -11,19 +11,16 @@ import {
 } from "@/ui/profit-color-scheme";
 
 const OPTIONS: Array<{
-  description: string;
   label: string;
   value: ProfitColorScheme;
 }> = [
   {
     value: "red-up",
     label: "红涨绿跌",
-    description: "涨红跌绿（国内常用）",
   },
   {
     value: "green-up",
     label: "绿涨红跌",
-    description: "涨绿跌红（国际常用）",
   },
 ];
 
@@ -89,7 +86,6 @@ export function ProfitColorSettings({
             />
             <span className="settings-choice-copy">
               <strong>{option.label}</strong>
-              <span>{option.description}</span>
             </span>
             <span
               className="settings-choice-preview"
