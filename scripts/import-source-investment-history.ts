@@ -22,7 +22,6 @@ if (action === "--apply") {
   backupPath = path.join(path.dirname(inputFile), `before-import-${Date.now()}.sqlite`);
   await backup(sql, backupPath);
   await chmod(backupPath, 0o600);
-  const directory = path.dirname(databaseFile);
   const database = new SqliteDashboardDatabase(databaseFile);
   result = await database.importSourceInvestmentHistory(history);
   assert.deepEqual(sql.prepare("SELECT * FROM investment_cashflows ORDER BY id").all(), ledgerBefore, "组合及长桥资金账本必须不变");

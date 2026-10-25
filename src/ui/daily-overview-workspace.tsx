@@ -49,7 +49,6 @@ import {
   VibeSelect,
 } from "@/ui/vibe/vibe-field";
 import {
-  formatShanghaiDateTime,
   formatShanghaiDayLabel,
   formatShanghaiShortDateTime,
 } from "@/ui/shanghai-date-time";
@@ -243,10 +242,6 @@ export function DailyOverviewWorkspace({
   const recordedSources = useMemo(
     () => liveSources.filter(hasManualAssetRecord),
     [liveSources],
-  );
-  const refreshEnabled = recordedSources.some(
-    (source) =>
-      source.kind !== "manual" && source.lifecycle !== "disconnected",
   );
   const usdValuation = useMemo(
     () => buildTotalValuation(recordedSources, "USD", "source"),

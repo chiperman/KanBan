@@ -744,7 +744,7 @@ const lidoWithdrawalAdapter: EvmProtocolPositionAdapter = {
           .filter(({ status }) => status.isFinalized)
           .map(({ requestId }) => requestId),
       );
-      for (const { requestId, providerPositionId, status } of positions) {
+      for (const { providerPositionId, status } of positions) {
         if (seenRequestIds.has(providerPositionId)) {
           throw new Error(`Lido 返回重复提现申请 #${providerPositionId}`);
         }

@@ -20,7 +20,6 @@ import {
   type MarketBenchmarkSymbol,
 } from "@/domain/market-benchmark";
 import {
-  decimalCompare,
   decimalMultiply,
 } from "@/domain/decimal";
 import { buildTotalValuation, convertCurrencyAmount, type ReportingCurrency } from "@/domain/valuation";
@@ -43,7 +42,6 @@ import { useMarketBenchmarkComparison } from "@/ui/market-benchmark";
 import { formatShanghaiDateTime, formatShanghaiDayLabel } from "@/ui/shanghai-date-time";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeMetric, VibeStatusTag } from "@/ui/vibe/vibe-data-instrument";
-import { VibeDateField } from "@/ui/vibe/vibe-date-field";
 import { VibeDialog } from "@/ui/vibe/vibe-dialog";
 import {
   VibeField,

@@ -127,6 +127,15 @@ export class DatabaseAssetSourceConnections implements AssetSourceConnections {
     return run;
   }
 
+  private async hasNoAutomaticSources(): Promise<boolean> {
+    return !(await this.database.listSources()).some(
+      (source) =>
+        source.kind !== "manual" &&
+        source.lifecycle !== "disconnected" &&
+        source.credentialReference !== null,
+    );
+  }
+
   private async connect(
     sourceKind: SourceConnectionKind,
     result:
@@ -148,12 +157,7 @@ export class DatabaseAssetSourceConnections implements AssetSourceConnections {
       : await this.secrets.stage(result.credentials);
     let isFirstAutomaticSource: boolean;
     try {
-      isFirstAutomaticSource = !(await this.database.listSources()).some(
-        (source) =>
-          source.kind !== "manual" &&
-          source.lifecycle !== "disconnected" &&
-          source.credentialReference !== null,
-      );
+      isFirstAutomaticSource = await this.hasNoAutomaticSources();
       await save(credentialReference, capturedAt);
     } catch (error) {
       if (usesKeychainReference) throw error;
@@ -197,12 +201,7 @@ export class DatabaseAssetSourceConnections implements AssetSourceConnections {
     result: SourceAuthorizationResult,
   ): Promise<void> {
     await this.ready;
-    const isFirstAutomaticSource = !(await this.database.listSources()).some(
-      (source) =>
-        source.kind !== "manual" &&
-        source.lifecycle !== "disconnected" &&
-        source.credentialReference !== null,
-    );
+    const isFirstAutomaticSource = await this.hasNoAutomaticSources();
     const capturedAt = this.clock.now().toISOString();
     const usesKeychainReference =
       sourceKind === "longbridge" &&
@@ -226,7 +225,6 @@ export class DatabaseAssetSourceConnections implements AssetSourceConnections {
         sourceKind,
         result,
         credentialReference,
-        capturedAt,
       );
     } catch (error) {
       if (!usesKeychainReference) await this.secrets.remove(credentialReference);

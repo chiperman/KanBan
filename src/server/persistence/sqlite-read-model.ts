@@ -23,7 +23,7 @@ export class SqliteDashboardReadModel {
   private readonly investments: SqliteInvestmentReadStore;
   private readonly formalSettlements: SqliteFormalSettlementReadStore;
 
-  constructor(private readonly database: DatabaseSync) {
+  constructor(database: DatabaseSync) {
     this.sources = new SqliteSourceReadStore(database);
     this.observations = new SqliteObservationReadStore(database);
     this.investments = new SqliteInvestmentReadStore(database);

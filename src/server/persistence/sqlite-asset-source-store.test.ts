@@ -96,11 +96,11 @@ test("断开保留快照，重连核对账户并保留来源身份、卡片与�
     assert.deepEqual((await database.listSources())[0].snapshot, source.snapshot);
     await assert.rejects(database.reconnectAssetSource(source.id, "binance", {
       ...authorization, account: { ...authorization.account, id: "different-account" },
-    }, "fixture-new", capturedAt), /账户/);
+    }, "fixture-new"), /账户/);
     const updated = { ...authorization, snapshot: {
       ...authorization.snapshot, total: { amount: "150", currency: "USD" },
     } };
-    assert.equal(await database.reconnectAssetSource(source.id, "binance", updated, "fixture-new", capturedAt), "fixture-old");
+    assert.equal(await database.reconnectAssetSource(source.id, "binance", updated, "fixture-new"), "fixture-old");
     const current = (await database.listSources())[0];
     assert.equal(current.id, source.id);
     assert.equal(current.lifecycle, "connected");
@@ -133,7 +133,6 @@ test("重连来源写入失败时连接状态、凭证和快照整批回滚", as
           },
         },
         "fixture-new",
-        capturedAt,
       ),
       /fixture reconnect failure/,
     );

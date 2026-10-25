@@ -29,7 +29,6 @@ export interface SolidPaths {
 }
 
 export type Tone = "hi" | "mid" | "lo" | "faint";
-export type LineTone = Tone | "lit" | "red" | "green" | "blue";
 
 export const AZIMUTH = 45;
 export const ELEVATION = 30;
@@ -63,11 +62,6 @@ export function towardViewer(projection: Projection): Plane {
   return [cosA, sinA];
 }
 
-export function depthOf([x, y, z]: Point3, projection: Projection) {
-  const { sinA, cosA, sinE, cosE } = cameraOf(projection);
-  return (x * cosA + y * sinA) * cosE + z * sinE;
-}
-
 const tenth = (value: number) => {
   const text = (Math.round(value * 10) / 10).toFixed(1).replace(/\.0$/, "");
   return text === "-0" ? "0" : text;
@@ -77,8 +71,6 @@ export function pathOf(points: Flat[], closed = false) {
   if (!points.length) return "";
   return points.map(([x, y], at) => `${at ? "L" : "M"}${tenth(x)} ${tenth(y)}`).join("") + (closed ? "Z" : "");
 }
-
-export const joinPaths = (paths: string[]) => paths.filter(Boolean).join("");
 
 export function roundedPlan({ x, y, w, d, r }: Plan, steps = 8): Plane[] {
   const radius = Math.max(0, Math.min(r, w / 2, d / 2));

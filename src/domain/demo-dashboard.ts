@@ -3,7 +3,6 @@ import type {
   AssetExchangeRate,
   AssetHolding,
   AssetSnapshotCoverage,
-  AssetSourceSummary,
   Card,
   DailyAssetSourceSnapshot,
   DailyAssetTrendObservation,

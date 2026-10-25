@@ -220,28 +220,6 @@ export function portfolioSourceTotal(
   };
 }
 
-export function ignoredSourceHoldings(
-  source: SourceWithEvmTokenPreferences,
-): AssetHolding[] {
-  const ignored = ignoredAssetKeySet(source);
-  return source.snapshot.holdings.filter(
-    (holding) =>
-      holding.sourceAsset !== undefined &&
-      ignored.has(holding.sourceAsset),
-  );
-}
-
-export function includedSourceHoldings(
-  source: SourceWithEvmTokenPreferences,
-): AssetHolding[] {
-  const included = includedAssetKeySet(source);
-  return source.snapshot.holdings.filter(
-    (holding) =>
-      holding.sourceAsset !== undefined &&
-      included.has(holding.sourceAsset),
-  );
-}
-
 export function normalizeIgnoredAssetKeys(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return [

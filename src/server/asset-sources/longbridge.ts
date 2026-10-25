@@ -16,7 +16,6 @@ import type {
   LongbridgeHoldingCandlestick,
   LongbridgeHoldingCandlestickReader,
   LongbridgeHoldingCandlestickPeriod,
-  LongbridgeHoldingCandlePeriod,
   LongbridgeHoldingTrendPoint,
   LongbridgeBenchmarkCandlestick,
   LongbridgeBenchmarkCandlestickReader,

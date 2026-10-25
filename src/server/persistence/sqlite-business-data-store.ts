@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { BusinessDataState } from "@/server/backup/document-codec";
-import type { DashboardState, SqliteRow } from "@/server/persistence/contracts";
+import type { DashboardState } from "@/server/persistence/contracts";
 import { migrateDailyObservation } from "@/server/persistence/migrations";
 import type { SqliteFormalSettlementStore } from "./sqlite-formal-settlements";
 import type { SqliteInvestmentCashflowStore } from "./sqlite-investment-cashflow-store";

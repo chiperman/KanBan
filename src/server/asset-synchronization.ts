@@ -1,6 +1,5 @@
 import type {
   AssetFullRefreshState,
-  AssetRefreshIntent,
   AssetRefreshMode,
   AssetRefreshReport,
   AssetRefreshRequest,
@@ -202,8 +201,4 @@ export class SourceIsolatedAssetSynchronization
       source.credentialReference !== null
     );
   }
-}
-
-export function isAutomaticAssetRefreshIntent(intent: AssetRefreshIntent): boolean {
-  return intent.reason !== "manual-global" && intent.reason !== "manual-source";
 }

@@ -119,11 +119,6 @@ export interface LongbridgeSdkTrendPoint {
   close: string;
 }
 
-/** Keychain 中 OAuth 凭证的唯一持久化引用；不是可写入 SecretStore 的密钥。 */
-export function isMacOSKeychainCredentialReference(reference: string): boolean {
-  return reference.startsWith("macos-keychain:") && reference.length > "macos-keychain:".length;
-}
-
 function requiredClientId(): string {
   const clientId = process.env.LONGBRIDGE_OAUTH_CLIENT_ID;
   if (!clientId) throw new Error("未配置 LONGBRIDGE_OAUTH_CLIENT_ID");

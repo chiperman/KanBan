@@ -47,9 +47,3 @@ export function formatAssetAmount(value: string): string {
   }
   return grouped(fixed);
 }
-
-/** 带符号的金额：正数补 `+`，假零时同样输出 `<0.01`。 */
-export function formatSignedAssetAmount(value: string): string {
-  const formatted = formatAssetAmount(value);
-  return decimalCompare(value, "0") > 0 ? `+${formatted}` : formatted;
-}

@@ -1,11 +1,9 @@
 import type {
   AssetPermission,
   AssetSourceSummary,
-  LongbridgeAuthorizationResult,
   LongbridgeBenchmarkCandlestick,
   LongbridgeBenchmarkCandlestickReader,
   LongbridgeBenchmarkSymbol,
-  LongbridgeHoldingCandlePeriod,
   LongbridgeHoldingCandlestick,
   LongbridgeHoldingCandlestickPeriod,
   LongbridgeHoldingCandlestickReader,

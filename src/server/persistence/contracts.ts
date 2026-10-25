@@ -97,7 +97,6 @@ export interface AssetSourceConnectionDatabase {
     sourceKind: SourceConnectionKind,
     result: SourceAuthorizationResult,
     credentialReference: string,
-    capturedAt: string,
   ): Promise<string | null>;
   connectOkx(
     result: OkxAuthorizationResult,

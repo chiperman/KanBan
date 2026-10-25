@@ -1,35 +1,6 @@
 import { sourceTrendClassTotals } from "@/domain/daily-asset-snapshots";
-import { decimalAdd } from "@/domain/decimal";
 import { convertCurrencyAmount } from "@/domain/valuation";
-import type { AssetExchangeRate, AssetSourceSummary, DailyAssetSnapshot, DailyAssetSourceSnapshot, DailyAssetTrendObservation, ManualAssetRecord } from "@/server/ports";
-
-export function withoutSnapshotSource(
-  snapshot: DailyAssetSnapshot,
-  sourceId: string,
-): DailyAssetSnapshot | null {
-  const sources = snapshot.sources.filter((source) => source.sourceId !== sourceId);
-  if (sources.length === 0) return null;
-  const total = {
-    USD: sources.some((source) => source.total.USD !== null)
-      ? decimalAdd(...sources.flatMap((source) => source.total.USD ?? []))
-      : null,
-    CNY: sources.some((source) => source.total.CNY !== null)
-      ? decimalAdd(...sources.flatMap((source) => source.total.CNY ?? []))
-      : null,
-    HKD: sources.some((source) => source.total.HKD !== null)
-      ? decimalAdd(...sources.flatMap((source) => source.total.HKD ?? []))
-      : null,
-  };
-  return {
-    ...snapshot,
-    sources,
-    total,
-    complete:
-      sources.every((source) => source.complete) &&
-      total.USD !== null &&
-      total.HKD !== null,
-  };
-}
+import type { AssetExchangeRate, AssetSourceSummary, DailyAssetSourceSnapshot, ManualAssetRecord } from "@/server/ports";
 
 export function manualDailySource(
   source: Pick<
@@ -87,56 +58,5 @@ export function applyLatestManualAssetRecord(
       error: null,
       failedMode: null,
     },
-  };
-}
-
-export function mergeManualSourceObservation(
-  previous: DailyAssetSnapshot,
-  source: DailyAssetSourceSnapshot,
-): DailyAssetSnapshot {
-  const sources = [
-    ...previous.sources.filter((item) => item.sourceId !== source.sourceId),
-    source,
-  ];
-  const total = {
-    USD: sources.some((item) => item.total.USD !== null)
-      ? decimalAdd(...sources.flatMap((item) => item.total.USD ?? []))
-      : null,
-    CNY: sources.some((item) => item.total.CNY !== null)
-      ? decimalAdd(...sources.flatMap((item) => item.total.CNY ?? []))
-      : null,
-    HKD: sources.some((item) => item.total.HKD !== null)
-      ? decimalAdd(...sources.flatMap((item) => item.total.HKD ?? []))
-      : null,
-  };
-  const complete =
-    total.USD !== null &&
-    total.HKD !== null &&
-    sources.every((item) => item.complete);
-  return {
-    ...previous,
-    sources,
-    total,
-    complete,
-    status: sources.some((item) => item.status === "expired")
-      ? "expired"
-      : complete
-        ? "complete"
-        : "incomplete",
-  };
-}
-
-export function manualOnlyTrendObservation(
-  day: string,
-  source: DailyAssetSourceSnapshot,
-): DailyAssetTrendObservation {
-  return {
-    day,
-    capturedAt: source.capturedAt,
-    exchangeRates: [],
-    complete: false,
-    status: "incomplete",
-    total: source.total,
-    sources: [source],
   };
 }

@@ -8,7 +8,6 @@ import {
   decimalCompare,
   decimalMultiply,
   decimalSubtract,
-  decimalToFixed,
 } from "@/domain/decimal";
 import { activeSourceHoldings } from "@/domain/evm-token-preferences";
 import {
@@ -31,7 +30,6 @@ import {
   formatAssetQuantity,
   formatAssetUnitPrice,
 } from "@/ui/asset-price-display";
-import { sourceSyncStatus } from "@/ui/asset-source-status";
 import { holdingTodayProfit } from "@/ui/asset-source-card/holding-detail-model";
 import { profitDirection, type ProfitColorScheme } from "@/ui/profit-color-scheme";
 import { signedAmount } from "@/ui/signed-amount";
@@ -151,49 +149,6 @@ function holdingMarketValue(
       reportingCurrency,
       rates,
     );
-}
-
-function sourceStatuses(source: WorkspaceSource): {
-  label: string;
-  tone: "warning" | "error";
-}[] {
-  const statuses: ReturnType<typeof sourceStatuses> = [];
-  if (source.kind === "manual" && source.hasManualRecord === false) {
-    return [{ label: "尚未添加首条记录", tone: "warning" }];
-  }
-  if (source.lifecycle === "disconnected") {
-    statuses.push({ label: "已断开，保留最后快照", tone: "warning" });
-  }
-  const sync = sourceSyncStatus(source);
-  if (sync !== null) statuses.push(sync);
-  const coverage = source.snapshot.coverage;
-  if (coverage?.status === "unknown") {
-    statuses.push({ label: "总额可读，覆盖待确认", tone: "warning" });
-  } else if (coverage?.status === "partial") {
-    statuses.push({
-      label: coverage.totalIsAuthoritative
-        ? "总额为准，明细覆盖不完整"
-        : "总额覆盖不完整",
-      tone: "warning",
-    });
-  } else if (
-    coverage?.products.some(
-      ({ capability, freshness }) =>
-        capability === "aggregate-only" && freshness === "current",
-    )
-  ) {
-    statuses.push({ label: "总额完整，部分产品仅汇总", tone: "warning" });
-  }
-  if (coverage?.products.some(({ freshness }) => freshness === "expired")) {
-    statuses.push({ label: "含过期产品数据", tone: "warning" });
-  }
-  if (coverage && coverage.excludedPositiveAccounts.length > 0) {
-    statuses.push({ label: "存在未纳入账户", tone: "warning" });
-  }
-  if (coverage?.unexplainedValue && coverage.status === "complete") {
-    statuses.push({ label: "存在明细差额", tone: "warning" });
-  }
-  return statuses;
 }
 
 function holdingStatus(holding: AssetHolding): {

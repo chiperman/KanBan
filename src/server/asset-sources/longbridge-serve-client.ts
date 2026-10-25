@@ -500,11 +500,3 @@ export class LongbridgeServeQuoteHub {
     return syncing;
   }
 }
-
-const HUB_KEY = "__kanban_longbridge_serve_quote_hub__";
-
-export function getLongbridgeServeQuoteHub(): LongbridgeServeQuoteHub {
-  const globalScope = globalThis as unknown as Record<string, LongbridgeServeQuoteHub | undefined>;
-  globalScope[HUB_KEY] ??= new LongbridgeServeQuoteHub();
-  return globalScope[HUB_KEY];
-}

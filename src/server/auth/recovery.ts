@@ -108,10 +108,6 @@ function totpCode(secret: string, counter: bigint): string {
   return value.toString().padStart(6, "0");
 }
 
-export function verifyTotp(secret: string, code: unknown, now: Date): boolean {
-  return matchingTotpCounter(secret, code, now) !== null;
-}
-
 export function matchingTotpCounter(
   secret: string,
   code: unknown,

@@ -419,7 +419,6 @@ export class SqliteDashboardDatabase
     sourceKind: SourceConnectionKind,
     result: SourceAuthorizationResult,
     credentialReference: string,
-    capturedAt: string,
   ): Promise<string | null> {
     return this.transaction(() => {
       const connection = sourceKind === "longbridge" ? parseConnection(credentialReference) : null;

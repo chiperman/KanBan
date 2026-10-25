@@ -1,6 +1,4 @@
 import type {
-  AssetPermission,
-  AssetSourceSummary,
   BinanceAuthorizationResult,
   BinanceReadOnly,
   BitgetAccountMode,
@@ -11,19 +9,9 @@ import type {
   EvmChain,
   EvmWatchAuthorizationResult,
   EvmWatchWalletReadOnly,
-  LongbridgeAuthorizationResult,
-  LongbridgeBenchmarkCandlestick,
-  LongbridgeBenchmarkCandlestickReader,
-  LongbridgeBenchmarkSymbol,
-  LongbridgeHoldingCandlePeriod,
-  LongbridgeHoldingCandlestick,
-  LongbridgeHoldingCandlestickPeriod,
-  LongbridgeHoldingCandlestickReader,
-  LongbridgeHoldingTrendPoint,
   OkxAuthorizationResult,
   OkxReadOnly,
   OkxRegion,
-  PriceQuote,
   Prices,
 } from "@/server/ports";
 
@@ -97,7 +85,6 @@ import { validateOkxReadOnlyPermission } from "@/server/asset-sources/okx";
 import { okxFixtureSnapshot } from "@/server/testing/okx-fixtures";
 import { validateBitgetReadOnlyPermission } from "@/server/asset-sources/bitget";
 import { bitgetFixtureSnapshot } from "@/server/testing/bitget-fixtures";
-import { mapLongbridgeSnapshot } from "@/server/asset-sources/longbridge";
 
 export class FakeOkxReadOnly implements OkxReadOnly {
   private scenario = "valid";

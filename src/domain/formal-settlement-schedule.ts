@@ -125,7 +125,7 @@ export function settlementMarketForSymbol(
     : null;
 }
 
-export function marketClose(
+function marketClose(
   day: string,
   market: SecuritiesMarket,
   calendar: MarketTradingDays,

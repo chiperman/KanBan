@@ -6,14 +6,6 @@ import type {
   ManualAssetRecordInput,
 } from "@/server/ports";
 
-export const MANUAL_ASSET_CURRENCIES = ["USD", "CNY", "HKD"] as const;
-export const MANUAL_ASSET_CLASSES = [
-  "securities",
-  "crypto",
-  "cash",
-  "other",
-] as const satisfies readonly ManualAssetClass[];
-
 export class InvalidManualAssetRecordError extends Error {}
 
 export function hasManualAssetRecord(

@@ -1,9 +1,8 @@
 import { createHmac } from "node:crypto";
 
-import { decimalAdd, decimalCompare, decimalMultiply } from "@/domain/decimal";
+import { decimalAdd, decimalMultiply } from "@/domain/decimal";
 import type {
   AssetHolding,
-  AssetPermission,
   AssetSnapshot,
   AssetSourceRefresher,
   AssetSourceRefreshResult,

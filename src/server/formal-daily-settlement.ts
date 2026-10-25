@@ -6,7 +6,6 @@ import {
   convertCurrencyAmount,
 } from "@/domain/valuation";
 import type {
-  AssetExchangeRate,
   AssetHolding,
   AssetSnapshot,
   AssetSourceRefresher,

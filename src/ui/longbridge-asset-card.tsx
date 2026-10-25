@@ -6,7 +6,6 @@ import type {
   MarketBenchmarkComparison,
   MarketBenchmarkSymbol,
 } from "@/domain/market-benchmark";
-import { decimalToFixed } from "@/domain/decimal";
 import { portfolioSourceTotal } from "@/domain/evm-token-preferences";
 import {
   convertCurrencyAmount,
@@ -27,7 +26,6 @@ import type { LongbridgeRealtimeState, ReceivedQuote } from "@/ui/use-longbridge
 import { formatAssetAmount, formatAssetUnitPrice } from "@/ui/asset-price-display";
 import type { ProfitColorScheme } from "@/ui/profit-color-scheme";
 import { assetSourceHoldingsModel } from "@/ui/asset-source-card/holdings-model";
-import { amount } from "@/ui/asset-source-card/holding-detail-model";
 import { AssetSourceHeader } from "@/ui/asset-source-card/source-header";
 import { AssetSourceTotal } from "@/ui/asset-source-card/source-total";
 import { AssetSourceTrend } from "@/ui/asset-source-card/source-trend";

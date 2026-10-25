@@ -12,7 +12,6 @@ import { readAssetRefreshState } from "@/server/asset-refresh-state"
 import { DailyOverviewWorkspace } from "@/ui/daily-overview-workspace"
 import { AssetRefreshReset } from "@/ui/asset-refresh-provider"
 import { LocalClock } from "@/ui/local-clock"
-import { LogoutButton } from "@/ui/logout-button"
 import { OwnerLogin } from "@/ui/owner-login"
 import {
   DEFAULT_PROFIT_COLOR_SCHEME,
