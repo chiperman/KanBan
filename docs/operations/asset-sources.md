@@ -18,7 +18,7 @@
 | 来源 | 实现入口 | 读取与解释边界 |
 | --- | --- | --- |
 | 长桥 | [连接路由](../../src/server/asset-sources/longbridge-connections.ts) | 证券、账户现金与账户总额；CLI/SDK 选择及身份绑定见 [服务生命周期](service-composition.md) |
-| Binance | [binance.ts](../../src/server/asset-sources/binance.ts) | 按账户及产品读取；Stocks 与普通 Spot 的持仓、报价和成本历史分别处理 |
+| Binance | [binance.ts](../../src/server/asset-sources/binance.ts) | 按账户及产品读取；客户端、持仓、成本、市场解析与估值按同目录 `binance-*.ts` 拆分，Stocks 与普通 Spot 的持仓、报价和成本历史分别处理 |
 | OKX | [okx.ts](../../src/server/asset-sources/okx.ts) | 平台总额与产品覆盖分别解释；Trading Bot 以 `stgyEq` 按币种汇总，不伪造逐策略明细 |
 | Bitget | [bitget.ts](../../src/server/asset-sources/bitget.ts) | 区分 Classic 与 UTA；UTA 现金范围检查会拒绝含合约仓位或挂单的连接 |
 | BIT / Matrixport | [bit.ts](../../src/server/asset-sources/bit.ts) | 托管账户的 Wallet、Balance+、DCP 总头寸及活跃订单，使用独立行情估值 |
