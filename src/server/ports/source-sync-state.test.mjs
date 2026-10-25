@@ -60,6 +60,11 @@ type Report = {
   supersededCount?: number;
   skipped?: "not-due" | "in-progress" | "no-sources";
   attemptedAt?: string;
+  sourceResults?: {
+    sourceId: string;
+    outcome: "success" | "failure" | "superseded";
+    sync?: Pick<SyncState, "status" | "lastSuccessfulAt" | "lastAttemptAt" | "error" | "diagnostic">;
+  }[];
 };
 
 type Contracts = [

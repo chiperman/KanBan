@@ -2,7 +2,7 @@
 
 import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
 import { AssetSourceRefreshButton } from "@/ui/asset-refresh-controls";
-import { sourceSyncStatus } from "@/ui/asset-source-status";
+import { sourceSyncStatus, sourceSummaryStatus } from "@/ui/asset-source-status";
 import { VibeStatusTag } from "@/ui/vibe/vibe-data-instrument";
 import type { AssetSourceView } from "./types";
 
@@ -20,13 +20,7 @@ export function AssetSourceHeader({
   const isManual = source.kind === "manual";
   const longbridge = source.kind === "longbridge";
   if (isManual) return null;
-  const sourceState = source.lifecycle === "disconnected"
-    ? { label: "已断开", tone: "muted" as const }
-    : source.sync.error
-      ? { label: "同步失败", tone: "error" as const }
-      : source.sync.status === "expired"
-        ? { label: "待更新", tone: "warning" as const }
-        : { label: "已同步", tone: "success" as const };
+  const sourceState = sourceSummaryStatus(source);
   return (
     <header className="asset-source-head">
       <div className="asset-source-head-actions">

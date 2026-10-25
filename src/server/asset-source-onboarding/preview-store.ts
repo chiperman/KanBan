@@ -94,7 +94,7 @@ export class AssetSourcePreviewStore {
     if (!stored) {
       throw new AssetSourceOnboardingError(
         "preview-unavailable",
-        "资产来源预览已失效或正在确认",
+        "资产来源预览已失效，请重新验证",
       );
     }
     const original = this.open(stored);
@@ -122,6 +122,9 @@ export class AssetSourcePreviewStore {
     provider: AssetSourceProvider,
     id: string,
   ): StoredPreview | null {
+    if (this.previews.get(id)?.authorization.provider === provider && this.claimed.has(id)) {
+      throw new AssetSourceOnboardingError("preview-busy", "资产来源正在确认，请先核对来源状态");
+    }
     const stored = this.available(id);
     if (!stored || stored.authorization.provider !== provider) return null;
     this.claimed.add(id);

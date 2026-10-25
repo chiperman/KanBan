@@ -44,14 +44,13 @@ export default async function AssetSourceDetailPage({
   const effectivePreset = preset === "custom" && !customRange ? "all" : preset;
   const days = rangeDays(effectivePreset, currentDay, undefined, customRange);
   const detailQuery = { sourceId: id, ...(effectivePreset === "all" ? {} : {from: days[0], to: days.at(-1)}) };
-  const [detail, cards, fullRefreshState, books] = await Promise.all([
+  const [detail, fullRefreshState, books] = await Promise.all([
     services.assetSourceDetails ? services.assetSourceDetails.readSourceDetail(detailQuery) : (async () => {
       const [sources, manualRecords, allHistory] = await Promise.all([services.assetSources.list(), services.manualAssetRecords.list(), services.dailyAssetSnapshots.listTrendObservations()]);
       return { sources, manualRecords: manualRecords.filter((record) => record.sourceId === id),
         firstDay: allHistory.filter((day) => day.sources.some((source) => source.sourceId === id)).map((day) => day.day).sort()[0],
         history: allHistory.filter((day) => (!detailQuery.from || day.day >= detailQuery.from) && (!detailQuery.to || day.day <= detailQuery.to)).map((day) => ({...day, sources: day.sources.filter((source) => source.sourceId === id)})) };
     })(),
-    services.assetCards.list(),
     readAssetRefreshState(services),
     services.investmentBooks?.readInvestmentBooks() ?? null,
   ]);
@@ -66,7 +65,6 @@ export default async function AssetSourceDetailPage({
   const trendHistory = books === null ? null : manualSourceBookAssetHistory({
     state: books, sourceId: id, sources, observations: history, manualRecords, currentDay,
   });
-  const cardHidden = cards.find((card) => card.sourceId === source.id)?.hidden ?? false;
   const reportingExchangeRates = longbridgeReferenceRates(sources);
   const profitColorScheme = await readProfitColorScheme();
 
@@ -87,7 +85,6 @@ export default async function AssetSourceDetailPage({
               initialPreset={effectivePreset}
               initialCustomRange={customRange}
               firstDay={trendHistory?.records[0]?.day ?? detail.firstDay}
-              cardHidden={cardHidden}
               currentDay={currentDay}
               history={history}
               profitColorScheme={profitColorScheme}

@@ -7,6 +7,7 @@ import type {
 } from "react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { VibeButton } from "@/ui/vibe/vibe-button";
 
 const FOCUSABLE_SELECTOR = [
   "button:not([disabled])",
@@ -24,12 +25,14 @@ function dialogControls(overlay: HTMLElement | null): HTMLElement[] {
 
 interface VibeDialogProps
   extends Omit<HTMLAttributes<HTMLDivElement>, "onSubmit" | "title"> {
-  actions: ReactNode;
+  actions: ReactNode | ((requestClose: () => void) => ReactNode);
   children?: ReactNode;
   description?: ReactNode;
   headerActions?: ReactNode;
   onClose: () => void;
   onSubmit?: FormEventHandler<HTMLFormElement>;
+  dirty?: boolean;
+  pending?: boolean;
   title: string;
   titleId: string;
 }
@@ -42,6 +45,8 @@ export function VibeDialog({
   headerActions,
   onClose,
   onSubmit,
+  dirty = false,
+  pending = false,
   title,
   titleId,
   onPointerDown: onOverlayPointerDown,
@@ -50,14 +55,33 @@ export function VibeDialog({
   const overlayRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   const [mounted, setMounted] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const editingFocusRef = useRef("");
+
+  function continueEditing() {
+    setConfirmDiscard(false);
+    window.requestAnimationFrame(() => {
+      const field = document.getElementById(editingFocusRef.current);
+      if (field && overlayRef.current?.contains(field)) field.focus();
+    });
+  }
+
+  function requestClose() {
+    if (pending) return;
+    if (confirmDiscard) continueEditing();
+    else if (dirty) {
+      editingFocusRef.current = document.activeElement?.id ?? "";
+      setConfirmDiscard(true);
+    } else onClose();
+  }
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
   useEffect(() => {
-    onCloseRef.current = onClose;
-  }, [onClose]);
+    onCloseRef.current = requestClose;
+  });
 
   useEffect(() => {
     const previouslyFocused = document.activeElement instanceof HTMLElement
@@ -116,17 +140,22 @@ export function VibeDialog({
     <>
       <header className="vibe-dialog__header">
         <div className="vibe-dialog__heading">
-          <h2 id={titleId}>{title}</h2>
+          <h2 id={titleId}>{confirmDiscard ? "放弃未保存的修改？" : title}</h2>
         </div>
-        {headerActions ? (
+        {!confirmDiscard && headerActions ? (
           <div className="vibe-dialog__header-actions">{headerActions}</div>
         ) : null}
       </header>
       <div className="vibe-dialog__body">
-        {description ? <p className="vibe-dialog__copy">{description}</p> : null}
-        {children}
+        {confirmDiscard ? <p className="vibe-dialog__copy">修改尚未保存。</p> : <>
+          {description ? <p className="vibe-dialog__copy">{description}</p> : null}
+          {children}
+        </>}
       </div>
-      <footer className="vibe-dialog__footer">{actions}</footer>
+      <footer className="vibe-dialog__footer">{confirmDiscard ? <>
+        <VibeButton type="button" variant="text" disabled={pending} onClick={continueEditing}>继续编辑</VibeButton>
+        <VibeButton type="button" tone="danger" disabled={pending} onClick={onClose}>放弃修改</VibeButton>
+      </> : typeof actions === "function" ? actions(requestClose) : actions}</footer>
     </>
   );
   const panelClassName = ["vibe-dialog", className].filter(Boolean).join(" ");
@@ -135,12 +164,14 @@ export function VibeDialog({
   const dialog = (
     <div
       ref={overlayRef}
-      aria-labelledby={hasExplicitLabel ? undefined : titleId}
       aria-modal="true"
       className="vibe-dialog-overlay"
       data-vibe-component="modal"
       role="dialog"
       {...overlayProps}
+      aria-busy={pending || overlayProps["aria-busy"]}
+      aria-label={confirmDiscard ? undefined : overlayProps["aria-label"]}
+      aria-labelledby={confirmDiscard ? titleId : overlayProps["aria-labelledby"] ?? (hasExplicitLabel ? undefined : titleId)}
       onPointerDown={(event) => {
         onOverlayPointerDown?.(event);
         if (!event.defaultPrevented && event.target === event.currentTarget) {
@@ -149,7 +180,10 @@ export function VibeDialog({
       }}
     >
       {onSubmit ? (
-        <form className={panelClassName} onSubmit={onSubmit}>
+        <form className={panelClassName} onSubmit={event => {
+          if (confirmDiscard || pending) event.preventDefault();
+          else onSubmit(event);
+        }}>
           {panelContent}
         </form>
       ) : (

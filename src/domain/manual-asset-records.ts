@@ -35,7 +35,7 @@ function normalizeLabel(value: unknown): string {
   return label;
 }
 
-function normalizeAmount(value: unknown): string {
+export function parseManualAssetRecordAmount(value: unknown): string {
   if (typeof value !== "string") {
     throw new InvalidManualAssetRecordError("资产总额无效");
   }
@@ -109,7 +109,7 @@ export function parseManualAssetRecordInput(
   }
   return {
     day: parseManualAssetRecordDay(value.day),
-    amount: normalizeAmount(value.amount),
+    amount: parseManualAssetRecordAmount(value.amount),
     currency: normalizeCurrency(value.currency),
   };
 }

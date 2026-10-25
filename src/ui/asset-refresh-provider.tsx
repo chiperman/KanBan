@@ -32,6 +32,7 @@ export interface AssetRefreshRegistration {
 interface AssetRefreshValue {
   canRefresh: boolean;
   globalStatus: AssetRefreshStatus;
+  failedSources: RefreshableAssetSource[];
   clear(): void;
   register(registration: AssetRefreshRegistration): void;
   request(intent: AssetRefreshIntent): Promise<void>;
@@ -146,6 +147,7 @@ export function AssetRefreshProvider({ children }: { children: ReactNode }) {
     canRefresh: coordinator.canRefresh,
     clear,
     globalStatus: coordinator.globalStatus(),
+    failedSources: coordinator.failedSources(),
     register,
     request,
     sourceStatus,

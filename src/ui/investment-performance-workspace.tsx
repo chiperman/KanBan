@@ -687,7 +687,7 @@ export function InvestmentPerformanceWorkspace({
         title="投资账本"
       />
 
-      <LongbridgeRealtimeNotice state={realtimeState} retry={retry} />
+      <LongbridgeRealtimeNotice state={realtimeState} retry={retry} sourceId={sources.find(source => source.kind === "longbridge" && source.lifecycle !== "disconnected")?.id} />
       <section className="investment-performance__current" aria-label="当前组合结论">
         <article data-testid="performance-current-total">
           <h2>当前总资产</h2>

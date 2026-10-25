@@ -26,6 +26,7 @@ import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
 import { VibeLink } from "@/ui/vibe/vibe-button";
 import { VibeEntityLink } from "@/ui/vibe/vibe-entity-link";
 import { VibeStatusTag } from "@/ui/vibe/vibe-data-instrument";
+import { sourceSummaryStatus } from "@/ui/asset-source-status";
 
 export const dynamic = "force-dynamic";
 
@@ -40,20 +41,22 @@ export default async function SettingsPage({
   const view = query?.view === "security" ? "security" : query?.view === "data" ? "data" : "preferences";
   const services = getServices();
   if ((await services.auth.currentSession()) === null) redirect("/");
-  const ownerCredential = await services.ownerCredentials.get();
+  const [ownerCredential, recoveryCredential, initialProfitColorScheme] = await Promise.all([
+    view === "security" ? services.ownerCredentials.get() : null,
+    view === "security" ? services.ownerRecoveryCredentials.get() : null,
+    view === "preferences" ? readSavedProfitColorScheme() : null,
+  ]);
   const ownerPasskeyConfigured = ownerCredential !== null;
   const ownerPasskeyBoundAt = ownerCredential?.createdAt ?? null;
-  const recoveryConfigured =
-    (await services.ownerRecoveryCredentials.get()) !== null;
-  const initialProfitColorScheme = await readSavedProfitColorScheme();
-  const externalServiceStatus = await services.externalServices.status();
-  const [execution, scheduler, collection, storedSources, history, fullRefreshState] = await Promise.all([
-    services.formalSettlementExecutions.latest(),
-    services.formalSettlementScheduler.read(),
+  const recoveryConfigured = recoveryCredential !== null;
+  const [execution, scheduler, collection, storedSources, history, fullRefreshState, externalServiceStatus] = await Promise.all([
+    view === "data" ? services.formalSettlementExecutions.latest() : null,
+    view === "data" ? services.formalSettlementScheduler.read() : null,
     view === "data" ? services.backgroundCollection?.read() ?? null : null,
     view === "data" ? services.assetSources.list() : [],
     view === "data" ? services.dailyAssetSnapshots.listTrendObservations() : [],
     view === "data" ? readAssetRefreshState(services) : undefined,
+    view === "data" ? services.externalServices.status() : null,
   ]);
 
   return (
@@ -103,19 +106,11 @@ export default async function SettingsPage({
                   {storedSources.length === 0 ? <p>尚未接入资产来源</p> : (
                     <ul className="settings-sources__list">
                       {storedSources.map((source) => {
-                        const disconnected = source.lifecycle === "disconnected";
-                        const failed = source.kind !== "manual" && source.sync.error !== null;
-                        const attention = source.kind === "manual"
-                          ? source.hasManualRecord === false
-                          : source.sync.status === "expired";
-                        const status = disconnected ? "已断开"
-                          : source.kind === "manual" ? source.hasManualRecord === false ? "待记录" : "手工记录"
-                          : failed ? "同步失败"
-                          : attention ? "待更新" : "已连接";
+                        const status = sourceSummaryStatus(source);
                         return (
                           <li key={source.id}>
-                            <VibeEntityLink href={`/asset-sources/${encodeURIComponent(source.id)}`}>{assetSourceDisplayName(source)}</VibeEntityLink>
-                            <VibeStatusTag tone={disconnected ? "muted" : failed ? "error" : attention ? "warning" : "muted"}>{status}</VibeStatusTag>
+                            <VibeEntityLink href={`/asset-sources/${encodeURIComponent(source.id)}?view=manage`}>{assetSourceDisplayName(source)}</VibeEntityLink>
+                            <VibeStatusTag tone={status.tone}>{status.label}</VibeStatusTag>
                           </li>
                         );
                       })}
@@ -127,7 +122,7 @@ export default async function SettingsPage({
                 <h2 id="collection-settlement-title">自动采集与日结</h2>
                 <div className="data-maintenance-section__content">
                   <BackgroundCollectionSettings status={collection} />
-                  <AutomaticDailySettlementSettings execution={execution} scheduler={scheduler} backgroundActive={collection?.health === "running"} />
+                  {scheduler ? <AutomaticDailySettlementSettings execution={execution} scheduler={scheduler} backgroundActive={collection?.health === "running"} /> : null}
                 </div>
               </section>
               <section className="data-maintenance-section" aria-labelledby="data-checks-title">
@@ -138,7 +133,7 @@ export default async function SettingsPage({
                   sources={storedSources.map(({ credentialReference: _credential, ...source }) => source)}
                 />
               </section>
-              <ExternalServiceSettings initialStatus={externalServiceStatus} />
+              {externalServiceStatus ? <ExternalServiceSettings initialStatus={externalServiceStatus} /> : null}
               <BusinessDataBackupSettings />
             </div>}
         </WorkbenchPage>

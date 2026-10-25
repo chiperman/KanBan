@@ -5,7 +5,7 @@ import type { LongbridgeConnectionMode } from "@/server/asset-sources/longbridge
 import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
 import { AssetFinancialValue } from "@/ui/asset-financial-value";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -125,7 +125,16 @@ export function AssetSourceFlow({
       : [...EVM_CHAINS],
   );
   const [error, setError] = useState("");
-  const [pending, setPending] = useState(false);
+  const operationLock = useRef(false);
+  const leavingFlow = useRef(false);
+  const configureTitle = useRef<HTMLHeadingElement>(null);
+  const revalidationChains = useRef<EvmChain[] | null>(null);
+  const focusConfiguration = useRef(false);
+  const [operation, setOperation] = useState<"verify" | "save" | "cancel" | null>(null);
+  const pending = operation !== null;
+  const [recovery, setRecovery] = useState<"revalidate" | "check" | null>(null);
+  const [savedProviders, setSavedProviders] = useState<AssetSourceProviderId[]>([]);
+  const [uncertainId, setUncertainId] = useState<string | null>(null);
   const [longbridgeMode, setLongbridgeMode] = useState<LongbridgeConnectionMode>("cli");
   const [longbridgeReady, setLongbridgeReady] = useState(false);
   const [fields, setFields] = useState(initialAssetSourceFields);
@@ -203,6 +212,27 @@ export function AssetSourceFlow({
     };
   }, [isEvm, step]);
 
+  useEffect(() => {
+    if (step === "configure" && focusConfiguration.current) {
+      focusConfiguration.current = false;
+      configureTitle.current?.focus();
+    }
+  }, [step]);
+
+  function beginOperation(next: NonNullable<typeof operation>): boolean {
+    if (operationLock.current) return false;
+    operationLock.current = true;
+    setOperation(next);
+    setError("");
+    return true;
+  }
+
+  function endOperation() {
+    if (leavingFlow.current) return;
+    operationLock.current = false;
+    setOperation(null);
+  }
+
   function updateField(id: AssetSourceFieldId, value: string) {
     setFields((current) => ({ ...current, [id]: value }));
   }
@@ -214,6 +244,7 @@ export function AssetSourceFlow({
   }
 
   function leaveFlow() {
+    leavingFlow.current = true;
     router.push(
       reauthorization === undefined
         ? "/settings?view=data#asset-sources"
@@ -233,8 +264,7 @@ export function AssetSourceFlow({
   }
 
   async function startOAuth() {
-    setPending(true);
-    setError("");
+    if (!beginOperation("verify")) return;
     const endpoint = reauthorization === undefined
       ? "/api/asset-sources/longbridge/oauth/start"
       : `/api/asset-sources/${encodeURIComponent(reauthorization.sourceId)}/reauthorize/oauth/start`;
@@ -245,15 +275,15 @@ export function AssetSourceFlow({
       if (!response.ok || !body?.authorizationUrl) throw new Error(body?.error ?? "无法开始长桥授权");
       window.location.assign(body.authorizationUrl);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "无法开始长桥授权");
-      setPending(false);
+      setError(caught instanceof TypeError ? "网络连接异常，请重试授权。" : caught instanceof Error ? caught.message : "无法开始长桥授权");
+    } finally {
+      endOperation();
     }
   }
 
   async function startSinglePreview() {
     if (!provider) return;
-    setPending(true);
-    setError("");
+    if (!beginOperation("verify")) return;
     try {
       const endpoint = previewUrl ?? `/api/asset-sources/${provider.route}/preview`;
       const response = await fetch(endpoint, {
@@ -263,71 +293,70 @@ export function AssetSourceFlow({
       });
       const body = await readJsonResult<Preview & { error?: string }>(response);
       if (lockOnUnauthorizedResponse(response)) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
-      if (!response.ok || body === null) throw new Error(body?.error ?? provider.validationError);
+      if (!response.ok || !body?.id) throw new Error(body?.error ?? provider.validationError);
       setFields(initialAssetSourceFields());
       setPreviews([body]);
       setStep("preview");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : provider.validationError);
-    } finally { setPending(false); }
+      setError(caught instanceof TypeError ? "网络连接异常，请重试验证。" : caught instanceof Error ? caught.message : provider.validationError);
+    } finally { endOperation(); }
+  }
+
+  function previewDeleteUrl(current: Preview): string {
+    const description = assetSourceProvider(current.provider);
+    return previewUrl === null
+      ? `/api/asset-sources/${description.route}/preview?id=${encodeURIComponent(current.id)}&provider=${current.provider}`
+      : `${previewUrl}?id=${encodeURIComponent(current.id)}`;
   }
 
   async function startEvmPreview() {
-    const chains = isReauthorizing
-      ? [reauthorization.provider as EvmChain]
-      : evmChains;
+    const chains = isReauthorizing ? [reauthorization.provider as EvmChain] : evmChains;
     if (chains.length === 0) {
       setError("请至少选择一条 EVM 链");
       return;
     }
-    setPending(true);
-    setError("");
-    const addresses = fields.addresses
-      .split(/\r?\n/)
-      .map((value) => value.trim())
-      .filter(Boolean);
-    const results = await Promise.all(
-      chains.map(async (chain) => {
-        const endpoint = previewUrl ?? "/api/asset-sources/evm/preview";
-        const response = await fetch(endpoint, {
+    if (!beginOperation("verify")) return;
+    try {
+      const addresses = fields.addresses.split(/\r?\n/).map((value) => value.trim()).filter(Boolean);
+      // 等待每条链结束，失败时也能清理另一条链已经生成的临时预览。
+      const results = await Promise.allSettled(chains.map(async (chain) => {
+        const response = await fetch(previewUrl ?? "/api/asset-sources/evm/preview", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ chain, addresses }),
         });
+        const expired = lockOnUnauthorizedResponse(response);
         const body = await readJsonResult<Preview & { error?: string }>(response);
-        return { chain, body, expired: lockOnUnauthorizedResponse(response), ok: response.ok && body !== null };
-      }),
-    );
-    if (results.some((result) => result.expired)) {
-      setPending(false);
-      setError(OWNER_SESSION_EXPIRED_MESSAGE);
-      return;
+        if (expired) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
+        if (!response.ok || !body?.id) throw new Error(body?.error ?? "EVM 公开地址验证失败");
+        return body;
+      }));
+      const successful = results.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
+      const failures = results.filter((result) => result.status === "rejected");
+      if (failures.length > 0) {
+        const cleanup = await Promise.allSettled(successful.map(async (current) => {
+          const response = await fetch(previewDeleteUrl(current), { method: "DELETE" });
+          if (lockOnUnauthorizedResponse(response)) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
+          if (!response.ok) throw new Error("临时预览清理失败");
+        }));
+        const expired = [...failures, ...cleanup].some((result) => result.status === "rejected" && result.reason instanceof Error && result.reason.message === OWNER_SESSION_EXPIRED_MESSAGE);
+        const reason = failures[0].reason;
+        setError(expired ? OWNER_SESSION_EXPIRED_MESSAGE : reason instanceof TypeError
+          ? "网络连接异常，请重试验证。"
+          : reason instanceof Error ? reason.message : "EVM 公开地址验证失败");
+        if (!expired && cleanup.some((result) => result.status === "rejected")) {
+          setError("验证未完成，部分临时预览未能清理，将在 10 分钟内失效；尚未保存来源，可重新验证。");
+        }
+        return;
+      }
+      setFields(initialAssetSourceFields());
+      setPreviews(successful);
+      setStep("preview");
+    } catch {
+      setError("网络连接异常，请重试验证。");
+    } finally {
+      endOperation();
     }
-    const failed = results.find((result) => !result.ok);
-    if (failed) {
-      await Promise.all(
-        results
-          .filter(
-            (result): result is { chain: EvmChain; body: Preview; expired: boolean; ok: true } =>
-              result.ok && result.body !== null,
-          )
-          .map(({ chain, body }) =>
-            fetch(
-              previewUrl === null
-                ? `/api/asset-sources/evm/preview?id=${encodeURIComponent(body.id)}&provider=${chain}`
-                : `${previewUrl}?id=${encodeURIComponent(body.id)}`,
-              { method: "DELETE" },
-            ),
-          ),
-      );
-      setPending(false);
-      setError(failed.body?.error ?? "EVM 公开地址验证失败");
-      return;
-    }
-    setPending(false);
-    setFields(initialAssetSourceFields());
-    setPreviews(results.map(({ body }) => body!));
-    setStep("preview");
   }
 
   async function start() {
@@ -343,105 +372,112 @@ export function AssetSourceFlow({
     await startSinglePreview();
   }
 
+  function confirmationFailed(body: { error?: string; code?: string } | null, fallback: string, current?: Preview) {
+    if (body?.code === "preview-unavailable" || body?.code === "scope-changed") {
+      setRecovery("revalidate");
+    } else if (body?.code === "preview-busy") {
+      setRecovery("check");
+      setUncertainId(current?.id ?? null);
+    }
+    setError(body?.error ?? fallback);
+  }
+
   async function confirmManualAsset() {
-    setPending(true);
-    setError("");
     const response = await fetch("/api/asset-sources/manual", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ label: manualLabel }),
     });
-    const body = await readJsonResult<{ error?: string }>(response);
     if (lockOnUnauthorizedResponse(response)) {
-      setPending(false);
       setError(OWNER_SESSION_EXPIRED_MESSAGE);
       return;
     }
     if (!response.ok) {
-      setPending(false);
+      const body = await readJsonResult<{ error?: string }>(response);
       setError(body?.error ?? "手工资产记录保存失败");
-      return;
-    }
-    router.push("/settings?view=data#asset-sources");
-    router.refresh();
-  }
-
-  async function confirmSingle() {
-    if (!preview || !provider) return;
-    setPending(true);
-    setError("");
-    const endpoint = confirmUrl ?? `/api/asset-sources/${provider.route}/confirm`;
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: preview.id, provider: preview.provider }),
-    });
-    const body = await readJsonResult<{ error?: string }>(response);
-    if (lockOnUnauthorizedResponse(response)) {
-      setPending(false);
-      setError(OWNER_SESSION_EXPIRED_MESSAGE);
-      return;
-    }
-    if (!response.ok) {
-      setPending(false);
-      setError(body?.error ?? `保存 ${provider.label} 来源失败`);
       return;
     }
     leaveFlow();
     router.refresh();
   }
 
-  async function confirmEvm() {
-    setPending(true);
-    setError("");
+  async function confirmPreviews() {
     const remaining = [...previews];
     for (const current of previews) {
-      const endpoint = confirmUrl ?? "/api/asset-sources/evm/confirm";
-      const response = await fetch(endpoint, {
+      const description = assetSourceProvider(current.provider);
+      const response = await fetch(confirmUrl ?? `/api/asset-sources/${description.route}/confirm`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: current.id, provider: current.provider }),
       });
-      const body = await readJsonResult<{ error?: string }>(response);
       if (lockOnUnauthorizedResponse(response)) {
-        setPending(false);
-        setPreviews(remaining);
         setError(OWNER_SESSION_EXPIRED_MESSAGE);
         return;
       }
       if (!response.ok) {
-        setPending(false);
-        setPreviews(remaining);
-        setError(body?.error ?? "保存 EVM 观察钱包失败");
+        const body = await readJsonResult<{ error?: string; code?: string }>(response);
+        confirmationFailed(body, `保存 ${description.label} 来源失败`, current);
         return;
       }
       remaining.shift();
+      setSavedProviders((saved) => [...saved, current.provider]);
+      setPreviews([...remaining]);
     }
     leaveFlow();
     router.refresh();
   }
 
   async function confirm() {
-    if (providerId === "manual") {
-      await confirmManualAsset();
-    } else if (isEvm) {
-      await confirmEvm();
-    } else {
-      await confirmSingle();
+    if (recovery !== null || !beginOperation("save")) return;
+    try {
+      if (providerId === "manual") await confirmManualAsset();
+      else await confirmPreviews();
+    } catch {
+      setRecovery("check");
+      // 已收到成功响应的链已从 previews 移除；中断的请求不能当作未保存。
+      setUncertainId(null);
+      setError("网络连接异常，保存结果尚不确定。请先核对来源，避免重复保存。");
+    } finally {
+      endOperation();
     }
   }
 
-  async function cancelPreview() {
-    await Promise.all(
-      previews.map((current) => {
-        const description = assetSourceProvider(current.provider);
-        const endpoint = previewUrl === null
-          ? `/api/asset-sources/${description.route}/preview?id=${encodeURIComponent(current.id)}&provider=${current.provider}`
-          : `${previewUrl}?id=${encodeURIComponent(current.id)}`;
-        return fetch(endpoint, { method: "DELETE" });
-      }),
-    );
-    leaveFlow();
+  async function cancelPreview(revalidate = false) {
+    if (recovery === "check" || !beginOperation("cancel")) return;
+    if (revalidate && isEvm && revalidationChains.current === null) {
+      revalidationChains.current = previews.map(({ provider }) => provider as EvmChain);
+    }
+    try {
+      // 成功取消的项立即移除，后续失败时不会再次确认已经取消的预览。
+      for (const current of previews) {
+        const response = await fetch(previewDeleteUrl(current), { method: "DELETE" });
+        if (lockOnUnauthorizedResponse(response)) {
+          setError(OWNER_SESSION_EXPIRED_MESSAGE);
+          return;
+        }
+        if (!response.ok) {
+          setError("未能取消临时预览，请重试取消。已保存的来源会保留。");
+          return;
+        }
+        setPreviews((remaining) => remaining.filter(({ id }) => id !== current.id));
+      }
+      if (revalidate) {
+        if (isEvm && !isReauthorizing) setEvmChains(revalidationChains.current ?? []);
+        setFields(initialAssetSourceFields());
+        revalidationChains.current = null;
+        setRecovery(null);
+        setUncertainId(null);
+        focusConfiguration.current = true;
+        setStep("configure");
+      } else {
+        leaveFlow();
+        router.refresh();
+      }
+    } catch {
+      setError("网络连接异常，取消尚未完成，请重试取消。已保存的来源会保留。");
+    } finally {
+      endOperation();
+    }
   }
 
   const ready =
@@ -521,7 +557,7 @@ export function AssetSourceFlow({
 
       {step === "configure" && selectedProvider !== null ? (
         <section aria-labelledby="source-flow-configure-title" className="asset-source-flow__panel">
-          <h2 id="source-flow-configure-title">{configurationTitle}</h2>
+          <h2 id="source-flow-configure-title" ref={configureTitle} tabIndex={-1}>{configurationTitle}</h2>
           {providerId !== "manual" ? <p>{providerId === "longbridge" ? "仅连接只读账户权限。" : isEvm ? "仅使用公开地址，无需私钥。" : "仅使用具有读取权限的授权。"}</p> : null}
           {providerId === "longbridge" ? (
             <LongbridgeConnectionSettings sourceId={reauthorization?.sourceId} mode={longbridgeMode} onMode={setLongbridgeMode} onReady={setLongbridgeReady} onAuthorizeSdk={() => void startOAuth()} pending={pending} />
@@ -585,7 +621,7 @@ export function AssetSourceFlow({
                 ),
               )}
               {providerId === "evm" && !isReauthorizing ? (
-                <fieldset className="source-evm-chains">
+                <fieldset className="source-evm-chains" disabled={pending}>
                   <legend className="vibe-field__label">同步链</legend>
                   {EVM_CHAINS.map((chain) => {
                     const description = assetSourceProvider(chain);
@@ -641,6 +677,9 @@ export function AssetSourceFlow({
           <h2 id="source-flow-preview-title">
             {providerId === "manual" ? "确认手工来源" : "确认资产来源"}
           </h2>
+          <div role="status">
+            {savedProviders.length > 0 ? <p>已保存：{savedProviders.map((id) => assetSourceProvider(id).label).join("、")}。已保存来源会保留。</p> : null}
+          </div>
           {providerId === "manual" ? (
             <>
               <dl className="source-preview-list vibe-preview-list">
@@ -663,6 +702,11 @@ export function AssetSourceFlow({
                     <div className="vibe-data-row" key={current.id}>
                       <dt>{description.label}</dt>
                       <dd>
+                        <div>{current.account.label}</div>
+                        {isEvmProvider(current.provider) ? <div>来源标识：{current.account.id}</div> : null}
+                        {recovery === "check" && (uncertainId === null ? current.id === previews[0]?.id : uncertainId === current.id)
+                          ? <div>保存结果待核对</div>
+                          : savedProviders.length > 0 ? <div>待完成</div> : null}
                         {description.previewScope(current.accountMode)}，{" "}
                         <AssetFinancialValue unit={current.total.currency}>
                           {formatAmount(
@@ -679,28 +723,32 @@ export function AssetSourceFlow({
           )}
           <div className="asset-source-flow__actions">
             <VibeButton
-              disabled={pending}
+              disabled={pending || recovery === "check"}
               onClick={() => void cancelPreview()}
               type="button"
               variant="text"
             >
-              取消
+              {operation === "cancel" ? "正在取消…" : savedProviders.length > 0 ? "取消剩余预览" : "取消"}
             </VibeButton>
-            <VibeButton
-              aria-busy={pending}
-              disabled={pending}
+            {recovery === "check" ? (
+              <VibeLink href={reauthorization === undefined ? "/settings?view=data#asset-sources" : `/asset-sources/${encodeURIComponent(reauthorization.sourceId)}?view=manage`} variant="primary">核对来源</VibeLink>
+            ) : recovery === "revalidate" ? (
+              <VibeButton disabled={pending} onClick={() => void cancelPreview(true)} type="button" variant="primary">重新验证</VibeButton>
+            ) : <VibeButton
+              aria-busy={operation === "save"}
+              disabled={pending || (providerId !== "manual" && previews.length === 0)}
               onClick={() => void confirm()}
               type="button"
               variant="primary"
             >
-              {pending
+              {operation === "save"
                 ? "正在保存…"
                 : providerId === "manual"
                   ? "确认创建来源"
                   : isReauthorizing
                     ? "确认更新授权"
-                    : "确认并保存"}
-            </VibeButton>
+                    : savedProviders.length > 0 ? "重试剩余来源" : "确认并保存"}
+            </VibeButton>}
           </div>
         </section>
       ) : null}

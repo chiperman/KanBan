@@ -3,7 +3,7 @@
 import { formatAssetAmount } from "@/ui/asset-price-display";
 import { AssetFinancialValue } from "@/ui/asset-financial-value";
 import { InvestmentBookRecordAmount, longbridgeOriginalFundingAmount } from "@/ui/investment-book-record-amount";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { activeBookRecords, analyzeInvestmentBook, analyzeInvestmentBookInterval, INVESTMENT_BOOKS, investmentBook, type BookMember, type BookRecord, type InvestmentBookId, type InvestmentBookState } from "@/domain/investment-books";
 import { decimalAdd, decimalCompare, decimalMultiply } from "@/domain/decimal";
@@ -30,6 +30,7 @@ import { VibeMetric } from "@/ui/vibe/vibe-data-instrument";
 import { VibeDialog } from "@/ui/vibe/vibe-dialog";
 import { VibeField, VibeSelectField, VibeTextAreaField } from "@/ui/vibe/vibe-field";
 import { VibeDateField } from "@/ui/vibe/vibe-date-field";
+import { VibeAmountField } from "@/ui/vibe/vibe-amount-field";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
 import { useTablePagination, VibeTablePagination } from "@/ui/vibe/vibe-table-pagination";
 
@@ -44,20 +45,23 @@ async function bookRequest(body: object) {
   if (lockOnUnauthorizedResponse(response)) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
   if (!response.ok) throw new Error(result?.error ?? "账本保存失败");
 }
-function ActionDialog({ title, description, children, submit, onClose, disabled = false, button = "保存" }: {
-  title: string; description?: string; children: ReactNode; submit(): Promise<void>; onClose(): void; disabled?: boolean; button?: string;
+function ActionDialog({ title, description, children, submit, onClose, disabled = false, dirty = false, button = "保存" }: {
+  title: string; description?: string; children: ReactNode; submit(): Promise<void>; onClose(): void; disabled?: boolean; dirty?: boolean; button?: string;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
+  const pendingRef = useRef(false);
   const [error, setError] = useState("");
   async function save() {
+    if (pendingRef.current || disabled) return;
+    pendingRef.current = true;
     setPending(true); setError("");
     try { await submit(); router.refresh(); onClose(); }
     catch (e) { setError(e instanceof Error ? e.message : "保存失败"); }
-    finally { setPending(false); }
+    finally { pendingRef.current = false; setPending(false); }
   }
-  return <VibeDialog title={title} titleId="book-action-title" description={description} onClose={() => { if (!pending) onClose(); }} onSubmit={e => { e.preventDefault(); if (!pending) void save(); }}
-    actions={<><VibeButton type="button" variant="text" disabled={pending} onClick={onClose}>取消</VibeButton><VibeButton type="submit" variant="primary" disabled={pending || disabled}>{pending ? "保存中…" : button}</VibeButton></>}>
+  return <VibeDialog title={title} titleId="book-action-title" description={description} dirty={dirty} pending={pending} onClose={onClose} onSubmit={e => { e.preventDefault(); void save(); }}
+    actions={requestClose => <><VibeButton type="button" variant="text" disabled={pending} onClick={requestClose}>取消</VibeButton><VibeButton type="submit" variant="primary" disabled={pending || disabled}>{pending ? "保存中…" : button}</VibeButton></>}>
     <fieldset className="investment-books__fields" disabled={pending}>{children}</fieldset>
     {error ? <VibeNotice tone="error" role="alert">{error}</VibeNotice> : null}
   </VibeDialog>;
@@ -69,13 +73,15 @@ function FundDialog({ initialBookId, currentDay, state, record, onClose }: { ini
   const [day, setDay] = useState(record?.day ?? currentDay);
   const [amount, setAmount] = useState(record?.amount ?? "");
   const [note, setNote] = useState(record?.note ?? "");
+  const [initial] = useState(() => ({ bookId: initialBookId, kind, day, amount, note }));
+  const dirty = bookId !== initial.bookId || kind !== initial.kind || day !== initial.day || amount !== initial.amount || note !== initial.note;
   const book = investmentBook(bookId);
   const hasOpening = activeBookRecords(state, bookId).some(row => row.kind === "opening");
-  return <ActionDialog title={record ? "更正记账记录" : "记录出入金"} description={record ? "更正后重算收益，原记录保留。" : undefined} onClose={onClose} disabled={!amount.trim()} submit={() => bookRequest({ action: "save", bookId, record: { id, day, amount, currency: book.currency, kind, note, ...(record ? { replacesId: record.id } : {}) } })}>
+  return <ActionDialog title={record ? "更正记账记录" : "记录出入金"} description={record ? "更正后重算收益，原记录保留。" : undefined} dirty={dirty} onClose={onClose} submit={() => bookRequest({ action: "save", bookId, record: { id, day, amount, currency: book.currency, kind, note, ...(record ? { replacesId: record.id } : {}) } })}>
     <VibeSelectField fieldId="book-fund-book" label="账本" value={bookId} disabled={!!record} options={INVESTMENT_BOOKS.map(book => ({ value: book.id, label: `${book.name}（${book.currency}）` }))} onValueChange={value => { setBookId(value as InvestmentBookId); setKind("deposit"); }} />
     <VibeSelectField fieldId="book-fund-kind" label="记录类型" value={kind} disabled={!!record} onValueChange={value => setKind(value as typeof kind)} options={Object.entries(labels).filter(([key]) => record ? key === record.kind : key !== "valuation" && (key !== "opening" || !hasOpening)).map(([value, label]) => ({ value, label }))} />
     <VibeDateField fieldId="book-fund-day" label="发生日期" max={currentDay} value={day} onValueChange={setDay} />
-    <VibeField fieldId="book-fund-amount" label={`${labels[kind]}（${book.currency}）`} inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} />
+    <VibeAmountField fieldId="book-fund-amount" label={`${labels[kind]}（${book.currency}）`} kind={kind} value={amount} onValueChange={setAmount} />
     <VibeField fieldId="book-fund-note" label="备注" maxLength={1000} value={note} onChange={e => setNote(e.target.value)} />
     <p className="trend-note">{kind === "opening" ? "填写历史起点时累计投入的本金，不是今天的资产余额；从零开始填 0。之后的入金出金要逐笔补齐，收益率从这个日期开始计算。" : kind === "valuation" ? "更正这一天的历史总资产，不改变本金。" : "资金记录不改变资产余额。买卖、分红和同一本账内账户互转都不属于入金出金。"}</p>
     {bookId === "crypto" ? <p className="trend-note">虚拟货币按整体记账，无需选择交易所或钱包，不分摊历史本金。</p> : null}
@@ -85,11 +91,34 @@ function AssetDialog({ currentDay, initialDay, state, sources, manualRecords, on
   const members = state.members.filter(row => row.bookId === "a-shares" && row.confirmed && !row.toDay);
   const [sourceId, setSourceId] = useState(members[0]?.sourceId ?? "");
   const [day, setDay] = useState(initialDay ?? currentDay);
-  const [amount, setAmount] = useState(() => initialDay ? manualRecords.find(row => row.sourceId === members[0]?.sourceId && row.day === initialDay)?.amount ?? "" : "");
-  return <ActionDialog title="更新A股资产" description="每周日填写当天的资产总额，包含持仓和账户现金。同日保存会更新已有金额。" onClose={onClose} disabled={!sourceId || !amount.trim()} submit={() => bookRequest({ action: "asset", bookId: "a-shares", sourceId, day, amount, currency: "CNY" })}>
-    <VibeSelectField fieldId="book-asset-source" label="资产来源" value={sourceId} onValueChange={id => { setSourceId(id); setAmount(manualRecords.find(row => row.sourceId === id && row.day === day)?.amount ?? ""); }} options={members.map(row => ({ value: row.sourceId, label: sources.find(source => source.id === row.sourceId)?.label ?? row.sourceId }))} />
-    <VibeDateField fieldId="book-asset-day" label="资产日期" max={currentDay} value={day} onValueChange={setDay} />
-    <VibeField fieldId="book-asset-amount" label="当天资产总额（CNY）" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} />
+  const savedAmount = (id: string, date: string) => manualRecords.find(row => row.sourceId === id && row.day === date)?.amount ?? "";
+  const [amount, setAmount] = useState(() => savedAmount(sourceId, day));
+  const [originalAmount, setOriginalAmount] = useState(amount);
+  const [selection, setSelection] = useState<{ sourceId: string; day: string; focusId: string } | null>(null);
+  const dirty = amount !== originalAmount;
+  function switchSelection(id: string, date: string) {
+    setSourceId(id); setDay(date);
+    const saved = savedAmount(id, date);
+    setAmount(saved); setOriginalAmount(saved); setSelection(null);
+  }
+  function requestSelection(id: string, date: string, focusId: string) {
+    if (id === sourceId && date === day) return;
+    if (dirty) setSelection({ sourceId: id, day: date, focusId });
+    else switchSelection(id, date);
+  }
+  function cancelSelection() {
+    const focusId = selection?.focusId;
+    setSelection(null);
+    window.requestAnimationFrame(() => { if (focusId) document.getElementById(focusId)?.focus(); });
+  }
+  if (selection) return <VibeDialog title="放弃当前金额修改？" titleId="book-asset-switch-title" description="切换后将显示所选来源与日期已保存的金额。" onClose={cancelSelection} actions={<>
+    <VibeButton type="button" variant="text" onClick={cancelSelection}>继续编辑</VibeButton>
+    <VibeButton type="button" tone="danger" onClick={() => switchSelection(selection.sourceId, selection.day)}>放弃并切换</VibeButton>
+  </>} />;
+  return <ActionDialog title="更新A股资产" description="每周日填写当天的资产总额，包含持仓和账户现金。同日保存会更新已有金额。" dirty={dirty} onClose={onClose} disabled={!sourceId} submit={() => bookRequest({ action: "asset", bookId: "a-shares", sourceId, day, amount, currency: "CNY" })}>
+    <VibeSelectField fieldId="book-asset-source" label="资产来源" value={sourceId} onValueChange={id => requestSelection(id, day, "book-asset-source")} options={members.map(row => ({ value: row.sourceId, label: sources.find(source => source.id === row.sourceId)?.label ?? row.sourceId }))} />
+    <VibeDateField fieldId="book-asset-day" label="资产日期" max={currentDay} value={day} onValueChange={date => requestSelection(sourceId, date, "book-asset-day")} />
+    <VibeAmountField key={`${sourceId}/${day}`} fieldId="book-asset-amount" label="当天资产总额（CNY）" value={amount} onValueChange={setAmount} />
     {members.length === 0 ? <VibeNotice tone="info">请先在资产页接入手工证券来源，并在本页确认来源范围。</VibeNotice> : null}
     <p className="trend-note">此处只更新资产金额。新增投入或取出资金，请另记入金或出金。</p>
   </ActionDialog>;
@@ -102,7 +131,7 @@ function ImportDialog({ bookId, onClose }: { bookId: InvestmentBookId; onClose()
     try { const history = parseSourceInvestmentHistory(JSON.parse(text)); if (history.currency !== investmentBook(bookId).currency) throw new Error("币种与本账不一致"); setPreview(history); setError(""); }
     catch (e) { setPreview(null); setError(e instanceof Error ? e.message : "导入格式无效"); }
   }
-  return <ActionDialog title={`导入历史，${investmentBook(bookId).name}`} description="导入已有的投资账本 JSON。先核对截止日、本金和资产；重复导入同一原件不会重复计账。" onClose={onClose} disabled={!preview} button="确认导入" submit={() => bookRequest({ action: "import", bookId, history: preview })}>
+  return <ActionDialog title={`导入历史，${investmentBook(bookId).name}`} description="导入已有的投资账本 JSON。先核对截止日、本金和资产；重复导入同一原件不会重复计账。" dirty={text !== ""} onClose={onClose} disabled={!preview} button="确认导入" submit={() => bookRequest({ action: "import", bookId, history: preview })}>
     <VibeTextAreaField fieldId="book-import-json" label="历史数据 JSON" value={text} onChange={e => { setText(e.target.value); setPreview(null); }} rows={6} />
     <VibeButton type="button" variant="outline" onClick={inspect}>核对导入数据</VibeButton>
     {error ? <VibeNotice tone="error" role="alert">{error}</VibeNotice> : null}
@@ -113,7 +142,8 @@ function ImportDialog({ bookId, onClose }: { bookId: InvestmentBookId; onClose()
 function MemberDialog({ member, currentDay, onClose }: { member: BookMember; currentDay: string; onClose(): void }) {
   const [fromDay, setFromDay] = useState(member.fromDay ?? "");
   const [toDay, setToDay] = useState(member.toDay ?? "");
-  return <ActionDialog title="确认来源范围" description="接入接口不会被算成新增投资。请确认该账户从哪天起包含在整本账的资产总额里。" onClose={onClose} disabled={!fromDay} submit={() => bookRequest({ action: "member", bookId: member.bookId, sourceId: member.sourceId, fromDay, toDay: toDay || null })}>
+  const [initial] = useState(() => ({ fromDay, toDay }));
+  return <ActionDialog title="确认来源范围" description="接入接口不会被算成新增投资。请确认该账户从哪天起包含在整本账的资产总额里。" dirty={fromDay !== initial.fromDay || toDay !== initial.toDay} onClose={onClose} disabled={!fromDay} submit={() => bookRequest({ action: "member", bookId: member.bookId, sourceId: member.sourceId, fromDay, toDay: toDay || null })}>
     <VibeDateField fieldId="book-member-from" label="计入资产的起始日" max={currentDay} value={fromDay} onValueChange={setFromDay} />
     <VibeDateField fieldId="book-member-to" label="退出日（可空，当天起不再计入）" max={currentDay} value={toDay} onValueChange={setToDay} />
     <p className="trend-note">{member.fromDay === null ? "现有来源此前默认全程计入；保存后将按指定起始日重新核算自动汇总。" : "确认前暂停汇总，避免接入账户导致资产跳变被误认为收益。"} 导入历史的整本账总额保持原口径。</p>
@@ -123,7 +153,7 @@ function ResolveDialog({ flow, bookId, state, onClose }: { flow: InvestmentCashf
   const [target, setTarget] = useState(bookId);
   const [recordId, setRecordId] = useState("");
   const matching = activeBookRecords(state, target).filter(row => row.day === shanghaiDay(flow.occurredAt) && row.currency === flow.currency && decimalCompare(row.amount, flow.amount) === 0 && (flow.kind === "initial-investment" ? row.kind === "opening" || row.kind === "deposit" : row.kind === (flow.kind === "external-withdrawal" ? "withdrawal" : "deposit")));
-  return <ActionDialog title="确认旧资金记录归属" description={`${shanghaiDay(flow.occurredAt)}，${flow.amount} ${flow.currency}，${flow.note ?? "无备注"}`} onClose={onClose} submit={() => bookRequest({ action: "resolve", bookId: target, cashflowId: flow.id, recordId: recordId || null })}>
+  return <ActionDialog title="确认旧资金记录归属" description={`${shanghaiDay(flow.occurredAt)}，${flow.amount} ${flow.currency}，${flow.note ?? "无备注"}`} dirty={target !== bookId || recordId !== ""} onClose={onClose} submit={() => bookRequest({ action: "resolve", bookId: target, cashflowId: flow.id, recordId: recordId || null })}>
     <VibeSelectField fieldId="book-resolve-target" label="归属账本" value={target} onValueChange={value => { setTarget(value as InvestmentBookId); setRecordId(""); }} options={INVESTMENT_BOOKS.map(book => ({ value: book.id, label: book.name }))} />
     <VibeSelectField fieldId="book-resolve-record" label="计账方式" value={recordId} onValueChange={setRecordId} options={[{ value: "", label: "作为一笔独立资金计入" }, ...matching.map(row => ({ value: row.id, label: `关联已有 ${row.day} ${labels[row.kind]} ${row.amount}，只计一次` }))]} />
     <p className="trend-note">确认这笔资金是否已包含在导入历史内。原始记录始终保留。</p>
@@ -236,7 +266,7 @@ export function InvestmentBooksWorkspace({ state, initialBookId = "us-stocks", v
       </li>)}</ul>
     </section> : null}
     </div> : null}
-    <LongbridgeRealtimeNotice state={realtimeState} retry={retry} />
+    <LongbridgeRealtimeNotice state={realtimeState} retry={retry} sourceId={sources.find(source => source.kind === "longbridge" && source.lifecycle !== "disconnected")?.id} />
     {view === "performance" ? <section className="source-performance" aria-label={`${analysis.book.name}投资表现`}>
       <div className="investment-books__summary-toolbar">
         <header className="source-performance__heading"><h2>{isInterval ? "区间表现" : "累计表现"}</h2><p>{isInterval ? `${startDay} 至 ${endDay}` : current?.total != null ? `截至 ${current.day}` : "暂无完整资产记录"}</p></header>

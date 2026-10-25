@@ -138,10 +138,25 @@ export class SourceIsolatedAssetSynchronization
     if (input.isFullBatch) await this.fullRefreshState.finish(attemptedAt);
     await this.clearCycleWhenNoRefreshableSources();
     if (input.mode === "all" && sources.some(source => source.kind === "longbridge")) await this.dailyAssetHistory?.run();
+    const currentSources = new Map((await this.sources.list()).map(source => [source.id, source]));
 
     return {
       successCount,
       failureCount,
+      sourceResults: sources.map((source, index) => {
+        const sync = currentSources.get(source.id)?.sync;
+        return {
+          sourceId: source.id,
+          outcome: outcomes[index],
+          ...(sync === undefined ? {} : { sync: {
+            status: sync.status,
+            lastSuccessfulAt: sync.lastSuccessfulAt,
+            lastAttemptAt: sync.lastAttemptAt,
+            error: sync.error,
+            diagnostic: sync.diagnostic,
+          } }),
+        };
+      }),
       ...(input.isFullBatch ? { attemptedAt } : {}),
       ...(supersededCount === 0 ? {} : { supersededCount }),
     };

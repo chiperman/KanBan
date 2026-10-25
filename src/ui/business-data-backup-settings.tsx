@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 
 import type { BackupRestorePreview, BackupSummary } from "@/server/backup/business-data-backup";
 import { BusinessDataBackupDropzone } from "@/ui/business-data-backup-dropzone";
 import { formatShanghaiDateTime } from "@/ui/shanghai-date-time";
 import { VibeSelectField } from "@/ui/vibe/vibe-field";
-import { VibeButton } from "@/ui/vibe/vibe-button";
+import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
+import { useAssetRefresh } from "@/ui/asset-refresh-provider";
 import { VibeDialog } from "@/ui/vibe/vibe-dialog";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
 import { lockOnUnauthorizedResponse, OWNER_SESSION_EXPIRED_MESSAGE, readJsonResult } from "@/ui/owner-request-lock";
@@ -92,6 +94,8 @@ function omittedHistorySummary(history: NonNullable<BackupRestorePreview["omitte
 }
 
 export function BusinessDataBackupSettings() {
+  const router = useRouter();
+  const { clear: clearRefreshState } = useAssetRefresh();
   const [exported, setExported] = useState<BackupExport | null>(null);
   const [preview, setPreview] = useState<BackupPreview | null>(null);
   const [restored, setRestored] = useState<BackupPreview | null>(null);
@@ -193,9 +197,11 @@ export function BusinessDataBackupSettings() {
     try {
       const result = await requestBackup<BackupRestorePreview>("restore", candidate, preview.discardConfirmation);
       const restoredPreview = { ...result, fileName: candidate };
-      setPreview(restoredPreview);
+      setPreview(null);
       setRestored(restoredPreview);
       setConfirmOpen(false);
+      clearRefreshState();
+      router.refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "恢复业务数据失败");
     } finally {
@@ -305,10 +311,11 @@ export function BusinessDataBackupSettings() {
           {restored ? (
             <VibeNotice role="status" tone="success">
               已恢复。自动来源需重新授权。
+              <VibeLink href="/settings?view=data#asset-sources" variant="text">管理来源并重新授权</VibeLink>
             </VibeNotice>
           ) : null}
         </div>
-        {error ? (
+        {error && !confirmOpen ? (
           <VibeNotice role="alert" tone="error">
             {error}
           </VibeNotice>
@@ -330,7 +337,7 @@ export function BusinessDataBackupSettings() {
                   type="submit"
                   variant="primary"
                 >
-                  {pending === "restore" ? "正在恢复…" : "确认恢复"}
+                  {pending === "restore" ? "正在恢复…" : error ? "重试恢复" : "确认恢复"}
                 </VibeButton>
               </>
             }
@@ -341,6 +348,7 @@ export function BusinessDataBackupSettings() {
               </>
             }
             onClose={() => setConfirmOpen(false)}
+            pending={pending === "restore"}
             onSubmit={restore}
             title="确认恢复业务数据"
             titleId="business-data-restore-confirm-title"
@@ -348,6 +356,7 @@ export function BusinessDataBackupSettings() {
             <p className="business-data-restore__dialog-summary">
               {previewSummary(preview)}
             </p>
+            {error ? <VibeNotice role="alert" tone="error">{error}</VibeNotice> : null}
           </VibeDialog>
         ) : null}
       </div>

@@ -36,6 +36,8 @@ import type {
   InvestmentCashflow,
 } from "@/server/ports";
 import { AssetGlobalRefreshControl } from "@/ui/asset-refresh-controls";
+import { useAssetRefresh } from "@/ui/asset-refresh-provider";
+import { AssetRefreshIssues } from "@/ui/asset-source-recovery";
 import { sourceSyncStatus } from "@/ui/asset-source-status";
 import { AssetTrendPanel, useAssetTrendRange } from "@/ui/asset-trend-panel";
 import { rangeDays } from "@/domain/investment-performance-trend";
@@ -73,6 +75,17 @@ type SourceComparison =
 
 function amount(value: string): string {
   return formatAssetAmount(value);
+}
+
+function sourceSyncTimeLabel(sources: OverviewSource[]): string {
+  const times = sources.filter(hasManualAssetRecord)
+    .map((source) => Date.parse(source.snapshot.syncedAt));
+  if (times.length === 0 || times.some((time) => !Number.isFinite(time))) {
+    return "时间未知";
+  }
+  const earliest = formatShanghaiShortDateTime(new Date(Math.min(...times)));
+  const latest = formatShanghaiShortDateTime(new Date(Math.max(...times)));
+  return earliest === latest ? earliest : `${earliest} 至 ${latest}`;
 }
 
 function sourceHealth(source: OverviewSource): {
@@ -232,6 +245,9 @@ export function DailyOverviewWorkspace({
   } = useWorkbenchDisplayPreferences();
 
   const { liveSources, state: realtimeState, retry } = useLongbridgeRealtime(sources, !demoMode);
+  const { failedSources } = useAssetRefresh();
+  const hasSyncFailures = !demoMode && (failedSources.length > 0 ||
+    sources.some(source => source.lifecycle !== "disconnected" && source.kind !== "manual" && source.sync.error !== null));
   const totalTrendObservations = useMemo(
     () => projectTotalAssetTrendObservations({
       observations: trendObservations, sources, manualRecords, importedHistory,
@@ -435,6 +451,8 @@ export function DailyOverviewWorkspace({
           valuation.incomplete;
         if (!hasIssue) return [];
         return [{
+          id: source.id,
+          syncOnly: source.sync.error !== null && sourceAmount !== null && !valuation.incomplete,
           amount: sourceAmount,
           label: assetSourceDisplayName(source),
           status: sourceAmount === null
@@ -446,6 +464,9 @@ export function DailyOverviewWorkspace({
         }];
       }),
     [currency, recordedSources, sourceSummaries],
+  );
+  const remainingChangeIssueSources = todayChangeIssueSources.filter(source =>
+    !source.syncOnly || !failedSources.some(failed => failed.id === source.id),
   );
   const currentReason = current === null
     ? currency === "USD"
@@ -487,7 +508,7 @@ export function DailyOverviewWorkspace({
               value={currency}
               variant="compact"
             />
-            {demoMode ? null : <AssetGlobalRefreshControl />}
+            {demoMode ? null : <AssetGlobalRefreshControl showRecoveryDetails={false} />}
           </>
         }
       />
@@ -519,7 +540,7 @@ export function DailyOverviewWorkspace({
                   <article className="daily-overview__balance" data-testid="overview-current-total">
                     <header className="daily-overview__total-heading">
                       <h2 id="overview-total-title" aria-label="总资产">总资产</h2>
-                      <span>更新于 {formatShanghaiShortDateTime(currentObservedAt)}</span>
+                      <span>资产同步 {sourceSyncTimeLabel(sources)}</span>
                     </header>
                     <MetricValue
                       currency={currency}
@@ -556,12 +577,13 @@ export function DailyOverviewWorkspace({
                     )}
                   </article>
                 </div>
-                {!currentValuationComplete || !current?.complete ? <details
+                {!currentValuationComplete || !current?.complete || hasSyncFailures ? <details
                   className="daily-overview__confidence"
+                  data-tone={hasSyncFailures ? "error" : undefined}
                   data-testid="overview-confidence"
                 >
                   <summary>
-                    <span>{dataStatusLabel}</span>
+                    <span>{hasSyncFailures ? "部分来源未更新" : dataStatusLabel}</span>
                     {usesRecordedTodayObservation ? <span className="daily-overview__confidence-context">
                       {"，"}资产变化截至 {formatShanghaiShortDateTime(changeEndpoint.observedAt)}
                     </span> : currentValuationComplete ? <span className="daily-overview__confidence-context">
@@ -569,20 +591,21 @@ export function DailyOverviewWorkspace({
                     </span> : null}
                   </summary>
                   <div className="daily-overview__confidence-details">
+                    {hasSyncFailures ? <AssetRefreshIssues hideSourceNames={!showSensitiveInfo} /> : null}
                     {demoMode ? null : <VibeLink href="/settings?view=data#source-checks-title" variant="text">检查资产来源</VibeLink>}
-                    <p>{currentReason ?? `已覆盖 ${recordedSources.length} 个来源`}</p>
+                    {!hasSyncFailures || !currentValuationComplete ? <p>{currentReason ?? `已覆盖 ${recordedSources.length} 个来源`}</p> : null}
                     {usesRecordedTodayObservation ? <p>
                       当前刷新有失败，资产变化使用上述时间的已记录观测。
                     </p> : null}
-                    {usdValuation.expiredCount > 0 ? <p>
+                    {!hasSyncFailures && usdValuation.expiredCount > 0 ? <p>
                       过期来源 {usdValuation.expiredCount} 个；可在顶部刷新资产。
                     </p> : null}
-                    {todayChangeIssueSources.length > 0 ? <div
+                    {remainingChangeIssueSources.length > 0 ? <div
                       className="daily-overview__change-issues"
                       data-testid="overview-data-issues"
                     >
-                      {!showSensitiveInfo ? <span>已隐藏 {todayChangeIssueSources.length} 个来源。</span> : <ul>
-                        {todayChangeIssueSources.map((source) => (
+                      {!showSensitiveInfo ? <span>已隐藏 {remainingChangeIssueSources.length} 个来源。</span> : <ul>
+                        {remainingChangeIssueSources.map((source) => (
                           <li data-tone={source.tone} key={source.label}>
                             <span>
                               <strong>{source.label}</strong>
@@ -601,7 +624,7 @@ export function DailyOverviewWorkspace({
                     </div> : null}
                   </div>
                 </details> : null}
-                <LongbridgeRealtimeNotice state={realtimeState} retry={retry} />
+                <LongbridgeRealtimeNotice state={realtimeState} retry={retry} sourceId={sources.find(source => source.kind === "longbridge" && source.lifecycle !== "disconnected")?.id} />
               </div>
               <section
                 className="daily-overview__trend"

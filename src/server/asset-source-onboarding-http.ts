@@ -22,41 +22,34 @@ interface PreviewRoute<Input extends AssetSourceAuthorizationInput> {
 
 const CONFIRM_MESSAGES: Record<
   AssetSourceProvider,
-  { invalid: string; unavailable: string; failed: string }
+  { invalid: string; failed: string }
 > = {
   longbridge: {
     invalid: "授权预览无效",
-    unavailable: "授权预览已失效或正在确认，请重新开始",
     failed: "保存长桥来源失败",
   },
   binance: {
     invalid: "Binance 预览无效",
-    unavailable: "Binance 预览已失效或正在确认，请重新验证",
     failed: "保存 Binance 来源失败",
   },
   okx: {
     invalid: "OKX 预览无效",
-    unavailable: "OKX 预览已失效或正在确认，请重新验证",
     failed: "保存 OKX 来源失败",
   },
   bitget: {
     invalid: "Bitget 预览无效",
-    unavailable: "Bitget 预览已失效或正在确认，请重新验证",
     failed: "保存 Bitget 来源失败",
   },
   bit: {
     invalid: "BIT / Matrixport 预览无效",
-    unavailable: "BIT / Matrixport 预览已失效或正在确认，请重新验证",
     failed: "保存 BIT / Matrixport 来源失败",
   },
   ethereum: {
     invalid: "EVM 观察钱包预览无效",
-    unavailable: "EVM 观察钱包预览已失效或正在确认，请重新验证",
     failed: "保存 EVM 观察钱包失败",
   },
   bsc: {
     invalid: "EVM 观察钱包预览无效",
-    unavailable: "EVM 观察钱包预览已失效或正在确认，请重新验证",
     failed: "保存 EVM 观察钱包失败",
   },
 };
@@ -308,19 +301,19 @@ export function createConfirmRoute(
       );
       return Response.json({ ok: true }, { status: 201 });
     } catch (error) {
-      const unavailable =
-        error instanceof AssetSourceOnboardingError &&
-        error.code === "preview-unavailable";
-      return Response.json(
-        {
-          error: unavailable
-            ? messages.unavailable
-            : error instanceof Error
-              ? error.message
-              : messages.failed,
-        },
-        { status: unavailable ? 409 : 500 },
-      );
+      return assetSourceOnboardingErrorResponse(error, messages.failed);
     }
   };
+}
+
+export function assetSourceOnboardingErrorResponse(
+  error: unknown,
+  fallback: string,
+  failureStatus = 500,
+): Response {
+  const code = error instanceof AssetSourceOnboardingError ? error.code : undefined;
+  return Response.json(
+    { error: error instanceof Error ? error.message : fallback, ...(code ? { code } : {}) },
+    { status: code === "preview-unavailable" || code === "preview-busy" ? 409 : failureStatus },
+  );
 }

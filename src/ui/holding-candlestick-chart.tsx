@@ -243,7 +243,7 @@ export function HoldingCandlestickChart({ currency, name, onClose, onRetryRealti
       titleId="holding-candlestick-chart-title"
     >
       <div className="holding-candlestick-chart" data-testid="holding-candlestick-chart">
-        {realtimeState && onRetryRealtime ? <LongbridgeRealtimeNotice state={realtimeState} retry={onRetryRealtime} /> : null}
+        {realtimeState && onRetryRealtime ? <LongbridgeRealtimeNotice state={realtimeState} retry={onRetryRealtime} sourceId={sourceId} /> : null}
         {error ? <VibeNotice role="alert" tone="error">{current ? `历史行情更新失败，保留上次数据：${error}` : error}{current ? <VibeButton disabled={loading} onClick={reload} size="compact" type="button" variant="text">重试</VibeButton> : null}</VibeNotice> : null}
         {current ? (
           <div aria-busy={loading}>

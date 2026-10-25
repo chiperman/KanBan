@@ -42,6 +42,12 @@ export type AssetRefreshScope = "all" | "evm" | "non-evm";
 export interface AssetRefreshReport {
   successCount: number;
   failureCount: number;
+  /** 本次实际执行的来源结果；不包含凭证、金额或持仓。旧调用可缺省。 */
+  sourceResults?: {
+    sourceId: string;
+    outcome: "success" | "failure" | "superseded";
+    sync?: Pick<AssetSourceSyncState, "status" | "lastSuccessfulAt" | "lastAttemptAt" | "error" | "diagnostic">;
+  }[];
   /** 因断开、删除或连接版本变化而安全丢弃的旧读取结果。 */
   supersededCount?: number;
   /** 自动意图因周期、在途批次或没有可刷新来源而未发起批次。 */

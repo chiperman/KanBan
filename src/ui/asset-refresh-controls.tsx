@@ -1,6 +1,8 @@
 "use client";
 
 import { useAssetRefresh } from "@/ui/asset-refresh-provider";
+import { AssetRefreshIssues } from "@/ui/asset-source-recovery";
+import { sourceRecoveryAction, sourceSyncFailureReason } from "@/ui/asset-source-status";
 import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
 import { VibeStatusTag } from "@/ui/vibe/vibe-data-instrument";
 
@@ -28,11 +30,13 @@ function AssetRefreshIcon({ className }: { className: string }) {
   );
 }
 
-export function AssetGlobalRefreshControl() {
+export function AssetGlobalRefreshControl({ showRecoveryDetails = true }: { showRecoveryDetails?: boolean }) {
   const refresh = useAssetRefresh();
   if (!refresh.canRefresh) return null;
 
   const global = refresh.globalStatus;
+  const failed = refresh.failedSources;
+  const retryable = failed.filter(source => sourceRecoveryAction(source).href === undefined);
   const pending = global.state === "refreshing";
   const terminal = global.state === "success" ||
     global.state === "partial" || global.state === "error";
@@ -41,7 +45,7 @@ export function AssetGlobalRefreshControl() {
     ? global.state as "success" | "partial" | "error"
     : null;
   const status = terminalState !== null
-    ? resultLabel(terminalState)
+    ? failed.length > 0 ? `${failed.length} 个来源未更新` : resultLabel(terminalState)
     : "";
 
   return (
@@ -51,30 +55,39 @@ export function AssetGlobalRefreshControl() {
     >
       <VibeButton
         aria-busy={pending}
-        aria-label={global.state === "error" || global.state === "partial" ? "重试刷新资产" : "立即刷新资产"}
+        aria-label={retryable.length > 0 ? "重试失败来源" : "立即刷新资产"}
         className="asset-refresh-button"
         disabled={pending}
-        onClick={() => void refresh.request({ reason: "manual-global" })}
+        onClick={() => {
+          if (retryable.length > 0) {
+            void Promise.all(retryable.map(source => refresh.request({ reason: "manual-source", sourceId: source.id })));
+          } else void refresh.request({ reason: "manual-global" });
+        }}
         type="button"
-        title="刷新全部已连接的自动来源"
+        title={retryable.length > 0 ? "仅重试可恢复的失败来源" : "刷新全部已连接的自动来源"}
         variant="outline"
       >
         <AssetRefreshIcon className="asset-global-refresh-icon" />
-        <span>{pending ? "刷新中…" : global.state === "error" || global.state === "partial" ? "重试刷新" : "刷新资产"}</span>
+        <span>{pending ? "刷新中…" : retryable.length > 0 ? "重试失败来源" : "刷新资产"}</span>
       </VibeButton>
       {showStatus ? (
         <VibeStatusTag
           className="asset-refresh-status is-visible"
           data-testid="asset-refresh-status"
           role="status"
-          tone={global.state === "success" ? "success" : global.state === "partial" ? "warning" : "error"}
+          tone={global.state === "success" ? "success" : "error"}
         >
           {status}
         </VibeStatusTag>
       ) : null}
-      {showStatus && (global.state === "error" || global.state === "partial") ? (
-        <div className="asset-refresh-recovery">
-          {global.state === "error" ? <p>{global.message}</p> : null}
+      {showRecoveryDetails && failed.length > 0 ? (
+        <details className="asset-refresh-recovery">
+          <summary>查看失败来源</summary>
+          <AssetRefreshIssues />
+        </details>
+      ) : showStatus && global.state === "error" && failed.length === 0 ? (
+        <div className="asset-refresh-recovery" role="status">
+          <p>{global.message}。保留已有资产数据。</p>
           <VibeLink href="/settings?view=data#source-checks-title" variant="text" size="compact">检查资产来源</VibeLink>
         </div>
       ) : null}
@@ -94,17 +107,9 @@ export function AssetSourceRefreshButton({
   sourceName: string;
 }) {
   const refresh = useAssetRefresh();
-  const global = refresh.globalStatus;
-  const source = refresh.sourceStatus(sourceId);
-  const coveredByGlobal = global.state === "refreshing";
-  const sourceHasActivity = source.state !== "idle";
-  const current = coveredByGlobal
-    ? global
-    : sourceHasActivity
-      ? source
-      : global.feedback === "manual" && global.state !== "idle"
-        ? global
-        : source;
+  const current = refresh.sourceStatus(sourceId);
+  const failed = refresh.failedSources.find(item => item.id === sourceId);
+  const canRetry = failed !== undefined && sourceRecoveryAction(failed).href === undefined;
   const pending = current.state === "refreshing";
   const terminal = current.feedback === "manual" &&
     (current.state === "success" || current.state === "partial" ||
@@ -131,7 +136,7 @@ export function AssetSourceRefreshButton({
         variant="outline"
       >
         <AssetRefreshIcon className="asset-source-refresh-icon" />
-        <span>{pending ? "刷新中…" : current.state === "error" || current.state === "partial" ? "重试刷新" : "刷新"}</span>
+        <span>{pending ? "刷新中…" : canRetry ? "重试刷新" : "刷新"}</span>
       </VibeButton>
       {pending || terminal ? (
         <span
@@ -142,7 +147,9 @@ export function AssetSourceRefreshButton({
         >
           {pending
             ? "正在刷新…"
-            : current.state === "error" ? current.message : resultLabel(current.state as "success" | "partial" | "error")}
+            : current.state === "error" ? failed?.sync?.error != null
+              ? `同步失败：${sourceSyncFailureReason(failed.sync)}` : current.message
+              : resultLabel(current.state as "success" | "partial" | "error")}
         </span>
       ) : null}
     </div>

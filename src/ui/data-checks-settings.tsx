@@ -4,6 +4,7 @@ import type { DailyAssetTrendObservation } from "@/server/ports";
 import { DataHealthDiagnostics, diagnoseSources, type DataHealthSource } from "@/ui/data-health-diagnostics";
 import { VibeEntityLink } from "@/ui/vibe/vibe-entity-link";
 import { VibeStatusTag } from "@/ui/vibe/vibe-data-instrument";
+import { AssetSourceRecoveryAction } from "@/ui/asset-source-recovery";
 
 export function DataChecksSettings({ currentDay, history, sources }: {
   currentDay: string;
@@ -15,6 +16,7 @@ export function DataChecksSettings({ currentDay, history, sources }: {
   const sourcesByReason = new Map<string, {
     label: string;
     tone: (typeof diagnostics)[number]["reasons"][number]["tone"];
+    recovery?: boolean;
     affected: typeof diagnostics;
   }>();
   for (const diagnostic of attention) {
@@ -44,14 +46,16 @@ export function DataChecksSettings({ currentDay, history, sources }: {
         </header>
         {attention.length > 0 ? (
           <ul className="data-checks__issues" aria-label="数据异常">
-            {[...sourcesByReason].map(([key, { label, tone, affected }]) => (
+            {[...sourcesByReason].map(([key, { label, tone, recovery, affected }]) => (
               <li key={key}>
                 <p data-vibe-tone={tone}>{label}</p>
                 <div>
                   {affected.map(({ source, name }) => (
-                    <VibeEntityLink key={source.id} href={`/asset-sources/${encodeURIComponent(source.id)}?view=manage`}>
-                      {name}
-                    </VibeEntityLink>
+                    <span className="data-checks__source-action" key={source.id}>
+                      <VibeEntityLink href={`/asset-sources/${encodeURIComponent(source.id)}?view=manage`}>{name}</VibeEntityLink>
+                      {recovery
+                        ? <AssetSourceRecoveryAction source={{ ...source, displayName: name }} /> : null}
+                    </span>
                   ))}
                 </div>
               </li>

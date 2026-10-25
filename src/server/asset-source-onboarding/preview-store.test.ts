@@ -69,7 +69,7 @@ test("消费全程保持独占，失败释放占用但不延长 TTL", async (con
   await assert.rejects(store.consume("binance", id, async () => {
     assert.fail("不应重复调用写入");
   }), (error: unknown) =>
-    error instanceof AssetSourceOnboardingError && error.code === "preview-unavailable");
+    error instanceof AssetSourceOnboardingError && error.code === "preview-busy");
   context.mock.timers.tick(900);
   const failure = new Error("写入失败");
   reject(failure);

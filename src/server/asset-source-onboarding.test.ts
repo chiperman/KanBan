@@ -123,7 +123,8 @@ test("并发确认期间预览不可读，第二次确认拒绝且只重验和�
   const preview = await onboarding.preview("binance", {}, PREVIEW_AT);
   const first = onboarding.confirm("binance", preview.id, CONFIRM_AT);
   assert.equal(onboarding.publicPreview("binance", preview.id), null);
-  await assert.rejects(onboarding.confirm("binance", preview.id, CONFIRM_AT), unavailable);
+  await assert.rejects(onboarding.confirm("binance", preview.id, CONFIRM_AT), (error: unknown) =>
+    error instanceof AssetSourceOnboardingError && error.code === "preview-busy");
   resume();
   await first;
   assert.equal(connections.length, 1);

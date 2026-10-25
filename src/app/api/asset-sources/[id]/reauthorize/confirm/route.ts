@@ -1,3 +1,4 @@
+import { assetSourceOnboardingErrorResponse } from "@/server/asset-source-onboarding-http";
 import { rejectCrossOrigin } from "@/server/auth/request-origin";
 import { assetSourceProviderForKind } from "@/server/asset-source-authorization-inputs";
 import { getServices } from "@/server/composition";
@@ -36,9 +37,6 @@ export async function POST(
     );
     return Response.json({ ok: true });
   } catch (error) {
-    return Response.json(
-      { error: error instanceof Error ? error.message : "更新授权失败" },
-      { status: 400 },
-    );
+    return assetSourceOnboardingErrorResponse(error, "更新授权失败", 400);
   }
 }

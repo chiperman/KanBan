@@ -422,11 +422,23 @@ test("部分成功仅记录成功来源，后续全失败不会覆盖", async ()
 
   fixture.refresher.configure("partial-failure");
   const partial = await fixture.synchronization.request({ intent: { reason: "manual-global" } });
-  assert.deepEqual(partial, {
+  assert.partialDeepStrictEqual(partial, {
     successCount: 1,
     failureCount: 1,
     attemptedAt: "2026-08-20T04:00:00.000Z",
   });
+  assert.deepEqual(partial.sourceResults?.map(({ sourceId, outcome }) => ({ sourceId, outcome })), [
+    { sourceId: "source-alpha", outcome: "success" },
+    { sourceId: "source-beta", outcome: "failure" },
+  ]);
+  assert.equal(partial.sourceResults?.[0].sync?.error, null);
+  assert.equal(partial.sourceResults?.[1].sync?.lastSuccessfulAt, betaBeforeFailure.sync.lastSuccessfulAt);
+  for (const result of partial.sourceResults ?? []) {
+    assert.deepEqual(Object.keys(result).sort(), ["outcome", "sourceId", "sync"]);
+    assert.deepEqual(Object.keys(result.sync ?? {}).sort(), [
+      "diagnostic", "error", "lastAttemptAt", "lastSuccessfulAt", "status",
+    ]);
+  }
   const betaAfterPartial = (await fixture.sources.list()).find(
     ({ id }) => id === "source-beta",
   )!;
@@ -495,7 +507,7 @@ test("全量批次在历史收尾异常后保留中断诊断", async () => {
   );
 
   fixture.clock.set("2026-08-20T04:01:00.000Z");
-  assert.deepEqual(
+  assert.partialDeepStrictEqual(
     await fixture.synchronization.request({
       intent: { reason: "manual-global" },
     }),
@@ -538,7 +550,7 @@ test("单来源刷新累计到组合历史且不改变周期，手动全量可�
     "102",
   );
 
-  assert.deepEqual(
+  assert.partialDeepStrictEqual(
     await fixture.synchronization.request({
       intent: { reason: "manual-global" },
     }),
@@ -620,7 +632,7 @@ test("自动全量只在统一周期到期后执行，并复用同一批次", as
     intent: { reason: "foreground" },
   });
   assert.equal(first, duplicate);
-  assert.deepEqual(await first, {
+  assert.partialDeepStrictEqual(await first, {
     successCount: 2,
     failureCount: 0,
     attemptedAt: "2026-08-20T04:00:00.000Z",
@@ -638,7 +650,7 @@ test("自动全量只在统一周期到期后执行，并复用同一批次", as
   });
 
   fixture.clock.set("2026-08-20T05:00:00.000Z");
-  assert.deepEqual(
+  assert.partialDeepStrictEqual(
     await fixture.synchronization.request({
       intent: { reason: "interval" },
     }),
@@ -760,7 +772,7 @@ test("两个协调器共享持久化预占时只允许一份自动全量读取",
   assert.deepEqual(refresher.calls.toSorted(), ["source-alpha", "source-beta"]);
 
   alpha.release();
-  assert.deepEqual(await first, {
+  assert.partialDeepStrictEqual(await first, {
     successCount: 2,
     failureCount: 0,
     attemptedAt: "2026-08-20T04:00:00.000Z",
@@ -803,7 +815,7 @@ test("手动全量可绕过周期但不能绕过其他协调器的在途批次",
   assert.deepEqual(refresher.calls.toSorted(), ["source-alpha", "source-beta"]);
 
   alpha.release();
-  assert.deepEqual(await first, {
+  assert.partialDeepStrictEqual(await first, {
     successCount: 2,
     failureCount: 0,
     attemptedAt: "2026-08-20T04:00:00.000Z",
@@ -836,7 +848,7 @@ test("部分失败、全部失败与超时仍等待下一统一周期", async ()
     refresher: hung,
     sourceTimeoutMs: 10,
   });
-  assert.deepEqual(
+  assert.partialDeepStrictEqual(
     await fixture.synchronization.request({
       intent: { reason: "page-entry" },
     }),
@@ -865,7 +877,7 @@ test("遗留进行中标记在下一到期批次不形成永久锁", async () =>
   await fixture.fullRefreshState.start(INITIAL_AT);
   fixture.clock.set("2026-08-20T05:00:00.000Z");
 
-  assert.deepEqual(
+  assert.partialDeepStrictEqual(
     await fixture.synchronization.request({
       intent: { reason: "interval" },
     }),
@@ -904,8 +916,8 @@ test("已开始单来源后，全量吸收排队目标并在后续完整批次�
   assert.equal(duplicate, full);
 
   alpha.release();
-  assert.deepEqual(await single, { successCount: 1, failureCount: 0 });
-  assert.deepEqual(await full, {
+  assert.partialDeepStrictEqual(await single, { successCount: 1, failureCount: 0 });
+  assert.partialDeepStrictEqual(await full, {
     successCount: 2,
     failureCount: 0,
     attemptedAt: "2026-08-20T04:30:00.000Z",
@@ -941,7 +953,7 @@ test("来源生命周期变化丢弃在途结果，其他成功来源仍累计�
     change(fixture.sources);
     alpha.release();
 
-    assert.deepEqual(await full, {
+    assert.partialDeepStrictEqual(await full, {
       successCount: 1,
       failureCount: 0,
       supersededCount: 1,

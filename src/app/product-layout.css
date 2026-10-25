@@ -2356,6 +2356,10 @@ body {
   margin: 0;
 }
 
+.asset-source-flow .source-preview-list dd {
+  overflow-wrap: anywhere;
+}
+
 .asset-source-detail__header {
   margin-bottom: var(--vibe-space-8);
 }
@@ -6390,10 +6394,10 @@ body {
 }
 
 .workbench-page-header__actions > .asset-refresh-controls:has(.asset-refresh-recovery) {
-  width: 160px;
-  flex-basis: 160px;
+  width: min(100%, 24rem);
+  flex-basis: 24rem;
+  max-width: 100%;
   gap: var(--vibe-space-2);
-  margin-top: var(--vibe-space-6);
 }
 
 .workbench-shell .workbench-page-header:has(.asset-refresh-recovery) {
@@ -6416,6 +6420,54 @@ body {
 
 .asset-refresh-recovery > p {
   color: var(--error);
+}
+
+details.asset-refresh-recovery {
+  display: block;
+}
+
+.asset-refresh-recovery > summary {
+  min-height: var(--vibe-control-height);
+  cursor: pointer;
+}
+
+.asset-refresh-issues,
+.asset-refresh-issues > ul {
+  display: grid;
+  min-width: 0;
+  gap: var(--vibe-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.asset-refresh-issues p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.asset-refresh-issues > ul > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--vibe-space-2) var(--vibe-space-4);
+}
+
+.asset-refresh-issues > ul > li > div {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.asset-refresh-issues > .vibe-button {
+  justify-self: start;
+}
+
+.data-checks__source-action {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--vibe-space-2);
 }
 
 .source-provider-button {
@@ -11085,6 +11137,10 @@ body {
   line-height: 1.6;
 }
 
+.daily-overview__confidence[data-tone="error"] {
+  color: var(--error);
+}
+
 .daily-overview__confidence summary {
   width: fit-content;
   max-width: 100%;
@@ -11113,6 +11169,10 @@ body {
 
 .daily-overview__confidence-details > p {
   margin: 0;
+}
+
+.daily-overview__confidence-details > .vibe-button {
+  justify-self: start;
 }
 
 .daily-overview__change-issues ul {

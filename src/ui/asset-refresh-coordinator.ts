@@ -11,6 +11,8 @@ export interface RefreshableAssetSource {
   lifecycle?: "connected" | "disconnected";
   credentialAvailable?: boolean;
   credentialReference?: string | null;
+  displayName?: string;
+  sync?: NonNullable<AssetRefreshReport["sourceResults"]>[number]["sync"];
 }
 
 export function isRefreshableAssetSource(source: RefreshableAssetSource): boolean {
@@ -71,6 +73,7 @@ export interface AssetRefreshStatus {
   message: string;
   feedback: "manual" | "silent";
   intent: AssetRefreshIntent | null;
+  sourceIds?: string[];
 }
 
 function idleStatus(): AssetRefreshStatus {
@@ -133,11 +136,41 @@ export class AssetRefreshCoordinator {
   }
 
   globalStatus(): AssetRefreshStatus {
-    return this.fullActivity;
+    const activity = this.fullActivity;
+    if ([...this.sourceActivities.values()].some(result => result.state === "refreshing")) {
+      return { ...activity, state: "refreshing" };
+    }
+    if (activity.state === "refreshing" || !activity.sourceIds?.length) return activity;
+    const results = activity.sourceIds
+      .filter(id => this.sources.has(id) && isRefreshableAssetSource(this.sources.get(id)!))
+      .map(id => this.sourceStatus(id));
+    if (results.length === 0) return idleStatus();
+    const failed = results.filter(result => result.state === "error").length;
+    const succeeded = results.some(result => result.state === "success");
+    return {
+      ...activity,
+      feedback: results.some(result => result.feedback === "manual") ? "manual" : activity.feedback,
+      state: results.some(result => result.state === "refreshing") ? "refreshing"
+        : failed > 0 ? succeeded ? "partial" : "error"
+        : succeeded ? "success" : "idle",
+    };
   }
 
   sourceStatus(sourceId: string): AssetRefreshStatus {
+    if (this.fullActivity.state === "refreshing" &&
+        this.sources.has(sourceId) && isRefreshableAssetSource(this.sources.get(sourceId)!)) {
+      return this.fullActivity;
+    }
     return this.sourceActivities.get(sourceId) ?? idleStatus();
+  }
+
+  failedSources(): RefreshableAssetSource[] {
+    return [...this.sources.values()].filter(source => {
+      if (source.kind === "manual" || source.lifecycle === "disconnected") return false;
+      const activity = this.sourceActivities.get(source.id);
+      if (activity?.state === "success") return false;
+      return activity?.state === "error" || source.sync?.error != null;
+    });
   }
 
   subscribe(listener: () => void): () => void {
@@ -190,8 +223,27 @@ export class AssetRefreshCoordinator {
   }
 
   setSources(sources: RefreshableAssetSource[]): void {
+    const previous = new Map(this.sources);
     this.sources.clear();
-    sources.forEach((source) => this.sources.set(source.id, source));
+    sources.forEach((source) => {
+      const oldSync = previous.get(source.id)?.sync;
+      const newerSync = oldSync && source.sync &&
+        Date.parse(oldSync.lastAttemptAt) >= Date.parse(source.sync.lastAttemptAt)
+        ? oldSync : source.sync;
+      this.sources.set(source.id, { ...source, sync: newerSync });
+      const activity = this.sourceActivities.get(source.id);
+      if (!isRefreshableAssetSource(source)) {
+        this.sourceActivities.delete(source.id);
+      } else if (newerSync && newerSync !== oldSync && activity && activity.state !== "refreshing") {
+        this.sourceActivities.set(source.id, {
+          ...activity,
+          state: newerSync.error !== null ? "error" : newerSync.status === "current" ? "success" : "idle",
+        });
+      }
+    });
+    for (const id of this.sourceActivities.keys()) {
+      if (!this.sources.has(id)) this.sourceActivities.delete(id);
+    }
     this.scheduleNext();
     this.notify();
   }
@@ -314,22 +366,36 @@ export class AssetRefreshCoordinator {
               : "刷新失败",
           feedback: activity.feedback,
           intent,
+          ...(intent.reason === "manual-source" || !report.sourceResults ? {} : {
+            sourceIds: report.sourceResults.map(result => result.sourceId),
+          }),
         };
         this.setActivity(intent, terminal);
+        for (const result of report.sourceResults ?? []) {
+          const source = this.sources.get(result.sourceId);
+          if (!source) continue;
+          if (result.sync) this.sources.set(source.id, { ...source, sync: result.sync });
+          this.sourceActivities.set(source.id, {
+            ...terminal,
+            sourceIds: undefined,
+            state: result.outcome === "superseded" ? "idle"
+              : result.outcome === "success" ? "success" : "error",
+          });
+        }
         this.latestTerminal = terminal;
         this.updateAggregate();
         this.scheduleNext();
         this.options.onReport?.({ intent, report });
         this.notify();
       },
-      (error) => {
+      () => {
         if (generation !== this.generation) return;
         if (intent.reason !== "manual-source") {
           this.attemptedAt = startedAt;
         }
         const terminal: AssetRefreshStatus = {
           state: "error",
-          message: error instanceof Error ? error.message : "资产刷新失败",
+          message: "刷新请求未完成，原因尚未确认",
           feedback: activity.feedback,
           intent,
         };
@@ -378,7 +444,9 @@ export class AssetRefreshCoordinator {
         : "silent";
       return;
     }
-    const terminal = this.latestTerminal;
+    const global = this.globalStatus();
+    const terminal = global.state === "partial" || global.state === "error"
+      ? global : this.latestTerminal;
     this.state = terminal?.state ?? "idle";
     this.message = terminal?.message ?? "";
     this.feedback = terminal?.feedback ?? "silent";

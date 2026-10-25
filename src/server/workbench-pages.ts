@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 
 import type { AssetSourceSummary } from "@/server/ports";
+import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
 import { readAssetRefreshState } from "@/server/refresh/asset-refresh-state";
 import {
   DEFAULT_PROFIT_COLOR_SCHEME,
@@ -27,8 +28,16 @@ export function assetRefreshRegistration(
     sources: sources.map((source) => ({
       id: source.id,
       kind: source.kind,
+      displayName: assetSourceDisplayName(source),
       lifecycle: source.lifecycle,
       credentialAvailable: source.credentialReference !== null,
+      sync: {
+        status: source.sync.status,
+        lastSuccessfulAt: source.sync.lastSuccessfulAt,
+        lastAttemptAt: source.sync.lastAttemptAt,
+        error: source.sync.error,
+        diagnostic: source.sync.diagnostic,
+      },
     })),
   };
 }

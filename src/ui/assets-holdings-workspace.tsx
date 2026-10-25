@@ -324,7 +324,7 @@ export function AssetsHoldingsWorkspace({
         titleId="assets-holdings-title"
       />
 
-      <LongbridgeRealtimeNotice state={realtimeState} retry={retry} />
+      <LongbridgeRealtimeNotice state={realtimeState} retry={retry} sourceId={sources.find(source => source.kind === "longbridge" && source.lifecycle !== "disconnected")?.id} />
 
       <section
         className="assets-holdings__observations"

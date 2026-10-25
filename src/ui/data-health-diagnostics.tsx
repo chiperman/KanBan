@@ -21,6 +21,7 @@ import type {
   DailyAssetTrendObservation,
 } from "@/server/ports";
 import { VibeButton } from "@/ui/vibe/vibe-button";
+import { sourceSyncStatus, sourceSyncFailureReason } from "@/ui/asset-source-status";
 import { VibeSelect } from "@/ui/vibe/vibe-field";
 import { useTablePagination, VibeTablePagination } from "@/ui/vibe/vibe-table-pagination";
 
@@ -43,7 +44,7 @@ type HistoryEntry = {
 export type DiagnosticSource = {
   manualWithoutRecord: boolean;
   name: string;
-  reasons: { label: string; tone: "error" | "warning" | "muted" | "success" }[];
+  reasons: { label: string; tone: "error" | "warning" | "muted" | "success"; recovery?: boolean }[];
   source: DataHealthSource;
   valuation: ReturnType<typeof valuationSummary>;
 };
@@ -234,8 +235,13 @@ function sourceDiagnosticReasons(
   source: DataHealthSource,
   valuation: ReturnType<typeof valuationSummary>,
 ): DiagnosticSource["reasons"] {
+  const sync = sourceSyncStatus(source);
   return [
-    ...(source.sync.error === null ? [] : [{ label: `上次同步失败：${source.sync.error}`, tone: "error" as const }]),
+    ...(sync === null || source.sync.error === null ? [] : [{
+      label: `同步失败：${sourceSyncFailureReason(source.sync)}`,
+      tone: sync.tone,
+      recovery: true,
+    }]),
     ...valuation.reasons.map(label => ({ label, tone: valuation.tone })),
   ];
 }

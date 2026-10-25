@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 
 import type {
   ExternalServiceConfigurationStatus,
 } from "@/server/ports";
+import { formatShanghaiDateTime } from "@/ui/shanghai-date-time";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
 import { lockOnUnauthorizedResponse, OWNER_SESSION_EXPIRED_MESSAGE, readJsonResult } from "@/ui/owner-request-lock";
@@ -40,7 +41,7 @@ const SERVICE_FIELDS = [
 
 function stateText(configured: boolean, verifiedAt: string | null): string {
   if (!configured) return "未配置";
-  return verifiedAt ? `已验证，${verifiedAt.slice(0, 16).replace("T", " ")}` : "已配置";
+  return verifiedAt ? `已验证，${formatShanghaiDateTime(verifiedAt)}` : "已配置";
 }
 
 export function ExternalServiceSettings({
@@ -52,9 +53,13 @@ export function ExternalServiceSettings({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const requestLock = useRef(false);
+  const [needsCheck, setNeedsCheck] = useState(false);
+  const [checked, setChecked] = useState(false);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (requestLock.current || needsCheck) return;
     const form = event.currentTarget;
     const data = new FormData(form);
     const body = Object.fromEntries(
@@ -66,32 +71,66 @@ export function ExternalServiceSettings({
         typeof value === "string" && value.trim() ? [[key, value]] : [],
       ),
     );
+    requestLock.current = true;
     setPending(true);
     setError("");
     setSaved(false);
-    const response = await fetch("/api/external-services", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const result = await readJsonResult<
-      | (ExternalServiceConfigurationStatus & { error?: never })
-      | { error?: string }
-    >(response);
-    if (lockOnUnauthorizedResponse(response)) {
-      setError(OWNER_SESSION_EXPIRED_MESSAGE);
+    setChecked(false);
+    try {
+      const response = await fetch("/api/external-services", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (lockOnUnauthorizedResponse(response)) {
+        setError(OWNER_SESSION_EXPIRED_MESSAGE);
+        return;
+      }
+      const result = await readJsonResult<ExternalServiceConfigurationStatus & { error?: string }>(response);
+      if (!response.ok) {
+        setError(result?.error ?? "外部服务保存失败，请重试。");
+        return;
+      }
+      if (!result?.coinGecko || !result.ethereumRpc || !result.bscRpc) {
+        throw new Error("保存响应不完整");
+      }
+      setStatus(result);
+      setSaved(true);
+      form.reset();
+    } catch {
+      setNeedsCheck(true);
+      setError("网络连接异常，保存结果尚不确定。请先核对服务状态，再决定是否重新保存；输入已保留。");
+    } finally {
+      requestLock.current = false;
       setPending(false);
-      return;
     }
-    if (!response.ok || !result || "error" in result) {
-      setError(result && "error" in result ? result.error ?? "外部服务保存失败" : "外部服务保存失败");
+  }
+
+  async function checkStatus() {
+    if (requestLock.current) return;
+    requestLock.current = true;
+    setPending(true);
+    setError("");
+    try {
+      const response = await fetch("/api/external-services", { cache: "no-store" });
+      if (lockOnUnauthorizedResponse(response)) {
+        setError(OWNER_SESSION_EXPIRED_MESSAGE);
+        return;
+      }
+      const result = await readJsonResult<ExternalServiceConfigurationStatus>(response);
+      if (!response.ok || !result?.coinGecko || !result.ethereumRpc || !result.bscRpc) {
+        setError("未能读取服务状态，请重试核对。输入已保留。");
+        return;
+      }
+      setStatus(result);
+      setNeedsCheck(false);
+      setChecked(true);
+    } catch {
+      setError("网络连接异常，尚未核对服务状态，请重试核对。输入已保留。");
+    } finally {
+      requestLock.current = false;
       setPending(false);
-      return;
     }
-    setStatus(result as ExternalServiceConfigurationStatus);
-    setSaved(true);
-    setPending(false);
-    form.reset();
   }
 
   return (
@@ -123,6 +162,7 @@ export function ExternalServiceSettings({
                   <dd className="external-service-statuses__input">
                     <input
                       autoComplete="off"
+                      disabled={pending}
                       className="vibe-field__input"
                       id={field.fieldId}
                       name={field.name}
@@ -140,12 +180,21 @@ export function ExternalServiceSettings({
             })}
           </dl>
           <div className="external-service-form__actions">
-            <VibeButton disabled={pending} type="submit" variant="primary">
-              {pending ? "正在保存…" : "保存并验证"}
-            </VibeButton>
+            {needsCheck ? (
+              <VibeButton disabled={pending} onClick={() => void checkStatus()} type="button" variant="primary">
+                {pending ? "正在核对…" : "核对服务状态"}
+              </VibeButton>
+            ) : (
+              <VibeButton disabled={pending} type="submit" variant="primary">
+                {pending ? "正在保存…" : "保存并验证"}
+              </VibeButton>
+            )}
             <span>留空保持原值。</span>
           </div>
         </form>
+        <div role="status">
+          {checked ? <p>已重新读取服务状态。请核对验证时间；状态不显示密钥内容，如仍需替换，可重新保存。</p> : null}
+        </div>
         {saved ? (
           <VibeNotice role="status" tone="success">
             已保存并验证。

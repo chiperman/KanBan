@@ -82,6 +82,7 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 - 当前输入配方至少 48px 高，字号 `--vibe-type-body`（16px）。
 - `VibeField density="compact"` 用于工具条的短数字输入：44px 高、字号 `--vibe-type-body`（16px），隐藏数字步进按钮；其他字段保持默认配方。
 - **聚焦只把边框色改为 `--primary`**：没有发光、没有强调色、没有阴影。
+- 手工资产与投资记账金额使用 [VibeAmountField](../../src/ui/vibe/vibe-amount-field.tsx)，复用写入端校验规则；资产余额最多两位小数，投资记录最多八位，入金与出金必须大于零。失焦或提交后在字段旁显示错误并关联读屏说明，修正输入时更新提示；不以禁用保存按钮代替校验。
 - 占位符 `--muted`；禁用 `opacity .55`。
 - 多行变体 `textarea.vibe-field__input` 最小高 112px，字距收到 `.02em`，行高 1.55。
 
@@ -213,6 +214,7 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 - 标题 `--f-head` / 600，字号 `--vibe-type-subheading`（16px）；不使用 eyebrow，description 可选，仅在影响决策时提供。
 - 页脚 = `.vibe-button--text` 取消 + `.vibe-button--primary` 确认。
 - 行为：`Esc` 关闭、遮罩内焦点循环、打开时把焦点移入、关闭后归还原元素、锁定 body 滚动。
+- 记账、编辑与历史导入设置 `dirty`：未修改时直接关闭，修改后由同一弹窗确认放弃；取消按钮通过 `actions(requestClose)` 使用相同保护。继续编辑保留输入，保存成功直接关闭。设置 `pending` 时阻止 Esc、遮罩及重复提交，操作按钮由调用者同步禁用。
 - 移动端（≤639px）遮罩贴底、面板 `max-height: calc(100dvh - 24px)`；来源向导类对话框升为全屏，页头页脚吸顶。
 
 ---

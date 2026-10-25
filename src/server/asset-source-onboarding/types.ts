@@ -48,7 +48,7 @@ export interface AssetSourceReauthorization {
 
 export class AssetSourceOnboardingError extends Error {
   constructor(
-    readonly code: "unsupported-provider" | "preview-unavailable" | "scope-changed",
+    readonly code: "unsupported-provider" | "preview-unavailable" | "preview-busy" | "scope-changed",
     message: string,
   ) {
     super(message);

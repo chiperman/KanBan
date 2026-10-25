@@ -201,7 +201,7 @@ export function WorkbenchShell({
 
   useEffect(() => {
     if (pendingHref === null) return;
-    if (pathname !== pendingHref) {
+    if (pathname === pendingHref) {
       setNavigationPending(pendingHref, false);
       return;
     }
