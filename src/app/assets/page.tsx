@@ -1,6 +1,4 @@
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
-
 import {
   redirectLoopbackIpToLocalhost,
   type PageSearchParams,
@@ -8,13 +6,10 @@ import {
 import { getServices } from "@/server/composition";
 import { readAssetRefreshState } from "@/server/asset-refresh-state";
 import { AssetsHoldingsWorkspace } from "@/ui/assets-holdings-workspace";
-import {
-  DEFAULT_PROFIT_COLOR_SCHEME,
-  isProfitColorScheme,
-  PROFIT_COLOR_SCHEME_COOKIE_KEY,
-} from "@/ui/profit-color-scheme";
+import { assetRefreshRegistration, readProfitColorScheme } from "@/server/workbench-pages";
 import { SessionGuard } from "@/ui/session-guard";
 import { WorkbenchShell } from "@/ui/workbench-shell";
+import { WorkbenchPage } from "@/ui/workbench-page";
 
 export const dynamic = "force-dynamic";
 
@@ -52,34 +47,17 @@ export default async function AssetsPage({
         : [],
     }),
   );
-  const savedProfitColorScheme =
-    (await cookies()).get(PROFIT_COLOR_SCHEME_COOKIE_KEY)?.value ?? null;
-  const profitColorScheme = isProfitColorScheme(savedProfitColorScheme)
-    ? savedProfitColorScheme
-    : DEFAULT_PROFIT_COLOR_SCHEME;
+  const profitColorScheme = await readProfitColorScheme();
 
   return (
     <SessionGuard>
       <WorkbenchShell
         refreshEnabled
-        refreshRegistration={{
-          ...fullRefreshState,
-          sources: storedSources.map((source) => ({
-            id: source.id,
-            kind: source.kind,
-            lifecycle: source.lifecycle,
-            credentialAvailable: source.credentialReference !== null,
-          })),
-        }}
+        refreshRegistration={assetRefreshRegistration(fullRefreshState, storedSources)}
       >
-        <div className="page page-workbench-destination">
-          <a className="skip-link" href="#main-content">
-            跳到主要内容
-          </a>
-          <main id="main-content">
-            <AssetsHoldingsWorkspace sources={sources} profitColorScheme={profitColorScheme} />
-          </main>
-        </div>
+        <WorkbenchPage className="page-workbench-destination">
+          <AssetsHoldingsWorkspace sources={sources} profitColorScheme={profitColorScheme} />
+        </WorkbenchPage>
       </WorkbenchShell>
     </SessionGuard>
   );

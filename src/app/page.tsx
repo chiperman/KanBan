@@ -1,4 +1,3 @@
-import { cookies } from "next/headers"
 import Image from "next/image"
 
 import { shanghaiDay } from "@/domain/daily-asset-snapshots"
@@ -13,18 +12,16 @@ import { DailyOverviewWorkspace } from "@/ui/daily-overview-workspace"
 import { AssetRefreshReset } from "@/ui/asset-refresh-provider"
 import { LocalClock } from "@/ui/local-clock"
 import { OwnerLogin } from "@/ui/owner-login"
-import {
-  DEFAULT_PROFIT_COLOR_SCHEME,
-  isProfitColorScheme,
-  PROFIT_COLOR_SCHEME_COOKIE_KEY,
-} from "@/ui/profit-color-scheme"
+import { DEFAULT_PROFIT_COLOR_SCHEME } from "@/ui/profit-color-scheme"
 import { SessionGuard } from "@/ui/session-guard"
 import { ThemeSwitcher } from "@/ui/theme-switcher"
 import { WorkbenchShell } from "@/ui/workbench-shell"
+import { WorkbenchPage } from "@/ui/workbench-page"
 import {
   WorkbenchDisplayPreferencesProvider,
 } from "@/ui/workbench-display-preferences"
 import { VibeLink } from "@/ui/vibe/vibe-button"
+import { assetRefreshRegistration, readProfitColorScheme } from "@/server/workbench-pages"
 
 export const dynamic = "force-dynamic"
 
@@ -125,48 +122,32 @@ export default async function AssetDashboardPage({
     storedSources,
     cashflows,
     dailyAssetTrendObservations,
-    fullRefreshState,
     investmentBooks,
     manualRecords,
     importedSourceHistory,
+    fullRefreshState,
   ] = await Promise.all([
     services.assetSources.list(),
     services.investmentCashflows.list(),
     services.dailyAssetSnapshots.listTrendObservations(),
-    readAssetRefreshState(services),
     services.investmentBooks?.readInvestmentBooks() ?? null,
     services.manualAssetRecords.list(),
     services.dailyAssetSnapshots.listImportedSourceHistoryObservations(),
+    readAssetRefreshState(services),
   ])
   const assetSources = storedSources.map(
     ({ credentialReference: _credentialReference, permissions: _permissions, ...source }) => source,
   )
-  const savedProfitColorScheme =
-    (await cookies()).get(PROFIT_COLOR_SCHEME_COOKIE_KEY)?.value ?? null
-  const profitColorScheme = isProfitColorScheme(savedProfitColorScheme)
-    ? savedProfitColorScheme
-    : DEFAULT_PROFIT_COLOR_SCHEME
+  const profitColorScheme = await readProfitColorScheme()
 
   return (
     <SessionGuard>
       <WorkbenchShell
         refreshEnabled
-        refreshRegistration={{
-          ...fullRefreshState,
-          sources: storedSources.map((source) => ({
-            id: source.id,
-            kind: source.kind,
-            lifecycle: source.lifecycle,
-            credentialAvailable: source.credentialReference !== null,
-          })),
-        }}
+        refreshRegistration={assetRefreshRegistration(fullRefreshState, storedSources)}
       >
-        <div className="page page-dashboard">
-          <a className="skip-link" href="#main-content">
-            跳到主要内容
-          </a>
-          <main id="main-content">
-            <DailyOverviewWorkspace
+        <WorkbenchPage className="page-dashboard">
+          <DailyOverviewWorkspace
               investmentBooks={investmentBooks}
               manualRecords={manualRecords}
               importedHistory={importedSourceHistory}
@@ -177,8 +158,7 @@ export default async function AssetDashboardPage({
               sources={assetSources}
               trendObservations={dailyAssetTrendObservations}
             />
-          </main>
-        </div>
+        </WorkbenchPage>
       </WorkbenchShell>
     </SessionGuard>
   )

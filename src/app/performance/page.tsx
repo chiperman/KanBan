@@ -1,12 +1,11 @@
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
-
 import {
   redirectLoopbackIpToLocalhost,
   type PageSearchParams,
 } from "@/server/auth/canonical-origin";
 import { getServices } from "@/server/composition";
 import { readAssetRefreshState } from "@/server/asset-refresh-state";
+import { assetRefreshRegistration, readProfitColorScheme } from "@/server/workbench-pages";
 import { shanghaiDay } from "@/domain/daily-asset-snapshots";
 import {
   longbridgeReferenceRates,
@@ -14,13 +13,9 @@ import {
 import { InvestmentPerformanceWorkspace } from "@/ui/investment-performance-workspace";
 import { InvestmentBooksWorkspace } from "@/ui/investment-books-workspace";
 import { INVESTMENT_BOOKS } from "@/domain/investment-books";
-import {
-  DEFAULT_PROFIT_COLOR_SCHEME,
-  isProfitColorScheme,
-  PROFIT_COLOR_SCHEME_COOKIE_KEY,
-} from "@/ui/profit-color-scheme";
 import { SessionGuard } from "@/ui/session-guard";
 import { WorkbenchShell } from "@/ui/workbench-shell";
+import { WorkbenchPage } from "@/ui/workbench-page";
 
 export const dynamic = "force-dynamic";
 
@@ -53,32 +48,16 @@ export default async function PerformancePage({
   const query = await searchParams;
   const initialBook = INVESTMENT_BOOKS.find(book => book.id === query?.book)?.id;
   const longbridgeRates = longbridgeReferenceRates(sources);
-  const savedProfitColorScheme =
-    (await cookies()).get(PROFIT_COLOR_SCHEME_COOKIE_KEY)?.value ?? null;
-  const profitColorScheme = isProfitColorScheme(savedProfitColorScheme)
-    ? savedProfitColorScheme
-    : DEFAULT_PROFIT_COLOR_SCHEME;
+  const profitColorScheme = await readProfitColorScheme();
 
   return (
     <SessionGuard>
       <WorkbenchShell
         refreshEnabled
-        refreshRegistration={{
-          ...fullRefreshState,
-          sources: sources.map((source) => ({
-            id: source.id,
-            kind: source.kind,
-            lifecycle: source.lifecycle,
-            credentialAvailable: source.credentialReference !== null,
-          })),
-        }}
+        refreshRegistration={assetRefreshRegistration(fullRefreshState, sources)}
       >
-        <div className="page page-workbench-destination">
-          <a className="skip-link" href="#main-content">
-            跳到主要内容
-          </a>
-          <main id="main-content">
-            {books ? <InvestmentBooksWorkspace
+        <WorkbenchPage className="page-workbench-destination">
+          {books ? <InvestmentBooksWorkspace
               state={books}
               key={initialBook ?? "us-stocks"}
               initialBookId={initialBook}
@@ -98,8 +77,7 @@ export default async function PerformancePage({
               importedSourceHistoryObservations={importedSourceHistoryObservations}
               trendObservations={trendObservations}
             />}
-          </main>
-        </div>
+        </WorkbenchPage>
       </WorkbenchShell>
     </SessionGuard>
   );

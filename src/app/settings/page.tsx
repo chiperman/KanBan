@@ -2,7 +2,6 @@ import { BackgroundCollectionSettings } from "@/ui/background-collection-setting
 import { WorkspaceViewNavigation } from "@/ui/workspace-view-navigation";
 import { AutomaticDailySettlementSettings } from "@/ui/automatic-daily-settlement-settings";
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
 
 import {
   redirectLoopbackIpToLocalhost,
@@ -10,12 +9,9 @@ import {
 } from "@/server/auth/canonical-origin";
 import { getServices } from "@/server/composition";
 import { readAssetRefreshState } from "@/server/asset-refresh-state";
+import { assetRefreshRegistration, readSavedProfitColorScheme } from "@/server/workbench-pages";
 import { shanghaiDay } from "@/domain/daily-asset-snapshots";
 import { DataChecksSettings } from "@/ui/data-checks-settings";
-import {
-  isProfitColorScheme,
-  PROFIT_COLOR_SCHEME_COOKIE_KEY,
-} from "@/ui/profit-color-scheme";
 import { BusinessDataBackupSettings } from "@/ui/business-data-backup-settings";
 import { OwnerPasskeySettings } from "@/ui/owner-passkey-settings";
 import { ProfitColorSettings } from "@/ui/profit-color-settings";
@@ -24,6 +20,7 @@ import { ExternalServiceSettings } from "@/ui/external-service-settings";
 import { SessionGuard } from "@/ui/session-guard";
 import { TrendAppearanceSettings } from "@/ui/trend-appearance-settings";
 import { WorkbenchShell } from "@/ui/workbench-shell";
+import { WorkbenchPage } from "@/ui/workbench-page";
 import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
 import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
 import { VibeLink } from "@/ui/vibe/vibe-button";
@@ -48,11 +45,7 @@ export default async function SettingsPage({
   const ownerPasskeyBoundAt = ownerCredential?.createdAt ?? null;
   const recoveryConfigured =
     (await services.ownerRecoveryCredentials.get()) !== null;
-  const savedProfitColorScheme =
-    (await cookies()).get(PROFIT_COLOR_SCHEME_COOKIE_KEY)?.value ?? null;
-  const initialProfitColorScheme = isProfitColorScheme(savedProfitColorScheme)
-    ? savedProfitColorScheme
-    : null;
+  const initialProfitColorScheme = await readSavedProfitColorScheme();
   const externalServiceStatus = await services.externalServices.status();
   const [execution, scheduler, collection, storedSources, history, fullRefreshState] = await Promise.all([
     services.formalSettlementExecutions.latest(),
@@ -67,21 +60,9 @@ export default async function SettingsPage({
     <SessionGuard>
       <WorkbenchShell
         refreshEnabled={view === "data"}
-        refreshRegistration={fullRefreshState === undefined ? undefined : {
-          ...fullRefreshState,
-          sources: storedSources.map((source) => ({
-            id: source.id,
-            kind: source.kind,
-            lifecycle: source.lifecycle,
-            credentialAvailable: source.credentialReference !== null,
-          })),
-        }}
+        refreshRegistration={assetRefreshRegistration(fullRefreshState, storedSources)}
       >
-        <div className="page page-settings">
-          <a className="skip-link" href="#main-content">
-            跳到主要内容
-          </a>
-          <main className={`settings-main settings-main--${view}`} id="main-content">
+        <WorkbenchPage className="page-settings" mainClassName={`settings-main settings-main--${view}`}>
             <WorkbenchPageHeader
               title="设置"
             />
@@ -160,8 +141,7 @@ export default async function SettingsPage({
               <ExternalServiceSettings initialStatus={externalServiceStatus} />
               <BusinessDataBackupSettings />
             </div>}
-          </main>
-        </div>
+        </WorkbenchPage>
       </WorkbenchShell>
     </SessionGuard>
   );
