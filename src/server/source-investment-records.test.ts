@@ -7,7 +7,7 @@ import test from "node:test";
 import { DatabaseSync } from "node:sqlite";
 import { parseSourceInvestmentRecordInput } from "../domain/source-investment-records";
 import { SqliteDashboardDatabase } from "./persistence/sqlite-database";
-import { CredentialFreeBusinessDataBackup } from "./business-data-backup";
+import { CredentialFreeBusinessDataBackup } from "./backup/business-data-backup";
 
 const at = "2026-09-29T12:00:00.000Z";
 const record = (id: string, day: string, kind: "opening" | "deposit" | "withdrawal" | "valuation", amount: string) =>

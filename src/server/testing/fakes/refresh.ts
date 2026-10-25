@@ -197,7 +197,7 @@ export class FakeAssetSourceRefresher implements AssetSourceRefresher {
   }
 }
 import { decimalAdd } from "@/domain/decimal";
-import { SourceIsolatedAssetSynchronization } from "@/server/asset-synchronization";
+import { SourceIsolatedAssetSynchronization } from "@/server/refresh/asset-synchronization";
 
 export class FakeAssetSynchronization implements AssetSynchronization {
   readonly sourceIds: Array<string | null> = [];

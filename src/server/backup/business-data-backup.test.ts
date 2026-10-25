@@ -12,7 +12,7 @@ import {
   CredentialFreeBusinessDataBackup,
   type BusinessDataBackupStore,
   type BusinessDataState,
-} from "@/server/business-data-backup";
+} from "@/server/backup/business-data-backup";
 
 // 原生 ESM 不补全 Next 子路径，仅在加载真实持久化实现时适配。
 const nextHook = registerHooks({

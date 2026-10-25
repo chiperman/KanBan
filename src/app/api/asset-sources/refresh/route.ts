@@ -1,6 +1,6 @@
 import { rejectCrossOrigin } from "@/server/auth/request-origin";
 import { getServices } from "@/server/composition";
-import { readAssetRefreshState } from "@/server/asset-refresh-state";
+import { readAssetRefreshState } from "@/server/refresh/asset-refresh-state";
 import type { AssetRefreshIntent } from "@/server/ports";
 
 export const dynamic = "force-dynamic";

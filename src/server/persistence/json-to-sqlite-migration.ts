@@ -2,7 +2,7 @@ import { chmodSync, copyFileSync, existsSync, readFileSync } from "node:fs";
 
 import { parseLegacyDashboardStateSync } from "./migrations";
 import { SqliteDashboardDatabase } from "./sqlite-database";
-import type { BusinessDataState } from "@/server/business-data-backup";
+import type { BusinessDataState } from "@/server/backup/business-data-backup";
 
 export interface JsonToSqliteMigrationInput {
   databasePath: string;

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import test, { type TestContext } from "node:test";
-import { SourceIsolatedAssetSynchronization } from "./asset-synchronization";
+import { SourceIsolatedAssetSynchronization } from "./refresh/asset-synchronization";
 import { DatabaseAssetFullRefreshState, DatabaseAssetSources, DatabaseDailyAssetSnapshots } from "./persistence/adapters";
 import { SqliteDashboardDatabase } from "./persistence/sqlite-database";
 import type { AssetSourceSummary } from "./ports";

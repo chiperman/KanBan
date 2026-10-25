@@ -9,7 +9,7 @@ import {
   type PageSearchParams,
 } from "@/server/auth/canonical-origin";
 import { getServices } from "@/server/composition";
-import { readAssetRefreshState } from "@/server/asset-refresh-state";
+import { readAssetRefreshState } from "@/server/refresh/asset-refresh-state";
 import { assetRefreshRegistration, readProfitColorScheme } from "@/server/workbench-pages";
 import { AssetSourceDetail } from "@/ui/asset-source-detail";
 import { SessionGuard } from "@/ui/session-guard";

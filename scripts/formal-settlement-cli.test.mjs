@@ -17,7 +17,7 @@ for (const failed of [false, true]) {
       const preload = path.join(root, "preload.mjs");
       // Fake runner only in this child process; production composition/storage/CLI remain real.
       await writeFile(preload, failed ?
-        'const { MarketCloseFormalDailySettlement } = await import(' + JSON.stringify(pathToFileURL(path.join(workspace, "src/server/formal-daily-settlement.ts")).href) + '); MarketCloseFormalDailySettlement.prototype.run = async function () { throw new Error("PRIVATE_CLI_TOKEN"); };' : "");
+        'const { MarketCloseFormalDailySettlement } = await import(' + JSON.stringify(pathToFileURL(path.join(workspace, "src/server/settlement/formal-daily-settlement.ts")).href) + '); MarketCloseFormalDailySettlement.prototype.run = async function () { throw new Error("PRIVATE_CLI_TOKEN"); };' : "");
       const env = { ...process.env, APP_ENV: "production", KANBAN_DATA_DIR: root, LONGBRIDGE_OAUTH_CLIENT_ID: "isolated-test-client", LONGBRIDGE_OAUTH_CALLBACK_PORT: "60355", PAD_SECRET_ENCRYPTION_KEY: randomBytes(32).toString("base64") };
       const args = ["--experimental-transform-types", "--import", "./scripts/register-ts-alias.mjs", "--import", preload, "./scripts/run-formal-daily-settlement.ts"];
       let output;
@@ -47,7 +47,7 @@ for (const ready of [false, true]) {
       const preload = path.join(root, "clock.mjs");
       const time = ready ? "2026-08-05T16:06:00.000Z" : "2026-08-05T16:01:00.000Z";
       const productionUrl = pathToFileURL(path.join(workspace, "src/server/production.ts")).href;
-      const runnerUrl = pathToFileURL(path.join(workspace, "src/server/formal-daily-settlement.ts")).href;
+  const runnerUrl = pathToFileURL(path.join(workspace, "src/server/settlement/formal-daily-settlement.ts")).href;
       await writeFile(preload, [
         'const { createProductionServices } = await import(' + JSON.stringify(productionUrl) + ');',
         'const services = createProductionServices(); await services.manualAssetRecords.create({label:"CLI样例"});',

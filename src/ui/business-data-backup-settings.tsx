@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
-import type { BackupRestorePreview, BackupSummary } from "@/server/business-data-backup";
+import type { BackupRestorePreview, BackupSummary } from "@/server/backup/business-data-backup";
 import { BusinessDataBackupDropzone } from "@/ui/business-data-backup-dropzone";
 import { formatShanghaiDateTime } from "@/ui/shanghai-date-time";
 import { VibeSelectField } from "@/ui/vibe/vibe-field";

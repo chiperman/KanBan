@@ -1,6 +1,6 @@
 import { getServices } from "@/server/composition";
 import { rejectCrossOrigin } from "@/server/auth/request-origin";
-import { MAX_BACKUP_CONTENTS_BYTES } from "@/server/business-data-backup";
+import { MAX_BACKUP_CONTENTS_BYTES } from "@/server/backup/business-data-backup";
 import type { AppServices } from "@/server/app-services";
 
 export const dynamic = "force-dynamic";

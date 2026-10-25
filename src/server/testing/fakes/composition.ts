@@ -5,7 +5,7 @@ import type {
 } from "@/server/ports";
 import type { AppServices } from "@/server/app-services";
 import { SessionOwnerAuth } from "@/server/auth/session-auth";
-import { SourceIsolatedAssetSynchronization } from "@/server/asset-synchronization";
+import { SourceIsolatedAssetSynchronization } from "@/server/refresh/asset-synchronization";
 import { LongbridgeOAuthState } from "@/server/asset-sources/longbridge";
 import { AssetSourceOnboarding } from "@/server/asset-source-onboarding";
 import { createAssetSourceProviderAdapters } from "@/server/asset-source-provider-adapters";

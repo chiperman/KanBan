@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { registerHooks } from "node:module";
-import { ObservedFormalSettlementRunner } from "@/server/formal-settlement-execution";
+import { ObservedFormalSettlementRunner } from "@/server/settlement/formal-settlement-execution";
 const hook = registerHooks({ resolve(s, c, next) { return next(s === "next/headers" ? "next/headers.js" : s, c); } });
 const { SqliteDashboardDatabase, DatabaseFormalSettlementExecutions } = await import("@/server/production");
 hook.deregister();

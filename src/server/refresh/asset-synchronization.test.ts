@@ -3,8 +3,8 @@ import test from "node:test";
 import { setImmediate } from "node:timers/promises";
 
 import { buildSnapshotFromPositions } from "@/domain/valuation";
-import { SourceIsolatedAssetSynchronization } from "@/server/asset-synchronization";
-import { readAssetRefreshState } from "@/server/asset-refresh-state";
+import { SourceIsolatedAssetSynchronization } from "@/server/refresh/asset-synchronization";
+import { readAssetRefreshState } from "@/server/refresh/asset-refresh-state";
 import { AssetRefreshCoordinator } from "@/ui/asset-refresh-coordinator";
 import {
   AssetRequestError,

@@ -2,7 +2,7 @@ import { buildSnapshotFromPositions } from "@/domain/valuation";
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { MarketCloseFormalDailySettlement } from "@/server/formal-daily-settlement";
+import { MarketCloseFormalDailySettlement } from "@/server/settlement/formal-daily-settlement";
 import type {
   AssetSnapshot,
   AssetSourceSummary,

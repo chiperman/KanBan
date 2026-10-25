@@ -8,7 +8,7 @@ import {
   SqliteDashboardDatabase,
   FileEncryptedSecretStore,
 } from "@/server/production";
-import { SourceIsolatedAssetSynchronization } from "@/server/asset-synchronization";
+import { SourceIsolatedAssetSynchronization } from "@/server/refresh/asset-synchronization";
 import { migrateJsonToSqlite } from "@/server/persistence/json-to-sqlite-migration";
 import { ServeLongbridgeHoldingCandlestickReader } from "@/server/asset-sources/longbridge";
 import { InMemoryAssetFullRefreshState } from "@/server/testing/fakes";

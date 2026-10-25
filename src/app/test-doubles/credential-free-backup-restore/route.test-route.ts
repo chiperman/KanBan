@@ -6,7 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import {
   CredentialFreeBusinessDataBackup,
   type BusinessDataState,
-} from "@/server/business-data-backup";
+} from "@/server/backup/business-data-backup";
 
 import type { AssetSourceSummary } from "@/server/ports";
 import { SqliteDashboardDatabase } from "@/server/production";

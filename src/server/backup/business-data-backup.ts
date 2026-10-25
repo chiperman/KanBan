@@ -19,16 +19,16 @@ import {
   type BusinessDataBackup,
   type BusinessDataBackupStore,
   type BusinessDataState,
-} from "./backup/document-codec";
+} from "./document-codec";
 
-export { SENSITIVE_ASSET_DATA_WARNING } from "./backup/document-codec";
+export { SENSITIVE_ASSET_DATA_WARNING } from "./document-codec";
 export type {
   BackupRestorePreview,
   BackupSummary,
   BusinessDataBackup,
   BusinessDataBackupStore,
   BusinessDataState,
-} from "./backup/document-codec";
+} from "./document-codec";
 
 /** 上传落盘的体积上限。实测本机全量业务数据约 1.5 MB，趋势观测仍会增长。 */
 export const MAX_BACKUP_CONTENTS_BYTES = 32 * 1024 * 1024;

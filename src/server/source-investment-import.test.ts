@@ -6,7 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import { DatabaseSync } from "node:sqlite";
 import { SqliteDashboardDatabase } from "./persistence/sqlite-database";
-import { CredentialFreeBusinessDataBackup } from "./business-data-backup";
+import { CredentialFreeBusinessDataBackup } from "./backup/business-data-backup";
 import { parseSourceInvestmentHistory } from "../domain/source-investment-history";
 
 test("来源历史事务导入、身份隔离、幂等与备份恢复", async () => {

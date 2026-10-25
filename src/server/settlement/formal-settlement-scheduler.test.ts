@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { LocalFormalSettlementScheduler, matchesSettlementInstance } from "@/server/formal-settlement-scheduler";
+import { LocalFormalSettlementScheduler, matchesSettlementInstance } from "@/server/settlement/formal-settlement-scheduler";
 const now = () => new Date("2026-09-18T00:00:00.000Z");
 const workspace = "/tmp/kanban-fixture";
 function job(directory = workspace, environment = "") {

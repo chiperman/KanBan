@@ -33,7 +33,7 @@ import type {
 } from "@/server/ports";
 import type { AssetSourceOnboarding } from "@/server/asset-source-onboarding";
 import type { LongbridgeOAuthState } from "@/server/asset-sources/longbridge";
-import type { BusinessDataBackup } from "@/server/business-data-backup";
+import type { BusinessDataBackup } from "@/server/backup/business-data-backup";
 import type { InvestmentBookStore } from "@/domain/investment-books";
 
 export interface AssetServices {

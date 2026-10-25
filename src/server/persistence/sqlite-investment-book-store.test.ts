@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { SqliteDashboardDatabase } from "./sqlite-database";
-import { CredentialFreeBusinessDataBackup } from "../business-data-backup";
+import { CredentialFreeBusinessDataBackup } from "../backup/business-data-backup";
 import type { SourceInvestmentHistory } from "@/domain/source-investment-history";
 
 const at = "2026-10-18T08:00:00.000Z";

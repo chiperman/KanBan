@@ -4,7 +4,7 @@ import type {
   AssetSources,
   DailyAssetSnapshots,
 } from "@/server/ports";
-import type { SourceRefreshOutcome } from "@/server/source-refresh-executor";
+import type { SourceRefreshOutcome } from "@/server/refresh/source-refresh-executor";
 
 /** 无原子持久化能力的适配器，在刷新后累计成功来源。 */
 export class RefreshObservationRecorder {

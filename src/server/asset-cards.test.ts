@@ -6,7 +6,7 @@ import test from "node:test";
 import type { DatabaseSync } from "node:sqlite";
 
 import { parseAssetCards, updateAssetCardLayout } from "./asset-cards";
-import { CredentialFreeBusinessDataBackup } from "./business-data-backup";
+import { CredentialFreeBusinessDataBackup } from "./backup/business-data-backup";
 import { SqliteDashboardDatabase } from "./persistence/sqlite-database";
 import type { Card } from "./ports";
 
