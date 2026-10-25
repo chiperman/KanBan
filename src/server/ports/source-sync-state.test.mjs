@@ -74,8 +74,6 @@ type Contracts = [
   Expect<Equal<Root.AssetSourceSummary["sync"], State.AssetSourceSyncState>>,
   Expect<Equal<Parameters<Legacy.AssetSynchronization["request"]>, [Request]>>,
   Expect<Equal<ReturnType<Legacy.AssetSynchronization["request"]>, Promise<Report>>>,
-  Expect<Equal<Parameters<Legacy.AssetSynchronization["refresh"]>, [Mode, Scope?, string?]>>,
-  Expect<Equal<ReturnType<Legacy.AssetSynchronization["refresh"]>, Promise<Report>>>,
   Expect<Equal<Parameters<Legacy.AssetSourceRefresher["refresh"]>[0]["mode"], Mode>>
 ];
 
@@ -91,12 +89,8 @@ function callers(synchronization: Root.AssetSynchronization) {
   void synchronization.request({ intent: { reason: "manual-global" } });
   void synchronization.request({ intent: { reason: "manual-source", sourceId: "source-1" }, sourceIds: ["source-1", "source-2"] });
   void synchronization.request({ intent: { reason: "interval" } });
-  void synchronization.refresh("prices");
-  void synchronization.refresh("holdings", "non-evm", "source-1");
   // @ts-expect-error 单来源意图必须带来源身份。
   void synchronization.request({ intent: { reason: "manual-source" } });
-  // @ts-expect-error 不允许把任意字符串放宽为刷新模式。
-  void synchronization.refresh("balance");
 }
 `;
 

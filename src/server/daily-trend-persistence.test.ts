@@ -58,12 +58,12 @@ async function fixture(t: TestContext) {
 
 test("SQLite 同日断开后全量观测移除旧来源，手工增量保留其余观测和当日基准", async t => {
   const state = await fixture(t);
-  await state.synchronization.refresh("all");
+  await state.synchronization.request({ intent: { reason: "manual-global" } });
   const manualId = await state.addManual();
   await state.database.disconnectAssetSource("beta");
   state.advance("2026-10-02T02:00:00.000Z");
   state.amounts.alpha = "110";
-  await state.synchronization.refresh("all");
+  await state.synchronization.request({ intent: { reason: "manual-global" } });
   let [trend] = await state.snapshots.listTrendObservations();
   assert.deepEqual(trend.sources.map(source => source.sourceId).sort(), ["alpha", manualId].sort());
   assert.equal(trend.total.USD, "160");
@@ -78,12 +78,12 @@ test("SQLite 同日断开后全量观测移除旧来源，手工增量保留其�
 
 test("SQLite 部分失败保留成功来源并更新新成功值，手工增量独立且恢复后更新", async t => {
   const state = await fixture(t);
-  await state.synchronization.refresh("all");
+  await state.synchronization.request({ intent: { reason: "manual-global" } });
   const manualId = await state.addManual();
   state.advance("2026-10-02T02:00:00.000Z");
   state.amounts.alpha = "110";
   state.failures.add("beta");
-  assert.equal((await state.synchronization.refresh("all")).failureCount, 1);
+  assert.equal((await state.synchronization.request({ intent: { reason: "manual-global" } })).failureCount, 1);
   let [trend] = await state.snapshots.listTrendObservations();
   assert.equal(trend.total.USD, "360");
   assert.equal(trend.status, "complete");
@@ -95,7 +95,7 @@ test("SQLite 部分失败保留成功来源并更新新成功值，手工增量�
   state.failures.clear();
   state.amounts.beta = "220";
   state.advance("2026-10-02T04:00:00.000Z");
-  await state.synchronization.refresh("all");
+  await state.synchronization.request({ intent: { reason: "manual-global" } });
   [trend] = await state.snapshots.listTrendObservations();
   assert.equal(trend.total.USD, "400");
   assert.equal(trend.status, "complete");

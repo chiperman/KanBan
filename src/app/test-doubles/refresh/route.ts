@@ -118,8 +118,6 @@ export async function GET() {
   if (denied) return denied;
   const synchronization = getTestServices().assetSynchronization;
   return Response.json({
-    modes: synchronization.modes,
-    scopes: synchronization.scopes,
     sourceIds: synchronization.sourceIds,
     active: synchronization.active,
     adapterCalls: synchronization.refresher.calls(),

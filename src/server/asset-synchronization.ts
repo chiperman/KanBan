@@ -58,23 +58,7 @@ export class SourceIsolatedAssetSynchronization
     return this.scheduler.request(input);
   }
 
-  refresh(
-    mode: AssetRefreshMode,
-    scope: AssetRefreshScope = "all",
-    sourceId?: string,
-  ): Promise<AssetRefreshReport> {
-    return this.scheduler.refresh(mode, scope, sourceId);
-  }
-
   private async executeJob(job: RefreshPlan): Promise<AssetRefreshReport> {
-    if (job.kind === "legacy") {
-      return this.executeBatch({
-        mode: job.mode,
-        scope: job.scope,
-        sourceId: job.sourceId,
-        isFullBatch: false,
-      });
-    }
     return this.executeUnified(job);
   }
 
@@ -125,7 +109,7 @@ export class SourceIsolatedAssetSynchronization
     });
   }
 
-  private async executeBatch(input: {
+  protected async executeBatch(input: {
     mode: AssetRefreshMode;
     scope: AssetRefreshScope;
     sourceId?: string;

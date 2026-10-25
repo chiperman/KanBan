@@ -1,4 +1,4 @@
-import type { AssetRefreshMode, AssetRefreshReport, AssetRefreshRequest, AssetRefreshScope, AssetSynchronization } from "@/server/ports";
+import type { AssetRefreshReport, AssetRefreshRequest, AssetSynchronization } from "@/server/ports";
 
 export interface UnifiedRefreshPlan {
   kind: "unified";
@@ -7,14 +7,7 @@ export interface UnifiedRefreshPlan {
   sourceIds: Set<string>;
 }
 
-interface LegacyRefreshPlan {
-  kind: "legacy";
-  mode: AssetRefreshMode;
-  scope: AssetRefreshScope;
-  sourceId: string | undefined;
-}
-
-export type RefreshPlan = UnifiedRefreshPlan | LegacyRefreshPlan;
+export type RefreshPlan = UnifiedRefreshPlan;
 
 interface UnifiedJob extends UnifiedRefreshPlan {
   promise: Promise<AssetRefreshReport>;
@@ -22,13 +15,7 @@ interface UnifiedJob extends UnifiedRefreshPlan {
   reject: (error: unknown) => void;
 }
 
-interface LegacyJob extends LegacyRefreshPlan {
-  promise: Promise<AssetRefreshReport>;
-  resolve: (report: AssetRefreshReport) => void;
-  reject: (error: unknown) => void;
-}
-
-type RefreshJob = UnifiedJob | LegacyJob;
+type RefreshJob = UnifiedJob;
 
 /** 合并同进程的刷新请求，并在当前批次结束后串行执行下一批。 */
 export class RefreshScheduler implements AssetSynchronization {
@@ -52,21 +39,6 @@ export class RefreshScheduler implements AssetSynchronization {
       return this.scheduleSources(sourceIds);
     }
     return this.scheduleFull(true);
-  }
-
-  refresh(
-    mode: AssetRefreshMode,
-    scope: AssetRefreshScope = "all",
-    sourceId?: string,
-  ): Promise<AssetRefreshReport> {
-    if (mode === "all" && scope === "all") {
-      return sourceId === undefined
-        ? this.request({ intent: { reason: "manual-global" } })
-        : this.request({
-          intent: { reason: "manual-source", sourceId },
-        });
-    }
-    return this.enqueueLegacy(mode, scope, sourceId);
   }
 
   private scheduleFull(automatic: boolean): Promise<AssetRefreshReport> {
@@ -136,30 +108,6 @@ export class RefreshScheduler implements AssetSynchronization {
       full,
       automatic,
       sourceIds: new Set(sourceIds),
-      promise,
-      resolve,
-      reject,
-    });
-    this.scheduleDrain();
-    return promise;
-  }
-
-  private enqueueLegacy(
-    mode: AssetRefreshMode,
-    scope: AssetRefreshScope,
-    sourceId: string | undefined,
-  ): Promise<AssetRefreshReport> {
-    let resolve!: (report: AssetRefreshReport) => void;
-    let reject!: (error: unknown) => void;
-    const promise = new Promise<AssetRefreshReport>((nextResolve, nextReject) => {
-      resolve = nextResolve;
-      reject = nextReject;
-    });
-    this.pending.push({
-      kind: "legacy",
-      mode,
-      scope,
-      sourceId,
       promise,
       resolve,
       reject,

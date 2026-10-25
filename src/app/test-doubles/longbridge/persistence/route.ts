@@ -347,7 +347,7 @@ export async function POST(request: Request) {
           finish: async () => undefined,
           clear: async () => undefined,
         },
-      ).refresh("all");
+      ).request({ intent: { reason: "manual-global" } });
       const rotationRaw = await readFile(
         path.join(rotationDir, "secrets.json"),
         "utf8",
@@ -405,7 +405,7 @@ export async function POST(request: Request) {
             keychainDatabase.recordDailyAssetObservation(snapshot, createBaseline),
         },
         new InMemoryAssetFullRefreshState(),
-      ).refresh("all", "all", keychainSource?.id);
+      ).request({ intent: { reason: "manual-source", sourceId: keychainSource?.id ?? "" } });
       const keychainCandles = keychainSource === undefined
         ? []
         : await new ServeLongbridgeHoldingCandlestickReader({

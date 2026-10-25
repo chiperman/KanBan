@@ -1,7 +1,5 @@
 import type {
-  AssetRefreshMode,
   AssetRefreshReport,
-  AssetRefreshScope,
   AssetSourceRefresher,
   AssetSynchronization,
 } from "@/server/ports";
@@ -202,8 +200,6 @@ import { decimalAdd } from "@/domain/decimal";
 import { SourceIsolatedAssetSynchronization } from "@/server/asset-synchronization";
 
 export class FakeAssetSynchronization implements AssetSynchronization {
-  readonly modes: AssetRefreshMode[] = [];
-  readonly scopes: AssetRefreshScope[] = [];
   readonly sourceIds: Array<string | null> = [];
   active = 0;
   private holdNext = false;
@@ -215,8 +211,6 @@ export class FakeAssetSynchronization implements AssetSynchronization {
   ) {}
 
   reset(scenario: FakeRefreshScenario): void {
-    this.modes.length = 0;
-    this.scopes.length = 0;
     this.sourceIds.length = 0;
     this.active = 0;
     this.holdNext = false;
@@ -241,8 +235,6 @@ export class FakeAssetSynchronization implements AssetSynchronization {
     const sourceIds = input.sourceIds ?? (
       intent.reason === "manual-source" ? [intent.sourceId] : undefined
     );
-    this.modes.push("all");
-    this.scopes.push("all");
     this.sourceIds.push(sourceIds?.[0] ?? null);
     this.active += 1;
     try {
@@ -258,25 +250,4 @@ export class FakeAssetSynchronization implements AssetSynchronization {
     }
   }
 
-  async refresh(
-    mode: AssetRefreshMode,
-    scope: AssetRefreshScope = "all",
-    sourceId?: string,
-  ): Promise<AssetRefreshReport> {
-    this.modes.push(mode);
-    this.scopes.push(scope);
-    this.sourceIds.push(sourceId ?? null);
-    this.active += 1;
-    try {
-      if (this.holdNext) {
-        this.holdNext = false;
-        await new Promise<void>((resolve) => {
-          this.releasePending = resolve;
-        });
-      }
-      return await this.delegate.refresh(mode, scope, sourceId);
-    } finally {
-      this.active -= 1;
-    }
-  }
 }

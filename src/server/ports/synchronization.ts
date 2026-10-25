@@ -4,7 +4,6 @@ import type {
   AssetRefreshMode,
   AssetRefreshReport,
   AssetRefreshRequest,
-  AssetRefreshScope,
 } from "./source-sync-state";
 
 export type {
@@ -21,12 +20,6 @@ export type {
 export interface AssetSynchronization {
   /** 统一刷新入口；自动意图由服务端再次判断周期并防重复。 */
   request(input: AssetRefreshRequest): Promise<AssetRefreshReport>;
-  /** 兼容既有来源定向与 prices/holdings 调用；统一协调器不使用它。 */
-  refresh(
-    mode: AssetRefreshMode,
-    scope?: AssetRefreshScope,
-    sourceId?: string,
-  ): Promise<AssetRefreshReport>;
 }
 
 /** 统一全量刷新周期；仅记录最近一次尝试与异常中断诊断。 */

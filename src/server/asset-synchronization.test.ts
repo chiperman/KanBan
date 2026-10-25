@@ -133,7 +133,14 @@ class TestFullRefreshState implements AssetFullRefreshState {
     this.inProgressAt = null;
   }
 }
-
+class PartialRefreshSynchronization extends SourceIsolatedAssetSynchronization {
+  executeBatchForTests(input: {
+    mode: "all" | "prices" | "holdings";
+    scope: "all";
+  }): Promise<import("@/server/ports").AssetRefreshReport> {
+    return this.executeBatch({ ...input, isFullBatch: false });
+  }
+}
 class TestDailySnapshots implements DailyAssetSnapshots {
   private baselines: DailyAssetSnapshot[] = [];
   private trends: DailyAssetTrendObservation[] = [];
@@ -317,7 +324,7 @@ async function synchronizationFixture(input: {
     refresher: refresher as TestRefresher,
     dailySnapshots,
     fullRefreshState,
-    synchronization: new SourceIsolatedAssetSynchronization(
+    synchronization: new PartialRefreshSynchronization(
       sources,
       secrets,
       clock,
@@ -344,17 +351,17 @@ for (const failedMode of ["holdings", "all"] as const) {
         },
       },
     });
-    await fixture.synchronization.refresh(failedMode);
+    await fixture.synchronization.executeBatchForTests({ mode: failedMode, scope: "all" });
     const failed = structuredClone((await fixture.sources.list())[0].sync);
     assert.equal(failed.status, "expired");
     assert.equal(failed.failedMode, failedMode);
 
     fixture.clock.set("2026-08-20T05:00:00.000Z");
-    await fixture.synchronization.refresh("prices");
+    await fixture.synchronization.executeBatchForTests({ mode: "prices", scope: "all" });
     assert.equal((await fixture.sources.list())[0].sync.failedMode, failedMode);
     failing = false;
     fixture.clock.set("2026-08-20T06:00:00.000Z");
-    await fixture.synchronization.refresh("prices");
+    await fixture.synchronization.executeBatchForTests({ mode: "prices", scope: "all" });
     const [stale, healthy] = await fixture.sources.list();
     assert.equal(stale.snapshot.total.amount, "125");
     assert.equal(stale.snapshot.syncedAt, "2026-08-20T06:00:00.000Z");
@@ -367,7 +374,7 @@ for (const failedMode of ["holdings", "all"] as const) {
     assert.equal(stale.sync.recentAttempts?.at(-1)?.outcome, "success");
     assert.equal(healthy.sync.status, "current");
 
-    await fixture.synchronization.refresh("holdings");
+    await fixture.synchronization.executeBatchForTests({ mode: "holdings", scope: "all" });
     const recovered = (await fixture.sources.list())[0].sync;
     assert.equal(recovered.status, "current");
     assert.equal(recovered.failedMode, null);
@@ -380,10 +387,10 @@ for (const failedMode of ["holdings", "all"] as const) {
 test("仅行情失败可由后续成功行情刷新恢复", async () => {
   const fixture = await synchronizationFixture();
   fixture.refresher.configure("partial-failure");
-  await fixture.synchronization.refresh("prices");
+  await fixture.synchronization.executeBatchForTests({ mode: "prices", scope: "all" });
   assert.equal((await fixture.sources.list())[1].sync.failedMode, "prices");
   fixture.refresher.configure("schedule");
-  await fixture.synchronization.refresh("prices");
+  await fixture.synchronization.executeBatchForTests({ mode: "prices", scope: "all" });
   assert.equal((await fixture.sources.list())[1].sync.status, "current");
   assert.equal((await fixture.sources.list())[1].sync.error, null);
 });
@@ -392,7 +399,7 @@ test("完整全量批次冻结当天首个基准并更新趋势", async () => {
   const fixture = await synchronizationFixture();
   fixture.refresher.configure("schedule");
 
-  await fixture.synchronization.refresh("all");
+  await fixture.synchronization.request({ intent: { reason: "manual-global" } });
   const firstState = await fixture.fullRefreshState.read();
   assert.deepEqual(firstState, {
     attemptedAt: "2026-08-20T04:00:00.000Z",
@@ -402,7 +409,7 @@ test("完整全量批次冻结当天首个基准并更新趋势", async () => {
   assert.equal((await fixture.dailySnapshots.listTrendObservations())[0]?.total.USD, "302");
 
   fixture.clock.set("2026-08-20T05:00:00.000Z");
-  await fixture.synchronization.refresh("all");
+  await fixture.synchronization.request({ intent: { reason: "manual-global" } });
   assert.equal((await fixture.dailySnapshots.list())[0]?.total.USD, "302");
   assert.equal((await fixture.dailySnapshots.listTrendObservations())[0]?.total.USD, "304");
 });
@@ -414,7 +421,7 @@ test("部分成功仅记录成功来源，后续全失败不会覆盖", async ()
   );
 
   fixture.refresher.configure("partial-failure");
-  const partial = await fixture.synchronization.refresh("all");
+  const partial = await fixture.synchronization.request({ intent: { reason: "manual-global" } });
   assert.deepEqual(partial, {
     successCount: 1,
     failureCount: 1,
@@ -449,7 +456,7 @@ test("部分成功仅记录成功来源，后续全失败不会覆盖", async ()
 
   fixture.clock.set("2026-08-20T05:00:00.000Z");
   fixture.refresher.configure("all-failure");
-  await fixture.synchronization.refresh("all");
+  await fixture.synchronization.request({ intent: { reason: "manual-global" } });
   assert.deepEqual(
     await fixture.dailySnapshots.listTrendObservations(),
     historyBeforeFailure,
@@ -466,7 +473,7 @@ test("全量批次在历史收尾异常后保留中断诊断", async () => {
   fixture.dailySnapshots.failNextRecord();
 
   await assert.rejects(
-    fixture.synchronization.refresh("all"),
+    fixture.synchronization.request({ intent: { reason: "manual-global" } }),
     /组合历史写入失败/,
   );
 
@@ -515,7 +522,7 @@ test("单来源刷新累计到组合历史且不改变周期，手动全量可�
     await fixture.dailySnapshots.listTrendObservations(),
   );
   fixture.clock.set("2026-08-20T04:10:00.000Z");
-  await fixture.synchronization.refresh("all", "all", "source-alpha");
+  await fixture.synchronization.request({ intent: { reason: "manual-source", sourceId: "source-alpha" } });
 
   assert.deepEqual(await fixture.fullRefreshState.read(), {
     attemptedAt: "2026-08-20T04:00:00.000Z",
@@ -551,11 +558,11 @@ test("断开来源不参与新历史，恢复后单来源成功也能累计", as
   const fixture = await synchronizationFixture();
   fixture.refresher.configure("schedule");
 
-  await fixture.synchronization.refresh("all");
+  await fixture.synchronization.request({ intent: { reason: "manual-global" } });
   fixture.sources.setLifecycle("source-beta", "disconnected");
 
   fixture.clock.set("2026-08-20T05:00:00.000Z");
-  await fixture.synchronization.refresh("all");
+  await fixture.synchronization.request({ intent: { reason: "manual-global" } });
   assert.deepEqual(
     (await fixture.dailySnapshots.listTrendObservations())[0]?.sources.map(
       ({ sourceId }) => sourceId,
@@ -565,7 +572,7 @@ test("断开来源不参与新历史，恢复后单来源成功也能累计", as
 
   fixture.sources.setLifecycle("source-beta", "connected");
   fixture.clock.set("2026-08-20T06:00:00.000Z");
-  await fixture.synchronization.refresh("all", "all", "source-beta");
+  await fixture.synchronization.request({ intent: { reason: "manual-source", sourceId: "source-beta" } });
   assert.deepEqual(
     (await fixture.dailySnapshots.listTrendObservations())[0]?.sources.map(
       ({ sourceId }) => sourceId,
@@ -574,7 +581,7 @@ test("断开来源不参与新历史，恢复后单来源成功也能累计", as
   );
 
   fixture.clock.set("2026-08-20T07:00:00.000Z");
-  await fixture.synchronization.refresh("all");
+  await fixture.synchronization.request({ intent: { reason: "manual-global" } });
   assert.deepEqual(
     (await fixture.dailySnapshots.listTrendObservations())[0]?.sources.map(
       ({ sourceId }) => sourceId,
@@ -592,7 +599,7 @@ test("旧来源没有统一周期时仍视为到期，首次失败全量建立�
     attemptedAt: null,
     inProgressAt: null,
   });
-  await fixture.synchronization.refresh("all");
+  await fixture.synchronization.request({ intent: { reason: "manual-global" } });
 
   assert.deepEqual(await fixture.fullRefreshState.read(), {
     attemptedAt: "2026-08-20T08:00:00.000Z",
@@ -822,7 +829,6 @@ test("部分失败、全部失败与超时仍等待下一统一周期", async ()
       },
     );
   }
-
   const hung: AssetSourceRefresher = {
     async refresh() { return await new Promise<never>(() => undefined); },
   };
@@ -993,7 +999,7 @@ test("同步失败只保存结构化安全字段，原始异常和 RPC URL 不�
     },
   });
   const before = structuredClone((await fixture.sources.list())[0]);
-  await fixture.synchronization.refresh("all", "all", "source-alpha");
+  await fixture.synchronization.request({ intent: { reason: "manual-source", sourceId: "source-alpha" } });
   const current = (await fixture.sources.list())[0];
   assert.deepEqual(current.snapshot, before.snapshot);
   assert.equal(current.sync.lastSuccessfulAt, before.sync.lastSuccessfulAt);
@@ -1016,7 +1022,7 @@ test("429 与 5xx 在总预算内有限重试，Retry-After 超预算不重试",
       },
     },
   });
-  const recovered = await fixture.synchronization.refresh("all", "all", "source-alpha");
+  const recovered = await fixture.synchronization.request({ intent: { reason: "manual-source", sourceId: "source-alpha" } });
   assert.equal(recovered.failureCount, 0);
   assert.equal(calls, 2);
 
@@ -1030,7 +1036,7 @@ test("429 与 5xx 在总预算内有限重试，Retry-After 超预算不重试",
       },
     },
   });
-  const failed = await bounded.synchronization.refresh("all", "all", "source-alpha");
+  const failed = await bounded.synchronization.request({ intent: { reason: "manual-source", sourceId: "source-alpha" } });
   assert.equal(failed.failureCount, 1);
   assert.equal(calls, 1);
   assert.equal((await bounded.sources.list())[0].sync.diagnostic?.httpStatus, 503);
@@ -1042,7 +1048,7 @@ test("认证、权限与地区限制错误不重试，取消或预算耗尽保�
     const fixture = await synchronizationFixture({
       refresher: { async refresh() { calls += 1; throw new AssetRequestError("拒绝", status, null, null); } },
     });
-    await fixture.synchronization.refresh("all", "all", "source-alpha");
+    await fixture.synchronization.request({ intent: { reason: "manual-source", sourceId: "source-alpha" } });
     assert.equal(calls, 1);
     assert.equal((await fixture.sources.list())[0].sync.diagnostic?.category, category);
   }
@@ -1057,7 +1063,7 @@ test("认证、权限与地区限制错误不重试，取消或预算耗尽保�
       },
     },
   });
-  await fixture.synchronization.refresh("all", "all", "source-alpha");
+  await fixture.synchronization.request({ intent: { reason: "manual-source", sourceId: "source-alpha" } });
   assert.equal((await fixture.sources.list())[0].sync.diagnostic?.category, "timeout");
 });
 
@@ -1093,7 +1099,7 @@ test("单来源最多三次尝试，主动取消不重试且最近记录最多�
       },
     },
   });
-  await failed.synchronization.refresh("all", "all", "source-alpha");
+  await failed.synchronization.request({ intent: { reason: "manual-source", sourceId: "source-alpha" } });
   assert.equal(signals.length, 3);
   assert.ok(signals.every((signal) => signal.aborted));
   assert.deepEqual(
@@ -1110,14 +1116,14 @@ test("单来源最多三次尝试，主动取消不重试且最近记录最多�
       },
     },
   });
-  await cancelled.synchronization.refresh("all", "all", "source-alpha");
+  await cancelled.synchronization.request({ intent: { reason: "manual-source", sourceId: "source-alpha" } });
   assert.equal(calls, 1);
   assert.equal((await cancelled.sources.list())[0].sync.diagnostic?.category, "cancelled");
 
   const bounded = await synchronizationFixture();
   for (let index = 0; index < 12; index += 1) {
     bounded.clock.set(new Date(Date.parse(INITIAL_AT) + index * 3_600_001).toISOString());
-    await bounded.synchronization.refresh("all", "all", "source-alpha");
+    await bounded.synchronization.request({ intent: { reason: "manual-source", sourceId: "source-alpha" } });
   }
   const attempts = (await bounded.sources.list())[0].sync.recentAttempts!;
   assert.equal(attempts.length, 10);
