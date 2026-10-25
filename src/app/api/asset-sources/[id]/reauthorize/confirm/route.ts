@@ -1,26 +1,8 @@
 import { rejectCrossOrigin } from "@/server/auth/request-origin";
+import { assetSourceProviderForKind } from "@/server/asset-source-authorization-inputs";
 import { getServices } from "@/server/composition";
 
 export const dynamic = "force-dynamic";
-
-function providerFor(source: {
-  kind: string;
-}) {
-  switch (source.kind) {
-    case "longbridge":
-    case "binance":
-    case "okx":
-    case "bitget":
-    case "bit":
-      return source.kind;
-    case "evm-watch-ethereum":
-      return "ethereum";
-    case "evm-watch-bsc":
-      return "bsc";
-    default:
-      return null;
-  }
-}
 
 export async function POST(
   request: Request,
@@ -37,7 +19,7 @@ export async function POST(
   if (source === undefined) {
     return Response.json({ error: "资产来源不存在或不支持重新授权" }, { status: 404 });
   }
-  const provider = providerFor(source);
+  const provider = assetSourceProviderForKind(source.kind);
   if (provider === null) {
     return Response.json({ error: "资产来源不存在或不支持重新授权" }, { status: 404 });
   }

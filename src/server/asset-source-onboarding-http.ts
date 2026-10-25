@@ -1,5 +1,10 @@
 import type { AssetSourceAuthorizationInput } from "@/server/asset-source-provider-adapters";
 import {
+  assetSourceProviderForKind,
+  parseAssetSourceAuthorizationInput,
+  parseAssetSourceReauthorizationInput,
+} from "@/server/asset-source-authorization-inputs";
+import {
   AssetSourceOnboardingError,
   type AssetSourceProvider,
 } from "@/server/asset-source-onboarding";
@@ -53,6 +58,47 @@ const CONFIRM_MESSAGES: Record<
     invalid: "EVM 观察钱包预览无效",
     unavailable: "EVM 观察钱包预览已失效或正在确认，请重新验证",
     failed: "保存 EVM 观察钱包失败",
+  },
+};
+
+const PREVIEW_MESSAGES: Record<
+  AssetSourceProvider,
+  { invalidInput: string; previewFailed: string; previewExpired: string }
+> = {
+  longbridge: {
+    invalidInput: "授权预览无效",
+    previewFailed: "长桥授权预览失败",
+    previewExpired: "授权预览已失效，请重新开始",
+  },
+  binance: {
+    invalidInput: "Binance API 凭证格式无效",
+    previewFailed: "Binance 凭证验证失败",
+    previewExpired: "Binance 预览已失效，请重新验证",
+  },
+  okx: {
+    invalidInput: "OKX API 凭证格式无效",
+    previewFailed: "OKX 凭证验证失败",
+    previewExpired: "OKX 预览已失效，请重新验证",
+  },
+  bitget: {
+    invalidInput: "Bitget API 凭证格式无效",
+    previewFailed: "Bitget 凭证验证失败",
+    previewExpired: "Bitget 预览已失效，请重新验证",
+  },
+  bit: {
+    invalidInput: "BIT / Matrixport API 凭证格式无效",
+    previewFailed: "BIT / Matrixport 凭证验证失败",
+    previewExpired: "BIT / Matrixport 预览已失效，请重新验证",
+  },
+  ethereum: {
+    invalidInput: "EVM 链或公开地址格式无效",
+    previewFailed: "EVM 观察钱包预览失败",
+    previewExpired: "EVM 观察钱包预览已失效，请重新验证",
+  },
+  bsc: {
+    invalidInput: "EVM 链或公开地址格式无效",
+    previewFailed: "EVM 观察钱包预览失败",
+    previewExpired: "EVM 观察钱包预览已失效，请重新验证",
   },
 };
 
@@ -117,6 +163,107 @@ export function createPreviewRoute<Input extends AssetSourceAuthorizationInput>(
       if (unauthorized) return unauthorized;
       getServices().assetSourceOnboarding.cancel(
         config.provider,
+        new URL(request.url).searchParams.get("id") ?? "",
+      );
+      return Response.json({ ok: true });
+    },
+  };
+}
+
+export function createProviderPreviewRoute(
+  provider: AssetSourceProvider,
+  { readable = false }: { readable?: boolean } = {},
+) {
+  const messages = PREVIEW_MESSAGES[provider];
+  return createPreviewRoute({
+    provider,
+    parse: (body) => parseAssetSourceAuthorizationInput(provider, body),
+    ...messages,
+    readable,
+  });
+}
+
+async function reauthorizeSource(id: string) {
+  const services = getServices();
+  if ((await services.auth.currentSession()) === null) {
+    return { response: Response.json({ error: "需要所有者身份" }, { status: 401 }) };
+  }
+  const source = (await services.assetSources.list()).find((item) => item.id === id);
+  if (source === undefined) {
+    return { response: Response.json({ error: "资产来源不存在" }, { status: 404 }) };
+  }
+  const provider = assetSourceProviderForKind(source.kind);
+  if (provider === null) {
+    return { response: Response.json({ error: "该来源不支持重新授权" }, { status: 400 }) };
+  }
+  return { services, source, provider };
+}
+
+export function createReauthorizePreviewRoute() {
+  return {
+    GET: async (
+      request: Request,
+      { params }: { params: Promise<{ id: string }> },
+    ) => {
+      const { id } = await params;
+      const context = await reauthorizeSource(id);
+      if ("response" in context) return context.response;
+      const preview = context.services.assetSourceOnboarding.publicPreview(
+        context.provider,
+        new URL(request.url).searchParams.get("id") ?? "",
+      );
+      return preview === null
+        ? Response.json({ error: "授权预览已失效，请重新验证" }, { status: 404 })
+        : Response.json(preview);
+    },
+    POST: async (
+      request: Request,
+      { params }: { params: Promise<{ id: string }> },
+    ) => {
+      const originError = rejectCrossOrigin(request);
+      if (originError) return originError;
+      const { id } = await params;
+      const context = await reauthorizeSource(id);
+      if ("response" in context) return context.response;
+      const input = parseAssetSourceReauthorizationInput(
+        context.provider,
+        await request.json().catch(() => null),
+      );
+      if (input === null) {
+        return Response.json({ error: "重新授权材料格式无效" }, { status: 400 });
+      }
+      try {
+        return Response.json(
+          await context.services.assetSourceOnboarding.preview(
+            context.provider,
+            context.provider === "longbridge"
+              ? { ...input, sourceId: context.source.id }
+              : input,
+            context.services.clock.now().toISOString(),
+            {
+              sourceId: context.source.id,
+              expectedAccountId: context.source.accountId,
+            },
+          ),
+        );
+      } catch (error) {
+        return Response.json(
+          { error: error instanceof Error ? error.message : "重新授权校验失败" },
+          { status: 400 },
+        );
+      }
+    },
+    DELETE: async (
+      request: Request,
+      { params }: { params: Promise<{ id: string }> },
+    ) => {
+      const originError = rejectCrossOrigin(request);
+      if (originError) return originError;
+      const { id } = await params;
+      const context = await reauthorizeSource(id);
+      if ("response" in context) return context.response;
+      context.services.assetSourceOnboarding.cancel(
+        context.provider,
         new URL(request.url).searchParams.get("id") ?? "",
       );
       return Response.json({ ok: true });

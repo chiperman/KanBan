@@ -4,29 +4,11 @@ import {
   redirectLoopbackIpToLocalhost,
   type PageSearchParams,
 } from "@/server/auth/canonical-origin";
+import { assetSourceProviderForKind } from "@/server/asset-source-authorization-inputs";
 import { getServices } from "@/server/composition";
 import { AssetSourceFlow } from "@/ui/asset-source-flow";
 import { SessionGuard } from "@/ui/session-guard";
 import { WorkbenchShell } from "@/ui/workbench-shell";
-
-function providerFor(source: {
-  kind: string;
-}): "longbridge" | "binance" | "okx" | "bitget" | "bit" | "ethereum" | "bsc" | null {
-  switch (source.kind) {
-    case "longbridge":
-    case "binance":
-    case "okx":
-    case "bitget":
-    case "bit":
-      return source.kind;
-    case "evm-watch-ethereum":
-      return "ethereum";
-    case "evm-watch-bsc":
-      return "bsc";
-    default:
-      return null;
-  }
-}
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +27,7 @@ export default async function ReauthorizeAssetSourcePage({
   const services = getServices();
   if ((await services.auth.currentSession()) === null) redirect("/");
   const source = (await services.assetSources.list()).find((item) => item.id === id);
-  const provider = source === undefined ? null : providerFor(source);
+  const provider = source === undefined ? null : assetSourceProviderForKind(source.kind);
   if (source === undefined || provider === null) notFound();
 
   return (
