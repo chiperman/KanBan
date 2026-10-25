@@ -7,6 +7,10 @@ const nextConfig: NextConfig = {
   },
   // 浏览器验收可写入独立构建目录，避免覆盖正在运行的本地开发服务。
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
+  // 测试路由使用独立扩展名；生产构建不发现、不打包 test-doubles。
+  pageExtensions: process.env.APP_ENV === "test"
+    ? ["tsx", "ts", "test-route.ts"]
+    : ["tsx", "ts"],
   // 允许通过当前设备的 Tailscale HTTPS 入口使用开发服务器。
   allowedDevOrigins: ["xiaoxmacbook-pro.tail72342.ts.net"],
   async headers() {

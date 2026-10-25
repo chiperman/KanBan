@@ -31,20 +31,11 @@
   "include": [
     "next-env.d.ts",
     "**/*.ts",
-    "**/*.tsx",
-    ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts",
-    ".next-ui-polish/types/**/*.ts",
-    ".next-ui-polish/dev/types/**/*.ts",
-    ".next-landing-overview/types/**/*.ts",
-    ".next-landing-overview/dev/types/**/*.ts",
-    ".next-preview-3030/types/**/*.ts",
-    ".next-preview-3030/dev/types/**/*.ts",
-    ".next-3030/types/**/*.ts",
-    ".next-3030/dev/types/**/*.ts"
+    "**/*.tsx"
   ],
   "exclude": [
     "node_modules",
-    "tmp"
+    "tmp",
+    ".next*"
   ]
 }
