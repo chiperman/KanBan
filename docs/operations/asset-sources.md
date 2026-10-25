@@ -8,7 +8,7 @@
 | --- | --- |
 | [Provider 定义](../../src/domain/asset-source-providers.ts) | 来源类型与接入字段 |
 | [接入事务](../../src/server/asset-source-onboarding.ts) / [Provider adapters](../../src/server/asset-source-provider-adapters.ts) | 预览、临时加密、确认时重验和保存；公共预览不返回凭证正文或持仓明细 |
-| [同步服务](../../src/server/asset-synchronization.ts) | 读取来源、保存快照与覆盖状态；失败时保留最后成功数据并表达时效 |
+| [同步服务](../../src/server/refresh/asset-synchronization.ts) | 读取来源、保存快照与覆盖状态；失败时保留最后成功数据并表达时效 |
 | [刷新器路由](../../src/server/asset-sources/router.ts) / [生产装配](../../src/server/production.ts) | 选择对应适配器并注入凭证、行情与存储能力 |
 
 统一刷新入口及周期状态见 [源码导航](../current-baseline.md#其他实现入口)。组合趋势按同日来源累计有效观测，后台调度与刷新互斥见 [后台自动采集](service-composition.md#后台自动采集)；正式日结仍是 [独立流程](service-composition.md#正式日结)。

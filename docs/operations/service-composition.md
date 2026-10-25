@@ -58,8 +58,8 @@ pnpm runtime:update
 
 ## 正式日结
 
-- [日结执行器](../../src/server/formal-daily-settlement.ts) 使用独立只读采集与持久化，不调用实时刷新的记录写入路径，不改写实时资产快照、当日基准或每日趋势观测。
+- [日结执行器](../../src/server/settlement/formal-daily-settlement.ts) 使用独立只读采集与持久化，不调用实时刷新的记录写入路径，不改写实时资产快照、当日基准或每日趋势观测。
 - 持有证券时按相关市场交易日历及已确认的常规盘日 K 收盘确定锚点；无证券时使用上海自然日加密资产截点。休市、半日市与夏令时不能由固定钟点代替。
 - 每个锚点只保存一批记录；[SQLite 写入](../../src/server/persistence/sqlite-formal-settlements.ts) 通过唯一键忽略重复插入，重复运行或进程重启不能覆盖既有金额。窗口外记录漏采，不用后续持仓、价格或汇率补造历史总额；证据不足明确降级。
 - [CLI](../../scripts/run-formal-daily-settlement.ts) 与页面使用同一服务装配和 `KANBAN_DATA_DIR`。本机 [launchd 管理脚本](../../scripts/formal-daily-settlement-launchd.mjs) 的安装、启停不是构建或启动页面的副作用，需明确操作授权。
-- 设置页的 [调度状态读取](../../src/server/formal-settlement-scheduler.ts) 只查询本实例配置与加载证据，不安装任务、不采集资产，也不把“已加载”解释为采集健康或真实验收通过。未完成事项见 [待办](../backlog.md)。
+- 设置页的 [调度状态读取](../../src/server/settlement/formal-settlement-scheduler.ts) 只查询本实例配置与加载证据，不安装任务、不采集资产，也不把“已加载”解释为采集健康或真实验收通过。未完成事项见 [待办](../backlog.md)。

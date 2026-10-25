@@ -21,7 +21,7 @@
 ## 其他实现入口
 
 - 锁定与演示入口在 [首页路由](../src/app/page.tsx)。`/?mode=demo` 使用固定虚构数据，路由在进入所有者服务之前处理演示分支。
-- 统一刷新从 [AssetRefreshProvider](../src/ui/asset-refresh-provider.tsx)、[Coordinator](../src/ui/asset-refresh-coordinator.ts) 沿 [刷新接口](../src/app/api/asset-sources/refresh/route.ts) 追踪到 [服务端刷新状态](../src/server/asset-refresh-state.ts) 和 [SQLite 周期状态](../src/server/persistence/sqlite-refresh-state-store.ts)。客户端共享状态与服务端并发控制需一并核对，不能照历史轮询计划重建刷新逻辑。
+- 统一刷新从 [AssetRefreshProvider](../src/ui/asset-refresh-provider.tsx)、[Coordinator](../src/ui/asset-refresh-coordinator.ts) 沿 [刷新接口](../src/app/api/asset-sources/refresh/route.ts) 追踪到 [服务端刷新状态](../src/server/refresh/asset-refresh-state.ts) 和 [SQLite 周期状态](../src/server/persistence/sqlite-refresh-state-store.ts)。客户端共享状态与服务端并发控制需一并核对，不能照历史轮询计划重建刷新逻辑。
 - 各来源适配器、接入事务与覆盖边界见 [来源接入](operations/asset-sources.md)；长桥生产读取与身份绑定见 [服务生命周期](operations/service-composition.md)，安装与启动约束见 [工具链](operations/toolchain.md)。
 - 三本账的归属、历史衔接和旧资金核对见 [ADR-0007](adr/0007-unify-investment-books.md)；计算入口为 [investment-books](../src/domain/investment-books.ts)，持久化与惰性迁移入口为 [SQLite 账本存储](../src/server/persistence/sqlite-investment-book-store.ts)，写入口为 [账本接口](../src/app/api/investment-books/route.ts)。业务备份包含已建立的规范账本及旧原件，单纯导出不触发迁移。
 - 财务趋势共用 [AssetTrendPanel](../src/ui/asset-trend-panel.tsx) 的区间、自定义日期与图表状态；默认曲线按日期单调平滑，折线以端点圆点收尾。首页、投资账、来源详情默认全部历史，指标与数据口径由各页提供。证券行情 K 线独立，不在此控件范围内。
