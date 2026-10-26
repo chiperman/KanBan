@@ -11,6 +11,7 @@ import { VibeButton } from "@/ui/vibe/vibe-button";
 
 /** 与服务端 MAX_BACKUP_CONTENTS_BYTES 一致。 */
 const MAX_BYTES = 32 * 1024 * 1024;
+const UPLOAD_TIMEOUT_MS = 120_000;
 
 export interface UploadedBackup {
   fileName: string;
@@ -24,7 +25,7 @@ interface BusinessDataBackupDropzoneProps {
   onUploadEnd(): void;
   /** 上传并落盘成功后回调，调用方选中该文件。 */
   onUploaded(backup: UploadedBackup): void;
-  onError(message: string): void;
+  onError(message: string, outcomeUnknown?: boolean): void;
 }
 
 const fmt = (bytes: number) =>
@@ -105,10 +106,10 @@ export function BusinessDataBackupDropzone({
         onUploadEnd();
       }
 
-      function fail() {
+      function fail(message: string, outcomeUnknown = false) {
         if (requestRef.current !== request) return;
         setPhase({ kind: "idle" });
-        onError("上传备份失败");
+        onError(message, outcomeUnknown);
         finish();
       }
 
@@ -122,6 +123,7 @@ export function BusinessDataBackupDropzone({
       });
       request.addEventListener("load", async () => {
         if (requestRef.current !== request) return;
+        let outcomeUnknown = request.status >= 500 || (request.status >= 200 && request.status < 300);
         try {
           const response = new Response(request.response, {
             status: request.status,
@@ -134,27 +136,30 @@ export function BusinessDataBackupDropzone({
             UploadedBackup & { error?: string }
           >(response);
           if (requestRef.current !== request) return;
-          if (!response.ok || result === null || "error" in result) {
-            throw new Error(result?.error ?? "上传备份失败");
+          if (!response.ok || result === null || typeof result.fileName !== "string" || typeof result.warning !== "string" || "error" in result) {
+            throw new Error(outcomeUnknown ? "尚未确认备份是否保存，请重新读取备份列表后核对。" : result?.error ?? "备份上传未通过，请检查文件后重试。");
           }
+          outcomeUnknown = false;
           setPhase({ kind: "done", fileName: result.fileName, size: file.size });
           onUploaded(result);
         } catch (error) {
           setPhase({ kind: "idle" });
-          onError(error instanceof Error ? error.message : "上传备份失败");
+          onError(error instanceof Error ? error.message : "上传备份未完成，请检查连接后重试。", outcomeUnknown);
         } finally {
           finish();
         }
       });
-      request.addEventListener("error", fail);
-      request.addEventListener("abort", fail);
+      request.addEventListener("error", () => fail("连接中断，尚未确认备份是否保存，请先重新读取备份列表核对。", true));
+      request.addEventListener("abort", () => fail("上传已中断，尚未确认备份是否保存，请先重新读取备份列表核对。", true));
+      request.addEventListener("timeout", () => fail("等待上传结果超时，备份可能仍在保存；请先重新读取备份列表核对。", true));
 
       try {
         request.open("POST", "/api/business-data-backups");
         request.responseType = "text";
+        request.timeout = UPLOAD_TIMEOUT_MS;
         request.send(body);
       } catch {
-        fail();
+        fail("无法开始上传，请检查连接后重试。");
       }
     },
     [disabled, onError, onUploadStart, onUploadEnd, onUploaded],

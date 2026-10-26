@@ -15,7 +15,6 @@ import { DataChecksSettings } from "@/ui/data-checks-settings";
 import { BusinessDataBackupSettings } from "@/ui/business-data-backup-settings";
 import { OwnerPasskeySettings } from "@/ui/owner-passkey-settings";
 import { ProfitColorSettings } from "@/ui/profit-color-settings";
-import { RecoverySetup } from "@/ui/recovery-setup";
 import { ExternalServiceSettings } from "@/ui/external-service-settings";
 import { SessionGuard } from "@/ui/session-guard";
 import { TrendAppearanceSettings } from "@/ui/trend-appearance-settings";
@@ -93,10 +92,6 @@ export default async function SettingsPage({
                 configured={ownerPasskeyConfigured}
                 recoveryConfigured={recoveryConfigured}
               />
-              <div className="security-settings__recovery">
-                <h3 id="recovery-settings-title">TOTP 登录</h3>
-                <RecoverySetup configured={recoveryConfigured} />
-              </div>
             </section>
             </> : <div className="data-maintenance-panel">
               <section id="asset-sources" className="data-maintenance-section" aria-labelledby="asset-sources-title">

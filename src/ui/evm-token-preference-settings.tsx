@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 
 import {
   ignoredAssetKeySet,
@@ -121,7 +122,12 @@ export function EvmTokenPreferenceSettings({
 }: {
   sources: EvmTokenPreferenceSettingsSource[];
 }) {
+  const router = useRouter();
   const [pendingAssetKey, setPendingAssetKey] = useState<string | null>(null);
+  const pendingRef = useRef(false);
+  const [refreshing, startRefresh] = useTransition();
+  const busy = pendingAssetKey !== null || refreshing;
+  const [saved, setSaved] = useState(false);
   const [nativeAssetToIgnore, setNativeAssetToIgnore] = useState<{
     source: EvmTokenPreferenceSettingsSource;
     asset: PreferenceAsset;
@@ -170,9 +176,11 @@ export function EvmTokenPreferenceSettings({
     status: PreferenceStatus,
   ) {
     const assetKey = token.sourceAsset;
-    if (pendingAssetKey !== null) return;
+    if (pendingRef.current || busy) return;
+    pendingRef.current = true;
     setPendingAssetKey(assetKey);
     setError("");
+    setSaved(false);
     try {
       const response = await fetch(
         `/api/asset-sources/${encodeURIComponent(sourceId)}`,
@@ -189,12 +197,16 @@ export function EvmTokenPreferenceSettings({
       const body = await readJsonResult<{ error?: string }>(response);
       if (lockOnUnauthorizedResponse(response)) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
       if (!response.ok) throw new Error(body?.error ?? "资产范围设置保存失败");
-      window.location.reload();
+      setNativeAssetToIgnore(null);
+      setSaved(true);
+      startRefresh(() => router.refresh());
     } catch (caught) {
-      setPendingAssetKey(null);
       setError(
-        caught instanceof Error ? caught.message : "资产范围设置保存失败",
+        caught instanceof TypeError ? "连接中断，尚未确认资产范围是否保存，请检查连接后重试。" : caught instanceof Error ? caught.message : "资产范围设置保存失败",
       );
+    } finally {
+      pendingRef.current = false;
+      setPendingAssetKey(null);
     }
   }
 
@@ -202,6 +214,9 @@ export function EvmTokenPreferenceSettings({
     source: EvmTokenPreferenceSettingsSource,
     asset: PreferenceAsset,
   ) {
+    if (pendingRef.current || busy) return;
+    setError("");
+    setSaved(false);
     if (asset.native) {
       setNativeAssetToIgnore({ source, asset });
       return;
@@ -257,7 +272,7 @@ export function EvmTokenPreferenceSettings({
                         <small>{token.native ? "原生币" : token.name ?? "ERC-20"}</small>
                       </div>
                       <VibeButton
-                        disabled={pendingAssetKey !== null}
+                        disabled={busy}
                         onClick={() => ignoreAsset(source, token)}
                         type="button"
                         variant="text"
@@ -307,7 +322,7 @@ export function EvmTokenPreferenceSettings({
                       </div>
                       <div className="evm-token-settings__actions">
                         <VibeButton
-                          disabled={pendingAssetKey !== null}
+                          disabled={busy}
                           onClick={() =>
                             void updatePreference(source.id, token, "included")
                           }
@@ -317,7 +332,7 @@ export function EvmTokenPreferenceSettings({
                           {pending ? "正在保存…" : "需要关注"}
                         </VibeButton>
                         <VibeButton
-                          disabled={pendingAssetKey !== null}
+                          disabled={busy}
                           onClick={() =>
                             void ignoreAsset(source, token)
                           }
@@ -366,7 +381,7 @@ export function EvmTokenPreferenceSettings({
                         ) : null}
                       </div>
                       <VibeButton
-                        disabled={pendingAssetKey !== null}
+                        disabled={busy}
                         onClick={() =>
                           void updatePreference(source.id, token, "unrecognized")
                         }
@@ -415,7 +430,7 @@ export function EvmTokenPreferenceSettings({
                         ) : null}
                       </div>
                       <VibeButton
-                        disabled={pendingAssetKey !== null}
+                        disabled={busy}
                         onClick={() =>
                           void updatePreference(source.id, token, "unrecognized")
                         }
@@ -425,7 +440,7 @@ export function EvmTokenPreferenceSettings({
                         {pending ? "正在保存…" : "取消关注"}
                       </VibeButton>
                       <VibeButton
-                        disabled={pendingAssetKey !== null}
+                        disabled={busy}
                         onClick={() => ignoreAsset(source, token)}
                         type="button"
                         variant="text"
@@ -451,7 +466,8 @@ export function EvmTokenPreferenceSettings({
         </p>
       ) : null}
 
-      {error ? (
+      <div role="status">{saved ? <VibeNotice tone="success">{refreshing ? "资产范围已保存，正在更新页面…" : "资产范围已保存。"}</VibeNotice> : null}</div>
+      {error && !nativeAssetToIgnore ? (
         <VibeNotice role="alert" tone="error">
           {error}
         </VibeNotice>
@@ -462,7 +478,7 @@ export function EvmTokenPreferenceSettings({
           actions={
             <>
               <VibeButton
-                disabled={pendingAssetKey !== null}
+                disabled={busy}
                 onClick={() => setNativeAssetToIgnore(null)}
                 type="button"
                 variant="text"
@@ -470,23 +486,25 @@ export function EvmTokenPreferenceSettings({
                 取消
               </VibeButton>
               <VibeButton
-                disabled={pendingAssetKey !== null}
+                disabled={busy}
                 onClick={() => {
                   const target = nativeAssetToIgnore;
-                  setNativeAssetToIgnore(null);
                   void updatePreference(target.source.id, target.asset, "ignored");
                 }}
                 type="button"
               >
-                仍要忽略
+                {busy ? "正在保存…" : error ? "重试忽略" : "仍要忽略"}
               </VibeButton>
             </>
           }
           description="不计入总额，不影响链上资产。"
           onClose={() => setNativeAssetToIgnore(null)}
+          pending={busy}
           title={`确认忽略 ${nativeAssetToIgnore.asset.symbol ?? "原生币"}`}
           titleId="ignore-native-asset-dialog-title"
-        />
+        >
+          {error ? <VibeNotice role="alert" tone="error">{error}</VibeNotice> : null}
+        </VibeDialog>
       ) : null}
     </section>
   );

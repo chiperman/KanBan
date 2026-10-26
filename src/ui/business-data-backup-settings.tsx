@@ -30,8 +30,10 @@ async function requestBackup<T>(
   fileName?: string,
   discardConfirmation?: string,
 ): Promise<T> {
+  const signal = action === "list" ? AbortSignal.timeout(30_000) : undefined;
   const response = await fetch("/api/business-data-backups", {
     method: action === "list" ? "GET" : "POST",
+    ...(action === "list" ? { cache: "no-store", signal } : {}),
     ...(action === "list"
       ? {}
       : {
@@ -42,9 +44,13 @@ async function requestBackup<T>(
               : { action, fileName, discardConfirmation },
           ),
         }),
+  }).catch((caught: unknown) => {
+    if (signal?.aborted) throw new Error("读取备份列表超时，请重试。");
+    throw caught;
   });
-  const result = await readJsonResult<T & { error?: string }>(response);
   if (lockOnUnauthorizedResponse(response)) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
+  const result = await readJsonResult<T & { error?: string }>(response);
+  if (signal?.aborted) throw new Error("读取备份列表超时，请重试。");
   if (!response.ok || result === null || "error" in result) {
     throw new Error(
       result && "error" in result
@@ -108,6 +114,7 @@ export function BusinessDataBackupSettings() {
   const [pending, setPending] = useState<BackupOperation | null>(null);
   const pendingRef = useRef<BackupOperation | null>(null);
   const [error, setError] = useState("");
+  const [uploadNeedsCheck, setUploadNeedsCheck] = useState(false);
 
   function beginOperation(operation: BackupOperation) {
     if (pendingRef.current !== null) return false;
@@ -129,10 +136,12 @@ export function BusinessDataBackupSettings() {
     try {
       const result = await requestBackup<{ backups: BackupSummary[] }>("list");
       if (requestId === listRequestRef.current) setBackups(result.backups);
+      return requestId === listRequestRef.current;
     } catch (caught) {
       if (requestId === listRequestRef.current) {
         setListError(caught instanceof Error ? caught.message : "读取备份列表失败");
       }
+      return false;
     } finally {
       if (requestId === listRequestRef.current) setLoadingBackups(false);
     }
@@ -246,7 +255,7 @@ export function BusinessDataBackupSettings() {
             </span>
           </p>
           <BusinessDataBackupDropzone
-            disabled={pending !== null || confirmOpen}
+            disabled={pending !== null || confirmOpen || uploadNeedsCheck}
             onUploadStart={() => {
               if (!beginOperation("upload")) return false;
               setPreview(null);
@@ -261,8 +270,22 @@ export function BusinessDataBackupSettings() {
               setRestored(null);
               void loadBackups();
             }}
-            onError={setError}
+            onError={(message, outcomeUnknown = false) => {
+              setError(message);
+              setUploadNeedsCheck(outcomeUnknown);
+            }}
           />
+          {uploadNeedsCheck ? <VibeNotice role="alert" tone="warning">
+            {error || "尚未确认上传结果，请先核对备份列表中的文件名与时间。"}
+            <VibeButton
+              disabled={loadingBackups || pending !== null}
+              onClick={async () => {
+                if (await loadBackups()) { setUploadNeedsCheck(false); setError(""); }
+              }}
+              type="button"
+              variant="text"
+            >{loadingBackups ? "正在读取…" : "重新读取备份列表"}</VibeButton>
+          </VibeNotice> : null}
           <div className="business-data-restore">
             <VibeSelectField
               disabled={pending !== null}
@@ -315,7 +338,7 @@ export function BusinessDataBackupSettings() {
             </VibeNotice>
           ) : null}
         </div>
-        {error && !confirmOpen ? (
+        {error && !confirmOpen && !uploadNeedsCheck ? (
           <VibeNotice role="alert" tone="error">
             {error}
           </VibeNotice>

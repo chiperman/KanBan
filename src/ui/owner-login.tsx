@@ -2,6 +2,7 @@
 
 import { startAuthentication } from "@simplewebauthn/browser";
 import {
+  useEffect,
   useRef,
   useState,
   type FormEvent,
@@ -14,12 +15,22 @@ import { VibeIcon } from "@/ui/vibe/vibe-icon";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
 import { VibeVerificationCode } from "@/ui/vibe/vibe-verification-code";
 
-type LoginState = "idle" | "pending" | "failed" | "unavailable";
+type LoginState = "idle" | "pending";
 type LoginMode = "choice" | "recovery-totp";
 
 interface OwnerLoginProps {
   ownerProvisioned: boolean;
   recoveryConfigured: boolean;
+}
+
+function recoveryRetryAt(response: Response): number {
+  const value = response.headers.get("Retry-After");
+  if (value && /^\d+$/.test(value)) {
+    const seconds = Number(value);
+    if (Number.isFinite(seconds)) return Date.now() + seconds * 1000;
+  }
+  const date = value ? Date.parse(value) : NaN;
+  return Number.isFinite(date) ? date : Date.now() + 300_000;
 }
 
 const LOCKED_FLOW_DURATION = "12s";
@@ -345,85 +356,144 @@ export function OwnerLogin({
 }: OwnerLoginProps) {
   const [state, setState] = useState<LoginState>("idle");
   const [mode, setMode] = useState<LoginMode>("choice");
+  const [loginError, setLoginError] = useState("");
+  const [notice, setNotice] = useState("");
+  const authPendingRef = useRef(false);
   const [recoveryError, setRecoveryError] = useState("");
   const [recoveryPending, setRecoveryPending] = useState(false);
-  const [recoveryRateLimited, setRecoveryRateLimited] = useState(false);
+  const [recoveryRetryDeadline, setRecoveryRetryDeadline] = useState<number | null>(null);
+  const recoveryRateLimited = recoveryRetryDeadline !== null;
   const recoveryCodeRef = useRef<HTMLInputElement>(null);
   // 只要存在任一登录方式即为锁定态：允许仅剩 TOTP 时仍能登录与恢复。
   const locked = ownerProvisioned || recoveryConfigured;
 
+  useEffect(() => {
+    if (recoveryRetryDeadline === null) return;
+    const timer = window.setTimeout(() => {
+      setRecoveryRetryDeadline(null);
+      setRecoveryError("");
+      if (mode === "recovery-totp") setNotice("可以重新输入 TOTP 验证码。");
+    }, Math.max(0, recoveryRetryDeadline - Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [recoveryRetryDeadline, mode]);
+
   function showRecoveryTotp() {
+    if (authPendingRef.current) return;
     setState("idle");
-    setRecoveryError("");
-    setRecoveryRateLimited(false);
+    setLoginError("");
+    setNotice("");
+    if (!recoveryRateLimited) setRecoveryError("");
     setMode("recovery-totp");
   }
 
   function returnToLoginChoice() {
-    setRecoveryError("");
-    setRecoveryPending(false);
-    setRecoveryRateLimited(false);
+    if (authPendingRef.current) return;
+    if (!recoveryRateLimited) setRecoveryError("");
+    setNotice("");
     setMode("choice");
   }
 
   async function login() {
+    if (authPendingRef.current) return;
+    setLoginError("");
+    setNotice("");
+    if (typeof window.PublicKeyCredential === "undefined") {
+      setLoginError(`当前浏览器或设备不支持 Passkey，请换用支持 Passkey 的浏览器${recoveryConfigured ? "或使用 TOTP 登录" : "或设备"}。`);
+      return;
+    }
+    authPendingRef.current = true;
     setState("pending");
+    let stage: "options" | "ceremony" | "verify" = "options";
+    let authenticated = false;
     try {
       const optionsResponse = await fetch("/api/auth/login/options", {
         method: "POST",
       });
       if (!optionsResponse.ok) {
-        setState("unavailable");
+        const result = await optionsResponse.json().catch(() => null);
+        setLoginError(result?.error ?? "暂时无法开始 Passkey 登录，请稍后重试。");
         return;
       }
+      const optionsJSON = await optionsResponse.json();
+      stage = "ceremony";
       const assertion = await startAuthentication({
-        optionsJSON: await optionsResponse.json(),
+        optionsJSON,
       });
+      stage = "verify";
       const verifyResponse = await fetch("/api/auth/login/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(assertion),
       });
+      const result = await verifyResponse.json().catch(() => null);
       if (!verifyResponse.ok) {
-        setState("failed");
+        setLoginError(result?.error ?? "Passkey 登录验证未通过，请重试。");
         return;
       }
+      if (result?.ok !== true) {
+        setLoginError("尚未确认登录结果，请重试。");
+        return;
+      }
+      authenticated = true;
       window.location.reload();
-    } catch {
-      setState("failed");
+    } catch (caught) {
+      if (stage === "ceremony") {
+        const cause = caught instanceof Error && caught.cause instanceof Error ? caught.cause : caught;
+        if (cause instanceof Error && ["AbortError", "NotAllowedError"].includes(cause.name)) {
+          setNotice("Passkey 验证未完成，可能已取消或等待超时；可重新发起登录。");
+        } else {
+          setLoginError("设备未能完成 Passkey 验证，请重试或换用支持 Passkey 的浏览器与设备。");
+        }
+      } else {
+        setLoginError(stage === "verify" ? "连接中断，尚未确认登录结果，请检查连接后重试。" : "无法开始 Passkey 登录，请检查连接后重试。");
+      }
+    } finally {
+      if (!authenticated) {
+        authPendingRef.current = false;
+        setState("idle");
+      }
     }
   }
 
   async function verifyRecoveryTotp(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (authPendingRef.current || recoveryRateLimited) return;
+    const data = new FormData(event.currentTarget);
+    authPendingRef.current = true;
     setRecoveryPending(true);
     setRecoveryError("");
+    setNotice("");
+    let authenticated = false;
     try {
-      const data = new FormData(event.currentTarget);
       const response = await fetch("/api/auth/recovery/totp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: data.get("code") }),
       });
+      const result = await response.json().catch(() => null) as { ok?: boolean; error?: string } | null;
       if (!response.ok) {
-        const result = (await response.json().catch(() => null)) as
-          | { error?: string }
-          | null;
         const rateLimited = response.status === 429;
-        setRecoveryRateLimited(rateLimited);
+        if (rateLimited) setRecoveryRetryDeadline(recoveryRetryAt(response));
         setRecoveryError(result?.error ?? "TOTP 验证失败");
-        setRecoveryPending(false);
         if (!rateLimited) {
           window.requestAnimationFrame(() => recoveryCodeRef.current?.focus());
         }
         return;
       }
+      if (result?.ok !== true) {
+        setRecoveryError("尚未确认登录结果，请重试。");
+        return;
+      }
+      authenticated = true;
       window.location.reload();
     } catch {
-      setRecoveryRateLimited(false);
       setRecoveryError("TOTP 验证失败，请检查连接后重试");
-      setRecoveryPending(false);
       window.requestAnimationFrame(() => recoveryCodeRef.current?.focus());
+    } finally {
+      if (!authenticated) {
+        authPendingRef.current = false;
+        setRecoveryPending(false);
+      }
     }
   }
 
@@ -437,14 +507,12 @@ export function OwnerLogin({
       <div className="login-auth-column">
         <h1 id="login-title">资产看板</h1>
         <div className="login-flow" key={locked ? mode : "setup"}>
-          {state === "failed" ? (
+          <div role="status" className={notice ? "login-error" : undefined}>
+            {notice ? <VibeNotice tone="info">{notice}</VibeNotice> : null}
+          </div>
+          {loginError ? (
             <VibeNotice className="login-error" role="alert" tone="error">
-              验证未完成，请重试。
-            </VibeNotice>
-          ) : null}
-          {state === "unavailable" ? (
-            <VibeNotice className="login-error" role="alert" tone="error">
-              登录暂时不可用，请重试。
+              {loginError}
             </VibeNotice>
           ) : null}
           {!locked ? (
@@ -518,7 +586,7 @@ export function OwnerLogin({
                   disabled={recoveryPending || recoveryRateLimited}
                   variant="primary"
                 >
-                  完成 TOTP 登录
+                  {recoveryPending ? "正在验证…" : "完成 TOTP 登录"}
                 </VibeButton>
                 <VibeButton
                   type="button"

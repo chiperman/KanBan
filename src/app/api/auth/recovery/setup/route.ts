@@ -1,6 +1,8 @@
 import { rejectCrossOrigin } from "@/server/auth/request-origin";
+import { timingSafeEqual } from "node:crypto";
 import {
   createTotpSecret,
+  decryptRecoverySecret,
   matchingTotpCounter,
   protectRecoverySecret,
   validateTotpSecret,
@@ -36,10 +38,29 @@ export async function POST(request: Request) {
   }
 
   let secret: string;
+  let body: Record<string, unknown>;
+  try {
+    body = (await request.json()) as Record<string, unknown>;
+    secret = validateTotpSecret(body.secret);
+  } catch {
+    return Response.json({ error: "TOTP 密钥格式无效" }, { status: 400 });
+  }
+
+  // 仅核对此次持有的密钥，不回传已存密钥，也不消费验证码或改写凭证。
+  if (body.action === "check") {
+    const credential = await services.ownerRecoveryCredentials.get();
+    if (credential === null) return Response.json({ ok: true, matches: false });
+    const storedSecret = decryptRecoverySecret(credential);
+    if (storedSecret === null) {
+      return Response.json({ error: "暂时无法核对 TOTP 密钥，请稍后重试。" }, { status: 503 });
+    }
+    const stored = Buffer.from(storedSecret);
+    const candidate = Buffer.from(secret);
+    return Response.json({ ok: true, matches: stored.length === candidate.length && timingSafeEqual(stored, candidate) });
+  }
+
   let counter: string;
   try {
-    const body = (await request.json()) as Record<string, unknown>;
-    secret = validateTotpSecret(body.secret);
     const matched = matchingTotpCounter(secret, body.code, services.clock.now());
     if (matched === null) {
       throw new Error("当前 TOTP 验证码无效");

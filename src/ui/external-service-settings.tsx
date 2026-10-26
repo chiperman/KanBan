@@ -112,12 +112,14 @@ export function ExternalServiceSettings({
     setPending(true);
     setError("");
     try {
-      const response = await fetch("/api/external-services", { cache: "no-store" });
+      const signal = AbortSignal.timeout(15_000);
+      const response = await fetch("/api/external-services", { cache: "no-store", signal });
       if (lockOnUnauthorizedResponse(response)) {
         setError(OWNER_SESSION_EXPIRED_MESSAGE);
         return;
       }
       const result = await readJsonResult<ExternalServiceConfigurationStatus>(response);
+      signal.throwIfAborted();
       if (!response.ok || !result?.coinGecko || !result.ethereumRpc || !result.bscRpc) {
         setError("未能读取服务状态，请重试核对。输入已保留。");
         return;
@@ -125,8 +127,10 @@ export function ExternalServiceSettings({
       setStatus(result);
       setNeedsCheck(false);
       setChecked(true);
-    } catch {
-      setError("网络连接异常，尚未核对服务状态，请重试核对。输入已保留。");
+    } catch (caught) {
+      setError(caught instanceof Error && caught.name === "TimeoutError"
+        ? "核对服务状态超时，请重试核对。输入与上次状态已保留。"
+        : "网络连接异常，尚未核对服务状态，请重试核对。输入已保留。");
     } finally {
       requestLock.current = false;
       setPending(false);
