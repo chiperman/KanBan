@@ -123,6 +123,19 @@ export class SqliteSchemaMigrationStore {
       });
       schemaVersion = "22";
     }
+    if (schemaVersion === "22") {
+      this.transaction(() => {
+        const columns = this.database.prepare("PRAGMA table_info(asset_source_snapshots)")
+          .all() as Array<{ name: string }>;
+        if (!columns.some(column => column.name === "longbridge_valuation_json")) {
+          this.database.exec(`ALTER TABLE asset_source_snapshots
+            ADD COLUMN longbridge_valuation_json TEXT
+            CHECK (longbridge_valuation_json IS NULL OR json_valid(longbridge_valuation_json))`);
+        }
+        this.database.prepare("UPDATE schema_metadata SET value = '23' WHERE key = 'schema_version'").run();
+      });
+      schemaVersion = "23";
+    }
     if (schemaVersion !== String(SQLITE_SCHEMA_VERSION)) {
       throw new Error(`不支持的 SQLite schema 版本: ${schemaVersion}`);
     }

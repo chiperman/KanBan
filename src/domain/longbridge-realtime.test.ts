@@ -61,6 +61,12 @@ function source(): AssetSourceSummary {
         costPrice: "300",
         platformProfit: "200",
         changePercent: "0",
+      }, {
+        symbol: "CASH.USD", name: "账户现金", quantity: "200", currency: "USD", assetClass: "cash",
+        currentPrice: { amount: "1", currency: "USD" }, marketValue: "200",
+        sourceMarketValue: { amount: "200", currency: "USD" },
+        valuation: { status: "valued", priceSource: "Longbridge 账户现金总额", pricedAt: "2026-09-22T01:00:00.000Z" },
+        costPrice: null, platformProfit: null, changePercent: null,
       }],
     },
   };
@@ -78,6 +84,8 @@ test("实时行情只覆盖内存快照并重新计算市值和浮动盈亏", ()
   assert.equal(holding.platformProfit, "300");
   assert.equal(holding.changePercent, "7.1428571428571428");
   assert.equal(updated.snapshot.total.amount, "1100");
+  assert.equal(updated.snapshot.longbridgeValuation?.reportedTotal.amount, "1000");
+  assert.equal(updated.snapshot.longbridgeValuation?.basis, "latest-quotes");
   assert.equal(holding.quoteEvidence?.freshness, "current");
 });
 

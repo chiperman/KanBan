@@ -46,6 +46,7 @@ export class DashboardSchema {
           CHECK (json_valid(unrecognized_evm_tokens_json)),
         exchange_rates_json TEXT NOT NULL CHECK (json_valid(exchange_rates_json)),
         coverage_json TEXT CHECK (coverage_json IS NULL OR json_valid(coverage_json)),
+        longbridge_valuation_json TEXT CHECK (longbridge_valuation_json IS NULL OR json_valid(longbridge_valuation_json)),
         synced_at TEXT NOT NULL
       ) STRICT;
       CREATE TABLE IF NOT EXISTS asset_source_sync_states (

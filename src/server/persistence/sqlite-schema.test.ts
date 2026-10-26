@@ -34,7 +34,7 @@ test("SQLite Schema 首次建表写入当前版本且重复初始化幂等", asy
     createSchema(database);
     assert.equal(
       (database.prepare("SELECT value FROM schema_metadata WHERE key = 'schema_version'").get() as { value: string }).value,
-      "22",
+      "23",
     );
     const tablesBefore = database
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
@@ -61,7 +61,7 @@ test("SQLite Schema 将 19 版迁移到当前版本并拒绝未知版本", async
     createSchema(database);
     assert.equal(
       (database.prepare("SELECT value FROM schema_metadata WHERE key = 'schema_version'").get() as { value: string }).value,
-      "22",
+      "23",
     );
     database.prepare("UPDATE schema_metadata SET value = '999' WHERE key = 'schema_version'").run();
     assert.throws(() => createSchema(database), /不支持的 SQLite schema 版本: 999/);

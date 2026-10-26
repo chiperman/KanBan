@@ -1,11 +1,11 @@
 import {
-  decimalAdd,
   decimalCompare,
   decimalDivide,
   decimalMultiply,
   decimalSubtract,
 } from "@/domain/decimal";
 import { convertCurrencyAmount } from "@/domain/valuation";
+import { revalueLongbridgeSnapshot } from "@/domain/longbridge-valuation";
 import type { AssetQuoteSession, AssetSourceSummary } from "@/server/ports";
 
 export interface LongbridgeRealtimeQuote {
@@ -74,13 +74,6 @@ export function applyLongbridgeRealtimeQuote<T extends Pick<AssetSourceSummary, 
     source.snapshot.total.currency,
     source.snapshot.exchangeRates,
   );
-  const previousSourceMarketValue = current.sourceMarketValue?.amount ?? null;
-  const total = sourceMarketValueAmount === null || previousSourceMarketValue === null
-    ? source.snapshot.total.amount
-    : decimalAdd(
-        source.snapshot.total.amount,
-        decimalSubtract(sourceMarketValueAmount, previousSourceMarketValue),
-      );
   const platformProfit = current.costPrice === null
     ? current.platformProfit
     : decimalMultiply(current.quantity, decimalSubtract(price, current.costPrice));
@@ -121,10 +114,9 @@ export function applyLongbridgeRealtimeQuote<T extends Pick<AssetSourceSummary, 
   holdings[index] = nextHolding;
   return {
     ...source,
-    snapshot: {
-      ...source.snapshot,
-      total: { ...source.snapshot.total, amount: total },
+    snapshot: revalueLongbridgeSnapshot({
+      ...revalueLongbridgeSnapshot(source.snapshot),
       holdings,
-    },
+    }),
   };
 }

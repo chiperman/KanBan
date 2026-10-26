@@ -39,6 +39,7 @@ import {
 } from "@/domain/longbridge-symbols";
 import { assetResponseError, AssetRequestError, hasManagedAssetRetry } from "@/server/asset-sync-diagnostics";
 import { LongbridgeServeMarketData } from "@/server/asset-sources/longbridge-serve-market-data";
+import { revalueLongbridgeSnapshot } from "@/domain/longbridge-valuation";
 
 export { isLongbridgeUsOptionSymbol } from "@/domain/longbridge-symbols";
 
@@ -348,8 +349,7 @@ export function mapLongbridgeSnapshot(input: {
       const price = nativePrice ?? selectedQuote?.price ?? null;
       const currency = text(item.currency, "currency");
       const marketValue =
-        optionalText(item.market_value) ??
-        (price ? multiplyDecimal(quantity, price) : null);
+        price ? multiplyDecimal(quantity, price) : optionalText(item.market_value);
       const sourceAmount =
         marketValue === null
           ? null
@@ -464,15 +464,17 @@ export function mapLongbridgeSnapshot(input: {
       if (right.sourceMarketValue === null) return -1;
       return compareDecimal(right.sourceMarketValue.amount, left.sourceMarketValue.amount);
     });
-  return {
-    total: {
-      amount: text(account.net_assets, "net_assets"),
-      currency: accountCurrency,
-    },
+  const reportedTotal = {
+    amount: text(account.net_assets, "net_assets"),
+    currency: accountCurrency,
+  };
+  return revalueLongbridgeSnapshot({
+    total: reportedTotal,
+    longbridgeValuation: { basis: "reported", reportedTotal, reportedAt: input.syncedAt },
     holdings,
     exchangeRates,
     syncedAt: input.syncedAt,
-  };
+  });
 }
 
 function multiplyDecimal(left: string, right: string): string {
@@ -1017,8 +1019,8 @@ export function snapshotWithQuotes(
   syncedAt: string,
 ): AssetSnapshot {
   const bySymbol = new Map(quotes.map((quote) => [quote.symbol, quote]));
-  return {
-    ...snapshot,
+  return revalueLongbridgeSnapshot({
+    ...revalueLongbridgeSnapshot(snapshot),
     syncedAt,
     holdings: snapshot.holdings.map((holding) => {
       const quote = bySymbol.get(holding.symbol);
@@ -1038,6 +1040,9 @@ export function snapshotWithQuotes(
       }
       const marketValue = multiplyDecimal(holding.quantity, selectedQuote.price);
       const pricedAt = selectedQuote.quotedAt ?? syncedAt;
+      const sourceAmount = convertLongbridgeAmount(
+        marketValue, holding.currency, snapshot.total.currency, snapshot.exchangeRates,
+      );
       return {
         ...holding,
         currentPrice: { amount: selectedQuote.price, currency: holding.currency },
@@ -1045,11 +1050,11 @@ export function snapshotWithQuotes(
         previousClose: { amount: quote.prevClose, currency: holding.currency },
         marketValue,
         sourceMarketValue:
-          holding.currency === snapshot.total.currency
-            ? { amount: marketValue, currency: snapshot.total.currency }
-            : null,
+          sourceAmount === null
+            ? null
+            : { amount: sourceAmount, currency: snapshot.total.currency },
         valuation:
-          holding.currency === snapshot.total.currency
+          sourceAmount !== null
             ? {
               status: "valued" as const,
                 priceSource: "Longbridge 行情",
@@ -1061,7 +1066,7 @@ export function snapshotWithQuotes(
               },
       };
     }),
-  };
+  });
 }
 
 /**
@@ -1075,8 +1080,8 @@ export function snapshotRetainingMissingQuotes(
   const previousBySymbol = new Map(
     previous.holdings.map((holding) => [holding.symbol, holding]),
   );
-  return {
-    ...snapshot,
+  return revalueLongbridgeSnapshot({
+    ...revalueLongbridgeSnapshot(snapshot),
     holdings: snapshot.holdings.map((holding) => {
       if (holding.currentPrice !== null || holding.quoteEvidence !== undefined) {
         return holding;
@@ -1123,7 +1128,7 @@ export function snapshotRetainingMissingQuotes(
               },
       };
     }),
-  };
+  });
 }
 
 /**

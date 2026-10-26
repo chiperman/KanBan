@@ -161,6 +161,13 @@ export interface EvmUnrecognizedToken {
 
 export interface AssetSnapshot {
   total: AssetMoney;
+  /** 长桥当前总额的估值口径；保留账户接口原值及读取时间，价格刷新不覆盖。 */
+  longbridgeValuation?: {
+    basis: "latest-quotes" | "reported";
+    reportedTotal: AssetMoney;
+    /** 旧快照无法证明账户原值读取时间时保留 null。 */
+    reportedAt: string | null;
+  };
   holdings: AssetHolding[];
   /** 仅 EVM 观察钱包使用；不计入来源总额，供所有者决定关注或忽略。 */
   unrecognizedEvmTokens?: EvmUnrecognizedToken[];

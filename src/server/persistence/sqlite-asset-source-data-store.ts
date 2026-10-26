@@ -80,8 +80,9 @@ export class SqliteAssetSourceDataStore {
       .prepare(`
         INSERT OR REPLACE INTO asset_source_snapshots (
           source_id, total_amount, total_currency, holdings_json,
-          unrecognized_evm_tokens_json, exchange_rates_json, coverage_json, synced_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          unrecognized_evm_tokens_json, exchange_rates_json, coverage_json,
+          longbridge_valuation_json, synced_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
       .run(
         source.id,
@@ -93,6 +94,9 @@ export class SqliteAssetSourceDataStore {
         source.snapshot.coverage === undefined
           ? null
           : JSON.stringify(source.snapshot.coverage),
+        source.snapshot.longbridgeValuation === undefined
+          ? null
+          : JSON.stringify(source.snapshot.longbridgeValuation),
         source.snapshot.syncedAt,
       );
     this.database

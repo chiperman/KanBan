@@ -16,7 +16,7 @@ export class SqliteSourceReadStore {
     // 保留全局汇率与注册元数据，但详情查询不解码无关来源持仓。
     const snapshots = this.database.prepare(detailSourceId === undefined
       ? "SELECT * FROM asset_source_snapshots"
-      : "SELECT source_id, total_amount, total_currency, synced_at, exchange_rates_json, CASE WHEN source_id = ? THEN holdings_json ELSE '[]' END AS holdings_json, CASE WHEN source_id = ? THEN unrecognized_evm_tokens_json ELSE '[]' END AS unrecognized_evm_tokens_json, CASE WHEN source_id = ? THEN coverage_json ELSE NULL END AS coverage_json FROM asset_source_snapshots")
+      : "SELECT source_id, total_amount, total_currency, synced_at, exchange_rates_json, longbridge_valuation_json, CASE WHEN source_id = ? THEN holdings_json ELSE '[]' END AS holdings_json, CASE WHEN source_id = ? THEN unrecognized_evm_tokens_json ELSE '[]' END AS unrecognized_evm_tokens_json, CASE WHEN source_id = ? THEN coverage_json ELSE NULL END AS coverage_json FROM asset_source_snapshots")
       .all(...(detailSourceId === undefined ? [] : [detailSourceId, detailSourceId, detailSourceId])) as SqliteRow[];
     const snapshotMap = new Map(snapshots.map((row) => [row.source_id, row]));
     const syncMap = new Map((this.database.prepare("SELECT * FROM asset_source_sync_states").all() as SqliteRow[]).map((row) => [row.source_id, row]));
@@ -65,6 +65,9 @@ export class SqliteSourceReadStore {
             amount: snapshot.total_amount as string,
             currency: snapshot.total_currency as string,
           },
+          ...(snapshot.longbridge_valuation_json == null
+            ? {}
+            : { longbridgeValuation: JSON.parse(snapshot.longbridge_valuation_json as string) }),
           holdings: JSON.parse(snapshot.holdings_json as string),
           ...(unrecognizedEvmTokens.length === 0
             ? {}
