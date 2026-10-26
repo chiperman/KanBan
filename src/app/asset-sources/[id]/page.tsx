@@ -78,6 +78,7 @@ export default async function AssetSourceDetailPage({
             <AssetSourceDetail
               view={query?.view === "manage" ? "manage" : "overview"}
               initialUpdate={query?.action === "update"}
+              checkRecordDay={validDay(query?.checkDay) ? query.checkDay : undefined}
               bookId={books?.members.find(member => member.sourceId === id)?.bookId}
               bookMode={books !== null}
               investmentHistory={"investmentHistory" in detail ? detail.investmentHistory : null}

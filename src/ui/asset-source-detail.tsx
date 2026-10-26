@@ -3,7 +3,7 @@
 import { LongbridgeConnectionSummary } from "@/ui/longbridge-connection-settings";
 
 import { WorkspaceViewNavigation } from "@/ui/workspace-view-navigation";
-import { lazy, Suspense, useMemo, useState, useTransition } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
 import { AssetSourceRefreshButton } from "@/ui/asset-refresh-controls";
@@ -13,7 +13,7 @@ import { type AssetTrendRange } from "@/ui/asset-trend-panel";
 import { SourceInvestmentPerformance } from "@/ui/source-investment-performance";
 import type { SourceInvestmentHistory } from "@/domain/source-investment-history";
 import type { SourceInvestmentRecord } from "@/domain/source-investment-records";
-import { SourceInvestmentRecordDialog, SourceInvestmentRecordDeleteDialog } from "@/ui/source-investment-record-dialog";
+import { ManualAssetRecordCheck, SourceInvestmentRecordDialog, SourceInvestmentRecordDeleteDialog } from "@/ui/source-investment-record-dialog";
 
 import { assetSourceDefaultDisplayName, assetSourceDisplayName } from "@/domain/asset-source-display-name";
 import { defaultManualAssetRecordCurrency } from "@/domain/manual-asset-records";
@@ -68,9 +68,10 @@ async function sourceRequest(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  const result = await readJsonResult<{ error?: string }>(response);
+  const result = await readJsonResult<{ ok?: boolean; error?: string }>(response);
   if (lockOnUnauthorizedResponse(response)) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
   if (!response.ok) throw new Error(result?.error ?? "来源操作失败");
+  if (result?.ok !== true) throw new Error("尚未确认操作结果，请刷新页面核对后再重试。");
 }
 
 function permissionSummary(permissions: AssetPermission[]): string {
@@ -163,20 +164,34 @@ function ManualRecordDeleteDialog({
 function SourceDisplayNameForm({ source }: { source: DetailSource }) {
   const router = useRouter();
   const [displayName, setDisplayName] = useState(source.displayName ?? "");
+  const [savedName, setSavedName] = useState(source.displayName ?? "");
   const [pending, setPending] = useState(false);
+  const [refreshing, startRefresh] = useTransition();
+  const pendingRef = useRef(false);
   const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+  const busy = pending || refreshing;
+
+  useEffect(() => { setSavedName(source.displayName ?? ""); }, [source.displayName]);
 
   async function save() {
+    if (pendingRef.current || busy || displayName.trim() === savedName) return;
+    pendingRef.current = true;
     setPending(true);
     setError("");
+    setSaved(false);
     try {
       await sourceRequest(`/api/asset-sources/${encodeURIComponent(source.id)}`, "PATCH", {
         action: "rename", displayName,
       });
-      router.refresh();
+      setDisplayName(displayName.trim());
+      setSavedName(displayName.trim());
+      setSaved(true);
+      startRefresh(() => router.refresh());
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "保存名称失败");
+      setError(caught instanceof TypeError ? "连接中断，尚未确认名称是否保存，请检查连接后重试。" : caught instanceof Error ? caught.message : "保存名称失败");
     } finally {
+      pendingRef.current = false;
       setPending(false);
     }
   }
@@ -187,22 +202,23 @@ function SourceDisplayNameForm({ source }: { source: DetailSource }) {
         <VibeField
           aria-describedby="source-display-name-hint"
           autoComplete="off"
-          disabled={pending}
+          disabled={busy}
           fieldId="source-display-name"
           label="自定义名称"
-          onChange={(event) => setDisplayName(event.target.value)}
+          onChange={(event) => { setDisplayName(event.target.value); setSaved(false); }}
           placeholder={assetSourceDefaultDisplayName(source)}
           value={displayName}
         />
         <VibeButton
-          disabled={pending || displayName.trim() === (source.displayName ?? "")}
+          disabled={busy || displayName.trim() === savedName}
           type="submit"
           variant="outline"
         >
-          {pending ? "正在保存…" : "保存名称"}
+          {pending ? "正在保存…" : refreshing ? "正在更新…" : "保存名称"}
         </VibeButton>
       </div>
       <p className="trend-note" id="source-display-name-hint">仅修改本看板中的显示名称。清空后恢复默认名称。</p>
+      <div role="status">{saved ? <VibeNotice tone="success">{refreshing ? "名称已保存，正在更新页面…" : "名称已保存。"}</VibeNotice> : null}</div>
       {error ? <VibeNotice role="alert" tone="error">{error}</VibeNotice> : null}
     </form>
   );
@@ -371,6 +387,7 @@ function SourceLifecycleActions({
 export function AssetSourceDetail({
   view = "overview",
   initialUpdate = false,
+  checkRecordDay,
   bookId,
   bookMode = false,
   investmentHistory = null,
@@ -386,6 +403,7 @@ export function AssetSourceDetail({
 }: {
   view?: "overview" | "manage";
   initialUpdate?: boolean;
+  checkRecordDay?: string;
   bookId?: import("@/domain/investment-books").InvestmentBookId;
   bookMode?: boolean;
   investmentHistory?: SourceInvestmentHistory | null;
@@ -484,6 +502,7 @@ export function AssetSourceDetail({
         { href: `/asset-sources/${encodeURIComponent(source.id)}?view=manage&interval=${preset}${customRange ? `&from=${customRange.startDay}&to=${customRange.endDay}` : ""}`, label: "连接与管理" },
       ]} />
       {view === "overview" ? <section aria-label="来源分析" className="asset-source-detail__analysis">
+        {manual && checkRecordDay ? <ManualAssetRecordCheck sourceId={source.id} sourceName={name} day={checkRecordDay} records={source.manualRecords ?? []} /> : null}
         {bookId ? <p className="trend-note">本来源提供资产余额。<VibeLink href={`/performance?book=${bookId}`} variant="text">查看所属账本的本金与收益</VibeLink></p> : null}
         <LongbridgeRealtimeNotice state={realtimeState} retry={retry} sourceId={source.id} />
         <AssetSourceCard
@@ -537,11 +556,11 @@ export function AssetSourceDetail({
                 <dd>{manual ? "手工资产记录" : source.kind.startsWith("evm-watch-") ? "观察钱包" : "自动账户"}</dd>
               </div>
             </dl>
-            <SourceDisplayNameForm key={`${source.id}:${source.displayName ?? ""}`} source={source} />
+            <SourceDisplayNameForm key={source.id} source={source} />
             {manual ? (
               <Suspense fallback={null}>
                 <SourceManualAssetClassForm
-                  key={`${source.id}:${source.manualAssetClass ?? ""}`}
+                  key={source.id}
                   manualAssetClass={source.manualAssetClass ?? null}
                   sourceId={source.id}
                 />
@@ -602,6 +621,7 @@ export function AssetSourceDetail({
 
       {manual && (investmentRecord !== null || editingRecord !== null) ? <SourceInvestmentRecordDialog sourceId={source.id} sourceName={name}
         assetOnly={bookMode}
+        checkBookId={bookId}
         currentDay={currentDay} currency={investmentCurrency} hasOpening={investmentHistory !== null || !!openingRecord}
         defaultCurrency={defaultManualAssetRecordCurrency(source.manualRecords)}
         record={investmentRecord ?? undefined} manualRecord={editingRecord ?? undefined}

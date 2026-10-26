@@ -36,11 +36,11 @@ export type AssetTrendRange = AssetTrendRangeSelection & {
   pending?: boolean;
 };
 
-export function useAssetTrendRange(): AssetTrendRangeSelection {
+export function useAssetTrendRange(initialSelection?: Pick<AssetTrendRangeSelection, "preset" | "customRange">): AssetTrendRangeSelection {
   const [selection, setSelection] = useState<{
     preset: InvestmentPerformanceIntervalPreset;
     customRange: InvestmentPerformanceCustomRange | null;
-  }>({ preset: "all", customRange: null });
+  }>(initialSelection ?? { preset: "all", customRange: null });
   return {
     ...selection,
     onChange: (preset, customRange) => setSelection({ preset, customRange }),

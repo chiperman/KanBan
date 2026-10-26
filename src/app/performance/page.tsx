@@ -7,6 +7,7 @@ import { getServices } from "@/server/composition";
 import { readAssetRefreshState } from "@/server/refresh/asset-refresh-state";
 import { assetRefreshRegistration, readProfitColorScheme } from "@/server/workbench-pages";
 import { shanghaiDay } from "@/domain/daily-asset-snapshots";
+import { parseManualAssetRecordDay } from "@/domain/manual-asset-records";
 import {
   longbridgeReferenceRates,
 } from "@/domain/investment-performance";
@@ -47,6 +48,12 @@ export default async function PerformancePage({
   ]);
   const query = await searchParams;
   const initialBook = INVESTMENT_BOOKS.find(book => book.id === query?.book)?.id;
+  const initialRecordFilter = query?.recordFilter === "valuations" || query?.recordFilter === "all" ? query.recordFilter : "funds";
+  let initialRecordDay: string | undefined;
+  try {
+    const day = parseManualAssetRecordDay(query?.recordDay);
+    if (day <= shanghaiDay(now)) initialRecordDay = day;
+  } catch { /* 无效核对日期沿用全部历史，不据此判断记录缺失。 */ }
   const longbridgeRates = longbridgeReferenceRates(sources);
   const profitColorScheme = await readProfitColorScheme();
 
@@ -61,6 +68,9 @@ export default async function PerformancePage({
               state={books}
               key={initialBook ?? "us-stocks"}
               initialBookId={initialBook}
+              initialRecordFilter={initialRecordFilter}
+              initialRecordDay={initialRecordDay}
+              checkSourceId={typeof query?.recordSource === "string" ? query.recordSource : undefined}
               view={query?.view === "records" || query?.view === "manage" ? "records" : "performance"}
               sources={sources.map(({ credentialReference: _credential, permissions: _permissions, ...source }) => source)}
               observations={trendObservations}
