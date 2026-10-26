@@ -11,6 +11,7 @@
 | [设计契约与规范入口](../DESIGN.md) | 固定上游、项目适配，以及基础、组件与页面规范的阅读入口 |
 | [工具链](operations/toolchain.md) / [脚本索引](../scripts/README.md) | 安装、构建与开发环境约束，以及命令和脚本职责 |
 | [来源接入与读取边界](operations/asset-sources.md) | 接入事务、各来源适配器、估值覆盖与排查入口 |
+| [第三方插件开发](operations/plugin-development.md) | 独立接入模板、协议、打包与分发 |
 | [服务生命周期](operations/service-composition.md) | 服务装配、长桥读取链路与持久化生命周期 |
 | [认证传输](operations/auth-transport.md) | 认证请求的传输约束 |
 | [Agent 规则](../AGENTS.md) | Agent 阅读顺序、领域命名与测试纪律 |

@@ -1,5 +1,8 @@
 import type { DatabaseSync } from "node:sqlite";
 import { normalizeAssetSyncState } from "@/server/asset-sync-diagnostics";
+import { isPersistedAssetSourceKind } from "@/domain/asset-source-kinds";
+import { normalizedSourceBookId, sourceInvestmentBookId } from "@/domain/source-investment-book";
+import { assertPluginSnapshot } from "@/server/asset-source-plugins/snapshot-validation";
 import type { SqliteRow } from "./contracts";
 import type { AssetSourceSummary, ManualAssetClass } from "@/server/ports";
 
@@ -8,13 +11,16 @@ export class SqliteAssetSourceDataStore {
   constructor(private readonly database: DatabaseSync) {}
 
   insert(source: AssetSourceSummary, position: number): void {
+    if (!isPersistedAssetSourceKind(source.kind)) throw new Error("资产来源类型无效");
+    if (source.kind.startsWith("plugin:")) assertPluginSnapshot(source.snapshot);
+    const bookId = normalizedSourceBookId(source);
     this.database
       .prepare(`
         INSERT INTO asset_sources (
           id, position, kind, label, display_name, account_id, permissions_json,
           credential_reference, ignored_asset_keys_json, included_asset_keys_json,
-          has_manual_record, manual_asset_class, lifecycle
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          has_manual_record, manual_asset_class, lifecycle, investment_book_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
       .run(
         source.id,
@@ -30,11 +36,15 @@ export class SqliteAssetSourceDataStore {
         source.kind === "manual" && source.hasManualRecord === false ? 0 : 1,
         source.kind === "manual" ? source.manualAssetClass ?? null : null,
         source.lifecycle ?? null,
+        bookId,
       );
     this.writeDetails(source);
   }
 
   update(source: AssetSourceSummary): void {
+    if (!isPersistedAssetSourceKind(source.kind)) throw new Error("资产来源类型无效");
+    if (source.kind.startsWith("plugin:")) assertPluginSnapshot(source.snapshot);
+    const bookId = normalizedSourceBookId(source);
     const existing = this.database
       .prepare("SELECT id FROM asset_sources WHERE id = ?")
       .get(source.id);
@@ -45,7 +55,7 @@ export class SqliteAssetSourceDataStore {
         SET kind = ?, label = ?, display_name = ?, account_id = ?,
             permissions_json = ?, credential_reference = ?,
             ignored_asset_keys_json = ?, included_asset_keys_json = ?,
-            manual_asset_class = ?, lifecycle = ?
+            manual_asset_class = ?, lifecycle = ?, investment_book_id = ?
         WHERE id = ?
       `)
       .run(
@@ -59,6 +69,7 @@ export class SqliteAssetSourceDataStore {
         JSON.stringify(source.includedAssetKeys ?? []),
         source.kind === "manual" ? source.manualAssetClass ?? null : null,
         source.lifecycle ?? null,
+        bookId,
         source.id,
       );
     this.writeDetails(source);
@@ -135,8 +146,8 @@ export class SqliteAssetSourceDataStore {
       throw new Error("只有手工资产来源可以设置资产类别");
     }
     this.database
-      .prepare("UPDATE asset_sources SET manual_asset_class = ? WHERE id = ?")
-      .run(assetClass, sourceId);
+      .prepare("UPDATE asset_sources SET manual_asset_class = ?, investment_book_id = ? WHERE id = ?")
+      .run(assetClass, sourceInvestmentBookId({ kind: "manual", manualAssetClass: assetClass ?? undefined }), sourceId);
   }
 
   setEvmTokenPreferences(

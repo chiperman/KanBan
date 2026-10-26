@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
-import { getTestServices } from "@/server/composition";
+import { getTestServices } from "@/server/testing/composition";
 import {
   DatabaseAssetSourceConnections,
   SqliteDashboardDatabase,

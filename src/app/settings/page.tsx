@@ -1,3 +1,7 @@
+import { createDemoPluginMarketplaceData } from "@/domain/demo-plugin-marketplace";
+import { AssetRefreshReset } from "@/ui/asset-refresh-provider";
+import { ThemeSwitcher } from "@/ui/theme-switcher";
+import { PluginMarketplace } from "@/ui/plugin-marketplace";
 import { BackgroundCollectionSettings } from "@/ui/background-collection-settings";
 import { WorkspaceViewNavigation } from "@/ui/workspace-view-navigation";
 import { AutomaticDailySettlementSettings } from "@/ui/automatic-daily-settlement-settings";
@@ -37,7 +41,27 @@ export default async function SettingsPage({
   await redirectLoopbackIpToLocalhost("/settings", searchParams);
 
   const query = await searchParams;
-  const view = query?.view === "security" ? "security" : query?.view === "data" ? "data" : "preferences";
+  const view = query?.view === "plugins" ? "plugins" : query?.view === "security" ? "security" : query?.view === "data" ? "data" : "preferences";
+  if (view === "plugins" && query.mode === "demo") {
+    const demo = createDemoPluginMarketplaceData();
+    return (
+      <div className="page page-settings page-demo">
+        <AssetRefreshReset />
+        <a className="skip-link" href="#main-content">跳到主要内容</a>
+        <main className="settings-main settings-main--plugins" id="main-content">
+          <WorkbenchPageHeader
+            title="插件"
+            actions={<>
+              <VibeLink href="/?mode=demo" variant="outline">返回演示总览</VibeLink>
+              <VibeLink href="/" variant="outline">退出演示</VibeLink>
+              <ThemeSwitcher persist={false} showLabel />
+            </>}
+          />
+          <PluginMarketplace demoMode initialStatus={demo.status} initialCatalog={demo.catalog} />
+        </main>
+      </div>
+    );
+  }
   const services = getServices();
   if ((await services.auth.currentSession()) === null) redirect("/");
   const [ownerCredential, recoveryCredential, initialProfitColorScheme] = await Promise.all([
@@ -72,6 +96,7 @@ export default async function SettingsPage({
               { href: "/settings", label: "偏好" },
               { href: "/settings?view=security", label: "安全" },
               { href: "/settings?view=data", label: "数据与维护" },
+              { href: "/settings?view=plugins", label: "插件" },
             ]} />
             {view === "preferences" ? <>
             <section
@@ -93,7 +118,7 @@ export default async function SettingsPage({
                 recoveryConfigured={recoveryConfigured}
               />
             </section>
-            </> : <div className="data-maintenance-panel">
+            </> : view === "plugins" ? (services.pluginManagement ? <PluginMarketplace initialStatus={services.pluginManagement.status()} /> : <p>当前运行环境不支持插件管理。</p>) : <div className="data-maintenance-panel">
               <section id="asset-sources" className="data-maintenance-section" aria-labelledby="asset-sources-title">
                 <h2 id="asset-sources-title">资产来源</h2>
                 <div className="settings-sources">

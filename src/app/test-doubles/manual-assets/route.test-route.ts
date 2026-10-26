@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { getTestServices } from "@/server/composition";
+import { getTestServices } from "@/server/testing/composition";
 import type { AssetSourceSummary } from "@/server/ports";
 import { SqliteDashboardDatabase } from "@/server/production";
 import { withTestDirectory } from "@/server/testing/temporary-directory";

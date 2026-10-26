@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getTestServices, resetTestServices, type AppServices } from "./composition";
+import type { AppServices } from "./composition";
+import { getTestServices, resetTestServices } from "./testing/composition";
 import { clearAllSessions, createSession, destroySession, lookupSession, SESSION_COOKIE } from "./auth/session";
 import { SESSION_IDLE_TIMEOUT_MS } from "@/shared/session-policy";
 import { GET } from "@/app/api/asset-sources/stream/route";

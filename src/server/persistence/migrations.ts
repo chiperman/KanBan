@@ -1,11 +1,13 @@
 import { existsSync, readFileSync } from "node:fs";
 
-import { isAssetSourceKind } from "@/domain/asset-source-kinds";
+import { isPersistedAssetSourceKind } from "@/domain/asset-source-kinds";
+import { normalizedSourceBookId } from "@/domain/source-investment-book";
+import { assertPluginSnapshot } from "@/server/asset-source-plugins/snapshot-validation";
 import { shanghaiDay, sourceTrendClassTotals } from "@/domain/daily-asset-snapshots";
 import { decimalAdd, decimalCompare, decimalDivide } from "@/domain/decimal";
 import { normalizeIgnoredAssetKeys } from "@/domain/evm-token-preferences";
 import { parseAssetCards } from "@/server/asset-cards";
-import { isLongbridgeUsOptionSymbol } from "@/server/asset-sources/longbridge";
+import { isLongbridgeUsOptionSymbol } from "@/domain/longbridge-symbols";
 import { normalizeAssetSyncState } from "@/server/asset-sync-diagnostics";
 import type { DashboardState } from "@/server/persistence/contracts";
 import { DASHBOARD_SCHEMA_VERSION } from "@/server/persistence/contracts";
@@ -16,7 +18,7 @@ export function migrateAssetSource(raw: unknown): AssetSourceSummary {
     throw new Error("资产来源数据格式无效");
   }
   const source = raw as Omit<AssetSourceSummary, "kind"> & { kind: unknown };
-  if (!isAssetSourceKind(source.kind)) {
+  if (!isPersistedAssetSourceKind(source.kind)) {
     throw new Error("资产来源类型无效或不受支持");
   }
   if (
@@ -27,6 +29,7 @@ export function migrateAssetSource(raw: unknown): AssetSourceSummary {
     throw new Error("资产来源快照格式无效");
   }
   const snapshot = source.snapshot as AssetSnapshot;
+  if (source.kind.startsWith("plugin:")) assertPluginSnapshot(snapshot);
   const legacySnapshot =
     !Array.isArray(snapshot.exchangeRates) ||
     snapshot.holdings.some(
@@ -136,6 +139,7 @@ export function migrateAssetSource(raw: unknown): AssetSourceSummary {
   return {
     ...source,
     kind: source.kind,
+    investmentBookId: normalizedSourceBookId({ ...source, kind: source.kind }),
     ...(ignoredAssetKeys.length === 0 ? {} : { ignoredAssetKeys }),
     ...(includedAssetKeys.length === 0 ? {} : { includedAssetKeys }),
     ...(source.kind === "manual"

@@ -6,13 +6,8 @@ import {
   decimalSubtract,
 } from "@/domain/decimal";
 import { convertCurrencyAmount } from "@/domain/valuation";
-import type {
-  AssetExchangeRate,
-  AssetSnapshot,
-  InvestmentCashflow,
-  InvestmentCashflowCurrency,
-  InvestmentCashflowInput,
-} from "@/server/ports";
+import type { AssetExchangeRate, AssetSnapshot } from "@/domain/assets";
+import type { InvestmentCashflow, InvestmentCashflowCurrency, InvestmentCashflowInput } from "@/domain/investment-cashflows";
 
 export type InvestmentCashflowRateSource = {
   kind: string;

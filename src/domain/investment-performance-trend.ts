@@ -2,11 +2,7 @@ import { decimalSubtract } from "@/domain/decimal";
 import { assetClassTrendObservation } from "@/domain/daily-asset-snapshots";
 import type { PortfolioObservation } from "@/domain/investment-performance";
 import type { ReportingCurrency } from "@/domain/valuation";
-import type {
-  AssetTrendClass,
-  DailyAssetTrendObservation,
-  ImportedAssetSourceHistoryObservation,
-} from "@/server/ports";
+import type { AssetTrendClass, DailyAssetTrendObservation, ImportedAssetSourceHistoryObservation } from "@/domain/asset-history";
 
 export type InvestmentPerformanceIntervalPreset =
   | "7d"

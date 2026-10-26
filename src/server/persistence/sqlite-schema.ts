@@ -19,6 +19,7 @@ export class DashboardSchema {
         id TEXT PRIMARY KEY,
         position INTEGER NOT NULL UNIQUE,
         kind TEXT NOT NULL,
+        investment_book_id TEXT CHECK (investment_book_id IS NULL OR investment_book_id IN ('us-stocks', 'a-shares', 'crypto')),
         label TEXT NOT NULL,
         display_name TEXT,
         account_id TEXT NOT NULL,

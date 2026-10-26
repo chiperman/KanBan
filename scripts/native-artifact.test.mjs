@@ -7,7 +7,7 @@ import { checkNativeArtifact, writeArtifactManifest } from "./native-artifact.mj
 
 test("原生产物缺失、代码变化和二进制损坏均要求显式重建", () => {
   const root = mkdtempSync(path.join(tmpdir(), "kanban-native-fixture-"));
-  const base = path.join(root, "native/longbridge-keychain-sdk");
+  const base = path.join(root, "plugins/longbridge/native");
   mkdirSync(base, { recursive: true });
   try {
     assert.throws(() => checkNativeArtifact(root, {load:false}), /native:longbridge:build/);

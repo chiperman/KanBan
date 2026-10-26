@@ -21,7 +21,11 @@
     "background:run": "node scripts/run-background.mjs",
     "background:launchd": "node scripts/background-launchd.mjs",
     "runtime:prepare": "node scripts/prepare-runtime.mjs",
-    "runtime:update": "node scripts/update-runtime.mjs"
+    "runtime:update": "node scripts/update-runtime.mjs",
+    "plugins:build": "node scripts/build-source-plugins.mjs",
+    "plugin:build": "node scripts/build-source-plugin.mjs",
+    "plugin": "node --experimental-transform-types --import ./scripts/register-ts-alias.mjs scripts/source-plugin.ts",
+    "plugins:release": "node scripts/release-source-plugins.mjs"
   },
   "dependencies": {
     "@radix-ui/colors": "^3.0.0",

@@ -1,0 +1,22 @@
+{
+  "id": "longbridge",
+  "version": "1.0.0",
+  "protocolVersion": 1,
+  "capabilities": [
+    "assets.read",
+    "authorization.preview",
+    "authorization.revalidate",
+    "extension.call"
+  ],
+  "entry": "plugins/longbridge/src/main.mjs",
+  "description": {
+    "label": "长桥 Longbridge",
+    "fields": [],
+    "previewScope": "账户、持仓、行情（只读）"
+  },
+  "metadata": {
+    "summary": "账户、持仓、行情（只读）",
+    "publisher": "KanBan",
+    "homepage": "https://github.com/chiperman/KanBan"
+  }
+}

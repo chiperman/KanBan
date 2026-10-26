@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
-import { isAssetSourceKind } from "@/domain/asset-source-kinds";
+import { isPersistedAssetSourceKind } from "@/domain/asset-source-kinds";
+import { normalizedSourceBookId } from "@/domain/source-investment-book";
+import { assertPluginSnapshot } from "@/server/asset-source-plugins/snapshot-validation";
 import { parseSourceInvestmentHistory, type SourceInvestmentHistory } from "@/domain/source-investment-history";
 import { parseSourceInvestmentRecordInput, type SourceInvestmentRecord } from "@/domain/source-investment-records";
 import { normalizeAssetSyncState } from "@/server/asset-sync-diagnostics";
@@ -24,8 +26,8 @@ import { convertCurrencyAmount } from "@/domain/valuation";
 import { validateBookLegacyCoverage, validateInvestmentBookState, type InvestmentBookState } from "@/domain/investment-books";
 
 const BACKUP_FORMAT = "personal-asset-dashboard-business-data";
-export const BACKUP_FORMAT_VERSION = 8;
-const SUPPORTED_BACKUP_VERSIONS = new Set([1, 2, 3, 4, 5, 6, 7, BACKUP_FORMAT_VERSION]);
+export const BACKUP_FORMAT_VERSION = 9;
+const SUPPORTED_BACKUP_VERSIONS = new Set([1, 2, 3, 4, 5, 6, 7, 8, BACKUP_FORMAT_VERSION]);
 
 export const SENSITIVE_ASSET_DATA_WARNING =
   "备份仍包含敏感资产数据，请仅存放在受保护的位置。";
@@ -611,7 +613,7 @@ function validateReferences(state: BusinessDataState): void {
   for (const history of state.sourceInvestmentHistories ?? []) {
     parseSourceInvestmentHistory(history);
     const source = state.assetSources.find(row => row.id === history.sourceId);
-    if (!source || (source.kind !== "manual" && source.kind !== "longbridge") || source.label !== history.sourceLabel) {
+    if (!source || source.label !== history.sourceLabel) {
       throw new Error("来源投资历史引用了不存在或身份不匹配的来源");
     }
   }
@@ -793,7 +795,7 @@ function restoredState(document: BackupDocument): BusinessDataState {
     if (!isRecord(source)) throw new Error("资产来源备份格式无效");
     assertString(source.id, "assetSources.id");
     assertString(source.kind, "assetSources.kind");
-    if (!isAssetSourceKind(source.kind)) {
+    if (!isPersistedAssetSourceKind(source.kind)) {
       throw new Error("资产来源类型无效或不受支持");
     }
     assertString(source.label, "assetSources.label");
@@ -803,11 +805,15 @@ function restoredState(document: BackupDocument): BusinessDataState {
       throw new Error("资产来源快照格式无效");
     }
     if (!isRecord(source.sync)) throw new Error("资产来源同步状态格式无效");
+    if (source.kind.startsWith("plugin:")) assertPluginSnapshot(source.snapshot);
+    if (document.formatVersion >= 9 && source.investmentBookId === undefined) throw new Error("来源备份缺少账本归属");
+    const investmentBookId = normalizedSourceBookId(source as unknown as AssetSourceSummary);
     if (source.kind === "manual") {
-      return { ...(source as unknown as Omit<AssetSourceSummary, "credentialReference">), credentialReference: null };
+      return { ...(source as unknown as Omit<AssetSourceSummary, "credentialReference">), investmentBookId, credentialReference: null };
     }
     return {
       ...(source as unknown as Omit<AssetSourceSummary, "credentialReference">),
+      investmentBookId,
       credentialReference: null,
       lifecycle: "disconnected" as const,
       sync: {
@@ -847,7 +853,7 @@ export function encodeBackupDocument(
 ): { contents: string; checksum: string } {
   const assetSources = state.assetSources.map(
     ({ credentialReference: _credentialReference, ...source }) => ({
-      ...source, sync: normalizeAssetSyncState(source.sync),
+      ...source, investmentBookId: normalizedSourceBookId(source), sync: normalizeAssetSyncState(source.sync),
     }),
   );
   const base = {

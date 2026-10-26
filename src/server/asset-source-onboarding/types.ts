@@ -16,6 +16,7 @@ export interface AssetSourceAuthorization {
   snapshot: AssetSnapshot;
   accountMode?: BitgetAccountMode;
   scopeFingerprint?: string;
+  investmentBookId?: import("@/domain/investment-books").InvestmentBookId | null;
 }
 
 export interface AssetSourceOnboardingPreview {

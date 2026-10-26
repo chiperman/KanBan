@@ -30,12 +30,12 @@ export class AssetSourceOnboarding {
   private readonly previews: AssetSourcePreviewStore;
 
   constructor(
-    adapters: AssetSourceProviderAdapter[],
+    private readonly adapterInput: AssetSourceProviderAdapter[] | (() => AssetSourceProviderAdapter[]),
     now: () => number = Date.now,
     previewTtlMs = 10 * 60_000,
   ) {
     this.previews = new AssetSourcePreviewStore(now, previewTtlMs);
-    for (const adapter of adapters) this.adapters.set(adapter.provider, adapter);
+    if (Array.isArray(adapterInput)) for (const adapter of adapterInput) this.adapters.set(adapter.provider, adapter);
   }
 
   async preview<Input>(
@@ -139,7 +139,8 @@ export class AssetSourceOnboarding {
   }
 
   private adapter(provider: AssetSourceProvider): AssetSourceProviderAdapter {
-    const adapter = this.adapters.get(provider);
+    const adapter = typeof this.adapterInput === "function"
+      ? this.adapterInput().find(a => a.provider === provider) : this.adapters.get(provider);
     if (!adapter) {
       throw new AssetSourceOnboardingError(
         "unsupported-provider",
@@ -162,6 +163,7 @@ export class AssetSourceOnboarding {
       revalidated.provider !== original.provider ||
       revalidated.account.id !== original.account.id ||
       revalidated.accountMode !== original.accountMode ||
+      revalidated.investmentBookId !== original.investmentBookId ||
       revalidatedScope !== originalScope
     ) {
       throw new AssetSourceOnboardingError(

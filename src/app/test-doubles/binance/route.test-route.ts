@@ -1,4 +1,4 @@
-import { getTestServices } from "@/server/composition";
+import { getTestServices } from "@/server/testing/composition";
 import type { Card } from "@/server/ports";
 import { BINANCE_OBSERVED_AT, BINANCE_USDT_USD_QUOTE } from "@/server/testing/binance-fixtures";
 import { testGuard } from "@/server/testing/route-support";

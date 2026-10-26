@@ -5,7 +5,7 @@ import {
   sourceTrendClassTotals,
 } from "@/domain/daily-asset-snapshots";
 import { buildSnapshotFromPositions } from "@/domain/valuation";
-import { getTestServices } from "@/server/composition";
+import { getTestServices } from "@/server/testing/composition";
 import type { AssetSourceSummary, Card } from "@/server/ports";
 import { SqliteDashboardDatabase } from "@/server/production";
 import {

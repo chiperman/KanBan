@@ -1,4 +1,5 @@
 import { shanghaiDay, sourceTrendClassTotals } from "@/domain/daily-asset-snapshots";
+import { sourceInvestmentBookId } from "@/domain/source-investment-book";
 import type { SqliteRow } from "@/server/persistence/contracts";
 import { SQLITE_SCHEMA_VERSION } from "@/server/persistence/contracts";
 import type { DailyAssetSourceSnapshot, ManualAssetClass } from "@/server/ports";
@@ -135,6 +136,10 @@ export class SqliteSchemaMigrationStore {
         this.database.prepare("UPDATE schema_metadata SET value = '23' WHERE key = 'schema_version'").run();
       });
       schemaVersion = "23";
+    }
+    if (schemaVersion === "23") {
+      this.migrateSchemaVersionTwentyThree();
+      schemaVersion = "24";
     }
     if (schemaVersion !== String(SQLITE_SCHEMA_VERSION)) {
       throw new Error(`不支持的 SQLite schema 版本: ${schemaVersion}`);
@@ -551,6 +556,36 @@ export class SqliteSchemaMigrationStore {
       this.database
         .prepare("UPDATE schema_metadata SET value = ? WHERE key = ?")
         .run("18", "schema_version");
+    });
+  }
+
+  private migrateSchemaVersionTwentyThree(): void {
+    this.transaction(() => {
+      // Earlier plugin previews used v22 for investment_book_id before primary added source scopes.
+      const trendColumns = this.database.prepare("PRAGMA table_info(daily_asset_trend_observations)").all();
+      if (!trendColumns.some(column => column.name === "source_scope_json")) {
+        this.database.exec(`ALTER TABLE daily_asset_trend_observations
+          ADD COLUMN source_scope_json TEXT CHECK (source_scope_json IS NULL OR json_valid(source_scope_json))`);
+        this.database.exec(`UPDATE daily_asset_trend_observations AS observation
+          SET source_scope_json = (SELECT json_group_array(id) FROM (
+            SELECT id FROM asset_sources WHERE kind != 'manual' OR has_manual_record = 1
+              OR EXISTS (SELECT 1 FROM manual_asset_records WHERE source_id = asset_sources.id)
+            UNION SELECT source_id FROM daily_asset_source_trend_observations WHERE day = observation.day
+            ORDER BY 1
+          )) WHERE source_scope_json IS NULL`);
+      }
+      const columns = this.database.prepare("PRAGMA table_info(asset_sources)").all();
+      // createSchema may already have created the current table in an empty legacy database.
+      if (!columns.some(column => column.name === "investment_book_id")) {
+        this.database.exec("ALTER TABLE asset_sources ADD COLUMN investment_book_id TEXT CHECK (investment_book_id IS NULL OR investment_book_id IN ('us-stocks', 'a-shares', 'crypto'))");
+        const rows = this.database.prepare("SELECT id, kind, manual_asset_class FROM asset_sources").all();
+        const update = this.database.prepare("UPDATE asset_sources SET investment_book_id = ? WHERE id = ?");
+        for (const row of rows) update.run(sourceInvestmentBookId({
+          kind: row.kind as string,
+          manualAssetClass: row.manual_asset_class as ManualAssetClass | undefined,
+        }), row.id);
+      }
+      this.database.prepare("UPDATE schema_metadata SET value = '24' WHERE key = 'schema_version'").run();
     });
   }
 }

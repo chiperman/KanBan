@@ -1,5 +1,5 @@
-/** 业务来源与测试夹具共用的受支持来源类型。 */
-export type AssetSourceKind =
+/** 保留既有来源身份；新来源使用稳定的 plugin: 命名空间。 */
+export type BuiltinAssetSourceKind =
   | "longbridge"
   | "binance"
   | "okx"
@@ -8,6 +8,8 @@ export type AssetSourceKind =
   | "evm-watch-ethereum"
   | "evm-watch-bsc"
   | "manual";
+
+export type AssetSourceKind = BuiltinAssetSourceKind | `plugin:${string}`;
 
 export interface AssetSourceKindMetadata {
   code: string;
@@ -18,7 +20,7 @@ export interface AssetSourceKindMetadata {
   title: string;
 }
 
-const SOURCE_KIND_METADATA: Record<AssetSourceKind, AssetSourceKindMetadata> = {
+const SOURCE_KIND_METADATA: Record<BuiltinAssetSourceKind, AssetSourceKindMetadata> = {
   longbridge: {
     code: "LB",
     isManual: false,
@@ -91,8 +93,14 @@ export function assetSourceKindMetadata(
   return isAssetSourceKind(kind) ? SOURCE_KIND_METADATA[kind] : null;
 }
 
-export function isAssetSourceKind(kind: unknown): kind is AssetSourceKind {
+export function isAssetSourceKind(kind: unknown): kind is BuiltinAssetSourceKind {
   return typeof kind === "string" && Object.hasOwn(SOURCE_KIND_METADATA, kind);
+}
+
+/** 数据身份校验不依赖插件是否安装；不接受路径、原型属性或任意未知平台名。 */
+export function isPersistedAssetSourceKind(kind: unknown): kind is AssetSourceKind {
+  return isAssetSourceKind(kind) || (typeof kind === "string" && kind.length <= 128 &&
+    /^plugin:[a-z0-9]+(?:[._-][a-z0-9]+)*$/.test(kind));
 }
 
 export function isEvmWatchSourceKind(kind: string): boolean {

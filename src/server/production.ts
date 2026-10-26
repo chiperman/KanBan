@@ -1,3 +1,6 @@
+import { longbridgePluginClient } from "@/server/asset-source-plugins/longbridge-client";
+import { pluginReferencePrices, pluginConfigurationVerifier } from "@/server/asset-source-plugins/service-client";
+import { PluginDistribution } from "@/server/asset-source-plugins/distribution";
 import { BackgroundAssetCollection } from "@/server/background-collection";
 import { SystemClock } from "@/server/clock";
 import { ObservedFormalSettlementRunner } from "@/server/settlement/formal-settlement-execution";
@@ -7,22 +10,17 @@ import { LongbridgeDailyAssets } from "@/server/asset-sources/longbridge-daily-a
 import { existsSync } from "node:fs";
 
 import { AssetSourceOnboarding } from "@/server/asset-source-onboarding";
-import { createAssetSourceProviderAdapters } from "@/server/asset-source-provider-adapters";
-import { CoinGeckoUsdtUsdPrices, ProductionBinanceReadOnly, ProductionBinanceSourceRefresher, } from "@/server/asset-sources/binance";
-import { ProductionBitReadOnly, ProductionBitSourceRefresher, } from "@/server/asset-sources/bit";
-import { ProductionBitgetReadOnly, ProductionBitgetSourceRefresher, } from "@/server/asset-sources/bitget";
-import { ProductionEvmWatchSourceRefresher, ProductionEvmWatchWallet, } from "@/server/asset-sources/ethereum";
-import { LongbridgeOAuthState } from "@/server/asset-sources/longbridge";
-import { ProductionOkxReadOnly, ProductionOkxSourceRefresher, } from "@/server/asset-sources/okx";
-import { LongbridgeConnections } from "@/server/asset-sources/longbridge-connections";
-import { RoutedAssetSourceRefresher } from "@/server/asset-sources/router";
+import { pluginPackageLoader, pluginRoot } from "@/server/asset-source-plugins/registry";
+import { stdioAssetSourcePlugin } from "@/server/asset-source-plugins/stdio-host";
+import { LongbridgeOAuthState } from "@/server/asset-source-plugins/oauth-state";
+import { AssetSourcePluginManager } from "@/server/asset-source-plugins/manager";
 import { SourceIsolatedAssetSynchronization } from "@/server/refresh/asset-synchronization";
 import { SessionOwnerAuth } from "@/server/auth/session-auth";
 import { CredentialFreeBusinessDataBackup } from "@/server/backup/business-data-backup";
 import type { ProductionAppServices } from "@/server/app-services";
 import { FileOwnerCredentialStore, FileOwnerRecoveryCredentialStore } from "@/server/credentials/owner-store";
 import { FileEncryptedSecretStore, ReadySecretStore } from "@/server/credentials/secret-store";
-import { FileExternalServiceConfiguration } from "@/server/external-service-configuration";
+import { FileExternalServiceConfiguration } from "@/server/credentials/external-service-store";
 import { MarketCloseFormalDailySettlement, ReadOnlyFormalSettlementSourceCapture, } from "@/server/settlement/formal-daily-settlement";
 import { InvestmentCashflowLedger } from "@/server/investment-cashflows";
 import { hardenLocalDataPermissions } from "@/server/local-data-permissions";
@@ -73,20 +71,18 @@ export function createProductionServices(
   const dailyAssetSnapshots = new DatabaseDailyAssetSnapshots(database);
   const fullRefreshState = new DatabaseAssetFullRefreshState(database);
   const readySecrets = new ReadySecretStore(secrets, secretRecovery);
+  const packages = pluginPackageLoader(pluginRoot(dataDir));
+  const pluginManagement = new PluginDistribution(pluginRoot(dataDir));
   const externalServices: ExternalServiceConfiguration =
     new FileExternalServiceConfiguration(
       path.join(dataDir, "external-services.json"),
       readySecrets,
+      pluginConfigurationVerifier(packages),
     );
-  const prices = new CoinGeckoUsdtUsdPrices(externalServices);
-  const evmRefresher = new ProductionEvmWatchSourceRefresher(externalServices);
-  const longbridge = new LongbridgeConnections(database);
+  const prices = pluginReferencePrices(packages, externalServices);
+  const longbridgeRuntime = longbridgePluginClient(() => packages().find(p => p.manifest.id === "longbridge"), database);
+  const longbridge = longbridgeRuntime.client;
   const longbridgeDailyAssets = new LongbridgeDailyAssets(database, dataDir, clock, longbridge.readDailyAsset.bind(longbridge));
-  const binance = new ProductionBinanceReadOnly(prices);
-  const okx = new ProductionOkxReadOnly(prices);
-  const bitget = new ProductionBitgetReadOnly(prices);
-  const bit = new ProductionBitReadOnly(prices);
-  const evm = new ProductionEvmWatchWallet(externalServices);
   const assetSourceConnections = new DatabaseAssetSourceConnections(
     database,
     secrets,
@@ -94,27 +90,16 @@ export function createProductionServices(
     clock,
     fullRefreshState,
   );
+  const sourceRefresher = new AssetSourcePluginManager(() => {
+    const longbridgePlugin = longbridgeRuntime.plugin;
+    return [
+    ...(longbridgePlugin ? [longbridgePlugin] : []),
+    ...packages().filter(p => p.manifest.id !== "longbridge" && p.manifest.capabilities.includes("assets.read"))
+      .map(pkg => stdioAssetSourcePlugin(pkg, prices, externalServices)),
+  ]; });
   const assetSourceOnboarding = new AssetSourceOnboarding(
-    createAssetSourceProviderAdapters({
-      longbridge,
-      longbridgeConnections: longbridge,
-      binance,
-      okx,
-      bitget,
-      bit,
-      evm,
-      connections: assetSourceConnections,
-    }),
+    () => sourceRefresher.providerAdapters(assetSourceConnections.connectPlugin.bind(assetSourceConnections)),
   );
-  const sourceRefresher = new RoutedAssetSourceRefresher({
-    longbridge,
-    binance: new ProductionBinanceSourceRefresher(prices),
-    okx: new ProductionOkxSourceRefresher(prices),
-    bitget: new ProductionBitgetSourceRefresher(prices),
-    bit: new ProductionBitSourceRefresher(prices),
-    "evm-watch-ethereum": evmRefresher,
-    "evm-watch-bsc": evmRefresher,
-  });
   const formalDailySettlements = new DatabaseFormalDailySettlements(database);
   const formalSettlementExecutions = new DatabaseFormalSettlementExecutions(database);
   const assetSynchronization = new SourceIsolatedAssetSynchronization(
@@ -162,13 +147,10 @@ export function createProductionServices(
     longbridgeBenchmarkCandlesticks: longbridge.benchmarkCandlesticks,
     longbridgeHoldingCandlesticks: longbridge.holdingCandlesticks,
     longbridgeOAuthState: new LongbridgeOAuthState(),
-    binance,
-    okx,
-    bitget,
-    bit,
-    evm,
     assetSourceConnections,
     assetSourceOnboarding,
+    assetSourcePlugins: sourceRefresher,
+    pluginManagement,
     businessDataBackups: new CredentialFreeBusinessDataBackup(
       database,
       path.join(dataDir, "backups"),

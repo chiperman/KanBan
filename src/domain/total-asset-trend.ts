@@ -2,12 +2,9 @@ import { decimalAdd, decimalCompare } from "@/domain/decimal";
 import { hasManualAssetRecord } from "@/domain/manual-asset-records";
 import type { BookMember } from "@/domain/investment-books";
 import { convertCurrencyAmount } from "@/domain/valuation";
-import type {
-  AssetSourceSummary,
-  DailyAssetTrendObservation,
-  ImportedAssetSourceHistoryObservation,
-  ManualAssetRecord,
-} from "@/server/ports";
+import type { AssetSourceSummary } from "@/domain/asset-sources";
+import type { DailyAssetTrendObservation, ImportedAssetSourceHistoryObservation } from "@/domain/asset-history";
+import type { ManualAssetRecord } from "@/domain/manual-asset-records";
 
 type TrendSource = Pick<AssetSourceSummary,
   "id" | "kind" | "label" | "hasManualRecord" | "lifecycle"

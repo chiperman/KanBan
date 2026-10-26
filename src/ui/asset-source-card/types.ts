@@ -6,10 +6,12 @@ import type {
   ManualAssetRecord,
 } from "@/server/ports";
 import type { ReportingCurrency } from "@/domain/valuation";
+import type { InvestmentBookId } from "@/domain/investment-books";
 
 export interface AssetSourceView {
   id: string;
   kind: AssetSourceKind;
+  investmentBookId?: InvestmentBookId | null;
   label: string;
   displayName?: string;
   accountId: string;

@@ -62,6 +62,9 @@ export default async function AssetDashboardPage({
               <LocalClock initialTime={now.toISOString()} compact />
             </div>
             <div className="page-header__actions" aria-label="页面操作">
+              <VibeLink href="/settings?view=plugins&mode=demo" variant="outline">
+                插件
+              </VibeLink>
               <VibeLink
                 aria-label="退出演示模式"
                 className="header-demo-link"
@@ -130,7 +133,7 @@ export default async function AssetDashboardPage({
     services.assetSources.list(),
     services.investmentCashflows.list(),
     services.dailyAssetSnapshots.listTrendObservations(),
-    services.investmentBooks?.readInvestmentBooks() ?? null,
+    services.investmentBooks.readInvestmentBooks(),
     services.manualAssetRecords.list(),
     services.dailyAssetSnapshots.listImportedSourceHistoryObservations(),
     readAssetRefreshState(services),

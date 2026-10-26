@@ -36,7 +36,7 @@ import {
   settlementMarketForSymbol,
 } from "@/domain/formal-settlement-schedule";
 import { isLongbridgeExternalReference } from "@/server/asset-sources/longbridge-connection";
-import { LongbridgeTradingCalendar } from "@/server/asset-sources/longbridge-trading-calendar";
+import { AssetSourcePluginUnavailableError } from "@/server/asset-sync-diagnostics";
 
 const FORMAL_SETTLEMENT_CAPTURE_WINDOW_MS = 2 * 60 * 60_000;
 
@@ -256,6 +256,7 @@ export class ReadOnlyFormalSettlementSourceCapture
     source: AssetSourceSummary;
     attemptedAt: string;
   }): Promise<AssetSnapshot> {
+    this.refresher.assertAvailable?.(input.source);
     const isPublicWatchWallet = input.source.kind.startsWith("evm-watch-");
     if (input.source.credentialReference === null && !isPublicWatchWallet) {
       throw new Error("只读凭证不可用");
@@ -333,7 +334,7 @@ export class MarketCloseFormalDailySettlement
     private readonly sourceCapture: FormalSettlementSourceCapture,
     private readonly candleReader: FormalSettlementCandleReader,
     private readonly captureWindowMs = FORMAL_SETTLEMENT_CAPTURE_WINDOW_MS,
-    private readonly calendar: FormalSettlementTradingCalendar = new LongbridgeTradingCalendar(),
+    private readonly calendar: FormalSettlementTradingCalendar = { readTradingDays: async () => { throw new AssetSourcePluginUnavailableError(); } },
   ) {}
 
   async run(): Promise<FormalSettlementRunResult> {

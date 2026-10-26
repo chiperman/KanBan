@@ -45,7 +45,7 @@
 | [design-tokens.css](src/app/design-tokens.css) | 运行时 Token、明暗主题与字体加载 |
 | [vibe-components.css](src/app/vibe-components.css) | 可复用组件视觉配方 |
 | [src/ui/vibe/](src/ui/vibe/) | 产品页面消费的 React 接口 |
-| [product-layout.css](src/app/product-layout.css) | 产品布局、密度与交互适配 |
+| [product-layout.css](src/app/product-layout.css) / [product-layout/](src/app/product-layout/) | 产品样式有序入口与分区文件，负责布局、密度与交互适配；保留入口顺序，不按选择器重排历史覆盖层 |
 | [globals.css](src/app/globals.css) | 遗留层；新样式不写入此处 |
 | [layout.tsx](src/app/layout.tsx) | 样式加载顺序与全局装配 |
 

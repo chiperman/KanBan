@@ -1,3 +1,4 @@
+import { sourceAuthorizationProvider } from "@/server/asset-source-plugins/provider-id";
 import type { AssetSourceProviderId } from "@/domain/asset-source-providers";
 import type { BitgetAccountMode } from "@/server/ports";
 import { parseConnectionInput } from "@/server/asset-sources/longbridge-connection";
@@ -108,27 +109,18 @@ const INPUT_PARSERS: Record<
   bsc: (body) => parseEvmInput("bsc", body),
 };
 
-const KIND_PROVIDER_IDS: Record<string, AssetSourceProviderId> = {
-  longbridge: "longbridge",
-  binance: "binance",
-  okx: "okx",
-  bitget: "bitget",
-  bit: "bit",
-  "evm-watch-ethereum": "ethereum",
-  "evm-watch-bsc": "bsc",
-};
-
-export function assetSourceProviderForKind(
-  kind: string,
-): AssetSourceProviderId | null {
-  return Object.hasOwn(KIND_PROVIDER_IDS, kind) ? KIND_PROVIDER_IDS[kind] : null;
-}
+export const assetSourceProviderForKind = sourceAuthorizationProvider;
 
 export function parseAssetSourceAuthorizationInput(
   provider: AssetSourceProviderId,
   body: unknown,
 ): AssetSourceAuthorizationInput | null {
-  return INPUT_PARSERS[provider](body);
+  if (provider.startsWith("plugin:")) {
+    return body !== null && typeof body === "object" && !Array.isArray(body)
+      ? { ...body as Record<string, unknown>, provider } as AssetSourceAuthorizationInput
+      : null;
+  }
+  return INPUT_PARSERS[provider]?.(body) ?? null;
 }
 
 export function parseAssetSourceReauthorizationInput(

@@ -56,6 +56,8 @@ export interface AssetSourceRefreshResult {
 
 /** 外部来源读取的可替换 seam；凭证持久化只能由协调器的回调完成。 */
 export interface AssetSourceRefresher {
+  /** 执行前检查运行能力；必须早于凭证读取，缺插件不触发供应商调用。 */
+  assertAvailable?(source: AssetSourceSummary): void;
   refresh(input: {
     source: AssetSourceSummary;
     credentials: string;

@@ -1,6 +1,6 @@
 # 当前能力与源码导航
 
-源码导航复核日期：2026-10-19；页面分区、导航与三本投资账的职责入口已随本次实现更新。验证结果以本次交付说明或获授权的提交正文为准，不继承旧基线验收。阅读顺序与文档效力见 [文档入口](README.md)。
+源码导航复核日期：2026-10-26；页面分区、导航与三本投资账的职责入口已随本次实现更新。验证结果以本次交付说明或获授权的提交正文为准，不继承旧基线验收。阅读顺序与文档效力见 [文档入口](README.md)。
 
 本项目是本地优先、单所有者、只读的个人资产看板。产品边界、金额、本金、来源账本与历史口径以 [CONTEXT](../CONTEXT.md) 和 [有效 ADR](adr/README.md) 为准，本文只维护职责摘要与源码导航；完整目录分工见 [项目结构](../README.md#目录职责)，工程命令见 [脚本索引](../scripts/README.md)。
 
@@ -12,20 +12,21 @@
 | `/assets` 资产 | 展示持仓，标题区提供“新增来源”；持仓中的来源名称进入详情，来源筛选包含无持仓、手工、总览已隐藏和已断开的来源，选定后提供详情入口；旧 `?view=sources#asset-sources` 跳转设置中的资产来源 | [页面](../src/app/assets/page.tsx) / [AssetsHoldingsWorkspace](../src/ui/assets-holdings-workspace.tsx) |
 | `/performance` 投资账本 | 美股、A股、虚拟货币三本账；分“收益表现 / 记账记录”，全部日期显示累计表现，其他日期显示区间统计；同一本账切换视角保留日期范围；记账记录默认出入金，承载历史导入与生效记录维护，入金行附带截至本笔的累计净投入；待确认来源范围与旧资金核对始终保留；记录支持类型和日期筛选、每页 20 条分页及指定页跳转；A股更新资产，美股与虚拟货币沿用自动同步 | [页面](../src/app/performance/page.tsx) / [InvestmentBooksWorkspace](../src/ui/investment-books-workspace.tsx) |
 | `/asset-sources` 兼容入口 | 认证后跳转 `/settings?view=data#asset-sources` | [页面](../src/app/asset-sources/page.tsx) |
-| `/asset-sources/[id]` 来源详情 | 以来源真实名称为标题；“资产概况”展示来源余额、趋势并进入所属投资账，“连接与管理”维护名称、类别、授权及生命周期；手工来源可更新资产总额，资金统一在三本账维护 | [页面](../src/app/asset-sources/[id]/page.tsx) / [AssetSourceDetail](../src/ui/asset-source-detail.tsx) / [资产更新表单](../src/ui/source-investment-record-dialog.tsx) / [手工类别表单](../src/ui/source-manual-asset-class-form.tsx) |
-| `/settings` 设置 | 分“偏好 / 安全 / 数据与维护”；数据与维护按资产来源、自动采集与日结、数据检查、行情与链上服务、备份与恢复组成纵向设置面板；资产来源列表提供详情入口和接入后的落点 | [页面](../src/app/settings/page.tsx) / [数据检查](../src/ui/data-checks-settings.tsx) / [后台采集状态](../src/ui/background-collection-settings.tsx) |
+| `/asset-sources/[id]` 来源详情 | 以来源真实名称为标题；“资产概况”展示来源余额、趋势并进入所属投资账，“连接与管理”维护名称、类别、授权及生命周期；手工来源可更新资产总额，资金统一在三本账维护 | [页面](../src/app/asset-sources/[id]/page.tsx) / [AssetSourceDetail](../src/ui/asset-source-detail.tsx) / [资产更新表单](../src/ui/manual-asset-record-dialog.tsx) / [手工类别表单](../src/ui/source-manual-asset-class-form.tsx) |
+| `/settings` 设置 | 分“偏好 / 安全 / 数据与维护 / 插件”；插件页浏览、搜索和管理安装，支持从 GitHub 安装及第三方包导入；数据与维护按资产来源、自动采集与日结、数据检查、行情与链上服务、备份与恢复组成纵向设置面板；资产来源列表提供详情入口和接入后的落点 | [页面](../src/app/settings/page.tsx) / [插件页](../src/ui/plugin-marketplace.tsx) / [数据检查](../src/ui/data-checks-settings.tsx) / [后台采集状态](../src/ui/background-collection-settings.tsx) |
 | `/data-health` 兼容入口 | 认证后跳转设置的数据与维护中的历史覆盖区域 | [跳转入口](../src/app/data-health/page.tsx) |
 
 主导航为总览、资产、投资账本；桌面设置位于侧栏底部，手机底栏展示四项。实现以 [WorkbenchShell](../src/ui/workbench-shell.tsx) 为准。正式日结不在首页展示，设置页与后台相关能力仍保留；不能按旧规格把首页日结面板恢复。
 
 ## 其他实现入口
 
-- 锁定与演示入口在 [首页路由](../src/app/page.tsx)。`/?mode=demo` 使用固定虚构数据，路由在进入所有者服务之前处理演示分支。
+- 锁定与演示入口在 [首页路由](../src/app/page.tsx)。`/?mode=demo` 使用固定虚构数据；总览中的“插件”进入 `/settings?view=plugins&mode=demo`，复用插件组件预览虚构版本及安装状态，支持搜索和筛选。两处路由均在进入所有者服务之前处理演示分支，演示不调用插件管理 API。
 - 统一刷新从 [AssetRefreshProvider](../src/ui/asset-refresh-provider.tsx)、[Coordinator](../src/ui/asset-refresh-coordinator.ts) 沿 [刷新接口](../src/app/api/asset-sources/refresh/route.ts) 追踪到 [服务端刷新状态](../src/server/refresh/asset-refresh-state.ts) 和 [SQLite 周期状态](../src/server/persistence/sqlite-refresh-state-store.ts)。客户端共享状态与服务端并发控制需一并核对，不能照历史轮询计划重建刷新逻辑。
-- 各来源适配器、接入事务与覆盖边界见 [来源接入](operations/asset-sources.md)；长桥生产读取与身份绑定见 [服务生命周期](operations/service-composition.md)，安装与启动约束见 [工具链](operations/toolchain.md)。
-- 三本账的归属、历史衔接和旧资金核对见 [ADR-0007](adr/0007-unify-investment-books.md)；计算入口为 [investment-books](../src/domain/investment-books.ts)，持久化与惰性迁移入口为 [SQLite 账本存储](../src/server/persistence/sqlite-investment-book-store.ts)，写入口为 [账本接口](../src/app/api/investment-books/route.ts)。业务备份包含已建立的规范账本及旧原件，单纯导出不触发迁移。
+- 各来源适配器、接入事务与覆盖边界见 [来源接入](operations/asset-sources.md)；全部外部来源与 CoinGecko 已移至 [plugins/](../plugins/) 独立包，安装入口见来源接入文档，通过 [stdio Host](../src/server/asset-source-plugins/stdio-host.ts) 和 [插件管理器](../src/server/asset-source-plugins/manager.ts) 接入。长桥生产读取与身份绑定见 [服务生命周期](operations/service-composition.md)，安装与启动约束见 [工具链](operations/toolchain.md)。
+- 插件安装管理通过 [HTTP 接口](../src/app/api/plugins/route.ts)、[GitHub 查看与安装](../src/app/api/plugins/github/route.ts)、[第三方导入](../src/app/api/plugins/import/route.ts)、[发行目录](../src/server/asset-source-plugins/distribution.ts) 与 [原子安装](../src/server/asset-source-plugins/installation.ts)；浏览目录记录在 [plugins/registry.json](../plugins/registry.json)，由 [目录校验](../src/server/asset-source-plugins/market-registry.ts) 读取，可指向第三方独立 Release。未收录的插件可从公开 GitHub 仓库安装并从原仓库检查更新。开发与上架见 [第三方插件开发](operations/plugin-development.md)。
+- 三本账的归属、历史衔接和旧资金核对见 [ADR-0007](adr/0007-unify-investment-books.md)；计算入口为 [investment-books](../src/domain/investment-books.ts)，迁移、校验和更正共用 [账本服务](../src/server/investment-books.ts)，持久化适配为 [SQLite 账本存储](../src/server/persistence/sqlite-investment-book-store.ts)，写入口为 [账本接口](../src/app/api/investment-books/route.ts)。业务备份包含已建立的规范账本及旧原件，单纯导出不触发迁移。
 - 财务趋势共用 [AssetTrendPanel](../src/ui/asset-trend-panel.tsx) 的区间、自定义日期与图表状态；默认曲线按日期单调平滑，折线以端点圆点收尾。首页、投资账、来源详情默认全部历史，指标与数据口径由各页提供。证券行情 K 线独立，不在此控件范围内。
-- 记账记录、来源持仓明细、手工历史、历史覆盖、来源旧记账记录及旧资金账本共用 [表格分页](../src/ui/vibe/vibe-table-pagination.tsx)，每页 20 条并支持直接跳页；只影响明细展示。资产页的“持仓价格与市值观察”不分页，直接展示全部筛选结果。
+- 记账记录、来源持仓明细、手工历史、历史覆盖及旧资金账本共用 [表格分页](../src/ui/vibe/vibe-table-pagination.tsx)，每页 20 条并支持直接跳页；只影响明细展示。资产页的“持仓价格与市值观察”不分页，直接展示全部筛选结果。
 - 资产持仓表的“持仓浮盈亏”在首屏用已有现价、成本与数量计算；“价格变化”优先使用来源涨跌幅，缺失时用同币种现价与昨收补算，数据不足时不推测。该表首条实时行情及首次补齐参考价时立即显示，后续行情继续合并更新。
 - 视觉规则从 [设计契约与规范入口](../DESIGN.md) 按主题阅读，复用现有 Vibe 组件与 Token，不从旧规格提取字号、字体或页面布局。
 

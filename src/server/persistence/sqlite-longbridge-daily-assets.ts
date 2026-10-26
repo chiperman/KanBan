@@ -1,6 +1,6 @@
 import { shanghaiDay } from "@/domain/daily-asset-snapshots";
 import { dailyAssetAmount, dailyAssetQuery, dailyAssetRecordId, type LongbridgeDailyAsset, type LongbridgeDailyAssetsConfig } from "@/server/asset-sources/longbridge-daily-assets";
-import { sameAccount } from "@/server/asset-sources/longbridge-cli-identity";
+import { sameAccount } from "@/server/asset-sources/longbridge-connection";
 import type { SqliteDashboardComposition } from "./sqlite-database-composition";
 
 const key = (sourceId: string) => `longbridge_daily_assets:${sourceId}`;

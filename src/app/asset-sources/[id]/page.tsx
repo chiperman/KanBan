@@ -45,14 +45,9 @@ export default async function AssetSourceDetailPage({
   const days = rangeDays(effectivePreset, currentDay, undefined, customRange);
   const detailQuery = { sourceId: id, ...(effectivePreset === "all" ? {} : {from: days[0], to: days.at(-1)}) };
   const [detail, fullRefreshState, books] = await Promise.all([
-    services.assetSourceDetails ? services.assetSourceDetails.readSourceDetail(detailQuery) : (async () => {
-      const [sources, manualRecords, allHistory] = await Promise.all([services.assetSources.list(), services.manualAssetRecords.list(), services.dailyAssetSnapshots.listTrendObservations()]);
-      return { sources, manualRecords: manualRecords.filter((record) => record.sourceId === id),
-        firstDay: allHistory.filter((day) => day.sources.some((source) => source.sourceId === id)).map((day) => day.day).sort()[0],
-        history: allHistory.filter((day) => (!detailQuery.from || day.day >= detailQuery.from) && (!detailQuery.to || day.day <= detailQuery.to)).map((day) => ({...day, sources: day.sources.filter((source) => source.sourceId === id)})) };
-    })(),
+    services.assetSourceDetails.readSourceDetail(detailQuery),
     readAssetRefreshState(services),
-    services.investmentBooks?.readInvestmentBooks() ?? null,
+    services.investmentBooks.readInvestmentBooks(),
   ]);
   const { sources, manualRecords, history } = detail;
   const storedSource = sources.find((source) => source.id === id);
@@ -62,7 +57,7 @@ export default async function AssetSourceDetailPage({
   const records = source.kind === "manual"
     ? manualRecords.filter((record) => record.sourceId === source.id)
     : [];
-  const trendHistory = books === null ? null : manualSourceBookAssetHistory({
+  const trendHistory = manualSourceBookAssetHistory({
     state: books, sourceId: id, sources, observations: history, manualRecords, currentDay,
   });
   const reportingExchangeRates = longbridgeReferenceRates(sources);
@@ -79,10 +74,9 @@ export default async function AssetSourceDetailPage({
               view={query?.view === "manage" ? "manage" : "overview"}
               initialUpdate={query?.action === "update"}
               checkRecordDay={validDay(query?.checkDay) ? query.checkDay : undefined}
-              bookId={books?.members.find(member => member.sourceId === id)?.bookId}
-              bookMode={books !== null}
-              investmentHistory={"investmentHistory" in detail ? detail.investmentHistory : null}
-              investmentRecords={"investmentRecords" in detail ? detail.investmentRecords : []}
+              bookId={books.members.find(member => member.sourceId === id)?.bookId}
+              showAssetTrend={source.kind !== "manual" || source.hasManualRecord !== false ||
+                detail.investmentRecords.length > 0 || detail.investmentHistory != null}
               initialPreset={effectivePreset}
               initialCustomRange={customRange}
               firstDay={trendHistory?.records[0]?.day ?? detail.firstDay}

@@ -64,6 +64,7 @@ export class SourceRefreshExecutor {
         try {
           result = await abortableSyncOperation(signal, async () => {
             signal.throwIfAborted();
+            this.refresher.assertAvailable?.(source);
             const credentialReference = source.credentialReference;
             if (credentialReference === null) throw new Error("只读凭证不可用");
             const usesKeychainReference = source.kind === "longbridge" &&

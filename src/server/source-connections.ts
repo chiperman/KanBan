@@ -138,13 +138,7 @@ export class DatabaseAssetSourceConnections implements AssetSourceConnections {
 
   private async connect(
     sourceKind: SourceConnectionKind,
-    result:
-      | LongbridgeAuthorizationResult
-      | BinanceAuthorizationResult
-      | OkxAuthorizationResult
-      | BitgetAuthorizationResult
-      | BitAuthorizationResult
-      | EvmWatchAuthorizationResult,
+    result: SourceAuthorizationResult,
     save: (credentialReference: string, capturedAt: string) => Promise<void>,
   ) {
     await this.ready;
@@ -282,6 +276,14 @@ export class DatabaseAssetSourceConnections implements AssetSourceConnections {
     await this.serialize(() =>
       this.replaceExisting(sourceId, "longbridge", result),
     );
+  }
+
+  connectPlugin(kind: import("@/server/asset-source-plugins/protocol").AssetSourcePluginId, result: import("@/server/asset-source-plugins/protocol").AssetSourcePluginAuthorization, sourceId?: string): Promise<void> {
+    if (sourceId) return this.serialize(() => this.replaceExisting(sourceId, kind, result));
+    return this.connectOrReplace(kind, result, async (reference, capturedAt) => {
+      if (!this.database.connectPlugin) throw new Error("插件连接存储不可用");
+      await this.database.connectPlugin(kind, result, reference, capturedAt);
+    });
   }
 
   connectBinance(result: BinanceAuthorizationResult) {

@@ -2,7 +2,10 @@ import { randomUUID } from "node:crypto";
 
 import type { AssetSourceSummary, BinanceAuthorizationResult, BitAuthorizationResult, BitgetAuthorizationResult, Card, EvmWatchAuthorizationResult, LongbridgeAuthorizationResult, OkxAuthorizationResult } from "@/server/ports";
 
+import type { AssetSourcePluginAuthorization, AssetSourcePluginId } from "@/server/asset-source-plugins/protocol";
+
 export type SourceConnectionKind =
+  | AssetSourcePluginId
   | "longbridge"
   | "binance"
   | "okx"
@@ -10,6 +13,7 @@ export type SourceConnectionKind =
   | "bit"
   | "evm";
 export type SourceAuthorizationResult =
+  | AssetSourcePluginAuthorization
   | LongbridgeAuthorizationResult
   | BinanceAuthorizationResult
   | OkxAuthorizationResult
@@ -74,13 +78,14 @@ export function buildConnectedSource(
               body: "公开地址 BNB 与 BEP-20 只读来源",
             } as const;
       })()
-    : SOURCE_CARD_DETAILS[sourceKind];
+    : SOURCE_CARD_DETAILS[sourceKind as keyof typeof SOURCE_CARD_DETAILS] ?? { kind: sourceKind, title: result.account.label, body: "只读资产来源" };
   const sourceId = randomUUID();
   return {
     source: {
       id: sourceId,
       kind: details.kind,
       label: result.account.label,
+      ...("investmentBookId" in result ? { investmentBookId: result.investmentBookId } : {}),
       accountId: result.account.id,
       permissions: result.permissions,
       credentialReference,

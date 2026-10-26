@@ -1,8 +1,4 @@
-import type {
-  FormalSettlementAnchor,
-  MarketTradingDays,
-  SecuritiesMarket,
-} from "@/server/ports";
+import type { FormalSettlementAnchor, MarketTradingDays, SecuritiesMarket } from "@/domain/formal-settlements";
 
 export const SETTLEMENT_MARKET_DETAILS: Record<
   SecuritiesMarket,

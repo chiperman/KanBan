@@ -1,19 +1,14 @@
 import { decimalAdd, decimalCompare } from "@/domain/decimal";
 import { activeSourceHoldings } from "@/domain/evm-token-preferences";
 import { hasManualAssetRecord } from "@/domain/manual-asset-records";
+import { sourceInvestmentBookId } from "@/domain/source-investment-book";
 import {
   buildTotalValuation,
   holdingMakesTotalIncomplete,
   type ReportingCurrency,
 } from "@/domain/valuation";
-import type {
-  AssetSourceSummary,
-  AssetTrendClass,
-  DailyAssetClassTotal,
-  DailyAssetSnapshot,
-  DailyAssetSourceSnapshot,
-  DailyAssetTrendObservation,
-} from "@/server/ports";
+import type { AssetSourceSummary } from "@/domain/asset-sources";
+import type { AssetTrendClass, DailyAssetClassTotal, DailyAssetSnapshot, DailyAssetSourceSnapshot, DailyAssetTrendObservation } from "@/domain/asset-history";
 
 const SHANGHAI_TIME_ZONE = "Asia/Shanghai";
 const ASSET_TREND_CLASSES: readonly AssetTrendClass[] = [
@@ -24,7 +19,7 @@ const ASSET_TREND_CLASSES: readonly AssetTrendClass[] = [
 type SourceTrendClass = AssetTrendClass | "outside" | null;
 // 历史观测保留原始类型文本，不冒充已校验的当前来源。
 type SourceTrendIdentity = Pick<DailyAssetSourceSnapshot, "kind"> &
-  Pick<AssetSourceSummary, "manualAssetClass">;
+  Pick<AssetSourceSummary, "manualAssetClass" | "investmentBookId">;
 
 export function shanghaiDay(value: Date | string): string {
   const date = typeof value === "string" ? new Date(value) : value;
@@ -66,16 +61,9 @@ function sourceValue(
 export function sourceTrendClass(
   source: SourceTrendIdentity,
 ): SourceTrendClass {
-  if (source.kind === "longbridge") return "securities";
-  if (
-    source.kind === "binance" ||
-    source.kind === "bit" ||
-    source.kind === "bitget" ||
-    source.kind === "okx" ||
-    source.kind.startsWith("evm-watch-")
-  ) {
-    return "crypto";
-  }
+  const bookId = sourceInvestmentBookId(source);
+  if (bookId === "us-stocks" || bookId === "a-shares") return "securities";
+  if (bookId === "crypto") return "crypto";
   if (source.kind !== "manual") return null;
   if (
     source.manualAssetClass === "securities" ||

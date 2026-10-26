@@ -6,7 +6,8 @@ import {
 } from "@/domain/decimal";
 import { convertCurrencyAmount } from "@/domain/valuation";
 import { revalueLongbridgeSnapshot } from "@/domain/longbridge-valuation";
-import type { AssetQuoteSession, AssetSourceSummary } from "@/server/ports";
+import type { AssetQuoteSession } from "@/domain/assets";
+import type { AssetSourceSummary } from "@/domain/asset-sources";
 
 export interface LongbridgeRealtimeQuote {
   symbol: string;

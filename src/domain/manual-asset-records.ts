@@ -1,10 +1,22 @@
-import type {
-  AssetSourceSummary,
-  CreateManualAssetSourceInput,
-  ManualAssetClass,
-  ManualAssetRecord,
-  ManualAssetRecordInput,
-} from "@/server/ports";
+import type { AssetSourceSummary } from "@/domain/asset-sources";
+import type { ManualAssetClass } from "@/domain/assets";
+
+export interface ManualAssetRecordInput {
+  /** 按 Asia/Shanghai 解释的自然日，格式 YYYY-MM-DD。 */
+  day: string;
+  amount: string;
+  currency: "USD" | "CNY" | "HKD";
+}
+
+export interface ManualAssetRecord extends ManualAssetRecordInput {
+  sourceId: string;
+  /** 本次新增或编辑的实际保存时间。 */
+  recordedAt: string;
+}
+
+export interface CreateManualAssetSourceInput {
+  label: string;
+}
 
 export class InvalidManualAssetRecordError extends Error {}
 

@@ -1,9 +1,5 @@
-import type {
-  AssetHolding,
-  AssetSnapshotCoverage,
-  AssetSourceSummary,
-  EvmUnrecognizedToken,
-} from "@/server/ports";
+import type { AssetHolding, AssetSnapshotCoverage, EvmUnrecognizedToken } from "@/domain/assets";
+import type { AssetSourceSummary } from "@/domain/asset-sources";
 import { decimalAdd } from "@/domain/decimal";
 
 const EVM_TOKEN_ASSET_KEY_PATTERN =

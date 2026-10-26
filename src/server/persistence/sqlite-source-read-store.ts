@@ -29,6 +29,7 @@ export class SqliteSourceReadStore {
       return withEffectiveEvmSnapshotCoverage(migrateAssetSource({
         id: row.id as string,
         kind: row.kind as string,
+        investmentBookId: row.investment_book_id ?? null,
         label: row.label as string,
         ...(typeof row.display_name === "string"
           ? { displayName: row.display_name }

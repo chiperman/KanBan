@@ -1,20 +1,15 @@
 import { shanghaiDay } from "@/domain/daily-asset-snapshots";
-import type {
-  AssetExchangeRate,
-  AssetHolding,
-  AssetSnapshotCoverage,
-  Card,
-  DailyAssetSourceSnapshot,
-  DailyAssetTrendObservation,
-  ManualAssetRecord,
-} from "@/server/ports";
-import type { AssetSourceView } from "@/ui/longbridge-asset-card";
+import type { AssetExchangeRate, AssetHolding, AssetSnapshotCoverage } from "@/domain/assets";
+import type { Card } from "@/domain/asset-cards";
+import type { DailyAssetSourceSnapshot, DailyAssetTrendObservation } from "@/domain/asset-history";
+import type { ManualAssetRecord } from "@/domain/manual-asset-records";
+import type { AssetSourceSummary } from "@/domain/asset-sources";
 
 const HISTORY_DAY_COUNT = 35;
 const USD_TO_CNY = 7.18;
 const USD_TO_HKD = 7.81;
 
-type DemoSource = AssetSourceView;
+type DemoSource = Omit<AssetSourceSummary, "credentialReference" | "permissions"> & { manualRecords?: ManualAssetRecord[] };
 
 export interface DemoDashboardData {
   cards: Card[];

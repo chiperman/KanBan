@@ -1,0 +1,614 @@
+
+/* Locked home: focused login and interactive computer. */
+
+.page.page-locked {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  width: min(100%, 1440px);
+  min-height: 100dvh;
+  padding: 0 var(--vibe-space-12);
+}
+
+.page-locked .locked-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--vibe-space-6);
+  padding: var(--vibe-space-6) 0;
+  border-bottom: 0;
+}
+
+.locked-logo {
+  display: block;
+  width: var(--vibe-space-10);
+  height: var(--vibe-space-10);
+}
+
+.locked-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--vibe-space-3) var(--vibe-space-6);
+  padding-block: var(--vibe-space-5);
+  color: var(--secondary);
+  font-size: var(--vibe-type-caption);
+}
+
+.locked-footer .header-time {
+  width: auto;
+  margin: 0;
+}
+
+.locked-clock {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--vibe-space-2);
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.locked-clock > span {
+  font-size: var(--vibe-type-caption);
+  letter-spacing: 0.1em;
+}
+
+.locked-clock > strong {
+  color: var(--display);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-title);
+  font-variation-settings: normal;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.theme-toggle {
+
+  display: inline-grid;
+
+  width: var(--vibe-control-height);
+
+  height: var(--vibe-control-height);
+
+  flex: 0 0 var(--vibe-control-height);
+
+  place-items: center;
+  padding: 0;
+}
+
+@media (hover: hover) {
+}
+
+.page-locked .login-main {
+  display: grid;
+  width: min(100%, 1120px);
+  min-height: 0;
+  align-items: center;
+  justify-self: center;
+  padding-block: var(--vibe-space-8) var(--vibe-space-10);
+}
+
+.page-locked .login-gate {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  align-items: center;
+  gap: var(--vibe-space-16);
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  animation: none;
+}
+
+@keyframes login-gate-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-locked .login-gate {
+    animation: none;
+  }
+}
+
+.page-locked .login-auth-column {
+  display: grid;
+  width: min(100%, 320px);
+  min-width: 0;
+  gap: var(--vibe-space-10);
+  padding-block: var(--vibe-space-6);
+}
+
+.page-locked .login-gate h1 {
+  max-width: none;
+  margin: 0;
+  color: var(--display);
+  font-family: var(--f-head);
+  font-size: var(--vibe-type-display-lg);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  line-height: 1.4;
+}
+
+.login-flow {
+  min-width: 0;
+}
+
+.page-locked .login-actions {
+  margin-top: 0;
+}
+
+.page-locked .login-flow > .login-error {
+  margin: 0 0 var(--vibe-space-4);
+}
+
+.page-locked .login-actions--choice,
+.page-locked .first-run-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  gap: var(--vibe-space-3);
+}
+
+.page-locked .login-enter {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  width: 100%;
+  min-height: var(--vibe-space-12);
+  gap: var(--vibe-space-3);
+}
+
+.login-alternatives {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--vibe-space-2) var(--vibe-space-6);
+  margin-top: calc(var(--vibe-space-8) * -1);
+}
+
+.page-locked .login-form {
+  max-width: 100%;
+  margin-top: 0;
+}
+
+.page-locked .login-form > .login-actions {
+  margin-top: var(--vibe-space-6);
+}
+
+.login-visual-stage {
+  display: grid;
+  width: 100%;
+  max-width: 600px;
+  aspect-ratio: 680 / 600;
+  place-items: center;
+  justify-self: end;
+}
+
+.login-product-visual {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
+.locked-product-flow {
+  display: block;
+  width: 100%;
+  height: auto;
+  color: var(--secondary);
+  overflow: visible;
+}
+
+.locked-computer {
+  --computer-body: var(--gray-3);
+  --computer-edge: var(--gray-8);
+  user-select: none;
+}
+
+.locked-computer-fill,
+.locked-computer-cap {
+  fill: var(--computer-body);
+}
+
+.locked-computer-power-rim {
+  fill: var(--gray-5);
+}
+
+.locked-computer-cap,
+.locked-computer-power-rim {
+  stroke: var(--computer-edge);
+  stroke-width: 0.4;
+}
+
+.locked-computer-top {
+  fill: var(--gray-5);
+}
+
+.locked-computer-shade[data-shade="0"] {
+  fill: var(--gray-2);
+}
+
+.locked-computer-shade[data-shade="1"] {
+  fill: var(--gray-3);
+}
+
+.locked-computer-shade[data-shade="2"] {
+  fill: var(--gray-4);
+}
+
+.locked-computer-shade[data-shade="3"] {
+  fill: var(--gray-6);
+}
+
+.locked-computer-solid--dark {
+  --computer-body: var(--line-2);
+}
+
+.locked-computer-edge,
+.locked-computer-bevel,
+.locked-computer-panel-seam {
+  fill: none;
+  stroke: var(--computer-edge);
+  stroke-linejoin: round;
+  stroke-width: 0.65;
+  vector-effect: non-scaling-stroke;
+}
+
+.locked-computer-bevel {
+  stroke: var(--line-2);
+}
+
+.locked-computer-panel-seam {
+  stroke-width: 0.4;
+}
+
+.locked-computer-shadow {
+  fill: var(--primary);
+  opacity: 0.035;
+  filter: blur(12px);
+}
+
+.locked-computer-recess,
+.locked-computer-slot,
+.locked-computer-bezel {
+  fill: var(--line-2);
+  stroke: var(--computer-edge);
+  stroke-width: 0.25;
+}
+
+.locked-computer-drive,
+.locked-computer-glass {
+  fill: var(--bg);
+}
+
+.locked-computer-glass {
+  transition: none;
+}
+
+.login-product-visual[data-powered="false"] .locked-computer-glass {
+  fill: var(--dark-grey);
+}
+
+.locked-computer-crt-wall {
+  fill: var(--line-2);
+}
+
+.locked-computer-crt-wall[data-wall="upper"] {
+  fill: var(--gray-9);
+}
+
+.locked-computer-key-dish {
+  fill: none;
+  stroke: var(--computer-edge);
+  stroke-width: 0.3;
+  pointer-events: none;
+}
+
+.locked-computer-cable {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.locked-computer-cable-edge {
+  stroke: var(--secondary);
+}
+
+.locked-computer-cable-body {
+  stroke: var(--line-2);
+}
+
+.locked-computer-cable-shine {
+  stroke: var(--surface);
+}
+
+.locked-computer-screw {
+  fill: var(--muted);
+}
+
+.locked-computer-power-mark {
+  fill: none;
+  stroke: var(--primary);
+  stroke-linecap: round;
+  stroke-width: 0.55;
+}
+
+.locked-computer-led {
+  fill: var(--success);
+}
+
+.login-product-visual[data-powered="false"] .locked-computer-led {
+  fill: var(--muted);
+}
+
+.locked-computer-reflection {
+  fill: var(--display);
+  opacity: 0.025;
+  pointer-events: none;
+}
+
+.locked-computer-picture {
+  opacity: 1;
+  transform: scaleY(1);
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: none;
+}
+
+.login-product-visual[data-powered="false"] .locked-computer-picture {
+  opacity: 0;
+  transform: scaleY(0.005);
+}
+
+.locked-computer-scanlines {
+  pointer-events: none;
+}
+
+.locked-computer-scanline {
+  fill: var(--primary);
+}
+
+.locked-computer-raster {
+  opacity: 0.1;
+}
+
+.locked-computer-sweep {
+  opacity: 0.16;
+}
+
+.locked-computer-key {
+  transition: none;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
+.locked-computer-key[data-pressed="true"] {
+  transform: translateY(3px);
+  transition-duration: 40ms;
+}
+
+.locked-computer-key-legend {
+  fill: var(--secondary);
+  font-family: var(--f-mono);
+  pointer-events: none;
+}
+
+.locked-computer-power {
+  position: absolute;
+  width: var(--vibe-control-height);
+  height: var(--vibe-control-height);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+  touch-action: manipulation;
+}
+
+.locked-computer-power:focus-visible {
+  outline: 0.5px solid var(--primary);
+  outline-offset: 3px;
+}
+
+.login-product-visual:has(.locked-computer-power:active) .locked-computer-switch {
+  transform: translateY(0.8px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .locked-computer-glass,
+  .locked-computer-picture,
+  .locked-computer-key {
+    transition: none;
+  }
+}
+
+.locked-flow-screen rect {
+  fill: var(--bg);
+  stroke: var(--line-2);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.locked-flow-screen path,
+.locked-flow-screen circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: miter;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.locked-flow-screen .locked-flow-dashboard-point {
+  fill: var(--accent);
+  opacity: 0;
+  stroke: none !important;
+}
+
+.locked-flow-screen .locked-flow-dashboard-point-base {
+  fill: currentColor;
+  stroke: none !important;
+}
+
+.locked-flow-route-runner {
+  fill: currentColor !important;
+  stroke: none !important;
+}
+
+.locked-flow-screen text {
+  fill: currentColor;
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
+  letter-spacing: 0.06em;
+}
+
+.locked-flow-source {
+  color: var(--display);
+  opacity: 0.54;
+}
+
+.locked-flow-source rect {
+  fill: var(--bg);
+  stroke: currentColor;
+}
+
+.locked-flow-route--signal {
+  color: var(--success);
+}
+
+.locked-flow-route--error {
+  color: var(--error);
+}
+
+.locked-flow-route--neutral {
+  color: var(--display);
+}
+
+.locked-flow-route-base,
+.locked-flow-route-active {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.locked-flow-route-base {
+  stroke: var(--secondary) !important;
+  opacity: 0.48;
+}
+
+.locked-flow-route-active {
+  stroke: currentColor !important;
+  opacity: 0.92;
+}
+
+/* 遮罩亮度值：white=显示 / black=隐藏。这是 SVG <mask> 的 luminance，不是可见描边；
+   切勿改成 var(--display)——亮色主题下会变为黑色使遮罩隐藏、路线揭示动画消失。例外见 docs/design-system/foundations.md 的点阵语言。 */
+.locked-flow-route-reveal {
+  fill: none;
+  stroke: var(--mask-ink);
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  stroke-linecap: round;
+  stroke-width: 6;
+}
+
+.locked-flow-stage {
+  color: var(--display);
+}
+
+.locked-flow-stage rect {
+  fill: var(--bg);
+  stroke: currentColor;
+}
+
+.locked-flow-stage--sync {
+  opacity: 0.5;
+}
+
+.locked-flow-stage--value {
+  opacity: 0.5;
+}
+
+.locked-flow-stage--dashboard {
+  opacity: 0.5;
+}
+
+.locked-flow-dashboard-label {
+  font-size: var(--vibe-type-caption);
+  letter-spacing: 0.12em !important;
+}
+
+.locked-flow-dashboard-chart {
+  stroke: currentColor !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .locked-flow-source,
+  .locked-flow-stage {
+    color: var(--secondary);
+    opacity: 1;
+  }
+
+  .locked-flow-screen .locked-flow-dashboard-point {
+    fill: var(--accent);
+    opacity: 1;
+  }
+
+  .locked-flow-route-base {
+    stroke: currentColor;
+    opacity: 0.82;
+  }
+
+  .locked-flow-route-active,
+  .locked-flow-route-runner {
+    display: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  .page-locked .login-gate {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: 0;
+  }
+
+  .login-visual-stage {
+    display: none;
+  }
+}
+
+@media (max-width: 639px) {
+  .page.page-locked {
+    padding-inline: var(--vibe-space-6);
+  }
+
+  .page-locked .locked-header {
+    padding-block: var(--vibe-space-5);
+  }
+
+  .page-locked .login-main {
+    padding-block: var(--vibe-space-12);
+  }
+
+  .page-locked .login-gate h1 {
+    font-size: var(--vibe-type-display-md);
+  }
+
+  .page-locked .login-auth-column {
+    padding-block: 0;
+  }
+
+  .locked-footer {
+    font-size: var(--vibe-type-label);
+  }
+}

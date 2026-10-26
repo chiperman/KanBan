@@ -1,0 +1,57 @@
+{
+  "id": "bitget",
+  "version": "1.0.0",
+  "protocolVersion": 1,
+  "capabilities": [
+    "assets.read",
+    "authorization.preview",
+    "authorization.revalidate"
+  ],
+  "entry": "plugins/bitget/src/main.mjs",
+  "description": {
+    "label": "Bitget",
+    "fields": [
+      {
+        "id": "accountMode",
+        "label": "Bitget 账户类型",
+        "control": "select",
+        "required": true,
+        "defaultValue": "classic",
+        "options": [
+          {
+            "value": "classic",
+            "label": "Classic Account"
+          },
+          {
+            "value": "uta",
+            "label": "Unified Trading Account (UTA)"
+          }
+        ]
+      },
+      {
+        "id": "apiKey",
+        "label": "Bitget API Key",
+        "control": "text",
+        "required": true
+      },
+      {
+        "id": "apiSecret",
+        "label": "Bitget API Secret",
+        "control": "password",
+        "required": true
+      },
+      {
+        "id": "passphrase",
+        "label": "Bitget Passphrase",
+        "control": "password",
+        "required": true
+      }
+    ],
+    "previewScope": "现货、资金与理财（只读）"
+  },
+  "metadata": {
+    "summary": "现货、资金与理财（只读）",
+    "publisher": "KanBan",
+    "homepage": "https://github.com/chiperman/KanBan"
+  }
+}

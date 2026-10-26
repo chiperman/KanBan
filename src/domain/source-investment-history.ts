@@ -2,7 +2,9 @@ import { decimalAdd, decimalCompare, decimalDivide, decimalMultiply, decimalSubt
 import { shanghaiDay } from "@/domain/daily-asset-snapshots";
 import { buildTotalValuation, type ValuationSource } from "@/domain/valuation";
 import type { SourceInvestmentRecord } from "@/domain/source-investment-records";
-import type { DailyAssetTrendObservation, InvestmentCashflowCurrency, ManualAssetRecord } from "@/server/ports";
+import type { DailyAssetTrendObservation } from "@/domain/asset-history";
+import type { InvestmentCashflowCurrency } from "@/domain/investment-cashflows";
+import type { ManualAssetRecord } from "@/domain/manual-asset-records";
 
 export interface SourceInvestmentHistory {
   sourceId: string;

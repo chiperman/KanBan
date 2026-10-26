@@ -1,3 +1,10 @@
+import type { EvmChain, BitgetAccountMode, OkxRegion } from "@/domain/asset-source-providers";
+import type { ExternalServiceConfigurationReader } from "../../../plugins/sdk/host-capabilities";
+export type { EvmChain, BitgetAccountMode, OkxRegion } from "@/domain/asset-source-providers";
+import type { AssetSourceSummary } from "@/domain/asset-sources";
+export type { AssetSourceSummary } from "@/domain/asset-sources";
+import type { ManualAssetRecord, ManualAssetRecordInput, CreateManualAssetSourceInput } from "@/domain/manual-asset-records";
+export type { ManualAssetRecord, ManualAssetRecordInput, CreateManualAssetSourceInput } from "@/domain/manual-asset-records";
 import type { AssetSourceKind } from "../../domain/asset-source-kinds";
 import type {
   AssetPermission,
@@ -7,31 +14,6 @@ import type {
 import type { AssetSourceSyncState } from "./source-sync-state";
 
 export type { AssetSourceKind } from "../../domain/asset-source-kinds";
-
-/** 外部资产来源的持久化摘要；凭证正文永不进入这个接口。 */
-export interface AssetSourceSummary {
-  id: string;
-  kind: AssetSourceKind;
-  label: string;
-  /** 所有者设置的可选展示名；缺省时使用平台默认名称。 */
-  displayName?: string;
-  accountId: string;
-  permissions: AssetPermission[];
-  /** 断开来源可不再持有任何凭证引用；连接来源必须为非空引用。 */
-  credentialReference: string | null;
-  snapshot: AssetSnapshot;
-  sync: AssetSourceSyncState;
-  /** 所有者按 EVM chain ID + 原生币或合约资产标识明确忽略的来源资产。 */
-  ignoredAssetKeys?: string[];
-  /** 所有者确认属于投资资产、即使暂时缺价也应正常展示的 EVM 资产标识。 */
-  includedAssetKeys?: string[];
-  /** 手工来源创建后尚未添加首条数据时为 false；不得将占位快照计入资产。 */
-  hasManualRecord?: boolean;
-  /** 手工来源在资产类别分布中的归类；旧数据缺省为待分类。 */
-  manualAssetClass?: ManualAssetClass;
-  /** 旧数据缺省为 connected；断开后仅保留历史身份与快照。 */
-  lifecycle?: "connected" | "disconnected";
-}
 
 export interface LongbridgeAuthorizationResult {
   credentials: string;
@@ -71,7 +53,6 @@ export interface BitAuthorizationResult {
   snapshot: AssetSnapshot;
 }
 
-export type EvmChain = "ethereum" | "bsc";
 
 export interface ExternalServiceConnectionStatus {
   configured: boolean;
@@ -95,13 +76,11 @@ export interface ExternalServiceConfigurationInput {
  * 全局行情与链节点配置。
  * 外部服务凭证只进入 SecretStore，资产来源仅关联使用结果。
  */
-export interface ExternalServiceConfiguration {
+export interface ExternalServiceConfiguration extends ExternalServiceConfigurationReader {
   status(): Promise<ExternalServiceConfigurationStatus>;
   saveAndVerify(
     input: ExternalServiceConfigurationInput,
   ): Promise<ExternalServiceConfigurationStatus>;
-  coinGeckoDemoApiKey(): Promise<string | null>;
-  rpcUrl(chain: EvmChain): Promise<string | null>;
 }
 
 export interface EvmWatchAuthorizationResult {
@@ -112,9 +91,7 @@ export interface EvmWatchAuthorizationResult {
   snapshot: AssetSnapshot;
 }
 
-export type BitgetAccountMode = "classic" | "uta";
 
-export type OkxRegion = "global" | "us" | "eea";
 
 export interface BinanceReadOnly {
   preview(input: {
@@ -214,23 +191,6 @@ export interface AssetSourceConnections {
     sourceId: string,
     result: EvmWatchAuthorizationResult,
   ): Promise<void>;
-}
-
-export interface ManualAssetRecordInput {
-  /** 按 Asia/Shanghai 解释的自然日，格式 YYYY-MM-DD。 */
-  day: string;
-  amount: string;
-  currency: "USD" | "CNY" | "HKD";
-}
-
-export interface ManualAssetRecord extends ManualAssetRecordInput {
-  sourceId: string;
-  /** 本次新增或编辑的实际保存时间。 */
-  recordedAt: string;
-}
-
-export interface CreateManualAssetSourceInput {
-  label: string;
 }
 
 /**

@@ -10,10 +10,7 @@ import { AssetSourceRefreshButton } from "@/ui/asset-refresh-controls";
 import { AssetSourceRecoveryAction } from "@/ui/asset-source-recovery";
 import { sourceSyncStatus } from "@/ui/asset-source-status";
 import { type AssetTrendRange } from "@/ui/asset-trend-panel";
-import { SourceInvestmentPerformance } from "@/ui/source-investment-performance";
-import type { SourceInvestmentHistory } from "@/domain/source-investment-history";
-import type { SourceInvestmentRecord } from "@/domain/source-investment-records";
-import { ManualAssetRecordCheck, SourceInvestmentRecordDialog, SourceInvestmentRecordDeleteDialog } from "@/ui/source-investment-record-dialog";
+import { ManualAssetRecordCheck, ManualAssetRecordDialog } from "@/ui/manual-asset-record-dialog";
 
 import { assetSourceDefaultDisplayName, assetSourceDisplayName } from "@/domain/asset-source-display-name";
 import { defaultManualAssetRecordCurrency } from "@/domain/manual-asset-records";
@@ -235,11 +232,15 @@ function SourceLifecycleActions({
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [deleteStep, setDeleteStep] = useState<1 | 2 | null>(null);
   const [pending, setPending] = useState(false);
+  const pendingRef = useRef(false);
   const [failure, setFailure] = useState<{ action: SourceLifecycleAction; message: string } | null>(null);
   const name = assetSourceDisplayName(source);
   const manual = source.kind === "manual";
 
   async function run(action: SourceLifecycleAction) {
+    // React 状态更新有间隙；用 ref 立即挡住同一次事件循环里的第二次点击。
+    if (pendingRef.current) return;
+    pendingRef.current = true;
     setPending(true);
     setFailure(null);
     try {
@@ -259,6 +260,7 @@ function SourceLifecycleActions({
     } catch (caught) {
       setFailure({ action, message: caught instanceof Error ? caught.message : "来源操作失败" });
     } finally {
+      pendingRef.current = false;
       setPending(false);
     }
   }
@@ -389,9 +391,7 @@ export function AssetSourceDetail({
   initialUpdate = false,
   checkRecordDay,
   bookId,
-  bookMode = false,
-  investmentHistory = null,
-  investmentRecords = [],
+  showAssetTrend,
   initialPreset = "all",
   initialCustomRange = null,
   firstDay,
@@ -405,9 +405,7 @@ export function AssetSourceDetail({
   initialUpdate?: boolean;
   checkRecordDay?: string;
   bookId?: import("@/domain/investment-books").InvestmentBookId;
-  bookMode?: boolean;
-  investmentHistory?: SourceInvestmentHistory | null;
-  investmentRecords?: SourceInvestmentRecord[];
+  showAssetTrend: boolean;
   initialPreset?: InvestmentPerformanceIntervalPreset;
   initialCustomRange?: InvestmentPerformanceCustomRange | null;
   firstDay?: string;
@@ -425,13 +423,11 @@ export function AssetSourceDetail({
   const realtimeSources = useMemo(() => [source], [source]);
   const { active: realtimeActive, liveSources, quotes: realtimeQuotes, state: realtimeState, retry } = useLongbridgeRealtime(realtimeSources);
   const [editingRecord, setEditingRecord] = useState<ManualAssetRecord | null | undefined>(
-    null,
+    initialUpdate && source.kind === "manual" ? undefined : null,
   );
   const [deletingRecord, setDeletingRecord] = useState<ManualAssetRecord | null>(
     null,
   );
-  const [investmentRecord, setInvestmentRecord] = useState<SourceInvestmentRecord | null | undefined>(initialUpdate && source.kind === "manual" ? undefined : null);
-  const [deletingInvestmentRecord, setDeletingInvestmentRecord] = useState<SourceInvestmentRecord | null>(null);
   const preset = initialPreset;
   const customRange = initialCustomRange;
   const router = useRouter();
@@ -458,11 +454,6 @@ export function AssetSourceDetail({
     pending: rangePending, onChange: navigateRange,
   };
 
-  const openingRecord = investmentRecords.find(record => record.kind === "opening");
-  const investmentCurrency = investmentHistory?.currency ?? investmentRecords[0]?.currency ?? null;
-  const unrecordedManual = manual && source.hasManualRecord === false &&
-    investmentRecords.length === 0 && investmentHistory === null;
-
   return (
     <>
       <section className="asset-source-detail__header">
@@ -483,12 +474,12 @@ export function AssetSourceDetail({
             {manual ? (
               <VibeButton
                 className="manual-asset-record-button"
-                onClick={() => setInvestmentRecord(undefined)}
+                onClick={() => setEditingRecord(undefined)}
                 type="button"
                 variant="outline"
               >
                 <VibeIcon name="plus" />
-                <span>{bookMode ? "更新资产" : "添加记录"}</span>
+                <span>更新资产</span>
               </VibeButton>
             ) : source.lifecycle !== "disconnected" ? (
               <AssetSourceRefreshButton sourceId={source.id} sourceName={name} />
@@ -509,21 +500,7 @@ export function AssetSourceDetail({
           realtimeQuotes={realtimeQuotes}
           realtimeState={realtimeState}
           onRetryRealtime={retry}
-          showAssetTrend={!unrecordedManual && (bookMode || (investmentHistory === null && !openingRecord))}
-          trendContent={bookMode || unrecordedManual ? undefined : <SourceInvestmentPerformance
-            range={trendRange}
-            history={investmentHistory}
-            sourceId={source.id}
-            sourceName={name}
-            records={investmentRecords}
-            observations={manual ? [] : history}
-            source={manual ? undefined : liveSources[0]}
-            manualRecords={source.manualRecords ?? []}
-            currentDay={currentDay}
-            showSensitiveInfo={showSensitiveInfo}
-            onEdit={manual ? setInvestmentRecord : undefined}
-            onDelete={manual ? setDeletingInvestmentRecord : undefined}
-          />}
+          showAssetTrend={showAssetTrend}
           showRefreshControl={false}
           totalAnimationKey={source.kind === "longbridge" ? source.snapshot.syncedAt : undefined}
           assetScopeHref={source.kind.startsWith("evm-watch-")
@@ -619,15 +596,12 @@ export function AssetSourceDetail({
         <SourceLifecycleActions key={source.id} source={source} />
       </div>}
 
-      {manual && (investmentRecord !== null || editingRecord !== null) ? <SourceInvestmentRecordDialog sourceId={source.id} sourceName={name}
-        assetOnly={bookMode}
+      {manual && editingRecord !== null ? <ManualAssetRecordDialog sourceId={source.id} sourceName={name}
         checkBookId={bookId}
-        currentDay={currentDay} currency={investmentCurrency} hasOpening={investmentHistory !== null || !!openingRecord}
+        currentDay={currentDay}
         defaultCurrency={defaultManualAssetRecordCurrency(source.manualRecords)}
-        record={investmentRecord ?? undefined} manualRecord={editingRecord ?? undefined}
-        onClose={() => { setInvestmentRecord(null); setEditingRecord(null); }} /> : null}
-      {manual && deletingInvestmentRecord ? <SourceInvestmentRecordDeleteDialog sourceName={name} record={deletingInvestmentRecord}
-        onClose={() => setDeletingInvestmentRecord(null)} /> : null}
+        record={editingRecord}
+        onClose={() => setEditingRecord(null)} /> : null}
 
       {manual && deletingRecord ? (
         <ManualRecordDeleteDialog

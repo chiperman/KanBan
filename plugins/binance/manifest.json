@@ -1,0 +1,34 @@
+{
+  "id": "binance",
+  "version": "1.0.0",
+  "protocolVersion": 1,
+  "capabilities": [
+    "assets.read",
+    "authorization.preview",
+    "authorization.revalidate"
+  ],
+  "entry": "plugins/binance/src/main.mjs",
+  "description": {
+    "label": "Binance",
+    "fields": [
+      {
+        "id": "apiKey",
+        "label": "Binance API Key",
+        "control": "text",
+        "required": true
+      },
+      {
+        "id": "apiSecret",
+        "label": "Binance API Secret",
+        "control": "password",
+        "required": true
+      }
+    ],
+    "previewScope": "现货、资金、Simple Earn（只读）"
+  },
+  "metadata": {
+    "summary": "现货、资金、Simple Earn（只读）",
+    "publisher": "KanBan",
+    "homepage": "https://github.com/chiperman/KanBan"
+  }
+}

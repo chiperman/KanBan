@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createSession, lookupSession } from "./auth/session";
-import { getServices, getTestServices, resetTestServices } from "./composition";
+import { getServices } from "./composition";
+import { getTestServices, resetTestServices } from "./testing/composition";
 
 test("组合根复用完整服务，测试重置清空状态和会话", async (t) => {
   const previousEnv = process.env.APP_ENV;
@@ -14,7 +15,8 @@ test("组合根复用完整服务，测试重置清空状态和会话", async (t
 
   resetTestServices();
   const services = getTestServices();
-  assert.equal(services.assetSourceDetails, undefined);
+  assert.equal(typeof services.assetSourceDetails.readSourceDetail, "function");
+  assert.deepEqual((await services.investmentBooks.readInvestmentBooks()).records, []);
   assert.equal(getServices(), services);
   assert.equal(getTestServices(), services);
   await services.manualAssetRecords.create({ label: "Test source" });
@@ -41,7 +43,7 @@ test("非测试环境拒绝访问和重置测试服务", () => {
   }
 });
 
-test("可选来源详情必须是完整能力，旧缓存缺方法时重建服务", async (t) => {
+test("来源详情必须是完整能力，旧缓存缺方法时重建服务", async (t) => {
   const previousEnv = process.env.APP_ENV;
   process.env.APP_ENV = "test";
   t.after(() => {

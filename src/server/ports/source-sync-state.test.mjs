@@ -23,7 +23,7 @@ type Scope = "all" | "evm" | "non-evm";
 type Diagnostic = {
   stage: "credentials" | "request" | "response" | "refresh" | "persist";
   category: "network" | "timeout" | "rate-limit" | "server" | "authentication" |
-    "permission" | "restricted" | "cancelled" | "invalid-response" | "unknown";
+    "permission" | "restricted" | "cancelled" | "invalid-response" | "plugin-unavailable" | "unknown";
   httpStatus: number | null;
   code: string | null;
   durationMs: number;
@@ -165,8 +165,8 @@ test("稳定入口与旧同步端口重导出同一份共享类型，不重复�
   }
 });
 
-test("同步状态模块只声明共享值类型，不依赖来源实体或引入运行时代码", () => {
-  const file = sourceFile("source-sync-state.ts");
+test("领域同步状态模块只声明共享值类型，不依赖来源实体或引入运行时代码", () => {
+  const file = sourceFile("../../domain/asset-sync.ts");
   assert.ok(file.statements.every((statement) =>
     ts.isInterfaceDeclaration(statement) || ts.isTypeAliasDeclaration(statement)
   ));

@@ -1,6 +1,6 @@
 import { decimalAdd, decimalCompare } from "@/domain/decimal";
 import { isLongbridgeUsOptionSymbol } from "@/domain/longbridge-symbols";
-import type { AssetSnapshot } from "@/server/ports";
+import type { AssetSnapshot } from "@/domain/assets";
 
 /** 当前总资产采用完整的最新行情（含盘外）加官方现金；缺项时回退账户原值。 */
 export function revalueLongbridgeSnapshot(snapshot: AssetSnapshot): AssetSnapshot {

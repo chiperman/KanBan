@@ -1,4 +1,5 @@
 import type { AssetSourceSummary } from "./sources";
+export type { PriceQuote, Prices } from "../../../plugins/sdk/host-capabilities";
 
 /** 长桥持仓图表的产品展示周期。five-day 是近五个交易日的 5 分钟走势。 */
 export type LongbridgeHoldingCandlePeriod =
@@ -57,16 +58,4 @@ export interface LongbridgeBenchmarkCandlestickReader {
     count: number;
     symbol: LongbridgeBenchmarkSymbol;
   }): Promise<LongbridgeBenchmarkCandlestick[]>;
-}
-
-export interface PriceQuote {
-  symbol: string;
-  currency: string;
-  price: string;
-  quotedAt: Date;
-}
-
-/** 独立参考价格来源；无可靠价格时返回 null（未估值资产不得按零计）。 */
-export interface Prices {
-  quote(symbol: string): Promise<PriceQuote | null>;
 }

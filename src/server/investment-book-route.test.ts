@@ -10,7 +10,7 @@ const hook = registerHooks({ resolve(specifier, context, nextResolve) {
   return nextResolve(specifier === "next/headers" ? "next/headers.js" : specifier, context);
 } });
 const { SqliteDashboardDatabase } = await import("./persistence/sqlite-database");
-const { getTestServices, resetTestServices } = await import("./composition");
+const { getTestServices, resetTestServices } = await import("./testing/composition");
 const { GET, POST } = await import("../app/api/investment-books/route");
 const { POST: legacyPost } = await import("../app/api/investment-cashflows/route");
 const { PATCH: legacyPatch, DELETE: legacyDelete } = await import("../app/api/investment-cashflows/[id]/route");

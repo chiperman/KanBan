@@ -58,7 +58,7 @@ const SVG_TEXT_SELECTORS = [".locked-flow-screen text", ".locked-flow-dashboard-
 /**
  * 页面级样式不得覆盖共享按钮的视觉属性：统一规范后，颜色 / 背景 / 边框 /
  * 圆角 / 字体 / 高度 / 透明度 / 过渡 / 变换 / outline / box-shadow 只能来自
- * `src/app/vibe-components.css`。本规则扫描 `src/app/*.css`，排除共享组件文件，
+ * `src/app/vibe-components.css`。本规则递归扫描 `src/app/` 的 CSS，排除共享组件文件，
  * 命中标准按钮选择器时，只允许布局声明，其余一律报错且不可基线化。
  */
 const BUTTON_OVERRIDE_SELECTORS = [
@@ -362,10 +362,13 @@ function lintSource(file, source) {
 // 收集文件
 // ---------------------------------------------------------------------------
 
-const cssFiles = readdirSync(CSS_DIR)
-  .filter((name) => name.endsWith(".css"))
-  .map((name) => join(CSS_DIR, name))
-  .sort();
+function listCss(directory) {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    return entry.isDirectory() ? listCss(path) : entry.name.endsWith(".css") ? [path] : [];
+  });
+}
+const cssFiles = listCss(CSS_DIR).sort();
 
 function listSources(directory) {
   const result = [];

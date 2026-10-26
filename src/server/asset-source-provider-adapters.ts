@@ -53,8 +53,8 @@ export type AssetSourceAuthorizationInput =
 
 interface ProviderDependencies {
   longbridge: LongbridgeOAuth;
-  longbridgeConnections?: LongbridgeConnections;
-  binance: BinanceReadOnly;
+  longbridgeConnections?: Pick<LongbridgeConnections, "status" | "loginCli" | "subscribeQuotes" | "finishConnection" | "previewConnection">;
+  binance?: BinanceReadOnly;
   okx: OkxReadOnly;
   bitget: BitgetReadOnly;
   bit: BitReadOnly;
@@ -140,7 +140,7 @@ export function createAssetSourceProviderAdapters({
         await connections.connectLongbridge(authorization);
       },
     },
-    {
+    ...(binance ? [{
       provider: "binance",
       async authorize(raw, observedAt) {
         const input = inputFor(raw, "binance");
@@ -161,7 +161,7 @@ export function createAssetSourceProviderAdapters({
       async connect(authorization) {
         await connections.connectBinance(authorization);
       },
-    },
+    }] as AssetSourceProviderAdapter[] : []),
     {
       provider: "okx",
       scopeChangedMessage: "OKX 账户范围已变化，请重新预览",

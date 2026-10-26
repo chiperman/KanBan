@@ -578,7 +578,7 @@ export async function POST(request: Request) {
     }
     if (body.action === "rest-source-audit") {
       const [adapter, packageJson, lockfile] = await Promise.all([
-        readFile(path.join(/* turbopackIgnore: true */ process.cwd(), "src/server/asset-sources/longbridge.ts"), "utf8"),
+        readFile(path.join(/* turbopackIgnore: true */ process.cwd(), "plugins/longbridge/src/longbridge.ts"), "utf8"),
         readFile(path.join(/* turbopackIgnore: true */ process.cwd(), "package.json"), "utf8"),
         readFile(path.join(/* turbopackIgnore: true */ process.cwd(), "pnpm-lock.yaml"), "utf8"),
       ]);

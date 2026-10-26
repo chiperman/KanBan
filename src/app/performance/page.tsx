@@ -5,13 +5,9 @@ import {
 } from "@/server/auth/canonical-origin";
 import { getServices } from "@/server/composition";
 import { readAssetRefreshState } from "@/server/refresh/asset-refresh-state";
-import { assetRefreshRegistration, readProfitColorScheme } from "@/server/workbench-pages";
+import { assetRefreshRegistration } from "@/server/workbench-pages";
 import { shanghaiDay } from "@/domain/daily-asset-snapshots";
 import { parseManualAssetRecordDay } from "@/domain/manual-asset-records";
-import {
-  longbridgeReferenceRates,
-} from "@/domain/investment-performance";
-import { InvestmentPerformanceWorkspace } from "@/ui/investment-performance-workspace";
 import { InvestmentBooksWorkspace } from "@/ui/investment-books-workspace";
 import { INVESTMENT_BOOKS } from "@/domain/investment-books";
 import { SessionGuard } from "@/ui/session-guard";
@@ -33,7 +29,6 @@ export default async function PerformancePage({
     cashflows,
     sources,
     trendObservations,
-    importedSourceHistoryObservations,
     fullRefreshState,
     books,
     manualRecords,
@@ -41,9 +36,8 @@ export default async function PerformancePage({
     services.investmentCashflows.list(),
     services.assetSources.list(),
     services.dailyAssetSnapshots.listTrendObservations(),
-    services.dailyAssetSnapshots.listImportedSourceHistoryObservations(),
     readAssetRefreshState(services),
-    services.investmentBooks?.readInvestmentBooks() ?? null,
+    services.investmentBooks.readInvestmentBooks(),
     services.manualAssetRecords.list(),
   ]);
   const query = await searchParams;
@@ -54,8 +48,6 @@ export default async function PerformancePage({
     const day = parseManualAssetRecordDay(query?.recordDay);
     if (day <= shanghaiDay(now)) initialRecordDay = day;
   } catch { /* 无效核对日期沿用全部历史，不据此判断记录缺失。 */ }
-  const longbridgeRates = longbridgeReferenceRates(sources);
-  const profitColorScheme = await readProfitColorScheme();
 
   return (
     <SessionGuard>
@@ -64,7 +56,7 @@ export default async function PerformancePage({
         refreshRegistration={assetRefreshRegistration(fullRefreshState, sources)}
       >
         <WorkbenchPage className="page-workbench-destination">
-          {books ? <InvestmentBooksWorkspace
+          <InvestmentBooksWorkspace
               state={books}
               key={initialBook ?? "us-stocks"}
               initialBookId={initialBook}
@@ -77,16 +69,7 @@ export default async function PerformancePage({
               manualRecords={manualRecords}
               cashflows={cashflows}
               currentDay={shanghaiDay(now)}
-            /> : <InvestmentPerformanceWorkspace
-              cashflows={cashflows}
-              currentDay={shanghaiDay(now)}
-              currentObservedAt={now.toISOString()}
-              profitColorScheme={profitColorScheme}
-              sources={sources.map(({ credentialReference: _credential, permissions: _permissions, ...source }) => source)}
-              currentExchangeRates={longbridgeRates}
-              importedSourceHistoryObservations={importedSourceHistoryObservations}
-              trendObservations={trendObservations}
-            />}
+            />
         </WorkbenchPage>
       </WorkbenchShell>
     </SessionGuard>

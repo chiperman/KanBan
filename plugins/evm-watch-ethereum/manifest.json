@@ -1,0 +1,33 @@
+{
+  "id": "evm-watch-ethereum",
+  "version": "1.0.0",
+  "protocolVersion": 1,
+  "capabilities": [
+    "assets.read",
+    "authorization.preview",
+    "authorization.revalidate",
+    "extension.call"
+  ],
+  "entry": "plugins/evm-watch-ethereum/src/main.mjs",
+  "description": {
+    "label": "Ethereum 观察钱包",
+    "fields": [
+      {
+        "id": "addresses",
+        "label": "公开地址（每行一个）",
+        "control": "textarea",
+        "required": true
+      }
+    ],
+    "previewScope": "ETH、ERC-20（公开地址只读）"
+  },
+  "configuration": [
+    "rpc.ethereum",
+    "coingecko.apiKey"
+  ],
+  "metadata": {
+    "summary": "ETH、ERC-20（公开地址只读）",
+    "publisher": "KanBan",
+    "homepage": "https://github.com/chiperman/KanBan"
+  }
+}

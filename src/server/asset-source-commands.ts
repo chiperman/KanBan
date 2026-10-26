@@ -41,8 +41,8 @@ export function parseAssetSourceCommandBody(
 
 type SourceCommandServices = Pick<
   AssetServices,
-  "assetSourceLifecycle" | "manualAssetRecords" | "assetSourceDetails" | "assetSourceOnboarding"
-> & Pick<AppServices, "clock" | "investmentBooks">;
+  "assetSourceLifecycle" | "manualAssetRecords" | "assetSourceOnboarding"
+> & Pick<AppServices, "clock"> & Partial<Pick<AppServices, "assetSourceDetails" | "investmentBooks">>;
 
 type SourceCommandContext = {
   id: string;
@@ -50,7 +50,7 @@ type SourceCommandContext = {
   source: AssetSourceSummary;
 };
 
-function requireDetails(services: Pick<AssetServices, "assetSourceDetails">) {
+function requireDetails(services: Partial<Pick<AssetServices, "assetSourceDetails">>) {
   if (!services.assetSourceDetails) {
     throw new Error("来源详情服务不可用");
   }

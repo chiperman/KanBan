@@ -33,7 +33,7 @@ import { VibeDateField } from "@/ui/vibe/vibe-date-field";
 import { VibeAmountField } from "@/ui/vibe/vibe-amount-field";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
 import { useTablePagination, VibeTablePagination } from "@/ui/vibe/vibe-table-pagination";
-import { ManualAssetRecordCheck } from "@/ui/source-investment-record-dialog";
+import { ManualAssetRecordCheck } from "@/ui/manual-asset-record-dialog";
 
 export type InvestmentBookSource = Omit<AssetSourceSummary, "credentialReference" | "permissions">;
 const labels = { opening: "期初本金", deposit: "入金", withdrawal: "出金", valuation: "资产金额" };

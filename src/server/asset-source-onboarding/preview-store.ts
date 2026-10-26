@@ -68,9 +68,9 @@ export class AssetSourcePreviewStore {
     return {
       id,
       provider: authorization.provider,
-      account: authorization.account,
+      account: { id: authorization.account.id, label: authorization.account.label },
       permissions: authorization.permissions,
-      total: authorization.snapshot.total,
+      total: { amount: authorization.snapshot.total.amount, currency: authorization.snapshot.total.currency },
       ...(authorization.accountMode
         ? { accountMode: authorization.accountMode }
         : {}),

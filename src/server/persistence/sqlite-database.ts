@@ -1,5 +1,5 @@
 import { parseConnection, type LongbridgeTransportStatus } from "@/server/asset-sources/longbridge-connection";
-import { sameAccount } from "@/server/asset-sources/longbridge-cli-identity";
+import { sameAccount } from "@/server/asset-sources/longbridge-connection";
 import type { LongbridgeAccountIdentity } from "@/server/asset-sources/longbridge-keychain-sdk";
 import type { BackgroundCollectionStore, CollectionState } from "@/server/background-collection";
 import { buildDailyAssetSnapshot } from "@/domain/daily-asset-snapshots";
@@ -404,6 +404,10 @@ export class SqliteDashboardDatabase
     capturedAt: string,
   ): Promise<void> {
     this.connectAssetSource("longbridge", result, credentialReference, capturedAt);
+  }
+
+  async connectPlugin(kind: import("@/server/asset-source-plugins/protocol").AssetSourcePluginId, result: import("@/server/asset-source-plugins/protocol").AssetSourcePluginAuthorization, reference: string, capturedAt: string): Promise<void> {
+    this.connectAssetSource(kind, result, reference, capturedAt);
   }
 
   async connectBinance(

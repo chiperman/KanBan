@@ -9,14 +9,15 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
-  ASSET_SOURCE_PROVIDERS,
   assetSourceAuthorizationBody,
   assetSourceProvider,
   initialAssetSourceFields,
   type AssetSourceFieldDescription,
   type AssetSourceFieldId,
   type AssetSourceProviderId,
+  type AssetSourceProviderDescription,
 } from "@/domain/asset-source-providers";
+import { pluginProviderDescription, type AssetSourcePluginDescription } from "@/domain/asset-source-plugin-description";
 import { decimalToFixed } from "@/domain/decimal";
 import type {
   AssetMoney,
@@ -79,14 +80,6 @@ type ProviderSelectionId =
   | typeof MANUAL_ASSET_SOURCE.id;
 type FlowStep = "choose" | "configure" | "preview";
 
-const PROVIDER_OPTIONS = [
-  ...ASSET_SOURCE_PROVIDERS.filter(
-    ({ id }) => id !== "ethereum" && id !== "bsc",
-  ),
-  EVM_WATCH_WALLET,
-  MANUAL_ASSET_SOURCE,
-];
-
 function formatAmount(amount: string, fixed = false): string {
   const [integer, fraction] = (fixed ? decimalToFixed(amount, 2) : amount).split(".");
   const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -111,6 +104,10 @@ export function AssetSourceFlow({
   reauthorization?: Reauthorization;
 }) {
   const router = useRouter();
+  const [providers, setProviders] = useState<AssetSourceProviderDescription[]>([]);
+  const providerOptions = [...providers.filter(p => p.id !== "ethereum" && p.id !== "bsc"), ...(providers.some(p => p.id === "ethereum" || p.id === "bsc") ? [EVM_WATCH_WALLET] : []), MANUAL_ASSET_SOURCE];
+  const descriptionFor = (id: AssetSourceProviderId) => providers.find(p => p.id === id) ?? assetSourceProvider(id);
+
   const isReauthorizing = reauthorization !== undefined;
   const [step, setStep] = useState<FlowStep>(
     isReauthorizing ? "configure" : "choose",
@@ -144,7 +141,7 @@ export function AssetSourceFlow({
 
   const provider =
     providerId && providerId !== "evm" && providerId !== "manual"
-      ? assetSourceProvider(providerId)
+      ? providers.find(p => p.id === providerId) ?? null
       : null;
   const selectedProvider =
     provider ??
@@ -161,6 +158,23 @@ export function AssetSourceFlow({
   const confirmUrl = reauthorization === undefined
     ? null
     : `/api/asset-sources/${encodeURIComponent(reauthorization.sourceId)}/reauthorize/confirm`;
+
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/asset-sources/plugins").then(async response => {
+      if (lockOnUnauthorizedResponse(response)) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
+      if (!response.ok) throw new Error("读取来源插件失败");
+      return response.json() as Promise<{ providers: { id: AssetSourceProviderId; description: AssetSourcePluginDescription }[] }>;
+    }).then(({ providers: installed }) => {
+      if (!active) return;
+      const descriptions = installed.map(p => pluginProviderDescription(p.id, p.description));
+      setProviders(descriptions);
+      const reauthorizingPlugin = descriptions.find(p => p.id === reauthorization?.provider);
+      if (reauthorizingPlugin) setFields(initialAssetSourceFields(reauthorizingPlugin));
+      if (reauthorization && !installed.some(p => p.id === reauthorization.provider)) setError("来源插件不可用，请安装或启用后重启服务");
+    }).catch(caught => { if (active) setError(caught instanceof Error ? caught.message : "读取来源插件失败"); });
+    return () => { active = false; };
+  }, [reauthorization]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -239,6 +253,7 @@ export function AssetSourceFlow({
 
   function chooseProvider(id: ProviderSelectionId) {
     setProviderId(id);
+    setFields(initialAssetSourceFields(providers.find(p => p.id === id)));
     setError("");
     setStep("configure");
   }
@@ -294,7 +309,7 @@ export function AssetSourceFlow({
       const body = await readJsonResult<Preview & { error?: string }>(response);
       if (lockOnUnauthorizedResponse(response)) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
       if (!response.ok || !body?.id) throw new Error(body?.error ?? provider.validationError);
-      setFields(initialAssetSourceFields());
+      setFields(initialAssetSourceFields(provider));
       setPreviews([body]);
       setStep("preview");
     } catch (caught) {
@@ -310,7 +325,9 @@ export function AssetSourceFlow({
   }
 
   async function startEvmPreview() {
-    const chains = isReauthorizing ? [reauthorization.provider as EvmChain] : evmChains;
+    const chains = isReauthorizing
+      ? [reauthorization.provider as EvmChain]
+      : evmChains.filter(chain => providers.some(p => p.id === chain));
     if (chains.length === 0) {
       setError("请至少选择一条 EVM 链");
       return;
@@ -474,7 +491,7 @@ export function AssetSourceFlow({
       }
       if (revalidate) {
         if (isEvm && !isReauthorizing) setEvmChains(revalidationChains.current ?? []);
-        setFields(initialAssetSourceFields());
+        setFields(initialAssetSourceFields(provider ?? undefined));
         revalidationChains.current = null;
         setRecovery(null);
         setUncertainId(null);
@@ -498,7 +515,7 @@ export function AssetSourceFlow({
       ? manualLabel.trim() !== ""
       : selectedProvider !== null &&
         selectedProvider.fields.every(
-          (field) => fields[field.id].trim().length > 0,
+          (field) => (fields[field.id] ?? "").trim().length > 0,
         ) &&
         (isReauthorizing || providerId !== "evm" || evmChains.length > 0);
   const flowTitle = isReauthorizing
@@ -547,7 +564,7 @@ export function AssetSourceFlow({
         <section aria-labelledby="source-flow-choose-title" className="asset-source-flow__panel">
           <h2 id="source-flow-choose-title">选择来源类型</h2>
           <div aria-label="来源类型" className="source-provider-list" role="group">
-            {PROVIDER_OPTIONS.map((description) => (
+            {providerOptions.map((description) => (
               <VibeButton
                 className="source-provider-button"
                 key={description.id}
@@ -560,11 +577,14 @@ export function AssetSourceFlow({
               </VibeButton>
             ))}
           </div>
+          <VibeLink href="/settings?view=plugins" variant="text">浏览集成插件</VibeLink>
           <VibeButton onClick={leaveFlow} type="button" variant="text">
             取消返回
           </VibeButton>
         </section>
       ) : null}
+
+      {step === "configure" && selectedProvider === null ? <VibeButton onClick={leaveFlow} type="button" variant="text">返回资产</VibeButton> : null}
 
       {step === "configure" && selectedProvider !== null ? (
         <section aria-labelledby="source-flow-configure-title" className="asset-source-flow__panel">
@@ -605,7 +625,7 @@ export function AssetSourceFlow({
                     label={field.label}
                     onValueChange={(value) => updateField(field.id, value)}
                     options={field.options ?? []}
-                    value={fields[field.id]}
+                    value={fields[field.id] ?? ""}
                   />
                 ) : field.control === "textarea" ? (
                   <VibeTextAreaField
@@ -616,7 +636,7 @@ export function AssetSourceFlow({
                     label={field.label}
                     onChange={(event) => updateField(field.id, event.target.value)}
                     rows={4}
-                    value={fields[field.id]}
+                    value={fields[field.id] ?? ""}
                   />
                 ) : (
                   <VibeField
@@ -627,15 +647,15 @@ export function AssetSourceFlow({
                     label={field.label}
                     onChange={(event) => updateField(field.id, event.target.value)}
                     type={field.control}
-                    value={fields[field.id]}
+                    value={fields[field.id] ?? ""}
                   />
                 ),
               )}
               {providerId === "evm" && !isReauthorizing ? (
                 <fieldset className="source-evm-chains" disabled={pending}>
                   <legend className="vibe-field__label">同步链</legend>
-                  {EVM_CHAINS.map((chain) => {
-                    const description = assetSourceProvider(chain);
+                  {EVM_CHAINS.filter(chain => providers.some(p => p.id === chain)).map((chain) => {
+                    const description = descriptionFor(chain);
                     return (
                       <label className="vibe-choice" key={chain}>
                         <input
@@ -708,7 +728,7 @@ export function AssetSourceFlow({
             <>
               <dl className="source-preview-list vibe-preview-list">
                 {previews.map((current) => {
-                  const description = assetSourceProvider(current.provider);
+                  const description = descriptionFor(current.provider);
                   return (
                     <div className="vibe-data-row" key={current.id}>
                       <dt>{description.label}</dt>

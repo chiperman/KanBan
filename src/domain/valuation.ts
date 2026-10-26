@@ -15,18 +15,14 @@ import {
   unrecognizedEvmTokenCandidates,
 } from "@/domain/evm-token-preferences";
 import { hasManualAssetRecord } from "@/domain/manual-asset-records";
-import type {
-  AssetExchangeRate,
-  AssetHolding,
-  AssetMoney,
-  AssetSnapshot,
-  AssetSourceSummary,
-} from "@/server/ports";
+import type { AssetExchangeRate, AssetHolding, AssetMoney, AssetSnapshot } from "@/domain/assets";
+import type { AssetSourceSummary } from "@/domain/asset-sources";
 
 export type ValuationSource = Pick<
   AssetSourceSummary,
   | "id"
   | "kind"
+  | "investmentBookId"
   | "label"
   | "displayName"
   | "snapshot"

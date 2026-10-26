@@ -12,12 +12,12 @@ Node 使用内置 SQLite、模块 hooks 和实验性类型转换；CLI 的实验
 
 首次准备或 Rust 源码/Cargo.lock/本地补丁变化后运行 `pnpm native:longbridge:build`。构建以 `--locked` 运行 Cargo，复制并签署产物后写入本机 `artifact.json`；其记录源文件指纹、二进制摘要、平台、架构、Node 和 N-API。产物和清单均忽略，不进入 Git。
 
-`pnpm dev` / `pnpm start` / `pnpm build` 不强制构建或加载原生 SDK，CLI 连接可独立运行。首次使用 SDK 时才检查源指纹、摘要和公开接口；缺失或不兼容时明确提示构建，不自动执行 Cargo、修复 Keychain 或退回明文存储。Keychain 需修复时显式运行 `pnpm longbridge:keychain:repair`。复制需要 SDK 的运行副本时同时带上签署 `.node` 和 `artifact.json`。
+`pnpm dev` / `pnpm start` / `pnpm build` 不强制构建或加载原生 SDK，CLI 连接可独立运行。首次使用 SDK 时才检查源指纹、摘要和公开接口；缺失或不兼容时明确提示构建，不自动执行 Cargo、修复 Keychain 或退回明文存储。Keychain 需修复时显式运行 `pnpm longbridge:keychain:repair`。需要 SDK 时用 `pnpm plugin:build plugins/longbridge <新输出目录> --with-sdk` 携带签署 `.node` 和 `artifact.json`，然后安装到实际数据目录；应用更新不重打包已安装插件。
 
-源码在 [native/longbridge-keychain-sdk/](../../native/longbridge-keychain-sdk/)，其中 [vendor/longbridge-oauth/](../../native/longbridge-keychain-sdk/vendor/longbridge-oauth/) 是 [Cargo 实际引用](../../native/longbridge-keychain-sdk/Cargo.toml) 的本地补丁源码。该目录及两处 Cargo 锁文件保留在版本控制中；两个 `target/` 目录属于本机编译生成物，不与补丁源码混同。
+源码在 [plugins/longbridge/native/](../../plugins/longbridge/native/)，其中 [vendor/longbridge-oauth/](../../plugins/longbridge/native/vendor/longbridge-oauth/) 是 [Cargo 实际引用](../../plugins/longbridge/native/Cargo.toml) 的本地补丁源码。该目录及两处 Cargo 锁文件保留在版本控制中；两个 `target/` 目录属于本机编译生成物，不与补丁源码混同。
 
 ## 后台运行环境
 
-`pnpm runtime:prepare` 在存在原生产物时校验并复制，无产物时允许准备仅 CLI 的副本；独立安装依赖并执行应用生产构建，不会重复编译 Rust。运行副本、端口和正式数据与开发分离，安装步骤见 [后台自动采集](service-composition.md#后台自动采集)。
+`pnpm runtime:prepare` 独立安装依赖并执行应用生产构建，不复制插件原生产物，也不编译 Rust；实际运行从同一数据目录加载已安装插件。运行副本、端口和正式数据与开发分离，安装步骤见 [后台自动采集](service-composition.md#后台自动采集)。
 
 后台入口加载运行副本的 `.env.local`，要求绝对路径 `KANBAN_DATA_DIR`；launchd 显式提供 Node 路径、PATH 与正式数据目录。网络环境准备后另起 Node 进程，使 Node 内置代理在初始化时生效。网页登录会话不参与采集，来源凭证、服务端加密密钥、CLI 登录与登录钥匙串仍须有效；来源授权失效不会由网页登录自动修复。

@@ -1,4 +1,4 @@
-import { getTestServices } from "@/server/composition";
+import { getTestServices } from "@/server/testing/composition";
 import type { Card } from "@/server/ports";
 import { refreshSourceFixture as sourceFixture } from "@/server/testing/asset-source-fixtures";
 import type { FakeRefreshScenario } from "@/server/testing/fakes";

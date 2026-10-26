@@ -1,4 +1,6 @@
-import type { BitgetAccountMode } from "@/server/ports";
+export type EvmChain = "ethereum" | "bsc";
+export type BitgetAccountMode = "classic" | "uta";
+export type OkxRegion = "global" | "us" | "eea";
 
 export type AssetSourceProviderId =
   | "longbridge"
@@ -7,16 +9,10 @@ export type AssetSourceProviderId =
   | "bitget"
   | "bit"
   | "ethereum"
-  | "bsc";
+  | "bsc"
+  | `plugin:${string}`;
 
-export type AssetSourceFieldId =
-  | "apiKey"
-  | "apiSecret"
-  | "passphrase"
-  | "userId"
-  | "region"
-  | "accountMode"
-  | "addresses";
+export type AssetSourceFieldId = string;
 
 interface AssetSourceFieldOption {
   value: string;
@@ -35,7 +31,7 @@ export interface AssetSourceFieldDescription {
 export interface AssetSourceProviderDescription {
   id: AssetSourceProviderId;
   label: string;
-  route: "longbridge" | "binance" | "okx" | "bitget" | "bit" | "evm";
+  route: string;
   authorization: "oauth" | "credentials" | "public-addresses";
   fields: AssetSourceFieldDescription[];
   startLabel: string;
@@ -238,9 +234,11 @@ export function assetSourceProvider(
   return ASSET_SOURCE_PROVIDERS.find((provider) => provider.id === id)!;
 }
 
-export function initialAssetSourceFields(): Record<AssetSourceFieldId, string> {
+export function initialAssetSourceFields(
+  provider?: AssetSourceProviderDescription | null,
+): Record<AssetSourceFieldId, string> {
   const values = Object.fromEntries(
-    ASSET_SOURCE_PROVIDERS.flatMap((provider) => provider.fields).map((field) => [
+    [...ASSET_SOURCE_PROVIDERS.flatMap((item) => item.fields), ...(provider?.fields ?? [])].map((field) => [
       field.id,
       field.defaultValue ?? "",
     ]),
@@ -255,7 +253,7 @@ export function assetSourceAuthorizationBody(
   const body = Object.fromEntries(
     provider.fields.map((field) => [
       field.id,
-      field.id === "addresses"
+      provider.authorization === "public-addresses" && field.id === "addresses"
         ? values.addresses
             .split(/\r?\n/)
             .map((value) => value.trim())

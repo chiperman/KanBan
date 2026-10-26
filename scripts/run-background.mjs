@@ -2,11 +2,9 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import { readFileSync } from "node:fs";
 import { checkToolchain } from "./check-toolchain.mjs";
-import { checkNativeArtifact } from "./native-artifact.mjs";
 import { resolveNodeNetworkEnvironment } from "./local-network-environment.mjs";
 
 checkToolchain();
-checkNativeArtifact();
 try { process.loadEnvFile(path.resolve(".env.local")); }
 catch (error) { if (error.code !== "ENOENT") throw error; }
 if (process.env.APP_ENV === "test") throw new Error("后台生产采集不能使用 APP_ENV=test");

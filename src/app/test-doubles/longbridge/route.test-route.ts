@@ -1,4 +1,4 @@
-import { getTestServices } from "@/server/composition";
+import { getTestServices } from "@/server/testing/composition";
 import type { FakeLongbridgeConfig } from "@/server/testing/fakes";
 import { testGuard } from "@/server/testing/route-support";
 

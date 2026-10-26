@@ -32,16 +32,17 @@ import type {
   SecretStore,
 } from "@/server/ports";
 import type { AssetSourceOnboarding } from "@/server/asset-source-onboarding";
-import type { LongbridgeOAuthState } from "@/server/asset-sources/longbridge";
+import type { LongbridgeOAuthState } from "@/server/asset-source-plugins/oauth-state";
 import type { BusinessDataBackup } from "@/server/backup/business-data-backup";
 import type { InvestmentBookStore } from "@/domain/investment-books";
 
 export interface AssetServices {
-  investmentBooks?: InvestmentBookStore;
+  pluginManagement?: import("@/server/asset-source-plugins/distribution").PluginDistribution;
+  assetSourcePlugins?: import("@/server/asset-source-plugins/manager").AssetSourcePluginManager;
+  investmentBooks: InvestmentBookStore;
   assetCards: AssetCardStore;
   assetSources: AssetSources;
-  /** 测试替身可省略详情能力；提供时必须包含完整的查询和记账接口。 */
-  assetSourceDetails?: AssetSourceDetails;
+  assetSourceDetails: AssetSourceDetails;
   assetSourceLifecycle: AssetSourceLifecycle;
   assetSourceConnections: AssetSourceConnections;
   manualAssetRecords: ManualAssetRecords;
@@ -61,17 +62,17 @@ export interface AssetObservationServices {
 }
 
 export interface MarketServices {
-  longbridgeConnections?: LongbridgeConnections;
+  longbridgeConnections?: Pick<LongbridgeConnections, "status" | "checkCli" | "loginCli" | "subscribeQuotes" | "finishConnection" | "previewConnection">;
   prices: Prices;
   longbridge: LongbridgeOAuth;
   longbridgeBenchmarkCandlesticks: LongbridgeBenchmarkCandlestickReader;
   longbridgeHoldingCandlesticks: LongbridgeHoldingCandlestickReader;
   longbridgeOAuthState: LongbridgeOAuthState;
-  binance: BinanceReadOnly;
-  okx: OkxReadOnly;
-  bitget: BitgetReadOnly;
-  bit: BitReadOnly;
-  evm: EvmWatchWalletReadOnly;
+  binance?: BinanceReadOnly;
+  okx?: OkxReadOnly;
+  bitget?: BitgetReadOnly;
+  bit?: BitReadOnly;
+  evm?: EvmWatchWalletReadOnly;
 }
 
 export interface OwnerServices {
@@ -92,7 +93,6 @@ export interface AppServices extends
 }
 
 export interface ProductionAppServices extends AppServices {
+  pluginManagement: import("@/server/asset-source-plugins/distribution").PluginDistribution;
   backgroundCollection: BackgroundAssetCollection;
-  investmentBooks: InvestmentBookStore;
-  assetSourceDetails: AssetSourceDetails;
 }

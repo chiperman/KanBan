@@ -1,5 +1,5 @@
 import { buildSnapshotFromPositions, type RawAssetPosition } from "@/domain/valuation";
-import { getTestServices } from "@/server/composition";
+import { getTestServices } from "@/server/testing/composition";
 import type { AssetExchangeRate, AssetSourceSummary, Card } from "@/server/ports";
 import { testGuard } from "@/server/testing/route-support";
 

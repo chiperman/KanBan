@@ -7,7 +7,7 @@ import ts from "typescript";
 const directory = path.dirname(fileURLToPath(import.meta.url));
 const fixturePath = path.join(directory, "__source-kind-contract__.ts");
 const fixture = `
-import { isAssetSourceKind, type AssetSourceKind } from "./asset-source-kinds";
+import { isPersistedAssetSourceKind, type AssetSourceKind } from "./asset-source-kinds";
 import type * as Ports from "../server/ports";
 import type { AssetSourceView } from "../ui/asset-source-card/types";
 
@@ -16,7 +16,7 @@ type Equal<A, B> =
   (<T>() => T extends B ? 1 : 2) ? true : false;
 type Expect<T extends true> = T;
 type SupportedKind = "longbridge" | "binance" | "okx" | "bitget" | "bit" |
-  "evm-watch-ethereum" | "evm-watch-bsc" | "manual";
+  "evm-watch-ethereum" | "evm-watch-bsc" | "manual" | \`plugin:\${string}\`;
 type Contracts = [
   Expect<Equal<AssetSourceKind, SupportedKind>>,
   Expect<Equal<Ports.AssetSourceKind, AssetSourceKind>>,
@@ -27,7 +27,7 @@ type Contracts = [
 function accept(source: Ports.AssetSourceSummary, view: AssetSourceView, raw: unknown, text: string) {
   view.kind = source.kind;
   source.kind = view.kind;
-  if (isAssetSourceKind(raw)) {
+  if (isPersistedAssetSourceKind(raw)) {
     source.kind = raw;
     view.kind = raw;
   }
@@ -42,7 +42,7 @@ function accept(source: Ports.AssetSourceSummary, view: AssetSourceView, raw: un
 }
 `;
 
-test("来源实体、前端模型和稳定端口统一使用封闭来源类型，并要求先校验外部值", () => {
+test("来源实体、前端模型和端口统一使用内置或命名空间来源类型，并要求先校验外部值", () => {
   const options = {
     target: ts.ScriptTarget.ES2022,
     lib: ["lib.dom.d.ts", "lib.dom.iterable.d.ts", "lib.esnext.d.ts"],

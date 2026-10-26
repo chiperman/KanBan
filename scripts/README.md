@@ -14,7 +14,7 @@
 | `pnpm test:unit` | [run-unit-tests.mjs](run-unit-tests.mjs)：发现 `scripts/` 和 `src/` 中既有 `*.test.ts` / `*.test.mjs`，通过 Node 执行离线单测 |
 | `pnpm test` | 按顺序执行 `typecheck`、`design:lint`、`test:unit`；不启动应用构建或浏览器 |
 
-范围与新增测试约束见 [测试纪律](../AGENTS.md#测试纪律)。当前 GitHub Actions 仅 [发布介绍页](../.github/workflows/pages.yml)，没有自动执行应用测试的工作流。
+范围与新增测试约束见 [测试纪律](../AGENTS.md#测试纪律)。GitHub Actions 分别 [发布介绍页](../.github/workflows/pages.yml) 与 [插件 Release](../.github/workflows/plugins.yml)；插件发行包含路由类型生成、类型检查和包握手，不运行完整应用单测或浏览器验收。
 
 ## 原生扩展与本机授权
 
@@ -30,7 +30,7 @@
 
 | 命令 | 入口与作用 |
 | --- | --- |
-| `pnpm design:lint` | [lint-design-tokens.mjs](lint-design-tokens.mjs)：检查样式规则；存量记录在 [token-lint-baseline.json](design-system/token-lint-baseline.json) |
+| `pnpm design:lint` | [lint-design-tokens.mjs](lint-design-tokens.mjs)：递归检查 `src/app/` 的 CSS 与 UI 样式规则；存量记录在 [token-lint-baseline.json](design-system/token-lint-baseline.json) |
 
 验证范围和基线维护见 [设计契约](../DESIGN.md#变更与验证)，不能更新基线绕过检查。
 
@@ -42,6 +42,12 @@
 | --- | --- |
 | `pnpm runtime:prepare <新永久目录> [参数]` | [prepare-runtime.mjs](prepare-runtime.mjs)：准备独立的生产运行副本，不复制业务数据或安装任务；参数与迁移边界见 [后台自动采集](../docs/operations/service-composition.md#后台自动采集) |
 | `pnpm runtime:update [--check]` | [update-runtime.mjs](update-runtime.mjs)：从开发仓库更新已安装的 3001 正式版，沿用正式配置、数据与采集周期，验证失败恢复旧任务；`--check` 只检查配置，切换与备份边界见 [永久运行副本](../docs/operations/service-composition.md#永久运行副本) |
+| `pnpm plugin:build [源码目录] [新输出目录]` | [build-source-plugin.mjs](build-source-plugin.mjs)：将指定插件的静态运行时依赖发射为独立包，拒绝运行时依赖 `src/server/`；长桥 `--with-sdk` 校验并携带本机产物，默认构建 `plugins/binance`，不安装或接触来源 |
+| `pnpm plugins:build [新输出目录] [--with-sdk]` | [build-source-plugins.mjs](build-source-plugins.mjs)：构建全部八个外部来源与服务包，默认输出 `dist/plugins/packages/`，不安装插件 |
+| `pnpm plugin <available\|list\|inspect\|install\|update\|enable\|disable\|uninstall\|rollback> [参数]` | [source-plugin.ts](source-plugin.ts)：浏览发行目录；`inspect` 查看 GitHub 发行信息；按 ID、GitHub 仓库/Release 地址、包目录或压缩包安装及管理，多插件仓库用 `--plugin <ID>` 选择；读取 `.env.local`，下一次请求自动生效，详见 [插件安装](../docs/operations/asset-sources.md#独立包安装与生命周期) |
+| `pnpm plugin create <名称> <新目录>` / `pack <包目录> <新输出.tar.gz> [--repository owner/repo --release v1.0.0]` | [开发模板](../plugins/sdk/template/) 与独立包归档入口；带仓库和 tag 时还生成同目录 `catalog.json`，输出目录须先创建且文件须不存在；协议和分发见 [第三方插件开发](../docs/operations/plugin-development.md) |
+| `pnpm plugin release <包目录> [包目录...] --output <新目录> --repository owner/repo --release v1.0.0` | 一次生成全量插件压缩包与 `catalog.json`；每次传入仓库全部可运行包目录，未改动插件保持原版本；拒绝已有输出目录和重复 ID，失败清理本次产物；不执行发布 |
+| `pnpm plugins:release plugins-v1.0.0 [新输出目录]` | [release-source-plugins.mjs](release-source-plugins.mjs)：构建八个通用压缩包、目录与摘要，默认输出 `dist/plugins/release/`，不执行发布 |
 | `pnpm background:run` | [run-background.mjs](run-background.mjs) / [run-background-collection.ts](run-background-collection.ts)：一次后台检查，执行到期全量、失败补试及正式日结；必须显式指定正式数据目录 |
 | `pnpm background:launchd <install\|status\|remove\|print>` | [background-launchd.mjs](background-launchd.mjs)：管理永久副本的网页常驻与每分钟后台检查任务；移除不删除数据 |
 | `pnpm daily-settlement:run` | [run-formal-daily-settlement.ts](run-formal-daily-settlement.ts)：独立运行生产日结服务；`APP_ENV=test` 不会将此 CLI 切换为测试替身，合同见 [正式日结](../docs/operations/service-composition.md#正式日结) |
@@ -59,6 +65,7 @@ node --experimental-transform-types --import ./scripts/register-ts-alias.mjs ./s
 
 | 文件 | 职责 |
 | --- | --- |
+| [lib/plugin-archive.mjs](lib/plugin-archive.mjs) | 插件打包与受限 USTAR 解包，拒绝越界路径、链接、重复文件及超限内容 |
 | [check-toolchain.mjs](check-toolchain.mjs) | 安装、启动与 CLI 共用的 Node/pnpm 版本检查 |
 | [local-network-environment.mjs](local-network-environment.mjs) | 为本机启动准备 Node 网络环境，处理不可达的本地代理 |
 | [register-ts-alias.mjs](register-ts-alias.mjs) / [ts-alias-loader.mjs](ts-alias-loader.mjs) | TypeScript CLI 与单测的 `@/` 别名加载支持 |

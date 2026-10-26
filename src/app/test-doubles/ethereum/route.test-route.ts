@@ -1,4 +1,4 @@
-import { getTestServices } from "@/server/composition";
+import { getTestServices } from "@/server/testing/composition";
 import { testGuard } from "@/server/testing/route-support";
 
 export const dynamic = "force-dynamic";

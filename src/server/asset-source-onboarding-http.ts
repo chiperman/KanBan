@@ -1,4 +1,3 @@
-import type { AssetSourceAuthorizationInput } from "@/server/asset-source-provider-adapters";
 import {
   assetSourceProviderForKind,
   parseAssetSourceAuthorizationInput,
@@ -11,7 +10,7 @@ import {
 import { getServices } from "@/server/composition";
 import { rejectCrossOrigin } from "@/server/auth/request-origin";
 
-interface PreviewRoute<Input extends AssetSourceAuthorizationInput> {
+interface PreviewRoute<Input> {
   provider: AssetSourceProvider;
   parse(body: unknown): Input | null;
   invalidInput: string;
@@ -20,10 +19,10 @@ interface PreviewRoute<Input extends AssetSourceAuthorizationInput> {
   readable?: boolean;
 }
 
-const CONFIRM_MESSAGES: Record<
+const CONFIRM_MESSAGES: Partial<Record<
   AssetSourceProvider,
   { invalid: string; failed: string }
-> = {
+>> = {
   longbridge: {
     invalid: "授权预览无效",
     failed: "保存长桥来源失败",
@@ -101,7 +100,7 @@ async function ownerRequired(): Promise<Response | null> {
     : null;
 }
 
-export function createPreviewRoute<Input extends AssetSourceAuthorizationInput>(
+export function createPreviewRoute<Input>(
   config: PreviewRoute<Input>,
 ) {
   return {
@@ -288,7 +287,7 @@ export function createConfirmRoute(
         { status: 400 },
       );
     }
-    const messages = CONFIRM_MESSAGES[provider];
+    const messages = CONFIRM_MESSAGES[provider] ?? { invalid: "授权预览无效", unavailable: "授权预览已失效，请重新验证", failed: "保存插件来源失败" };
     if (typeof body?.id !== "string") {
       return Response.json({ error: messages.invalid }, { status: 400 });
     }

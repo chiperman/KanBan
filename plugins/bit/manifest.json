@@ -1,0 +1,40 @@
+{
+  "id": "bit",
+  "version": "1.0.0",
+  "protocolVersion": 1,
+  "capabilities": [
+    "assets.read",
+    "authorization.preview",
+    "authorization.revalidate"
+  ],
+  "entry": "plugins/bit/src/main.mjs",
+  "description": {
+    "label": "BIT / Matrixport",
+    "fields": [
+      {
+        "id": "apiKey",
+        "label": "BIT / Matrixport API Key",
+        "control": "text",
+        "required": true
+      },
+      {
+        "id": "apiSecret",
+        "label": "BIT / Matrixport API Secret",
+        "control": "password",
+        "required": true
+      },
+      {
+        "id": "userId",
+        "label": "BIT / Matrixport 用户 ID（UID）",
+        "control": "text",
+        "required": true
+      }
+    ],
+    "previewScope": "Wallet 余额、Balance+、DCP（只读）"
+  },
+  "metadata": {
+    "summary": "Wallet 余额、Balance+、DCP（只读）",
+    "publisher": "KanBan",
+    "homepage": "https://github.com/chiperman/KanBan"
+  }
+}

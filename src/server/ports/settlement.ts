@@ -1,62 +1,7 @@
-import type { AssetClass, AssetExchangeRate, AssetMoney, AssetSnapshot } from "./assets";
+import type { FormalSettlementStatus, FormalSettlementAnchor, SecuritiesMarket, FormalSettlementSource, FormalSettlementHolding, FormalDailySettlement, MarketTradingDays } from "@/domain/formal-settlements";
+export type { FormalSettlementStatus, FormalSettlementAnchor, SecuritiesMarket, FormalSettlementSource, FormalSettlementHolding, FormalDailySettlement, MarketTradingDays } from "@/domain/formal-settlements";
+import type { AssetSnapshot } from "./assets";
 import type { AssetSourceSummary } from "./sources";
-
-export type FormalSettlementStatus = "complete" | "incomplete" | "missed";
-
-export type FormalSettlementAnchor =
-  | {
-      key: string;
-      kind: "securities-close";
-      market: SecuritiesMarket;
-      tradingDay: string;
-      scheduledCloseAt: string;
-    }
-  | {
-      key: string;
-      kind: "crypto-cutoff";
-      market: null;
-      tradingDay: string;
-      scheduledCloseAt: string;
-    };
-
-export type SecuritiesMarket = "US" | "HK" | "SH" | "SZ" | "SG";
-
-export interface FormalSettlementSource {
-  sourceId: string;
-  label: string;
-  kind: string;
-  capturedAt: string | null;
-  status: FormalSettlementStatus;
-  diagnostic: string | null;
-  total: Record<"USD" | "CNY" | "HKD", string | null>;
-}
-
-export interface FormalSettlementHolding {
-  sourceId: string;
-  sourceAsset: string | null;
-  symbol: string;
-  name: string;
-  quantity: string;
-  assetClass: AssetClass;
-  price: AssetMoney | null;
-  priceBasis: "official-close" | "capture-time" | "unavailable";
-  priceObservedAt: string | null;
-  market: SecuritiesMarket | null;
-  marketTradingDay: string | null;
-  marketValue: string | null;
-  diagnostic: string | null;
-}
-
-export interface FormalDailySettlement {
-  anchor: FormalSettlementAnchor;
-  capturedAt: string | null;
-  status: FormalSettlementStatus;
-  diagnostic: string | null;
-  total: Record<"USD" | "CNY" | "HKD", string | null>;
-  exchangeRates: AssetExchangeRate[];
-  sources: FormalSettlementSource[];
-  holdings: FormalSettlementHolding[];
-}
 
 export interface FormalDailySettlements {
   list(): Promise<FormalDailySettlement[]>;
@@ -84,10 +29,6 @@ export interface FormalSettlementCandleReader {
   }): Promise<FormalSettlementDailyCandle[]>;
 }
 
-export interface MarketTradingDays {
-  tradingDays: string[];
-  halfTradingDays: string[];
-}
 
 export interface FormalSettlementTradingCalendar {
   readTradingDays(input: {

@@ -7,7 +7,7 @@ import {
   DEFAULT_PROFIT_COLOR_SCHEME,
   isProfitColorScheme,
   PROFIT_COLOR_SCHEME_COOKIE_KEY,
-} from "@/ui/profit-color-scheme";
+} from "@/domain/profit-color-scheme";
 
 export async function readSavedProfitColorScheme() {
   const saved = (await cookies()).get(PROFIT_COLOR_SCHEME_COOKIE_KEY)?.value ?? null;

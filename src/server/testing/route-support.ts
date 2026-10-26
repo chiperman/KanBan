@@ -1,5 +1,6 @@
 import { createSession, SESSION_COOKIE } from "@/server/auth/session";
-import { getTestServices, isTestEnv, resetTestServices } from "@/server/composition";
+import { isTestEnv } from "@/server/composition";
+import { getTestServices, resetTestServices } from "@/server/testing/composition";
 
 export function testGuard(): Response | null {
   return isTestEnv()

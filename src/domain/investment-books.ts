@@ -1,8 +1,11 @@
 import { decimalAdd, decimalCompare, decimalDivide, decimalMultiply, decimalSubtract, decimalToFixed } from "@/domain/decimal";
 import { shanghaiDay } from "@/domain/daily-asset-snapshots";
+import { sourceInvestmentBookId, type InvestmentBookId } from "@/domain/source-investment-book";
 import { parseSourceInvestmentRecordInput, type SourceInvestmentRecord, type SourceInvestmentRecordKind } from "@/domain/source-investment-records";
 import { buildTotalValuation, type ValuationSource } from "@/domain/valuation";
-import type { DailyAssetTrendObservation, InvestmentCashflow, ManualAssetRecord } from "@/server/ports";
+import type { DailyAssetTrendObservation } from "@/domain/asset-history";
+import type { InvestmentCashflow } from "@/domain/investment-cashflows";
+import type { ManualAssetRecord } from "@/domain/manual-asset-records";
 import { parseSourceInvestmentHistory, type SourceInvestmentHistory } from "@/domain/source-investment-history";
 
 export const INVESTMENT_BOOKS = [
@@ -10,7 +13,7 @@ export const INVESTMENT_BOOKS = [
   { id: "a-shares", name: "A股", currency: "CNY", automatic: false },
   { id: "crypto", name: "虚拟货币", currency: "USD", automatic: true },
 ] as const;
-export type InvestmentBookId = typeof INVESTMENT_BOOKS[number]["id"];
+export type { InvestmentBookId } from "@/domain/source-investment-book";
 export type BookSource = ValuationSource & { lifecycle?: string };
 export type BookRecord = {
   id: string;
@@ -55,11 +58,7 @@ export function investmentBook(id: unknown) {
   if (!book) throw new Error("投资账本无效");
   return book;
 }
-export function sourceBookId(source: Pick<BookSource, "kind" | "manualAssetClass">): InvestmentBookId | null {
-  if (source.kind === "longbridge") return "us-stocks";
-  if (source.kind !== "manual" || source.manualAssetClass === "crypto") return "crypto";
-  return source.manualAssetClass === "securities" ? "a-shares" : null;
-}
+export const sourceBookId = sourceInvestmentBookId;
 export function activeBookRecords(state: InvestmentBookState, bookId: InvestmentBookId) {
   return state.records.filter(row => row.bookId === bookId && !row.voidedAt);
 }

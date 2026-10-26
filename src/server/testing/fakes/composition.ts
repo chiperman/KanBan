@@ -6,7 +6,7 @@ import type {
 import type { AppServices } from "@/server/app-services";
 import { SessionOwnerAuth } from "@/server/auth/session-auth";
 import { SourceIsolatedAssetSynchronization } from "@/server/refresh/asset-synchronization";
-import { LongbridgeOAuthState } from "@/server/asset-sources/longbridge";
+import { LongbridgeOAuthState } from "@/server/asset-source-plugins/oauth-state";
 import { AssetSourceOnboarding } from "@/server/asset-source-onboarding";
 import { createAssetSourceProviderAdapters } from "@/server/asset-source-provider-adapters";
 import { InvestmentCashflowLedger } from "@/server/investment-cashflows";
@@ -42,6 +42,7 @@ import {
 } from "./credentials";
 import { InMemoryExternalServiceConfiguration } from "./external-services";
 import { InMemoryAssetSourceConnections, InMemoryAssetSourceLifecycle } from "./connections";
+import { InMemoryAssetSourceDetails, InMemoryInvestmentBooks } from "./investments";
 
 export interface TestServices extends AppServices {
   clock: FakeClock;
@@ -134,6 +135,8 @@ export function createTestServices(): TestServices {
     dailyAssetSnapshots,
     clock,
   );
+  const assetSourceDetails = new InMemoryAssetSourceDetails(assetSources, manualAssetRecords, dailyAssetSnapshots);
+  const investmentBooks = new InMemoryInvestmentBooks(assetSources, investmentCashflows, assetSourceDetails);
   const assetSourceOnboarding = new AssetSourceOnboarding(
     createAssetSourceProviderAdapters({
       longbridge,
@@ -172,6 +175,8 @@ export function createTestServices(): TestServices {
     clock,
     assetCards,
     assetSources,
+    assetSourceDetails,
+    investmentBooks,
     manualAssetRecords,
     investmentCashflows,
     assetSourceLifecycle,

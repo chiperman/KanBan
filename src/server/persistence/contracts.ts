@@ -13,7 +13,7 @@ export interface DashboardState {
 }
 
 export const DASHBOARD_SCHEMA_VERSION = 9 as const;
-export const SQLITE_SCHEMA_VERSION = 23;
+export const SQLITE_SCHEMA_VERSION = 24;
 
 /** 卡片布局持久化所需的最小接口。 */
 export interface AssetCardDatabase {
@@ -82,6 +82,7 @@ export interface ManualAssetRecordDatabase {
 
 /** 来源授权写入持久化所需的最小接口。 */
 export interface AssetSourceConnectionDatabase {
+  connectPlugin?(kind: import("@/server/asset-source-plugins/protocol").AssetSourcePluginId, result: import("@/server/asset-source-plugins/protocol").AssetSourcePluginAuthorization, reference: string, capturedAt: string): Promise<void>;
   connectLongbridge(
     result: LongbridgeAuthorizationResult,
     credentialReference: string,

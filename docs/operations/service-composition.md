@@ -1,10 +1,14 @@
 # 生产服务生命周期
 
 - `composition.ts` 的进程级槽保存服务。重复请求及兼容模块重载复用同一对象；独立 CLI 进程拥有自己的服务。
+- 生产与测试都提供必需的来源详情和规范投资账本服务，页面不按环境切换旧账本实现。账本迁移、校验和更正规则共用 [InvestmentBookLedger](../../src/server/investment-books.ts)，SQLite 与内存适配器分别负责持久化与测试状态。
+- 公共 `getServices()` 保持同步，不静态加载测试替身。测试装配归属 [testing/composition.ts](../../src/server/testing/composition.ts)，Next.js 由 [instrumentation.ts](../../src/instrumentation.ts) 在 `APP_ENV=test` 的 Node 启动阶段注入工厂；直接运行的测试先通过测试入口初始化，生产环境拒绝注入。
 - `production.ts` 只组装端口；`persistence/` 持有数据库、迁移和适配器，`credentials/` 保存秘密与所有者认证，`source-connections.ts` 协调授权与业务状态。旧公开导出继续兼容。
+- 来源读取统一通过插件管理器；全部外部来源与 CoinGecko 服务从正式数据目录加载独立包，核心没有生产内置供应商回退。包不随应用更新目录切换，浏览安装、停用与升级规则见 [来源插件](asset-sources.md#独立包安装与生命周期)；网页与后台必须使用同一插件目录。
+- 插件注册表原子切换后，各进程在下一次请求加载变化；不重建认证、SQLite 或预览存储。长桥只在其自身包或启用状态变化时更换 worker，其他包的安装保留 OAuth 会话与订阅。应用代码、底层服务或存储实现变更仍需重启。
 - SQLite 实例独占其连接，启动依次设置 PRAGMA、Schema 迁移、完整性校验和权限收紧。旧 JSON 不在运行时导入；需要迁移时单独执行 `pnpm migrate:json-to-sqlite`，迁移入口会校验目标库为空并保留源文件备份。Schema 模块借用该连接和事务，不自行连接。初始化失败关闭连接；正常连接与服务同寿命，由进程退出回收。
 - 秘密恢复在读取来源引用后执行；ReadySecretStore 和来源连接等待同一恢复 Promise，失败向调用者传播。
-- 长桥由 [连接路由](../../src/server/asset-sources/longbridge-connections.ts) 统一读取，支持仅 CLI、仅 SDK、CLI 优先且 SDK 备用。新连接默认 CLI，旧连接兼容为 CLI 优先。资产、每日历史、指数、持仓 K 线与正式日结均服从同一选择；读取前后核对同一真实账户，两种方式都失败时保留上次快照。CLI/SDK 不各建一份账本，不参与本金计算。
+- 长桥通过核心 RPC 门面调用插件的 [连接路由](../../plugins/longbridge/src/longbridge-connections.ts) 统一读取，支持仅 CLI、仅 SDK、CLI 优先且 SDK 备用。新连接默认 CLI，旧连接兼容为 CLI 优先。资产、每日历史、指数、持仓 K 线与正式日结均服从同一选择；读取前后核对同一真实账户，两种方式都失败时保留上次快照。CLI/SDK 不各建一份账本，不参与本金计算。
 - 新增来源及来源的「连接与管理」提供自动检测与方式选择。检测的是 KanBan 服务所在机器；「重新检测 CLI」只检查并更新 CLI，保留 SDK 的检测结果。CLI 已登录可直接预览确认，无需手动启动 serve（stdio JSON-RPC）。未登录可通过官方一次性授权码登录；不自动安装 CLI 或替换已登录账户。SDK 使用独立 OAuth 与 Keychain，按需加载原生扩展。仅 CLI 无需 SDK 配置和构建，仅 SDK 不启动 CLI serve。
 - CLI 账户核验按批次串行执行，读取后的核验使用新查询。K 线、指数及日结收盘价按来源连接引用复用 serve，空闲 60 秒回收，读取失败或连接引用变化时关闭旧连接。上述行情读取每个通道限时 25 秒；CLI 优先且 SDK 备用时，CLI 失败或超时后仍有独立的 SDK 读取预算。
 - CLI 行情使用推送，SDK 行情每 15 秒轮询；双方式在 CLI 失败时使用 SDK，并定期重试 CLI。流订阅检查来源及账户绑定变化，关闭后释放子进程。行情在页面合并显示，不逐 tick 写库；数据库仍由既有刷新周期保存最近成功快照，每日历史按来源和日期幂等更新。
@@ -36,7 +40,7 @@ pnpm background:launchd install
 pnpm background:launchd status
 ```
 
-[准备脚本](../../scripts/prepare-runtime.mjs) 不覆盖已有目录，不复制业务数据，也不安装任务；它复制当前源码（包括未提交且未忽略的修改）与经校验的原生产物，独立安装依赖和构建，保存 `.kanban-runtime.json`。构建使用一次性空数据目录，不接触正式库。运行副本禁止 `pnpm dev`。
+[准备脚本](../../scripts/prepare-runtime.mjs) 不覆盖已有目录，不复制业务数据，也不安装任务；它复制当前源码（包括未提交且未忽略的修改），独立安装依赖和构建；已安装插件和 SDK 产物位于数据目录的插件包中，不随运行副本复制，保存 `.kanban-runtime.json`。构建使用一次性空数据目录，不接触正式库。运行副本禁止 `pnpm dev`。
 
 日常开发完成后，在开发仓库根目录执行：
 
