@@ -18,6 +18,14 @@
 
 主导航为总览、资产、投资账本；桌面设置位于侧栏底部，手机底栏展示四项。实现以 [WorkbenchShell](../src/ui/workbench-shell.tsx) 为准。正式日结不在首页展示，设置页与后台相关能力仍保留；不能按旧规格把首页日结面板恢复。
 
+### 页面内部模块
+
+- 总览入口管理实时来源、展示偏好与页面组装；[daily-overview](../src/ui/daily-overview/) 分离估值与比较数据推导、资产概况、账本摘要和来源分布。
+- 投资账本入口保留页面与弹窗状态；[investment-books](../src/ui/investment-books/) 分离趋势和记录列表的数据推导、收益视图、记录视图及各业务表单，共用保存与结果核对弹窗。
+- 趋势图保留 [AssetTrendChart](../src/ui/asset-trend-chart.tsx) 公开入口；[asset-trend](../src/ui/asset-trend/) 分离普通与指数绘图、日期轴、提示浮层、资金标记和绘图部件。
+- 来源接入的步骤、互斥锁和保存恢复由 [AssetSourceFlow](../src/ui/asset-source-flow.tsx) 编排；[asset-source](../src/ui/asset-source/) 分离选择、配置和确认视图，以及单来源与多链预览请求。
+- 插件目录与操作状态由 [PluginMarketplace](../src/ui/plugin-marketplace.tsx) 管理；[plugin-marketplace](../src/ui/plugin-marketplace/) 分离插件卡片、操作确认、GitHub 安装表单及响应读取。
+
 ## 其他实现入口
 
 - 锁定与演示入口在 [首页路由](../src/app/page.tsx)。`/?mode=demo` 使用固定虚构数据；总览中的“插件”进入 `/settings?view=plugins&mode=demo`，复用插件组件预览虚构版本及安装状态，支持搜索和筛选。两处路由均在进入所有者服务之前处理演示分支，演示不调用插件管理 API。
