@@ -33,6 +33,7 @@ export function SetupPasskey() {
     try {
       const optionsResponse = await fetch("/api/auth/register/options", {
         method: "POST",
+        signal: AbortSignal.timeout(15_000),
       });
       if (!optionsResponse.ok) {
         const result = await optionsResponse.json().catch(() => null);

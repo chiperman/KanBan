@@ -54,7 +54,11 @@ export function SessionGuard({ children }: { children: ReactNode }) {
 
     async function destroyServerSession() {
       try {
-        const response = await fetch("/api/auth/logout", { method: "POST" });
+        // 挂起的注销会让锁定后一直重试不到服务端；超时后走既有重试路径。
+        const response = await fetch("/api/auth/logout", {
+          method: "POST",
+          signal: AbortSignal.timeout(15_000),
+        });
         if (response.ok) {
           const waitMs = Math.max(0, minDwellMs - (Date.now() - lockedAt));
           retry = setTimeout(() => {

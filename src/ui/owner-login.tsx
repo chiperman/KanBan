@@ -406,8 +406,10 @@ export function OwnerLogin({
     let stage: "options" | "ceremony" | "verify" = "options";
     let authenticated = false;
     try {
+      // options 是只读请求；挂起时让用户能拿到错误并重新发起，不卡住 pending 状态。
       const optionsResponse = await fetch("/api/auth/login/options", {
         method: "POST",
+        signal: AbortSignal.timeout(15_000),
       });
       if (!optionsResponse.ok) {
         const result = await optionsResponse.json().catch(() => null);
