@@ -194,9 +194,12 @@ export function EvmTokenPreferenceSettings({
           }),
         },
       );
-      const body = await readJsonResult<{ error?: string }>(response);
+      const body = await readJsonResult<{ error?: string; ok?: boolean }>(response);
       if (lockOnUnauthorizedResponse(response)) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
-      if (!response.ok) throw new Error(body?.error ?? "资产范围设置保存失败");
+      if (!response.ok || body?.ok !== true) {
+        // 空 2xx 无法确认服务端已保存，不能当作成功提示或刷新页面。
+        throw new Error(body?.error ?? "尚未确认资产范围是否保存，请刷新页面核对后再重试。");
+      }
       setNativeAssetToIgnore(null);
       setSaved(true);
       startRefresh(() => router.refresh());

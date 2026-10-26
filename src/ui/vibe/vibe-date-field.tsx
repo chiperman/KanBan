@@ -17,9 +17,20 @@ function dayForDate(date: Date): string {
   ].join("-");
 }
 
+const EMPTY_LABEL = "未设置";
+
+/** 空日期没有有效月份；回退到 1970-01 只为保持月份可格式化，调用方会用 max 打开日历。 */
+const FALLBACK_MONTH = new Date(Date.UTC(1970, 0, 1));
+
 function monthStart(day: string): Date {
   const date = dateForDay(day);
+  if (!Number.isFinite(date.getTime())) return FALLBACK_MONTH;
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+}
+
+/** 已有日期用所在月份，空日期落在可选范围末月，避免打开日历时读到无效月份。 */
+function calendarMonth(value: string, max: string): Date {
+  return value !== "" ? monthStart(value) : monthStart(max);
 }
 
 function monthLabel(month: Date): string {
@@ -31,6 +42,7 @@ function monthLabel(month: Date): string {
 }
 
 function displayDay(day: string): string {
+  if (day === "") return EMPTY_LABEL;
   return day.replaceAll("-", " / ");
 }
 
@@ -40,6 +52,7 @@ function isSameMonth(left: Date, right: Date): boolean {
 }
 
 export function VibeDateField({
+  clearable = false,
   disabled = false,
   fieldId,
   label,
@@ -48,6 +61,7 @@ export function VibeDateField({
   onValueChange,
   value,
 }: {
+  clearable?: boolean;
   disabled?: boolean;
   fieldId: string;
   label: string;
@@ -60,7 +74,7 @@ export function VibeDateField({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const calendarRef = useRef<HTMLElement>(null);
   const [open, setOpen] = useState(false);
-  const [month, setMonth] = useState(() => monthStart(value));
+  const [month, setMonth] = useState(() => calendarMonth(value, max));
   const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
   const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
   const maxMonth = monthStart(max);
@@ -149,7 +163,17 @@ export function VibeDateField({
     >
       <header className="vibe-date-field__calendar-head">
         <strong>{monthLabel(month)}</strong>
-        <span>
+        <span className="vibe-date-field__head-actions">
+          {clearable && !disabled ? <button
+            aria-label="清空日期"
+            className="vibe-date-field__clear"
+            onClick={() => {
+              onValueChange("");
+              setOpen(false);
+              triggerRef.current?.focus();
+            }}
+            type="button"
+          >清空</button> : null}
           <button
             aria-label="上个月"
             className="vibe-date-field__month-button is-previous"
@@ -177,7 +201,7 @@ export function VibeDateField({
         {days.map((date, index) => {
           if (date === null) return <span key={`blank-${index}`} />;
           const day = dayForDate(date);
-          const selected = day === value;
+          const selected = value !== "" && day === value;
           const isToday = day === today;
           return (
             <button
@@ -193,6 +217,7 @@ export function VibeDateField({
               onClick={() => {
                 onValueChange(day);
                 setOpen(false);
+                triggerRef.current?.focus();
               }}
               type="button"
             >
@@ -218,7 +243,7 @@ export function VibeDateField({
         disabled={disabled}
         id={fieldId}
         onClick={() => {
-          setMonth(monthStart(value));
+          setMonth(calendarMonth(value, max));
           setOpen((current) => !current);
         }}
         type="button"

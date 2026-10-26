@@ -160,9 +160,11 @@ function MemberDialog({ member, currentDay, onClose }: { member: BookMember; cur
   const [fromDay, setFromDay] = useState(member.fromDay ?? "");
   const [toDay, setToDay] = useState(member.toDay ?? "");
   const [initial] = useState(() => ({ fromDay, toDay }));
-  return <ActionDialog checkBookId={member.bookId} title="确认来源范围" description="接入接口不会被算成新增投资。请确认该账户从哪天起包含在整本账的资产总额里。" dirty={fromDay !== initial.fromDay || toDay !== initial.toDay} onClose={onClose} disabled={!fromDay} submit={() => bookRequest({ action: "member", bookId: member.bookId, sourceId: member.sourceId, fromDay, toDay: toDay || null })}>
+  const validRange = fromDay !== "" && (toDay === "" || toDay >= fromDay);
+  return <ActionDialog checkBookId={member.bookId} title="确认来源范围" description="接入接口不会被算成新增投资。请确认该账户从哪天起包含在整本账的资产总额里。" dirty={fromDay !== initial.fromDay || toDay !== initial.toDay} onClose={onClose} disabled={!validRange} submit={() => bookRequest({ action: "member", bookId: member.bookId, sourceId: member.sourceId, fromDay, toDay: toDay || null })}>
     <VibeDateField fieldId="book-member-from" label="计入资产的起始日" max={currentDay} value={fromDay} onValueChange={setFromDay} />
-    <VibeDateField fieldId="book-member-to" label="退出日（可空，当天起不再计入）" max={currentDay} value={toDay} onValueChange={setToDay} />
+    <VibeDateField clearable fieldId="book-member-to" label="退出日（可空，当天起不再计入）" max={currentDay} value={toDay} onValueChange={setToDay} />
+    {toDay !== "" && toDay < fromDay ? <VibeNotice tone="error" role="alert">退出日不能早于起始日。</VibeNotice> : null}
     <p className="trend-note">{member.fromDay === null ? "现有来源此前默认全程计入；保存后将按指定起始日重新核算自动汇总。" : "确认前暂停汇总，避免接入账户导致资产跳变被误认为收益。"} 导入历史的整本账总额保持原口径。</p>
   </ActionDialog>;
 }

@@ -39,6 +39,7 @@ type CandlesCache = {
   request?: Promise<MarketBenchmarkCandlesState>;
 };
 let candlesCache: CandlesCache | null = null;
+const candlesRetryListeners = new Set<() => void>();
 
 function cacheKey(scope: string): string {
   return `${shanghaiDay(new Date())}:${scope}`;
@@ -61,9 +62,12 @@ function readCandles(cache: CandlesCache): Promise<MarketBenchmarkCandlesState> 
   if (cache.state) return Promise.resolve(cache.state);
   if (cache.request) return cache.request;
   // 请求不随图表隐藏而中断，让再次勾选指数及其他消费者复用同一次读取。
-  cache.request = (async (): Promise<MarketBenchmarkCandlesState> => {
+  const request = (async (): Promise<MarketBenchmarkCandlesState> => {
     try {
-      const response = await fetch("/api/market-benchmarks/candles", { cache: "no-store" });
+      const response = await fetch("/api/market-benchmarks/candles", {
+        cache: "no-store",
+        signal: AbortSignal.timeout(15_000),
+      });
       if (lockOnUnauthorizedResponse(response)) return { kind: "failed" };
       if (response.status === 409) return { kind: "unavailable" };
       if (!response.ok) return { kind: "failed" };
@@ -77,8 +81,19 @@ function readCandles(cache: CandlesCache): Promise<MarketBenchmarkCandlesState> 
     } catch {
       return { kind: "failed" };
     }
-  })().finally(() => { cache.request = undefined; });
-  return cache.request;
+  })();
+  cache.request = request;
+  void request.finally(() => {
+    if (cache.request === request) cache.request = undefined;
+  });
+  return request;
+}
+
+/** 丢弃失败或挂起的指数读取，并让在监听的图表立即重新拉取。 */
+export function retryMarketBenchmarkCandles() {
+  if (candlesCache?.state) return;
+  if (candlesCache) candlesCache.request = undefined;
+  for (const listener of candlesRetryListeners) listener();
 }
 
 function useMarketBenchmarkCandles(visible: boolean, sources: readonly BenchmarkSource[]): MarketBenchmarkCandlesState {
@@ -113,6 +128,7 @@ function useMarketBenchmarkCandles(visible: boolean, sources: readonly Benchmark
       clearTimeout(timer);
       setState({ scope, value: { kind: "loading" } });
     }
+    candlesRetryListeners.add(refresh);
     refresh();
     window.addEventListener(OWNER_LOCK_EVENT, lock);
     window.addEventListener("focus", refresh);
@@ -121,6 +137,7 @@ function useMarketBenchmarkCandles(visible: boolean, sources: readonly Benchmark
     return () => {
       active = false;
       clearTimeout(timer);
+      candlesRetryListeners.delete(refresh);
       window.removeEventListener(OWNER_LOCK_EVENT, lock);
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", refresh);

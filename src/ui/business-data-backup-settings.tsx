@@ -19,6 +19,11 @@ interface BackupPreview extends BackupRestorePreview {
 
 type BackupOperation = "export" | "preview" | "restore" | "upload";
 
+/** 恢复可能已在服务端完成；响应丢失或服务端报错时结果不明，不能鼓励直接重放。 */
+class BackupOutcomeUnknown extends Error {}
+
+const READ_TIMEOUT_MESSAGE = "读取超时，请重试。";
+
 interface BackupExport {
   checksum: string;
   fileName: string;
@@ -30,10 +35,11 @@ async function requestBackup<T>(
   fileName?: string,
   discardConfirmation?: string,
 ): Promise<T> {
-  const signal = action === "list" ? AbortSignal.timeout(30_000) : undefined;
+  const readOnly = action === "list" || action === "preview";
+  const signal = readOnly ? AbortSignal.timeout(30_000) : undefined;
   const response = await fetch("/api/business-data-backups", {
     method: action === "list" ? "GET" : "POST",
-    ...(action === "list" ? { cache: "no-store", signal } : {}),
+    ...(action === "list" ? { cache: "no-store", signal } : signal ? { signal } : {}),
     ...(action === "list"
       ? {}
       : {
@@ -45,13 +51,18 @@ async function requestBackup<T>(
           ),
         }),
   }).catch((caught: unknown) => {
-    if (signal?.aborted) throw new Error("读取备份列表超时，请重试。");
+    if (signal?.aborted) throw new Error(READ_TIMEOUT_MESSAGE);
+    // 写入请求中断时无法判断服务端是否已经执行，只能当作结果不明。
+    if (action === "restore") throw new BackupOutcomeUnknown("未能确认恢复结果，连接中断。");
     throw caught;
   });
   if (lockOnUnauthorizedResponse(response)) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
   const result = await readJsonResult<T & { error?: string }>(response);
-  if (signal?.aborted) throw new Error("读取备份列表超时，请重试。");
+  if (signal?.aborted) throw new Error(READ_TIMEOUT_MESSAGE);
   if (!response.ok || result === null || "error" in result) {
+    if (action === "restore" && response.status >= 500) {
+      throw new BackupOutcomeUnknown("未能确认恢复结果，服务端返回错误。");
+    }
     throw new Error(
       result && "error" in result
         ? result.error ?? "备份操作失败"
@@ -115,6 +126,7 @@ export function BusinessDataBackupSettings() {
   const pendingRef = useRef<BackupOperation | null>(null);
   const [error, setError] = useState("");
   const [uploadNeedsCheck, setUploadNeedsCheck] = useState(false);
+  const [restoreNeedsCheck, setRestoreNeedsCheck] = useState(false);
 
   function beginOperation(operation: BackupOperation) {
     if (pendingRef.current !== null) return false;
@@ -157,6 +169,7 @@ export function BusinessDataBackupSettings() {
     setPreview(null);
     setRestored(null);
     setConfirmOpen(false);
+    setRestoreNeedsCheck(false);
   }
 
   async function exportBackup() {
@@ -182,6 +195,7 @@ export function BusinessDataBackupSettings() {
       return;
     }
     if (!beginOperation("preview")) return;
+    setRestoreNeedsCheck(false);
     try {
       const result = await requestBackup<BackupRestorePreview>("preview", candidate);
       setPreview({ ...result, fileName: candidate });
@@ -209,10 +223,19 @@ export function BusinessDataBackupSettings() {
       setPreview(null);
       setRestored(restoredPreview);
       setConfirmOpen(false);
+      setRestoreNeedsCheck(false);
       clearRefreshState();
       router.refresh();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "恢复业务数据失败");
+      if (caught instanceof BackupOutcomeUnknown) {
+        // 恢复可能已经生效：关闭确认框并要求重新预演，避免把重放当作唯一出路。
+        setPreview(null);
+        setConfirmOpen(false);
+        setRestoreNeedsCheck(true);
+        setError(caught.message);
+      } else {
+        setError(caught instanceof Error ? caught.message : "恢复业务数据失败");
+      }
     } finally {
       finishOperation();
     }
@@ -286,6 +309,9 @@ export function BusinessDataBackupSettings() {
               variant="text"
             >{loadingBackups ? "正在读取…" : "重新读取备份列表"}</VibeButton>
           </VibeNotice> : null}
+          {restoreNeedsCheck ? <VibeNotice role="alert" tone="warning">
+            {error || "未能确认恢复结果，请先核对当前数据，再重新预演恢复。"}
+          </VibeNotice> : null}
           <div className="business-data-restore">
             <VibeSelectField
               disabled={pending !== null}
@@ -338,7 +364,7 @@ export function BusinessDataBackupSettings() {
             </VibeNotice>
           ) : null}
         </div>
-        {error && !confirmOpen && !uploadNeedsCheck ? (
+        {error && !confirmOpen && !uploadNeedsCheck && !restoreNeedsCheck ? (
           <VibeNotice role="alert" tone="error">
             {error}
           </VibeNotice>
@@ -360,7 +386,7 @@ export function BusinessDataBackupSettings() {
                   type="submit"
                   variant="primary"
                 >
-                  {pending === "restore" ? "正在恢复…" : error ? "重试恢复" : "确认恢复"}
+                  {pending === "restore" ? "正在恢复…" : "确认恢复"}
                 </VibeButton>
               </>
             }

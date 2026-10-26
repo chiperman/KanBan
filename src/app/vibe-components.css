@@ -143,9 +143,26 @@
   font-weight: 600;
 }
 
-.vibe-date-field__calendar-head > span {
+.vibe-date-field__head-actions {
   display: flex;
   gap: 4px;
+  align-items: center;
+}
+
+.vibe-date-field__clear {
+  padding: 0 6px;
+  height: 34px;
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  cursor: pointer;
+  font-family: var(--f-ui);
+  font-size: var(--vibe-type-body-xs);
+}
+
+.vibe-date-field__clear:focus-visible {
+  outline: 1px solid var(--primary);
+  outline-offset: 1px;
 }
 
 .vibe-date-field__month-button {

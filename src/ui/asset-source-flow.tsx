@@ -397,6 +397,12 @@ export function AssetSourceFlow({
       setError(body?.error ?? "手工资产记录保存失败");
       return;
     }
+    // 无效成功响应无法确认来源已创建，不能当作成功进入下一步。
+    const body = await readJsonResult<{ error?: string; ok?: boolean }>(response);
+    if (body?.ok !== true) {
+      setError("尚未确认来源是否创建，请刷新页面核对后再重试。");
+      return;
+    }
     leaveFlow();
     router.refresh();
   }
@@ -414,9 +420,14 @@ export function AssetSourceFlow({
         setError(OWNER_SESSION_EXPIRED_MESSAGE);
         return;
       }
+      const body = await readJsonResult<{ error?: string; code?: string; ok?: boolean }>(response);
       if (!response.ok) {
-        const body = await readJsonResult<{ error?: string; code?: string }>(response);
         confirmationFailed(body, `保存 ${description.label} 来源失败`, current);
+        return;
+      }
+      if (body?.ok !== true) {
+        // 空 2xx 不是确定失败，不进恢复流，只保留预览让用户核对后重试。
+        setError(`尚未确认 ${description.label} 来源是否保存，请刷新页面核对后再重试。`);
         return;
       }
       remaining.shift();

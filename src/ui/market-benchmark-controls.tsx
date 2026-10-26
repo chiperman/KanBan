@@ -1,10 +1,12 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import {
   MARKET_BENCHMARKS,
   type MarketBenchmarkSymbol,
 } from "@/domain/market-benchmark";
-import type { MarketBenchmarkDataState } from "@/ui/market-benchmark";
+import { retryMarketBenchmarkCandles, type MarketBenchmarkDataState } from "@/ui/market-benchmark";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 
 function assetLabel(assetScopeLabel: string): string {
@@ -18,7 +20,7 @@ function BenchmarkState({
   title,
   tone,
 }: {
-  children?: string;
+  children?: ReactNode;
   title: string;
   tone: "error" | "warning" | "muted";
 }) {
@@ -76,7 +78,7 @@ export function MarketBenchmarkControls({
   } else if (dataState.kind === "unavailable") {
     stateDescription = "接入长桥行情后可对比。";
   } else if (dataState.kind === "failed") {
-    stateDescription = "指数加载失败，刷新重试。";
+    stateDescription = "指数加载失败。";
   } else {
     stateDescription = dataState.comparison.reason!;
   }
@@ -122,7 +124,14 @@ export function MarketBenchmarkControls({
           );
         })}
       </div>
-      {!returnComparison || stateDescription ? <BenchmarkState title={stateTitle} tone={enabledSymbols.length > 0 && dataState.kind === "failed" ? "error" : enabledSymbols.length > 0 && dataState.kind === "ready" && !comparisonReady ? "warning" : "muted"}>{stateDescription}</BenchmarkState> : null}
+      {!returnComparison || stateDescription ? (
+        <BenchmarkState title={stateTitle} tone={enabledSymbols.length > 0 && dataState.kind === "failed" ? "error" : enabledSymbols.length > 0 && dataState.kind === "ready" && !comparisonReady ? "warning" : "muted"}>
+          {stateDescription}
+          {enabledSymbols.length > 0 && dataState.kind === "failed" ? (
+            <VibeButton onClick={retryMarketBenchmarkCandles} type="button" variant="text">重试</VibeButton>
+          ) : null}
+        </BenchmarkState>
+      ) : null}
     </div>
   );
 }

@@ -41,6 +41,7 @@ function createChartSession(sourceId: string, symbol: string) {
   let latestQuote: LongbridgeRealtimeQuote | null = null;
   const cache = new Map<LongbridgeHoldingCandlePeriod, LoadedData>();
   const requests = new Map<LongbridgeHoldingCandlePeriod, { controller: AbortController; promise: Promise<LoadedData> }>();
+  const READ_TIMEOUT_MS = 15_000;
   function clear() {
     requests.forEach(({ controller }) => controller.abort());
     requests.clear();
@@ -65,33 +66,38 @@ function createChartSession(sourceId: string, symbol: string) {
     // 以请求前的报价为水位；延迟行情不能与电脑当前时间比较。
     const quoteAtRequest = longbridgeQuoteTime(latestQuote?.timestamp) ?? 0;
     const promise = (async () => {
-      const response = await fetch(
-        `/api/asset-sources/${encodeURIComponent(sourceId)}/candles?symbol=${encodeURIComponent(symbol)}&period=${period}`,
-        { cache: "no-store", signal: controller.signal },
-      );
-      const result = await readJsonResult<CandlestickResponse>(response);
-      controller.signal.throwIfAborted();
-      if (lockOnUnauthorizedResponse(response)) {
-        locked = true;
-        clear();
-        throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
+      const timeout = setTimeout(() => controller.abort(new Error("长桥 K 线读取超时，请重试。")), READ_TIMEOUT_MS);
+      try {
+        const response = await fetch(
+          `/api/asset-sources/${encodeURIComponent(sourceId)}/candles?symbol=${encodeURIComponent(symbol)}&period=${period}`,
+          { cache: "no-store", signal: controller.signal },
+        );
+        const result = await readJsonResult<CandlestickResponse>(response);
+        controller.signal.throwIfAborted();
+        if (lockOnUnauthorizedResponse(response)) {
+          locked = true;
+          clear();
+          throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
+        }
+        if (!response.ok || result === null) throw new Error(result?.error ?? "长桥 K 线读取失败");
+        const candles = (result.candles ?? []).filter((candle) =>
+          Number.isFinite(Date.parse(candle.time)) &&
+          [candle.open, candle.high, candle.low, candle.close].every(validNumber),
+        ).sort((a, b) => Date.parse(a.time) - Date.parse(b.time));
+        const trend = (result.trend ?? []).filter((point) =>
+          Number.isFinite(Date.parse(point.time)) && validNumber(point.price),
+        ).sort((a, b) => Date.parse(a.time) - Date.parse(b.time));
+        if (period === "five-day" ? trend.length < 2 : candles.length === 0) {
+          throw new Error(period === "five-day" ? "长桥暂未返回可展示的近五日走势" : "长桥暂未返回可展示的 K 线数据");
+        }
+        const history = { candles, trend, receivedAt: Date.now(), quoteAt: quoteAtRequest };
+        const data = latestQuote && (longbridgeQuoteTime(latestQuote.timestamp) ?? 0) > quoteAtRequest
+          ? applyHoldingChartQuote(history, period, latestQuote) : history;
+        cache.set(period, data);
+        return data;
+      } finally {
+        clearTimeout(timeout);
       }
-      if (!response.ok || result === null) throw new Error(result?.error ?? "长桥 K 线读取失败");
-      const candles = (result.candles ?? []).filter((candle) =>
-        Number.isFinite(Date.parse(candle.time)) &&
-        [candle.open, candle.high, candle.low, candle.close].every(validNumber),
-      ).sort((a, b) => Date.parse(a.time) - Date.parse(b.time));
-      const trend = (result.trend ?? []).filter((point) =>
-        Number.isFinite(Date.parse(point.time)) && validNumber(point.price),
-      ).sort((a, b) => Date.parse(a.time) - Date.parse(b.time));
-      if (period === "five-day" ? trend.length < 2 : candles.length === 0) {
-        throw new Error(period === "five-day" ? "长桥暂未返回可展示的近五日走势" : "长桥暂未返回可展示的 K 线数据");
-      }
-      const history = { candles, trend, receivedAt: Date.now(), quoteAt: quoteAtRequest };
-      const data = latestQuote && (longbridgeQuoteTime(latestQuote.timestamp) ?? 0) > quoteAtRequest
-        ? applyHoldingChartQuote(history, period, latestQuote) : history;
-      cache.set(period, data);
-      return data;
     })().finally(() => {
       if (requests.get(period)?.controller === controller) requests.delete(period);
     });

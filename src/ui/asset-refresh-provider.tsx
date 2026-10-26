@@ -68,7 +68,11 @@ async function requestAssetRefresh(
 }
 
 async function readAssetRefreshState() {
-  const response = await fetch("/api/asset-sources/refresh", { cache: "no-store" });
+  // 挂起的状态读取会阻断恢复核对；超时后由协调器按既有节奏重排。
+  const response = await fetch("/api/asset-sources/refresh", {
+    cache: "no-store",
+    signal: AbortSignal.timeout(15_000),
+  });
   if (lockOnUnauthorizedResponse(response)) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
   if (!response.ok) throw new Error("读取资产刷新状态失败");
   return await response.json() as { attemptedAt: string | null; inProgressAt: string | null };
