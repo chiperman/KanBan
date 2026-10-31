@@ -1,4 +1,5 @@
 import { rejectCrossOrigin } from "@/server/auth/request-origin";
+import { withOwnerCredentialLock } from "@/server/auth/challenges";
 import { getServices } from "@/server/composition";
 
 export const dynamic = "force-dynamic";
@@ -27,22 +28,24 @@ export async function GET() {
 export async function DELETE(request: Request) {
   const originError = rejectCrossOrigin(request);
   if (originError) return originError;
-  const services = getServices();
-  if ((await services.auth.currentSession()) === null) {
-    return Response.json({ error: "需要所有者身份" }, { status: 401 });
-  }
+  return withOwnerCredentialLock(async () => {
+    const services = getServices();
+    if ((await services.auth.currentSession()) === null) {
+      return Response.json({ error: "需要所有者身份" }, { status: 401 });
+    }
 
-  if ((await services.ownerCredentials.get()) === null) {
+    if ((await services.ownerCredentials.get()) === null) {
+      return Response.json({ ok: true });
+    }
+
+    if ((await services.ownerRecoveryCredentials.get()) === null) {
+      return Response.json(
+        { error: "请先配置 TOTP 登录，再移除 Passkey" },
+        { status: 409 },
+      );
+    }
+
+    await services.ownerCredentials.remove();
     return Response.json({ ok: true });
-  }
-
-  if ((await services.ownerRecoveryCredentials.get()) === null) {
-    return Response.json(
-      { error: "请先配置 TOTP 登录，再移除 Passkey" },
-      { status: 409 },
-    );
-  }
-
-  await services.ownerCredentials.remove();
-  return Response.json({ ok: true });
+  });
 }

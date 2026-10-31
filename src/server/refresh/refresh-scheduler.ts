@@ -43,8 +43,9 @@ export class RefreshScheduler implements AssetSynchronization {
 
   private scheduleFull(automatic: boolean): Promise<AssetRefreshReport> {
     if (this.active?.kind === "unified" && this.active.full) {
-      if (!automatic) this.active.automatic = false;
-      return this.active.promise;
+      return automatic
+        ? this.active.promise
+        : this.joinFull(this.active, () => this.scheduleFull(false));
     }
 
     const pendingFull = this.pending.find(
@@ -58,10 +59,10 @@ export class RefreshScheduler implements AssetSynchronization {
     const pendingSources = this.pending.find(
       (job): job is UnifiedJob => job.kind === "unified" && !job.full,
     );
-    if (pendingSources !== undefined) {
+    if (pendingSources !== undefined && !automatic) {
       pendingSources.full = true;
       pendingSources.sourceIds.clear();
-      if (!automatic) pendingSources.automatic = false;
+      pendingSources.automatic = false;
       return pendingSources.promise;
     }
 
@@ -71,15 +72,13 @@ export class RefreshScheduler implements AssetSynchronization {
   private scheduleSources(sourceIds: string[]): Promise<AssetRefreshReport> {
     const requested = new Set(sourceIds);
     if (this.active?.kind === "unified") {
-      if (this.active.full || this.containsAll(this.active.sourceIds, requested)) {
+      if (this.active.full) {
+        return this.joinFull(this.active, () => this.scheduleSources([...requested]));
+      }
+      if (this.containsAll(this.active.sourceIds, requested)) {
         return this.active.promise;
       }
     }
-
-    const pendingFull = this.pending.find(
-      (job): job is UnifiedJob => job.kind === "unified" && job.full,
-    );
-    if (pendingFull !== undefined) return pendingFull.promise;
 
     const pendingSources = this.pending.find(
       (job): job is UnifiedJob => job.kind === "unified" && !job.full,
@@ -89,7 +88,23 @@ export class RefreshScheduler implements AssetSynchronization {
       return pendingSources.promise;
     }
 
+    const pendingFull = this.pending.find(
+      (job): job is UnifiedJob => job.kind === "unified" && job.full,
+    );
+    if (pendingFull !== undefined) {
+      return this.joinFull(pendingFull, () => this.scheduleSources([...requested]));
+    }
+
     return this.enqueueUnified(false, false, requested);
+  }
+
+  private joinFull(
+    job: UnifiedJob,
+    retry: () => Promise<AssetRefreshReport>,
+  ): Promise<AssetRefreshReport> {
+    if (!job.automatic) return job.promise;
+    // An automatic cycle check can skip without satisfying the manual request.
+    return job.promise.then((report) => report.skipped === "not-due" ? retry() : report);
   }
 
   private enqueueUnified(
