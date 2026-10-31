@@ -73,7 +73,7 @@ export interface BusinessDataState {
 export interface BackupRestorePreview {
   /** Explicit loss consent binds to this file and current omitted facts. */
   discardConfirmation?: string;
-  omittedHistory?: { manualAssetRecords: number; formalDailySettlements: number; sourceInvestmentHistories?: number; sourceInvestmentRecords?: number; investmentBookRecords?: number };
+  omittedHistory?: { manualAssetRecords: number; formalDailySettlements: number; sourceInvestmentHistories?: number; sourceInvestmentRecords?: number; investmentBookRecords?: number; investmentCashflows?: number };
   sourceCount: number;
   cardCount: number;
   snapshotRange: { from: string | null; to: string | null };
@@ -108,21 +108,11 @@ export interface BackupSummary {
 }
 
 export interface BusinessDataBackupStore {
-  readStoredInvestmentBooks?(): Promise<InvestmentBookState | undefined>;
-  listSourceInvestmentHistories?(): Promise<SourceInvestmentHistory[]>;
-  listSourceInvestmentRecords?(sourceId?: string): Promise<SourceInvestmentRecord[]>;
-  listAssetCards(): Promise<Card[]>;
-  listSources(): Promise<AssetSourceSummary[]>;
-  listDailyAssetSnapshots(): Promise<DailyAssetSnapshot[]>;
-  listDailyAssetTrendObservations(): Promise<DailyAssetTrendObservation[]>;
-  listImportedSourceHistoryObservations(): Promise<
-    ImportedAssetSourceHistoryObservation[]
-  >;
-  listInvestmentCashflows(): Promise<InvestmentCashflow[]>;
-  listManualAssetRecords(): Promise<ManualAssetRecord[]>;
-  listFormalDailySettlements(): Promise<FormalDailySettlement[]>;
+  /** 同一数据库快照内读取，不触发迁移或其他业务写入。 */
+  readBusinessData(): Promise<BusinessDataState>;
   validateBusinessData(state: BusinessDataState): Promise<void>;
-  replaceBusinessData(state: BusinessDataState): Promise<void>;
+  /** 持有写事务后复核当前状态，复核成功才替换；review 必须同步结束。 */
+  replaceBusinessData<T>(state: BusinessDataState, review: (current: BusinessDataState) => T): Promise<T>;
 }
 
 type BackupPayload = {

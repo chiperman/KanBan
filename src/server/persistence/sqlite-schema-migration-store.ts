@@ -141,6 +141,12 @@ export class SqliteSchemaMigrationStore {
       this.migrateSchemaVersionTwentyThree();
       schemaVersion = "24";
     }
+    if (schemaVersion === "24") {
+      this.transaction(() => {
+        this.database.prepare("UPDATE schema_metadata SET value = '25' WHERE key = 'schema_version'").run();
+      });
+      schemaVersion = "25";
+    }
     if (schemaVersion !== String(SQLITE_SCHEMA_VERSION)) {
       throw new Error(`不支持的 SQLite schema 版本: ${schemaVersion}`);
     }

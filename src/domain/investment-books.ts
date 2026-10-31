@@ -103,6 +103,7 @@ export function validateInvestmentBookState(value: unknown): InvestmentBookState
         (row.origin === "provider" && (row.kind !== "valuation" || row.bookId !== "us-stocks")) ||
         typeof row.note !== "string" || row.note.length > 1000) throw new Error("账本币种或记录来源无效");
     text(row.originKey);
+    if (row.replacesId !== undefined) text(row.replacesId);
     if (ids.has(row.id) || origins.has(row.originKey)) throw new Error("账本记录重复");
     if (row.voidedAt && !Number.isFinite(Date.parse(row.voidedAt))) throw new Error("账本更正时间无效");
     ids.add(row.id); origins.add(row.originKey);

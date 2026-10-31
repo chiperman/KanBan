@@ -109,7 +109,7 @@ export function createProductionServices(
     assetSources, clock, formalDailySettlements,
     new ReadOnlyFormalSettlementSourceCapture(readySecrets, sourceRefresher, 60_000, assetSources),
     longbridge.settlementCandles,
-    undefined, longbridge.tradingCalendar,
+    undefined, longbridge.tradingCalendar, database.formalSettlementMarkets,
   ), formalSettlementExecutions, clock);
   return {
     backgroundCollection: new BackgroundAssetCollection(database, assetSources, dailyAssetSnapshots, fullRefreshState, assetSynchronization, formalDailySettlementRunner, clock, longbridgeDailyAssets, longbridge),

@@ -41,7 +41,10 @@ export class PluginInstaller {
       writeFileSync(temporary, JSON.stringify(registry, null, 2) + '\n', { mode: 0o600 });
       renameSync(temporary, path.join(this.root, 'registry.json')); return result;
     } finally {
-      rmSync(staging, { recursive: true, force: true }); rmSync(temporary, { force: true }); rmSync(lock, { recursive: true, force: true });
+      for (const target of [staging, temporary, lock]) {
+        try { rmSync(target, { recursive: true, force: true }); }
+        catch { /* 清理不改变原操作结果，单项失败后仍须继续释放其他资源。 */ }
+      }
     }
   }
   async install(input: { directory: string } | { archive: Buffer; id?: string; version?: string; release?: string; repository?: string; source?: 'github'; manifest?: InstalledPluginManifest }, updating = false) {
@@ -59,11 +62,14 @@ export class PluginInstaller {
       if ('archive' in input && prior?.repository && input.repository && prior.repository.toLowerCase() !== input.repository.toLowerCase()) throw new PluginManagementError('插件发布仓库已变化，请核对来源后卸载并重新安装');
       if (updating && !prior) throw new PluginManagementError('插件未安装');
       if (prior && comparePluginVersions(manifest.version, prior.version) < 0) throw new PluginManagementError('安装不能降级，请使用回滚命令');
-      await this.probe(staging);
       const target = path.join(this.root, pluginDirectoryName(manifest.id), manifest.version);
+      const fingerprint = pluginFingerprint(staging);
+      if (existsSync(target) && pluginFingerprint(target) !== fingerprint) throw new PluginManagementError('同版本插件内容不同，请提升版本号');
+      await this.probe(staging);
+      if (pluginFingerprint(staging) !== fingerprint) throw new PluginManagementError('插件启动检查期间包内容发生变化，请联系开发者修正后重新打包');
       mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
       if (existsSync(target)) {
-        if (pluginFingerprint(target) !== pluginFingerprint(staging)) throw new PluginManagementError('同版本插件内容不同，请提升版本号');
+        if (pluginFingerprint(target) !== fingerprint) throw new PluginManagementError('同版本插件内容不同，请提升版本号');
       } else renameSync(staging, target);
       registry[manifest.id] = { version: manifest.version, enabled: prior?.enabled ?? true, revision: randomUUID(),
         ...('archive' in input ? { release: input.release, repository: input.repository, source: input.source } : {}) };

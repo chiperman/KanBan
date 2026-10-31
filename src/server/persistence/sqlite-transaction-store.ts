@@ -9,6 +9,23 @@ export class SqliteTransactionStore {
     private readonly databasePath: string,
   ) {}
 
+  /** WAL 读事务固定跨表快照，允许其他连接继续提交；回调必须同步结束。 */
+  read<T>(operation: () => T): T {
+    this.database.exec("BEGIN");
+    try {
+      const result = operation();
+      this.database.exec("COMMIT");
+      return result;
+    } catch (error) {
+      try {
+        this.database.exec("ROLLBACK");
+      } catch {
+        // 保留原始读取错误。
+      }
+      throw error;
+    }
+  }
+
   run<T>(operation: () => T): T {
     this.database.exec("BEGIN IMMEDIATE");
     try {

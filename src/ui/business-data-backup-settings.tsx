@@ -103,6 +103,7 @@ function omittedHistorySummary(history: NonNullable<BackupRestorePreview["omitte
     [history.sourceInvestmentHistories ?? 0, "份来源投资历史"],
     [history.sourceInvestmentRecords ?? 0, "条来源手工投资记录"],
     [history.investmentBookRecords ?? 0, "条三本账记录或来源范围"],
+    [history.investmentCashflows ?? 0, "条旧资金记录"],
   ] as const;
   const discarded = counts.filter(([count]) => count > 0).map(([count, label]) => `${count} ${label}`);
   return discarded.length > 0

@@ -170,6 +170,12 @@ export class DashboardSchema {
         started_at TEXT NOT NULL,
         payload_json TEXT NOT NULL CHECK (json_valid(payload_json))
       ) STRICT;
+      CREATE TABLE IF NOT EXISTS formal_settlement_markets (
+        source_id TEXT PRIMARY KEY REFERENCES asset_sources(id) ON DELETE CASCADE,
+        account_id TEXT NOT NULL,
+        observed_at TEXT NOT NULL,
+        markets_json TEXT NOT NULL CHECK (json_valid(markets_json))
+      ) STRICT;
       CREATE TABLE IF NOT EXISTS formal_daily_settlements (
         anchor_key TEXT PRIMARY KEY,
         anchor_kind TEXT NOT NULL CHECK (anchor_kind IN ('securities-close', 'crypto-cutoff')),

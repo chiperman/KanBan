@@ -82,24 +82,19 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
     return decoded;
   }
 
-  private async previewFor(state: BusinessDataState, formatVersion = BACKUP_FORMAT_VERSION): Promise<BackupRestorePreview> {
-    const [currentSources, currentCards, currentSnapshots, manualRecords, settlements, sourceHistories, sourceRecords, investmentBooks] = await Promise.all([
-      this.store.listSources(),
-      this.store.listAssetCards(),
-      this.store.listDailyAssetSnapshots(),
-      this.store.listManualAssetRecords(),
-      this.store.listFormalDailySettlements(),
-      this.store.listSourceInvestmentHistories?.() ?? Promise.resolve([]),
-      this.store.listSourceInvestmentRecords?.() ?? Promise.resolve([]),
-      this.store.readStoredInvestmentBooks?.() ?? Promise.resolve(undefined),
-    ]);
+  private previewFor(state: BusinessDataState, current: BusinessDataState, formatVersion = BACKUP_FORMAT_VERSION): BackupRestorePreview {
+    const { assetSources: currentSources, assetCards: currentCards, dailyAssetSnapshots: currentSnapshots,
+      manualAssetRecords: manualRecords, formalDailySettlements: settlements,
+      sourceInvestmentHistories: sourceHistories = [], sourceInvestmentRecords: sourceRecords = [],
+      investmentBooks, investmentCashflows } = current;
     const bookFacts = investmentBooks ? investmentBooks.records.length + investmentBooks.members.length : 0;
     const dropsBooks = !state.investmentBooks && bookFacts > 0;
-    const dropsHistory = (formatVersion < 5 && (manualRecords.length > 0 || settlements.length > 0)) || (formatVersion < 6 && sourceHistories.length > 0) || (formatVersion < 7 && sourceRecords.length > 0) || dropsBooks;
+    const dropsCashflows = formatVersion === 1 && investmentCashflows.length > 0;
+    const dropsHistory = (formatVersion < 5 && (manualRecords.length > 0 || settlements.length > 0)) || (formatVersion < 6 && sourceHistories.length > 0) || (formatVersion < 7 && sourceRecords.length > 0) || dropsBooks || dropsCashflows;
     const days = state.dailyAssetSnapshots.map(({ day }) => day).sort();
     return {
-      ...(formatVersion < BACKUP_FORMAT_VERSION || dropsBooks ? { omittedHistory: { manualAssetRecords: formatVersion < 5 ? manualRecords.length : 0, formalDailySettlements: formatVersion < 5 ? settlements.length : 0, ...(formatVersion < 6 && sourceHistories.length ? { sourceInvestmentHistories: sourceHistories.length } : {}), ...(formatVersion < 7 && sourceRecords.length ? { sourceInvestmentRecords: sourceRecords.length } : {}), ...(dropsBooks ? { investmentBookRecords: bookFacts } : {}) } } : {}),
-      ...(dropsHistory ? { discardConfirmation: createHash("sha256").update(JSON.stringify({state, manualRecords, settlements, sourceHistories, sourceRecords, investmentBooks})).digest("hex") } : {}),
+      ...(formatVersion < BACKUP_FORMAT_VERSION || dropsBooks ? { omittedHistory: { manualAssetRecords: formatVersion < 5 ? manualRecords.length : 0, formalDailySettlements: formatVersion < 5 ? settlements.length : 0, ...(formatVersion < 6 && sourceHistories.length ? { sourceInvestmentHistories: sourceHistories.length } : {}), ...(formatVersion < 7 && sourceRecords.length ? { sourceInvestmentRecords: sourceRecords.length } : {}), ...(dropsBooks ? { investmentBookRecords: bookFacts } : {}), ...(dropsCashflows ? { investmentCashflows: investmentCashflows.length } : {}) } } : {}),
+      ...(dropsHistory ? { discardConfirmation: createHash("sha256").update(JSON.stringify({state, manualRecords, settlements, sourceHistories, sourceRecords, investmentBooks, ...(dropsCashflows ? { investmentCashflows } : {})})).digest("hex") } : {}),
       sourceCount: state.assetSources.length,
       cardCount: state.assetCards.length,
       snapshotRange: {
@@ -112,7 +107,7 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
         snapshotCount: currentSnapshots.length,
       },
       warning: formatVersion < BACKUP_FORMAT_VERSION || dropsBooks
-        ? `${SENSITIVE_ASSET_DATA_WARNING}${formatVersion < 5 ? LEGACY_HISTORY_WARNING : ""}${formatVersion < 6 ? "旧版备份不包含来源投资历史。" : ""}${formatVersion < 7 ? "旧版备份不包含来源手工投资记录。" : ""}${dropsBooks ? "此备份不包含三本账的记录、更正与来源范围。" : ""}`
+        ? `${SENSITIVE_ASSET_DATA_WARNING}${formatVersion < 5 ? LEGACY_HISTORY_WARNING : ""}${formatVersion === 1 ? "此版本备份不包含旧资金记录。" : ""}${formatVersion < 6 ? "旧版备份不包含来源投资历史。" : ""}${formatVersion < 7 ? "旧版备份不包含来源手工投资记录。" : ""}${dropsBooks ? "此备份不包含三本账的记录、更正与来源范围。" : ""}`
         : SENSITIVE_ASSET_DATA_WARNING,
     };
   }
@@ -120,44 +115,7 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
   async exportBackup(fileName?: string) {
     const createdAt = this.clock.now().toISOString();
     const requestedFileName = fileName ?? `asset-dashboard-${createdAt.replace(/[:.]/g, "-")}.json`;
-    const [
-      assetCards,
-      sources,
-      dailyAssetSnapshots,
-      dailyAssetTrendObservations,
-      importedAssetSourceHistoryObservations,
-      investmentCashflows,
-      manualAssetRecords,
-      formalDailySettlements,
-      sourceInvestmentHistories,
-      sourceInvestmentRecords,
-      investmentBooks,
-    ] = await Promise.all([
-      this.store.listAssetCards(),
-      this.store.listSources(),
-      this.store.listDailyAssetSnapshots(),
-      this.store.listDailyAssetTrendObservations(),
-      this.store.listImportedSourceHistoryObservations(),
-      this.store.listInvestmentCashflows(),
-      this.store.listManualAssetRecords(),
-      this.store.listFormalDailySettlements(),
-      this.store.listSourceInvestmentHistories?.() ?? Promise.resolve([]),
-      this.store.listSourceInvestmentRecords?.() ?? Promise.resolve([]),
-      this.store.readStoredInvestmentBooks?.() ?? Promise.resolve(undefined),
-    ]);
-    const { contents, checksum } = encodeBackupDocument({
-      assetCards,
-      assetSources: sources,
-      dailyAssetSnapshots,
-      dailyAssetTrendObservations,
-      importedAssetSourceHistoryObservations,
-      investmentCashflows,
-      manualAssetRecords,
-      formalDailySettlements,
-      sourceInvestmentHistories,
-      sourceInvestmentRecords,
-      investmentBooks,
-    }, createdAt);
+    const { contents, checksum } = encodeBackupDocument(await this.store.readBusinessData(), createdAt);
     const resolvedFileName = await this.saveBackup(requestedFileName, contents);
     return {
       fileName: resolvedFileName,
@@ -168,7 +126,7 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
 
   async previewRestore(fileName: string): Promise<BackupRestorePreview> {
     const decoded = await this.decode(fileName);
-    return this.previewFor(decoded.state, decoded.formatVersion);
+    return this.previewFor(decoded.state, await this.store.readBusinessData(), decoded.formatVersion);
   }
 
   /** 只列出业务数据 JSON：备份目录里还可能有手工放入的 SQLite 修复快照。 */
@@ -212,11 +170,12 @@ export class CredentialFreeBusinessDataBackup implements BusinessDataBackup {
 
   async restore(fileName: string, discardConfirmation?: string): Promise<BackupRestorePreview> {
     const decoded = await this.decode(fileName);
-    const preview = await this.previewFor(decoded.state, decoded.formatVersion);
-    if (preview.discardConfirmation && discardConfirmation !== preview.discardConfirmation) {
-      throw new Error("旧备份将丢弃现有历史数据，请重新预演并明确确认丢弃范围");
-    }
-    await this.store.replaceBusinessData(decoded.state);
-    return preview;
+    return this.store.replaceBusinessData(decoded.state, current => {
+      const preview = this.previewFor(decoded.state, current, decoded.formatVersion);
+      if (preview.discardConfirmation && discardConfirmation !== preview.discardConfirmation) {
+        throw new Error("旧备份将丢弃现有历史数据，请重新预演并明确确认丢弃范围");
+      }
+      return preview;
+    });
   }
 }

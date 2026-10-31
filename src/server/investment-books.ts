@@ -66,15 +66,17 @@ export class InvestmentBookLedger {
     const input = parseSourceInvestmentRecordInput(value, capturedAt);
     if (input.currency !== book.currency) throw new Error(`本账使用 ${book.currency} 记账`);
     const raw = value as Record<string, unknown>;
-    if (input.kind === "valuation" && !raw.replacesId) throw new Error("资产金额请通过资产更新或历史导入补充");
+    if (raw.replacesId !== undefined && (typeof raw.replacesId !== "string" ||
+        !raw.replacesId.trim() || raw.replacesId.length > 10000)) throw new Error("待更正记录标识无效");
+    const replacedId = raw.replacesId as string | undefined;
+    if (input.kind === "valuation" && replacedId === undefined) throw new Error("资产金额请通过资产更新或历史导入补充");
     const note = typeof raw.note === "string" ? raw.note.trim() : "";
     if (note.length > 1000) throw new Error("备注过长");
     const original = state.records.find(row => row.id === input.id);
     if (original) {
-      if (original.bookId === bookId && !original.voidedAt && ["day", "kind", "amount", "currency"].every(key => original[key as keyof BookRecord] === input[key as keyof typeof input]) && original.note === note) return;
+      if (original.bookId === bookId && !original.voidedAt && ["day", "kind", "amount", "currency"].every(key => original[key as keyof BookRecord] === input[key as keyof typeof input]) && original.note === note && original.replacesId === replacedId) return;
       throw new Error("记录已保存，修改请创建更正记录");
     }
-    const replacedId = typeof raw.replacesId === "string" ? raw.replacesId : undefined;
     if (replacedId) {
       const replaced = state.records.find(row => row.id === replacedId && row.bookId === bookId && !row.voidedAt);
       if (!replaced) throw new Error("待更正记录不存在或已更正");

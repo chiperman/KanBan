@@ -5,6 +5,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { checkToolchain } from "./check-toolchain.mjs";
+import { bootstrapLaunchAgent } from "./launchd-bootstrap.mjs";
 
 const args = process.argv.slice(2);
 if (args.length > 1 || (args.length === 1 && !["--check", "--help"].includes(args[0]))) {
@@ -123,7 +124,8 @@ async function unload(index) {
   await run("/bin/launchctl", ["bootout", `${domain}/${labels[index]}`]);
 }
 async function load(index) {
-  await run("/bin/launchctl", ["bootstrap", domain, files[index]]);
+  assertActive();
+  await bootstrapLaunchAgent(domain, files[index]);
 }
 try {
   console.log("1/4 构建独立新版，旧版网页和后台继续运行…");

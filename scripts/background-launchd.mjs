@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, chmodSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
+import { bootstrapLaunchAgent } from "./launchd-bootstrap.mjs";
 
 const workspace = realpathSync(process.cwd());
 const configPath = path.join(workspace, ".kanban-runtime.json");
@@ -50,12 +51,12 @@ if (action === "install" || action === "print") {
     for (const label of labels) {
       if (existsSync(file(label)) && !readFileSync(file(label), "utf8").includes(`<string>${xml(workspace)}</string>`)) throw new Error("已有其他运行副本的同名任务，请先在原副本移除");
     }
-    labels.forEach((label, index) => {
+    for (const [index, label] of labels.entries()) {
       try { launchctl(["bootout", target(label)], true); } catch { /* 初次安装时尚未加载。 */ }
       writeFileSync(file(label), plist(index, settings), { mode: 0o600 });
       chmodSync(file(label), 0o600);
-      launchctl(["bootstrap", `gui/${process.getuid()}`, file(label)]);
-    });
+      await bootstrapLaunchAgent(`gui/${process.getuid()}`, file(label));
+    }
     process.stdout.write(`已启用登录后后台运行：${settings.origin}\n`);
   }
 } else if (action === "status") {

@@ -20,6 +20,7 @@ import type {
   FormalSettlementCandleReader,
   FormalSettlementDailyCandle,
   FormalSettlementHolding,
+  FormalSettlementMarkets,
   FormalSettlementSource,
   FormalSettlementSourceCapture,
   FormalSettlementTradingCalendar,
@@ -335,6 +336,7 @@ export class MarketCloseFormalDailySettlement
     private readonly candleReader: FormalSettlementCandleReader,
     private readonly captureWindowMs = FORMAL_SETTLEMENT_CAPTURE_WINDOW_MS,
     private readonly calendar: FormalSettlementTradingCalendar = { readTradingDays: async () => { throw new AssetSourcePluginUnavailableError(); } },
+    private readonly marketObservations?: FormalSettlementMarkets,
   ) {}
 
   async run(): Promise<FormalSettlementRunResult> {
@@ -346,12 +348,20 @@ export class MarketCloseFormalDailySettlement
         (source.kind !== "manual" || source.hasManualRecord !== false),
     );
     if (sources.length === 0) return { outcome: "not-due", reason: "no-sources" };
-    const securities = securityCandidates(sources);
+    const observations = new Map((await this.marketObservations?.list() ?? [])
+      .map(observation => [observation.sourceId, observation]));
+    const markets = sources.flatMap(source => {
+      const observation = observations.get(source.id);
+      return source.kind === "longbridge" && observation?.accountId === source.accountId &&
+        Date.parse(observation.observedAt) >= Date.parse(source.snapshot.syncedAt)
+        ? observation.markets.map(market => ({ market }))
+        : securityCandidates([source]);
+    });
     let anchor: FormalSettlementAnchor;
     let calendars = new Map<SecuritiesMarket, MarketTradingDays>();
-    if (securities.length > 0) {
+    if (markets.length > 0) {
       try {
-        const schedule = await anchorForSecurities(now, securities, this.calendar);
+        const schedule = await anchorForSecurities(now, markets, this.calendar);
         if (schedule.anchor === null) return { outcome: "not-due", reason: "market-closed" };
         anchor = schedule.anchor;
         calendars = schedule.calendars;
@@ -371,16 +381,7 @@ export class MarketCloseFormalDailySettlement
     if (now.getTime() > scheduledAt + this.captureWindowMs) return this.recordMissed(anchor);
 
     if (hasUnsupportedSecurities(sources)) {
-      return this.recordIfAbsent({
-        anchor,
-        capturedAt: attemptedAt,
-        status: "incomplete",
-        diagnostic: "存在不能取得官方日 K 常规盘收盘的证券来源",
-        total: { USD: null, CNY: null, HKD: null },
-        exchangeRates: [],
-        sources: [],
-        holdings: [],
-      });
+      return this.recordUnsupportedSecurities(anchor, attemptedAt);
     }
 
     const captures = await Promise.all(
@@ -407,6 +408,7 @@ export class MarketCloseFormalDailySettlement
         }
       }),
     );
+    const captureFinishedAt = this.clock.now().getTime();
 
     const capturedBySourceId = new Map(
       captures
@@ -415,18 +417,26 @@ export class MarketCloseFormalDailySettlement
         )
         .map((capture) => [capture.source.id, capture]),
     );
-    const capturedSecurities = securityCandidates(
-      captures.flatMap((capture) =>
-        capture.snapshot === null
-          ? []
-          : [sourceWithSnapshot(capture.source, capture.snapshot)],
-      ),
+    const capturedSources = captures.flatMap((capture) =>
+      capture.snapshot === null
+        ? []
+        : [sourceWithSnapshot(capture.source, capture.snapshot)],
     );
+    const capturedSecurities = securityCandidates(capturedSources);
+    await this.marketObservations?.record(captures.flatMap(capture =>
+      capture.source.kind !== "longbridge" || capture.snapshot === null ? [] : [{
+        source: capture.source,
+        observedAt: capture.snapshot.syncedAt,
+        markets: [...new Set(capturedSecurities
+          .filter(security => security.source.id === capture.source.id)
+          .map(security => security.market))],
+      }],
+    ));
     // A fresh capture can include a market absent from the persisted snapshot.
     // Confirm that market's calendar and close before accepting its daily candle.
     if (capturedSecurities.some(security => !calendars.has(security.market))) {
       try {
-        const schedule = await anchorForSecurities(now, [...securities, ...capturedSecurities], this.calendar);
+        const schedule = await anchorForSecurities(now, [...markets, ...capturedSecurities], this.calendar);
         if (schedule.anchor === null) return { outcome: "not-due", reason: "market-closed" };
         anchor = schedule.anchor;
         calendars = schedule.calendars;
@@ -441,6 +451,12 @@ export class MarketCloseFormalDailySettlement
       if (now.getTime() > Date.parse(anchor.scheduledCloseAt) + this.captureWindowMs) {
         return this.recordMissed(anchor);
       }
+    }
+    if (captureFinishedAt > Date.parse(anchor.scheduledCloseAt) + this.captureWindowMs) {
+      return this.recordMissed(anchor);
+    }
+    if (hasUnsupportedSecurities(capturedSources)) {
+      return this.recordUnsupportedSecurities(anchor, attemptedAt);
     }
     const closeErrors: string[] = [];
     let candleReadFailed = false;
@@ -611,6 +627,22 @@ export class MarketCloseFormalDailySettlement
       capturedAt: null,
       status: "missed",
       diagnostic: "采集窗口内未形成正式日结，未使用之后的实时数据补写",
+      total: { USD: null, CNY: null, HKD: null },
+      exchangeRates: [],
+      sources: [],
+      holdings: [],
+    });
+  }
+
+  private async recordUnsupportedSecurities(
+    anchor: FormalSettlementAnchor,
+    capturedAt: string,
+  ): Promise<FormalSettlementRunResult> {
+    return this.recordIfAbsent({
+      anchor,
+      capturedAt,
+      status: "incomplete",
+      diagnostic: "存在不能取得官方日 K 常规盘收盘的证券来源",
       total: { USD: null, CNY: null, HKD: null },
       exchangeRates: [],
       sources: [],

@@ -16,19 +16,21 @@ class BookSaveOutcomeUnknown extends Error {
   }
 }
 export async function bookRequest(body: object) {
+  const signal = AbortSignal.timeout(30_000);
   let response: Response;
   try {
     response = await fetch("/api/investment-books", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal,
     });
   } catch {
     throw new BookSaveOutcomeUnknown();
   }
   if (lockOnUnauthorizedResponse(response)) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
   const result = await readJsonResult<{ ok?: boolean; error?: string }>(response);
-  if (response.status >= 500 || (response.ok && result?.ok !== true))
+  if (signal.aborted || response.status >= 500 || (response.ok && result?.ok !== true))
     throw new BookSaveOutcomeUnknown();
   if (!response.ok) throw new Error(result?.error ?? "账本保存失败");
 }

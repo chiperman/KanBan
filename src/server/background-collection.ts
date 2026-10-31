@@ -2,11 +2,17 @@ import { randomUUID } from "node:crypto";
 import { shanghaiDay } from "@/domain/daily-asset-snapshots";
 import { fullRefreshLeaseMs } from "@/server/refresh/asset-refresh-state";
 import type { LongbridgeSdkRenewal } from "@/server/asset-sources/longbridge-keychain-sdk";
-import type { AssetFullRefreshState, AssetRefreshReport, AssetSources, AssetSynchronization, Clock, DailyAssetSnapshots, FormalDailySettlementRunner } from "@/server/ports";
+import type { AssetFullRefreshState, AssetRefreshReport, AssetSourceSummary, AssetSources, AssetSynchronization, Clock, DailyAssetSnapshots, FormalDailySettlementRunner } from "@/server/ports";
 
 export const COLLECTION_INTERVAL_MS = 60 * 60_000;
 const RETRY_OFFSETS = [5 * 60_000, 15 * 60_000];
 const SDK_CHECK_INTERVAL_MS = 24 * 60 * 60_000;
+
+function sourceNeedsRetry(source: AssetSourceSummary, attemptedAt: string): boolean {
+  return source.kind !== "manual" && source.lifecycle !== "disconnected" &&
+    source.credentialReference !== null &&
+    (source.sync.status === "expired" || source.sync.lastAttemptAt < attemptedAt);
+}
 
 interface SdkAuthorizationState {
   checkedAt: string;
@@ -111,7 +117,9 @@ export class BackgroundAssetCollection {
     const today = trends.find(row => row.day === day);
     const targets = sources.filter(source => source.kind !== "manual" && source.lifecycle !== "disconnected");
     const nextFull = cycle.attemptedAt ? Date.parse(cycle.attemptedAt) + COLLECTION_INTERVAL_MS : now.getTime();
-    const retry = state?.cycleAt === cycle.attemptedAt && state?.nextRetryAt ? Date.parse(state.nextRetryAt) : Infinity;
+    const retry = cycle.attemptedAt && state?.cycleAt === cycle.attemptedAt && state.nextRetryAt &&
+      sources.some(source => state.retrySourceIds.includes(source.id) && sourceNeedsRetry(source, cycle.attemptedAt!))
+      ? Date.parse(state.nextRetryAt) : Infinity;
     return {
       state,
       health: !state ? "unknown" : now.getTime() - Date.parse(state.checkedAt) < 3 * 60_000 ? "running" : "stopped",
@@ -151,9 +159,8 @@ export class BackgroundAssetCollection {
       // 网页批次完成后再建立补试计划；过期的在途标记也不能永久阻止补试。
       if (cycle.attemptedAt && !batchActive && !state.retryPrepared) {
         state.retryPrepared = true;
-        state.retrySourceIds = (await this.sources.list()).filter(source => source.kind !== "manual" &&
-          source.lifecycle !== "disconnected" && source.credentialReference !== null &&
-          (source.sync.status === "expired" || source.sync.lastAttemptAt < cycle.attemptedAt!)).map(source => source.id);
+        state.retrySourceIds = (await this.sources.list()).filter(source =>
+          sourceNeedsRetry(source, cycle.attemptedAt!)).map(source => source.id);
         if (state.retrySourceIds.length) state.nextRetryAt = new Date(Date.parse(cycle.attemptedAt) + RETRY_OFFSETS[0]).toISOString();
       }
       if (!report.skipped) {
@@ -161,21 +168,25 @@ export class BackgroundAssetCollection {
         state.reportAt = this.clock.now().toISOString();
         if (report.successCount > 0 && report.failureCount === 0 && !report.supersededCount) state.lastFullSuccessAt = this.clock.now().toISOString();
       } else if (report.skipped === "not-due" && state.nextRetryAt && state.nextRetryAt <= now && state.retrySourceIds.length) {
-        const available = new Set((await this.sources.list()).filter(source => source.kind !== "manual" &&
-          source.lifecycle !== "disconnected" && source.credentialReference !== null).map(source => source.id));
-        const retryIds = state.retrySourceIds.filter(id => available.has(id));
+        const unresolved = new Set((await this.sources.list()).filter(source =>
+          sourceNeedsRetry(source, cycle.attemptedAt!)).map(source => source.id));
+        const retryIds = state.retrySourceIds.filter(id => unresolved.has(id));
         const retryAt = this.clock.now().toISOString();
+        state.retryRound++;
+        state.retrySourceIds = retryIds;
+        state.nextRetryAt = retryIds.length && state.retryRound < RETRY_OFFSETS.length && state.cycleAt
+          ? new Date(Date.parse(state.cycleAt) + RETRY_OFFSETS[state.retryRound]).toISOString() : null;
+        // 先占用本次补试机会；进程中断后仍按剩余计划执行，不反复重放本轮。
+        await this.store.saveCollectionState(state);
         if (retryIds.length) {
           state.report = await this.synchronization.request({
             intent: { reason: "manual-source", sourceId: retryIds[0] }, sourceIds: retryIds,
           });
           state.reportAt = this.clock.now().toISOString();
+          state.retrySourceIds = (await this.sources.list()).filter(source => retryIds.includes(source.id) &&
+            sourceNeedsRetry(source, retryAt)).map(source => source.id);
+          if (state.retrySourceIds.length === 0) state.nextRetryAt = null;
         }
-        state.retryRound++;
-        state.retrySourceIds = (await this.sources.list()).filter(source => retryIds.includes(source.id) &&
-          (source.sync.status === "expired" || source.sync.lastAttemptAt < retryAt)).map(source => source.id);
-        state.nextRetryAt = state.retrySourceIds.length && state.retryRound < RETRY_OFFSETS.length && state.cycleAt
-          ? new Date(Date.parse(state.cycleAt) + RETRY_OFFSETS[state.retryRound]).toISOString() : null;
       }
       await this.store.saveCollectionState(state);
       if (!state.formalCheckedAt || Date.parse(now) - Date.parse(state.formalCheckedAt) >= 15 * 60_000) {

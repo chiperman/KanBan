@@ -34,38 +34,44 @@ async function fixture() {
   const directory = await mkdtemp(path.join(tmpdir(), "kanban-backup-validation-"));
   let restored: BusinessDataState | null = null;
   const store: BusinessDataBackupStore = {
-    listAssetCards: async () => [],
-    listSources: async () => [{
-      id: "source-test", label: "测试来源", kind: "longbridge",
-      accountId: "test-owner", permissions: [], credentialReference: null,
-      snapshot: { total: { amount: "0", currency: "USD" }, holdings: [], exchangeRates: [],
-        syncedAt: observation.capturedAt },
-      sync: {
-        status: "current", lastSuccessfulAt: observation.capturedAt,
-        lastAttemptAt: observation.capturedAt, error: null,
-        diagnostic: {
-          stage: "response", category: "rate-limit", httpStatus: 429,
-          code: "429", durationMs: 12, retryable: true,
-        },
-        recentAttempts: [{
-          attemptedAt: observation.capturedAt, mode: "all", attempt: 1,
-          outcome: "failure", durationMs: 12,
+    readBusinessData: async () => ({
+      assetCards: [],
+      assetSources: [{
+        id: "source-test", label: "测试来源", kind: "longbridge",
+        accountId: "test-owner", permissions: [], credentialReference: null,
+        snapshot: { total: { amount: "0", currency: "USD" }, holdings: [], exchangeRates: [],
+          syncedAt: observation.capturedAt },
+        sync: {
+          status: "current", lastSuccessfulAt: observation.capturedAt,
+          lastAttemptAt: observation.capturedAt, error: null,
           diagnostic: {
             stage: "response", category: "rate-limit", httpStatus: 429,
             code: "429", durationMs: 12, retryable: true,
           },
-        }],
-        unsafeRawError: "must not be exported",
-      } as unknown as BusinessDataState["assetSources"][number]["sync"],
-    }],
-    listDailyAssetSnapshots: async () => [],
-    listDailyAssetTrendObservations: async () => [],
-    listImportedSourceHistoryObservations: async () => [observation],
-    listInvestmentCashflows: async () => [],
-    listManualAssetRecords: async () => [],
-    listFormalDailySettlements: async () => [],
+          recentAttempts: [{
+            attemptedAt: observation.capturedAt, mode: "all", attempt: 1,
+            outcome: "failure", durationMs: 12,
+            diagnostic: {
+              stage: "response", category: "rate-limit", httpStatus: 429,
+              code: "429", durationMs: 12, retryable: true,
+            },
+          }],
+          unsafeRawError: "must not be exported",
+        } as unknown as BusinessDataState["assetSources"][number]["sync"],
+      }],
+      dailyAssetSnapshots: [],
+      dailyAssetTrendObservations: [],
+      importedAssetSourceHistoryObservations: [observation],
+      investmentCashflows: [],
+      manualAssetRecords: [],
+      formalDailySettlements: [],
+    }),
     validateBusinessData: async () => {},
-    replaceBusinessData: async (state) => { restored = state; },
+    replaceBusinessData: async (state, review) => {
+      const result = review(await store.readBusinessData());
+      restored = state;
+      return result;
+    },
   };
   const backup = new CredentialFreeBusinessDataBackup(store, directory,
     { now: () => new Date("2026-08-02T00:00:00.000Z") });
@@ -310,7 +316,8 @@ for (const version of [1, 2, 3, 4]) {
       await writeFile(file, JSON.stringify(document));
       const before = await readBusinessState(f.database);
       const preview = await f.backup.previewRestore("legacy.json");
-      assert.deepEqual(preview.omittedHistory, { manualAssetRecords: 2, formalDailySettlements: 2 });
+      assert.deepEqual(preview.omittedHistory, { manualAssetRecords: 2, formalDailySettlements: 2,
+        ...(version === 1 ? { investmentCashflows: 1 } : {}) });
       assert.deepEqual(await readBusinessState(f.database), before);
       await assert.rejects(f.backup.restore("legacy.json"), /明确确认/);
       await assert.rejects(f.backup.restore("legacy.json", "invalid"), /明确确认/);

@@ -3,7 +3,7 @@ import { sameAccount } from "@/server/asset-sources/longbridge-connection";
 import type { LongbridgeAccountIdentity } from "@/server/asset-sources/longbridge-keychain-sdk";
 import type { BackgroundCollectionStore, CollectionState } from "@/server/background-collection";
 import { buildDailyAssetSnapshot } from "@/domain/daily-asset-snapshots";
-import type { AssetSourceRefreshGuard } from "@/server/ports";
+import type { AssetSourceRefreshGuard, FormalSettlementMarkets } from "@/server/ports";
 import { parseSourceInvestmentHistory, type SourceInvestmentHistory } from "@/domain/source-investment-history";
 import type { InvestmentBookId, InvestmentBookStore } from "@/domain/investment-books";
 import { InvalidSourceInvestmentRecordError, parseSourceInvestmentRecordInput, type SourceInvestmentRecord, type SourceInvestmentRecordInput } from "@/domain/source-investment-records";
@@ -285,6 +285,14 @@ export class SqliteDashboardDatabase
     return this.stores.formalSettlementExecutions.latest();
   }
 
+  readonly formalSettlementMarkets: FormalSettlementMarkets = {
+    list: async () => this.stores.formalSettlementMarkets.list(),
+    record: async (observations) => {
+      if (observations.length === 0) return;
+      this.transaction(() => this.stores.formalSettlementMarkets.record(observations));
+    },
+  };
+
   async recordFormalSettlementExecution(execution: FormalSettlementExecution): Promise<void> {
     this.transaction(() => this.stores.formalSettlementExecutions.record(execution));
   }
@@ -317,10 +325,34 @@ export class SqliteDashboardDatabase
     }
   }
 
-  async replaceBusinessData(state: BusinessDataState): Promise<void> {
-    this.transaction(() => {
+  async readBusinessData(): Promise<BusinessDataState> {
+    return this.stores.transactions.read(() => this.readBusinessDataSync());
+  }
+
+  private readBusinessDataSync(): BusinessDataState {
+    return {
+      assetCards: this.stores.cards.list(),
+      assetSources: this.stores.readModel.listSourcesSync(),
+      dailyAssetSnapshots: this.stores.readModel.listDailyAssetSnapshotsSync(),
+      dailyAssetTrendObservations: this.stores.readModel.listDailyAssetTrendObservationsSync(),
+      importedAssetSourceHistoryObservations: this.stores.readModel.listImportedSourceHistoryObservationsSync(),
+      investmentCashflows: this.stores.readModel.listInvestmentCashflowsSync(),
+      manualAssetRecords: this.stores.readModel.listManualAssetRecordsSync(),
+      formalDailySettlements: this.stores.readModel.listFormalDailySettlementsSync(),
+      sourceInvestmentHistories: this.stores.readModel.listSourceInvestmentHistories(),
+      sourceInvestmentRecords: this.stores.readModel.listSourceInvestmentRecordsSync(),
+      investmentBooks: this.stores.investmentBooks.stored(),
+    };
+  }
+
+  async replaceBusinessData(state: BusinessDataState): Promise<void>;
+  async replaceBusinessData<T>(state: BusinessDataState, review: (current: BusinessDataState) => T): Promise<T>;
+  async replaceBusinessData<T>(state: BusinessDataState, review?: (current: BusinessDataState) => T): Promise<T | void> {
+    return this.transaction(() => {
+      const result = review?.(this.readBusinessDataSync());
       this.stores.businessData.replace(state);
       this.stores.transactions.assertIntegrity();
+      return result;
     });
   }
 

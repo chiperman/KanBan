@@ -38,6 +38,23 @@ export interface FormalSettlementTradingCalendar {
   }): Promise<MarketTradingDays>;
 }
 
+export interface FormalSettlementMarketObservation {
+  sourceId: string;
+  accountId: string;
+  observedAt: string;
+  markets: SecuritiesMarket[];
+}
+
+/** 仅保存日结调度所需的市场证据，不保存持仓或价格。 */
+export interface FormalSettlementMarkets {
+  list(): Promise<FormalSettlementMarketObservation[]>;
+  record(observations: {
+    source: AssetSourceSummary;
+    observedAt: string;
+    markets: SecuritiesMarket[];
+  }[]): Promise<void>;
+}
+
 export interface FormalDailySettlementRunner {
   run(): Promise<FormalSettlementRunResult>;
 }
