@@ -5,6 +5,7 @@ import {
 import {
   decryptRecoverySecret,
   matchingTotpCounter,
+  withOwnerRecoveryCredentialLock,
 } from "@/server/auth/recovery";
 import {
   canAttemptRecoveryTotp,
@@ -25,39 +26,41 @@ function rateLimitedResponse(): Response {
 export async function POST(request: Request) {
   const originError = rejectCrossOrigin(request);
   if (originError) return originError;
-  const services = getServices();
-  const now = services.clock.now();
-  const credential = await services.ownerRecoveryCredentials.get();
-  const secret = credential ? decryptRecoverySecret(credential) : null;
-  if (!secret) {
-    return Response.json(
-      { error: "TOTP 登录不可用，请使用 Passkey" },
-      { status: 401 },
-    );
-  }
-  if (!canAttemptRecoveryTotp(now)) return rateLimitedResponse();
-
   const body = (await request.json().catch(() => null)) as
     | { code?: unknown }
     | null;
-  const counter = matchingTotpCounter(secret, body?.code, now);
-  const claimed = counter !== null
-    ? await services.ownerRecoveryCredentials.claimTotpCounter(counter)
-    : false;
-  const accepted = completeRecoveryTotpAttempt(claimed, now);
-  if (!accepted) {
-    if (!canAttemptRecoveryTotp(now)) return rateLimitedResponse();
-    if (counter !== null) {
+  return withOwnerRecoveryCredentialLock(async () => {
+    const services = getServices();
+    const credential = await services.ownerRecoveryCredentials.get();
+    const secret = credential ? decryptRecoverySecret(credential) : null;
+    if (!secret) {
       return Response.json(
-        { error: "该验证码已用于配置或登录，请等待下一组验证码" },
-        { status: 409 },
+        { error: "TOTP 登录不可用，请使用 Passkey" },
+        { status: 401 },
       );
     }
-    return Response.json({ error: "TOTP 验证失败" }, { status: 401 });
-  }
+    const now = services.clock.now();
+    if (!canAttemptRecoveryTotp(now)) return rateLimitedResponse();
 
-  const sessionToken = createSession("owner", now);
-  const headers = new Headers();
-  headers.append("Set-Cookie", sessionCookieHeader(sessionToken));
-  return Response.json({ ok: true }, { headers });
+    const counter = matchingTotpCounter(secret, body?.code, now);
+    const claimed = counter !== null
+      ? await services.ownerRecoveryCredentials.claimTotpCounter(counter)
+      : false;
+    const accepted = completeRecoveryTotpAttempt(claimed, now);
+    if (!accepted) {
+      if (!canAttemptRecoveryTotp(now)) return rateLimitedResponse();
+      if (counter !== null) {
+        return Response.json(
+          { error: "该验证码已用于配置或登录，请等待下一组验证码" },
+          { status: 409 },
+        );
+      }
+      return Response.json({ error: "TOTP 验证失败" }, { status: 401 });
+    }
+
+    const sessionToken = createSession("owner", now);
+    const headers = new Headers();
+    headers.append("Set-Cookie", sessionCookieHeader(sessionToken));
+    return Response.json({ ok: true }, { headers });
+  });
 }

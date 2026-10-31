@@ -10,6 +10,20 @@ import type { OwnerRecoveryCredential } from "@/server/ports";
 
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
+const scope = globalThis as typeof globalThis & {
+  __kanbanRecoveryCredentialQueue?: Promise<void>;
+};
+
+/** TOTP 校验、计数器消费与密钥更换共用单进程队列。 */
+export function withOwnerRecoveryCredentialLock<T>(
+  operation: () => Promise<T>,
+): Promise<T> {
+  const result = (scope.__kanbanRecoveryCredentialQueue ?? Promise.resolve())
+    .then(operation, operation);
+  scope.__kanbanRecoveryCredentialQueue = result.then(() => undefined, () => undefined);
+  return result;
+}
+
 function recoveryEncryptionKey(): Buffer {
   const encoded = process.env.PAD_SECRET_ENCRYPTION_KEY;
   const key = encoded ? Buffer.from(encoded, "base64") : Buffer.alloc(0);

@@ -160,6 +160,8 @@ function revalueSecurities(
   capturedAt: string,
 ): { snapshot: AssetSnapshot; diagnostics: string[] } {
   const diagnostics: string[] = [];
+  const rebuildReportedTotal = snapshot.longbridgeValuation?.basis === "reported" &&
+    snapshot.holdings.some((holding) => closes.has(holdingKey(source.id, holding)));
   let totalDelta = "0";
   const holdings = snapshot.holdings.map((holding) => {
     const close = closes.get(holdingKey(source.id, holding));
@@ -172,7 +174,8 @@ function revalueSecurities(
       snapshot.total.currency,
       snapshot.exchangeRates,
     );
-    if (sourceMarketValue === null || holding.sourceMarketValue === null) {
+    if (sourceMarketValue === null ||
+        (!rebuildReportedTotal && holding.sourceMarketValue === null)) {
       diagnostics.push(`${holding.symbol} 缺少收盘价折算所需汇率或来源估值`);
       return {
         ...holding,
@@ -185,10 +188,12 @@ function revalueSecurities(
         },
       };
     }
-    totalDelta = decimalAdd(
-      totalDelta,
-      decimalSubtract(sourceMarketValue, holding.sourceMarketValue.amount),
-    );
+    if (!rebuildReportedTotal && holding.sourceMarketValue !== null) {
+      totalDelta = decimalAdd(
+        totalDelta,
+        decimalSubtract(sourceMarketValue, holding.sourceMarketValue.amount),
+      );
+    }
     return {
       ...holding,
       currentPrice: price,
@@ -204,12 +209,28 @@ function revalueSecurities(
       },
     };
   });
+  let total = decimalAdd(snapshot.total.amount, totalDelta);
+  if (rebuildReportedTotal) {
+    // 账户原值不以保留报价加总而来，收盘价不能按旧报价差额叠加到原值。
+    const cash = holdings.filter((holding) => holding.assetClass === "cash");
+    const complete = cash.length === 1 && cash[0].symbol === `CASH.${snapshot.total.currency}` &&
+      holdings.every((holding) => decimalCompare(holding.quantity, "0") === 0 ||
+        (holding.valuation.status === "valued" &&
+          holding.sourceMarketValue?.currency === snapshot.total.currency));
+    if (complete) {
+      total = decimalAdd(...holdings.flatMap((holding) =>
+        decimalCompare(holding.quantity, "0") === 0 ? [] : [holding.sourceMarketValue!.amount],
+      ));
+    } else {
+      diagnostics.push("缺少官方现金或完整持仓估值，无法确认收盘总额");
+    }
+  }
   return {
     snapshot: {
       ...snapshot,
       total: {
         ...snapshot.total,
-        amount: decimalAdd(snapshot.total.amount, totalDelta),
+        amount: total,
       },
       holdings,
       syncedAt: capturedAt,

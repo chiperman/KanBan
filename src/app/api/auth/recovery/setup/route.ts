@@ -6,6 +6,7 @@ import {
   matchingTotpCounter,
   protectRecoverySecret,
   validateTotpSecret,
+  withOwnerRecoveryCredentialLock,
 } from "@/server/auth/recovery";
 import { getServices } from "@/server/composition";
 
@@ -59,22 +60,28 @@ export async function POST(request: Request) {
     return Response.json({ ok: true, matches: stored.length === candidate.length && timingSafeEqual(stored, candidate) });
   }
 
-  let counter: string;
-  try {
-    const matched = matchingTotpCounter(secret, body.code, services.clock.now());
-    if (matched === null) {
-      throw new Error("当前 TOTP 验证码无效");
+  return withOwnerRecoveryCredentialLock(async () => {
+    if ((await services.auth.currentSession()) === null) {
+      return Response.json({ error: "需要所有者身份" }, { status: 401 });
     }
-    counter = matched;
-  } catch (error) {
-    return Response.json(
-      { error: error instanceof Error ? error.message : "TOTP 登录配置无效" },
-      { status: 400 },
-    );
-  }
 
-  await services.ownerRecoveryCredentials.save(
-    protectRecoverySecret(secret, counter),
-  );
-  return Response.json({ ok: true });
+    let counter: string;
+    try {
+      const matched = matchingTotpCounter(secret, body.code, services.clock.now());
+      if (matched === null) {
+        throw new Error("当前 TOTP 验证码无效");
+      }
+      counter = matched;
+    } catch (error) {
+      return Response.json(
+        { error: error instanceof Error ? error.message : "TOTP 登录配置无效" },
+        { status: 400 },
+      );
+    }
+
+    await services.ownerRecoveryCredentials.save(
+      protectRecoverySecret(secret, counter),
+    );
+    return Response.json({ ok: true });
+  });
 }
