@@ -7,7 +7,7 @@ import type { DailyAssetTrendObservation, ImportedAssetSourceHistoryObservation 
 import type { ManualAssetRecord } from "@/domain/manual-asset-records";
 
 type TrendSource = Pick<AssetSourceSummary,
-  "id" | "kind" | "label" | "hasManualRecord" | "lifecycle"
+  "id" | "kind" | "label" | "hasManualRecord"
 >;
 
 /**
@@ -61,7 +61,10 @@ export function projectTotalAssetTrendObservations(input: {
       if (!source) continue;
       if (source.kind !== "manual") continue;
       const record = recordsBySource.get(source.id)?.find(row => row.day <= observation.day);
-      if (!record) continue;
+      if (!record) {
+        byId.delete(source.id);
+        continue;
+      }
       const previous = byId.get(source.id);
       const nativeAmount = previous?.total[record.currency];
       // 原币更正后按观测日已存汇率重算，避免沿用旧余额的折算金额。

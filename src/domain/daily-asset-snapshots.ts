@@ -138,11 +138,11 @@ function sourceSnapshot(
     "source",
     rateSources,
   );
+  // 来源美元估值完整即可保留有效观测，其他报告币种的缺失独立判断。
   const complete =
     observed &&
     !valuation.incomplete &&
-    total.USD !== null &&
-    total.HKD !== null;
+    total.USD !== null;
   // 历史观测的有效性不随后续同步失败而撤销；实时同步状态另行展示。
   const status = complete
       ? "complete" as const

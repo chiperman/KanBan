@@ -7,6 +7,7 @@ import type { DailyAssetTrendObservation } from "@/domain/asset-history";
 import type { InvestmentCashflow } from "@/domain/investment-cashflows";
 import type { ManualAssetRecord } from "@/domain/manual-asset-records";
 import { parseSourceInvestmentHistory, type SourceInvestmentHistory } from "@/domain/source-investment-history";
+import { projectTotalAssetTrendObservations } from "@/domain/total-asset-trend";
 
 export const INVESTMENT_BOOKS = [
   { id: "us-stocks", name: "美股", currency: "USD", automatic: true },
@@ -292,8 +293,13 @@ export function analyzeInvestmentBook(input: {
   const values = new Map<string, BookValuation>();
   const automaticValues = new Map<string, string | null>();
   const required = (day: string) => members.filter(member => (member.fromDay === null || member.fromDay <= day) && (member.toDay === null || day < member.toDay));
-  for (const observation of input.observations) {
-    if (!book.automatic) continue;
+  const observations = book.automatic ? projectTotalAssetTrendObservations({
+    observations: input.observations,
+    sources: input.sources,
+    manualRecords: input.manualRecords,
+    members: input.state.members,
+  }) : [];
+  for (const observation of observations) {
     const roster = required(observation.day);
     const rows = roster.map(member => observation.sources.find(row => row.sourceId === member.sourceId));
     const complete = roster.length > 0 && roster.every(member => member.confirmed) &&

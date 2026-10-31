@@ -969,8 +969,12 @@ test("来源生命周期变化丢弃在途结果，其他成功来源仍累计�
     const [trend] = await fixture.dailySnapshots.listTrendObservations();
     const beta = trend.sources.find(source => source.sourceId === "source-beta");
     assert.equal(beta?.total.USD, "200");
-    // 长桥被断开或删除时，成功读取的 beta 仍缺少可信报告汇率。
-    assert.equal(beta?.complete, current !== undefined && current.lifecycle !== "disconnected");
+    // 报告汇率缺失仅影响对应币种，不撤销 beta 的美元完整观测。
+    assert.equal(beta?.complete, true);
+    assert.equal(beta?.status, "complete");
+    const hasReportingRates = current !== undefined && current.lifecycle !== "disconnected";
+    assert.equal(beta?.total.CNY, hasReportingRates ? "1440" : null);
+    assert.equal(beta?.total.HKD, hasReportingRates ? "1560" : null);
     assert.equal(trend.sources.find(source => source.sourceId === "source-alpha")?.complete ?? false, false);
   }
 });

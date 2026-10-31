@@ -96,17 +96,9 @@ export class SqliteManualAssetSourceStore {
     this.data.writeDetails(
       applyLatestManualAssetRecord(source, latest, capturedAt),
     );
-    for (const [snapshot, sourceTable] of [
-      ["daily_asset_snapshots", "daily_asset_source_snapshots"],
-      ["daily_asset_trend_observations", "daily_asset_source_trend_observations"],
-    ] as const) {
-      this.database
-        .prepare(`DELETE FROM ${sourceTable} WHERE day = ? AND source_id = ?`)
-        .run(day, sourceId);
-      this.observations.recalculate(day, {
-        snapshot,
-        source: sourceTable,
-      });
-    }
+    this.database
+      .prepare("DELETE FROM daily_asset_source_trend_observations WHERE day = ? AND source_id = ?")
+      .run(day, sourceId);
+    this.observations.recalculateTrend(day);
   }
 }
