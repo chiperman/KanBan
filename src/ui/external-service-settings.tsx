@@ -77,16 +77,20 @@ export function ExternalServiceSettings({
     setSaved(false);
     setChecked(false);
     try {
+      const signal = AbortSignal.timeout(30_000);
       const response = await fetch("/api/external-services", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
+        signal,
       });
       if (lockOnUnauthorizedResponse(response)) {
         setError(OWNER_SESSION_EXPIRED_MESSAGE);
         return;
       }
       const result = await readJsonResult<ExternalServiceConfigurationStatus & { error?: string }>(response);
+      signal.throwIfAborted();
+      if (response.status >= 500) throw new Error("保存结果待核对");
       if (!response.ok) {
         setError(result?.error ?? "外部服务保存失败，请重试。");
         return;
@@ -99,7 +103,7 @@ export function ExternalServiceSettings({
       form.reset();
     } catch {
       setNeedsCheck(true);
-      setError("网络连接异常，保存结果尚不确定。请先核对服务状态，再决定是否重新保存；输入已保留。");
+      setError("尚未确认服务配置是否保存。请先核对服务状态，再决定是否重新保存；输入已保留。");
     } finally {
       requestLock.current = false;
       setPending(false);

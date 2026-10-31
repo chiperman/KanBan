@@ -83,6 +83,10 @@ export function VibeSelect<Value extends string>({
 
   useEffect(() => {
     if (!open) return;
+    if (triggerRef.current?.matches(":disabled")) {
+      setOpen(false);
+      return;
+    }
     const updatePosition = () => {
       const trigger = triggerRef.current;
       if (!trigger) return;
@@ -109,6 +113,7 @@ export function VibeSelect<Value extends string>({
     };
     updatePosition();
     const frame = window.requestAnimationFrame(() => {
+      updatePosition();
       selectedOptionRef.current?.focus();
     });
     const onPointerDown = (event: PointerEvent) => {
@@ -140,15 +145,16 @@ export function VibeSelect<Value extends string>({
       window.removeEventListener("resize", updatePosition);
       window.removeEventListener("scroll", updatePosition, true);
     };
-  }, [open, options.length]);
+  }, [open, options.length, selected?.value, portalRoot, disabled]);
 
   function closeAndFocusTrigger() {
     setOpen(false);
-    window.requestAnimationFrame(() => triggerRef.current?.focus());
+    triggerRef.current?.focus();
   }
 
   function chooseOption(nextValue: Value) {
-    if (nextValue !== value) onValueChange(nextValue);
+    // Portal 不继承表单 fieldset 的禁用状态，写入前以原字段为准。
+    if (!triggerRef.current?.matches(":disabled") && nextValue !== value) onValueChange(nextValue);
     closeAndFocusTrigger();
   }
 
@@ -173,7 +179,7 @@ export function VibeSelect<Value extends string>({
     optionElements[nextIndex]?.focus();
   }
 
-  const optionList = open && portalRoot ? createPortal(
+  const optionList = open && !disabled && portalRoot ? createPortal(
     <div
       className="vibe-select vibe-select__portal"
       data-vibe-component="select-options"
@@ -190,9 +196,9 @@ export function VibeSelect<Value extends string>({
         {options.map((option) => (
           <button
             key={option.value}
-            ref={option.value === value ? selectedOptionRef : undefined}
+            ref={option.value === selected?.value ? selectedOptionRef : undefined}
             type="button"
-            aria-selected={option.value === value}
+            aria-selected={option.value === selected?.value}
             className="vibe-select__option"
             onClick={() => chooseOption(option.value)}
             onKeyDown={(event) => {
@@ -206,12 +212,15 @@ export function VibeSelect<Value extends string>({
               } else if (event.key === "Escape") {
                 event.preventDefault();
                 closeAndFocusTrigger();
+              } else if (event.key === "Tab") {
+                closeAndFocusTrigger();
               }
             }}
             role="option"
+            tabIndex={-1}
           >
             <span>{option.label}</span>
-            {option.value === value ? (
+            {option.value === selected?.value ? (
               <span className="vibe-select__selected-mark" aria-hidden="true" />
             ) : null}
           </button>

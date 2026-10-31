@@ -3,6 +3,8 @@
 import { createPortal } from "react-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { formatShanghaiDateTime } from "@/ui/shanghai-date-time";
+
 const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
 
 function dateForDay(day: string): Date {
@@ -46,11 +48,6 @@ function displayDay(day: string): string {
   return day.replaceAll("-", " / ");
 }
 
-function isSameMonth(left: Date, right: Date): boolean {
-  return left.getUTCFullYear() === right.getUTCFullYear() &&
-    left.getUTCMonth() === right.getUTCMonth();
-}
-
 export function VibeDateField({
   clearable = false,
   disabled = false,
@@ -79,7 +76,7 @@ export function VibeDateField({
   const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
   const maxMonth = monthStart(max);
   const minMonth = min ? monthStart(min) : undefined;
-  const today = max;
+  const today = formatShanghaiDateTime(new Date()).slice(0, 10);
   const days = useMemo(() => {
     const firstWeekday = month.getUTCDay();
     const count = new Date(
@@ -96,32 +93,59 @@ export function VibeDateField({
 
   useEffect(() => {
     setPortalRoot(
-      rootRef.current?.closest<HTMLElement>(".vibe-dialog-overlay") ?? null,
+      rootRef.current?.closest<HTMLElement>(".vibe-dialog-overlay") ?? document.body,
     );
   }, []);
 
   useEffect(() => {
     if (!open) return;
+    if (triggerRef.current?.matches(":disabled")) {
+      setOpen(false);
+      return;
+    }
     const updatePosition = () => {
       const trigger = triggerRef.current;
       if (!trigger) return;
       const rect = trigger.getBoundingClientRect();
-      const width = Math.min(Math.max(rect.width, 300), 360);
+      const width = Math.min(Math.max(rect.width, 300), 360, window.innerWidth - 24);
+      const height = calendarRef.current?.getBoundingClientRect().height ?? 336;
       const left = Math.min(
         Math.max(12, rect.left),
         window.innerWidth - width - 12,
       );
       const preferredTop = rect.bottom + 8;
       setPosition({
-        top: preferredTop + 336 > window.innerHeight
-          ? Math.max(12, rect.top - 344)
-          : preferredTop,
+        top: Math.max(12, Math.min(
+          preferredTop + height > window.innerHeight - 12
+            ? rect.top - height - 8
+            : preferredTop,
+          window.innerHeight - height - 12,
+        )),
         left,
         width,
       });
     };
     updatePosition();
+    const frame = window.requestAnimationFrame(() => {
+      updatePosition();
+      const calendar = calendarRef.current;
+      const target =
+        calendar?.querySelector<HTMLButtonElement>('button[aria-pressed="true"]:not(:disabled)') ??
+        calendar?.querySelector<HTMLButtonElement>('button[aria-current="date"]:not(:disabled)') ??
+        calendar?.querySelector<HTMLButtonElement>(".vibe-date-field__day:not(:disabled)") ??
+        calendar?.querySelector<HTMLButtonElement>("button:not(:disabled)");
+      target?.focus({ preventScroll: true });
+    });
     const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (
+        !rootRef.current?.contains(target) &&
+        !calendarRef.current?.contains(target)
+      ) {
+        setOpen(false);
+      }
+    };
+    const onFocusIn = (event: FocusEvent) => {
       const target = event.target as Node;
       if (
         !rootRef.current?.contains(target) &&
@@ -140,19 +164,39 @@ export function VibeDateField({
       triggerRef.current?.focus();
     };
     document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("focusin", onFocusIn);
     // 日历是表单中的上层弹层，先于外层 dialog 消费 Escape。
     document.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("resize", updatePosition);
     window.addEventListener("scroll", updatePosition, true);
     return () => {
+      window.cancelAnimationFrame(frame);
       document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("focusin", onFocusIn);
       document.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("resize", updatePosition);
       window.removeEventListener("scroll", updatePosition, true);
     };
-  }, [open]);
+  }, [open, portalRoot, disabled]);
 
-  const calendar = open && portalRoot ? createPortal(
+  function chooseDay(day: string) {
+    // Portal 不继承表单 fieldset 的禁用状态，写入前以原字段为准。
+    if (!triggerRef.current?.matches(":disabled")) onValueChange(day);
+    setOpen(false);
+    triggerRef.current?.focus();
+  }
+
+  function moveMonth(offset: number) {
+    if (triggerRef.current?.matches(":disabled")) {
+      setOpen(false);
+      return;
+    }
+    setMonth((current) =>
+      new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + offset, 1)),
+    );
+  }
+
+  const calendar = open && !disabled && portalRoot ? createPortal(
     <section
       ref={calendarRef}
       aria-label="选择记录日期"
@@ -160,6 +204,15 @@ export function VibeDateField({
       id={`${fieldId}-calendar`}
       role="dialog"
       style={position}
+      onKeyDown={(event) => {
+        if (event.key !== "Tab") return;
+        const controls = calendarRef.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)");
+        const boundary = event.shiftKey ? controls?.[0] : controls?.[controls.length - 1];
+        if (document.activeElement !== boundary) return;
+        setOpen(false);
+        // 从原字段继续浏览器的 Tab 顺序，避免跳到 Portal 末尾。
+        triggerRef.current?.focus();
+      }}
     >
       <header className="vibe-date-field__calendar-head">
         <strong>{monthLabel(month)}</strong>
@@ -167,29 +220,21 @@ export function VibeDateField({
           {clearable && !disabled ? <button
             aria-label="清空日期"
             className="vibe-date-field__clear"
-            onClick={() => {
-              onValueChange("");
-              setOpen(false);
-              triggerRef.current?.focus();
-            }}
+            onClick={() => chooseDay("")}
             type="button"
           >清空</button> : null}
           <button
             aria-label="上个月"
             className="vibe-date-field__month-button is-previous"
-            disabled={minMonth !== undefined && isSameMonth(month, minMonth)}
-            onClick={() => setMonth((current) =>
-              new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() - 1, 1)),
-            )}
+            disabled={disabled || (minMonth !== undefined && month <= minMonth)}
+            onClick={() => moveMonth(-1)}
             type="button"
           />
           <button
             aria-label="下个月"
             className="vibe-date-field__month-button is-next"
-            disabled={isSameMonth(month, maxMonth)}
-            onClick={() => setMonth((current) =>
-              new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + 1, 1)),
-            )}
+            disabled={disabled || month >= maxMonth}
+            onClick={() => moveMonth(1)}
             type="button"
           />
         </span>
@@ -206,19 +251,16 @@ export function VibeDateField({
           return (
             <button
               aria-label={`${day}${isToday ? "，今天" : ""}`}
+              aria-current={isToday ? "date" : undefined}
               aria-pressed={selected}
               className={[
                 "vibe-date-field__day",
                 selected ? "is-selected" : "",
                 isToday ? "is-today" : "",
               ].filter(Boolean).join(" ")}
-              disabled={day > max || (min !== undefined && day < min)}
+              disabled={disabled || day > max || (min !== undefined && day < min)}
               key={day}
-              onClick={() => {
-                onValueChange(day);
-                setOpen(false);
-                triggerRef.current?.focus();
-              }}
+              onClick={() => chooseDay(day)}
               type="button"
             >
               {date.getUTCDate()}

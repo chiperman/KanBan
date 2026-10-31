@@ -123,6 +123,9 @@
   position: fixed;
   z-index: 101;
   max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 16px;
   border: 0.5px solid var(--line-2);
   border-radius: var(--r-md);
@@ -228,10 +231,13 @@
   font-weight: 500;
 }
 
-.vibe-date-field__day:hover:not(:disabled),
-.vibe-date-field__day:focus-visible {
+.vibe-date-field__day:hover:not(:disabled) {
   border-color: var(--line-2);
-  outline: 0;
+}
+
+.vibe-date-field__day:focus-visible {
+  outline: 0.5px solid var(--primary);
+  outline-offset: 1px;
 }
 
 .vibe-date-field__day.is-today {
@@ -434,6 +440,7 @@ textarea.vibe-field__input {
   width: 100%;
   max-height: min(280px, calc(100dvh - 24px));
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .vibe-select .vibe-select__option {

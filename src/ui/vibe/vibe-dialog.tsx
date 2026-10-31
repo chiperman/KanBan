@@ -20,7 +20,11 @@ const FOCUSABLE_SELECTOR = [
 
 function dialogControls(overlay: HTMLElement | null): HTMLElement[] {
   return [...(overlay?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? [])]
-    .filter((element) => element.getClientRects().length > 0);
+    .filter((element) =>
+      element.tabIndex >= 0 &&
+      !element.matches(":disabled") &&
+      element.getClientRects().length > 0,
+    );
 }
 
 interface VibeDialogProps
@@ -101,6 +105,7 @@ export function VibeDialog({
       const controls = dialogControls(overlayRef.current);
       if (controls.length === 0) {
         event.preventDefault();
+        overlayRef.current?.focus();
         return;
       }
       const first = controls[0];
@@ -130,8 +135,14 @@ export function VibeDialog({
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       const overlay = overlayRef.current;
-      if (!overlay || overlay.contains(document.activeElement)) return;
-      dialogControls(overlay)[0]?.focus();
+      if (!overlay) return;
+      const active = document.activeElement;
+      if (
+        active !== overlay &&
+        overlay.contains(active) &&
+        !(active instanceof HTMLElement && active.matches(":disabled"))
+      ) return;
+      (dialogControls(overlay)[0] ?? overlay).focus();
     });
     return () => window.cancelAnimationFrame(frame);
   });
@@ -168,6 +179,7 @@ export function VibeDialog({
       className="vibe-dialog-overlay"
       data-vibe-component="modal"
       role="dialog"
+      tabIndex={-1}
       {...overlayProps}
       aria-busy={pending || overlayProps["aria-busy"]}
       aria-label={confirmDiscard ? undefined : overlayProps["aria-label"]}

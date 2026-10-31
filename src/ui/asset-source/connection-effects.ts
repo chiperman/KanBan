@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import {
   pluginProviderDescription,
@@ -36,28 +36,37 @@ export function useSourceProviderCatalog({
 }) {
   useEffect(() => {
     let active = true;
-    void fetch("/api/asset-sources/plugins")
+    const controller = new AbortController();
+    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]);
+    void fetch("/api/asset-sources/plugins", { cache: "no-store", signal })
       .then(async (response) => {
         if (lockOnUnauthorizedResponse(response)) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
-        if (!response.ok) throw new Error("读取来源插件失败");
-        return response.json() as Promise<{
+        const body = await readJsonResult<{
           providers: { id: AssetSourceProviderId; description: AssetSourcePluginDescription }[];
-        }>;
+        }>(response);
+        signal.throwIfAborted();
+        if (!response.ok || !Array.isArray(body?.providers)) throw new Error("读取来源插件失败");
+        return body.providers;
       })
-      .then(({ providers: installed }) => {
+      .then((installed) => {
         if (!active) return;
         const descriptions = installed.map((p) => pluginProviderDescription(p.id, p.description));
         setProviders(descriptions);
         const reauthorizingPlugin = descriptions.find((p) => p.id === reauthorization?.provider);
         if (reauthorizingPlugin) setFields(initialAssetSourceFields(reauthorizingPlugin));
         if (reauthorization && !installed.some((p) => p.id === reauthorization.provider))
-          setError("来源插件不可用，请安装或启用后重启服务");
+          setError("来源插件不可用，请安装或启用后重新打开接入页面。");
       })
       .catch((caught) => {
-        if (active) setError(caught instanceof Error ? caught.message : "读取来源插件失败");
+        if (active) setError(
+          caught instanceof Error && caught.message === OWNER_SESSION_EXPIRED_MESSAGE
+            ? OWNER_SESSION_EXPIRED_MESSAGE
+            : "读取来源插件失败，请刷新页面重试。",
+        );
       });
     return () => {
       active = false;
+      controller.abort();
     };
   }, [reauthorization, setProviders, setFields, setError]);
 }
@@ -65,6 +74,7 @@ export function useSourceProviderCatalog({
 export function useLongbridgePreviewCallback({
   previewUrl,
   providerId,
+  step,
   setProviderId,
   setError,
   setStep,
@@ -72,42 +82,73 @@ export function useLongbridgePreviewCallback({
 }: {
   previewUrl: string | null;
   providerId: ProviderSelectionId | "";
+  step: FlowStep;
   setProviderId(provider: ProviderSelectionId | ""): void;
   setError(error: string): void;
   setStep(step: FlowStep): void;
   setPreviews(previews: Preview[]): void;
 }) {
+  const [callbackPreviewId, setCallbackPreviewId] = useState<string | null>(null);
+
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const callbackError = params.get("longbridge_error");
-    const previewId = params.get("longbridge_preview");
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("longbridge_error") && !url.searchParams.has("longbridge_preview"))
+      return;
+    const callbackError = url.searchParams.get("longbridge_error");
+    const previewId = url.searchParams.get("longbridge_preview");
+    url.searchParams.delete("longbridge_error");
+    url.searchParams.delete("longbridge_preview");
+    window.history.replaceState(window.history.state, "", url);
+    if (!callbackError && !previewId) return;
+    setProviderId("longbridge");
+    setStep("configure");
     if (callbackError) {
-      setProviderId("longbridge");
       setError(callbackError);
-      setStep("configure");
       return;
     }
-    if (!previewId) return;
-    if (providerId !== "longbridge") {
-      setProviderId("longbridge");
-      return;
-    }
+    setError("");
+    setCallbackPreviewId(previewId);
+  }, [setProviderId, setError, setStep]);
+
+  const pending = callbackPreviewId !== null && providerId === "longbridge" && step === "configure";
+
+  useEffect(() => {
+    if (!pending || callbackPreviewId === null) return;
+    let active = true;
+    const controller = new AbortController();
+    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]);
     const endpoint = previewUrl ?? "/api/asset-sources/longbridge/preview";
-    void fetch(`${endpoint}?id=${encodeURIComponent(previewId)}`)
+    void fetch(`${endpoint}?id=${encodeURIComponent(callbackPreviewId)}`, { cache: "no-store", signal })
       .then(async (response) => {
-        const expired = lockOnUnauthorizedResponse(response);
+        if (lockOnUnauthorizedResponse(response)) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
         const body = await readJsonResult<Preview & { error?: string }>(response);
-        if (expired) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
-        if (!response.ok || body === null) throw new Error(body?.error ?? "授权预览失败");
+        signal.throwIfAborted();
+        if (!response.ok || !body?.id) throw new Error(body?.error ?? "授权预览失败，请重新授权。");
+        if (!active) return;
+        setCallbackPreviewId(null);
         setPreviews([body]);
         setStep("preview");
-        window.history.replaceState(null, "", window.location.pathname);
       })
       .catch((caught: unknown) => {
-        setError(caught instanceof Error ? caught.message : "授权预览失败");
-        setStep("configure");
+        if (!active) return;
+        setCallbackPreviewId(null);
+        setError(
+          caught instanceof Error && caught.name === "TimeoutError"
+            ? "读取授权预览超时，请重新授权。"
+            : caught instanceof TypeError
+              ? "网络连接异常，请重新授权。"
+              : caught instanceof Error
+                ? caught.message
+                : "授权预览失败，请重新授权。",
+        );
       });
-  }, [previewUrl, providerId, setProviderId, setError, setStep, setPreviews]);
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [previewUrl, pending, callbackPreviewId, setError, setStep, setPreviews]);
+
+  return pending;
 }
 
 export function useEvmServiceConfiguration(
@@ -118,10 +159,15 @@ export function useEvmServiceConfiguration(
   useEffect(() => {
     if (!isEvm || step !== "configure") return;
     let active = true;
-    void fetch("/api/external-services")
-      .then(async (response) =>
-        response.ok ? (response.json() as Promise<ExternalServiceConfigurationStatus>) : null,
-      )
+    const controller = new AbortController();
+    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]);
+    void fetch("/api/external-services", { cache: "no-store", signal })
+      .then(async (response) => {
+        if (lockOnUnauthorizedResponse(response) || !response.ok) return null;
+        const body = await readJsonResult<ExternalServiceConfigurationStatus>(response);
+        signal.throwIfAborted();
+        return body;
+      })
       .then((result) => {
         if (active) setEvmServiceStatus(result);
       })
@@ -130,6 +176,7 @@ export function useEvmServiceConfiguration(
       });
     return () => {
       active = false;
+      controller.abort();
     };
   }, [isEvm, step, setEvmServiceStatus]);
 }

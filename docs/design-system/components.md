@@ -100,7 +100,7 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 - 触发器至少 44px 高，字号 `--vibe-type-body`（16px）；展开时底色转 `--raised`，边框转 `--primary`，箭头旋转 180°。
 - 选中项底色 `--raised`，右侧 6×6 方块用 `--accent` 标记。这是沿用上游的限定例外，不扩展到按钮、标签页或整个选项填充。
 - 面板挂在 portal 中，`z-index: 101`。
-- 键盘支持 `Enter` / `Space` 展开、方向键移动、`Esc` 收起；标签、展开状态和选中状态可被读屏识别。
+- 键盘支持 `Enter` / `Space` 展开、方向键移动、`Home` / `End` 到首尾、`Esc` 收起并归还焦点；`Tab` / `Shift+Tab` 收起后沿原字段顺序继续，不逐项遍历选项。标签、展开状态和选中状态可被读屏识别。
 
 ## 复选行 · `.vibe-choice`
 
@@ -246,10 +246,10 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 ## 日期字段 · `.vibe-date-field`
 
 - 触发器 48px 高、`--r-sm`、Doto 数字、正常字距。
-- 日历：`--surface` + `--line-2` + `--r-md`，日期用 Doto，**今天 = 反转填充**，已选 = `--display` 描边。
+- 日历：`--surface` + `--line-2` + `--r-md`，日期用 Doto，**今天 = 反转填充**，已选 = `--display` 描边。“今天”按上海当前自然日判断，与可选日期上限分开。
 - 服务于"按上海自然日保存"的手工记录。日历本身不写入任何数据。
-- 移动端 `max-width: calc(100vw - 24px)`。
-- 复用 [VibeDateField](../../src/ui/vibe/vibe-date-field.tsx)，月切换与日期均可键盘到达；今天与已选状态可被读屏识别。
+- 面板在视口四周留 12px，宽高受视口约束，内容超高时内部滚动。
+- 复用 [VibeDateField](../../src/ui/vibe/vibe-date-field.tsx)，展开后聚焦可选的已选日期，依次回退到今天或首个可选日期；月切换与日期均可键盘到达，`Esc` 收起并归还焦点，`Tab` 离开日历边界后沿原字段顺序继续；今天与已选状态可被读屏识别。
 
 ## 数据表 · `.vibe-data-table`
 
@@ -273,11 +273,12 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 
 内容结构为标题、一行说明与必要时的一个主操作；无操作可执行时不放无效按钮。不用插画、emoji 或多行长文案。
 
-当前页面采用上下细线、透明底、无圆角的变体；上游为虚线边框与点阵字形。二者的采用取舍尚待设计核定，见 [backlog](../backlog.md#卡片空态与字段密度核定)。不要把未采用的上游配方写成已经实现。
+当前页面采用上下细线、透明底、无圆角的变体，未采用上游的虚线边框与点阵字形。
 
 ## 通用交互与无障碍
 
 - 使用原生按钮、链接与输入语义，Tab 顺序与视觉顺序一致，无键盘陷阱；所有操作均可键盘完成，拖拽提供等价的非拖拽路径。
+- 弹窗焦点循环跳过禁用字段（含 `fieldset` 继承的禁用状态）和负 `tabindex` 元素，无可用控件时焦点留在弹窗；字段的 Portal 弹层同样遵守原字段的禁用状态。
 - 图标有相邻文字时隐藏装饰语义；纯图标按钮必须有可访问名称。装饰 SVG 使用 `aria-hidden="true"` 与 `focusable="false"`。
 - 不使用 `outline: none` 移除焦点而没有同等可见的替代。按钮焦点用 0.5px `--primary` 轮廓、外偏移 3px；菜单项用 0.5px 内轮廓，下拉选项用 0.5px 内轮廓；字段沿用聚焦配方。
 - 命中区按 [基础规范](foundations.md#7-控件尺寸) 执行，触控目标之间至少留出 8px；不让轻薄轮廓缩小实际可点范围。

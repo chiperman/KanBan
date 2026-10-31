@@ -81,7 +81,6 @@ export function AssetSourceFlow({ reauthorization }: { reauthorization?: Reautho
   const revalidationChains = useRef<EvmChain[] | null>(null);
   const focusConfiguration = useRef(false);
   const [operation, setOperation] = useState<"verify" | "save" | "cancel" | null>(null);
-  const pending = operation !== null;
   const [recovery, setRecovery] = useState<"revalidate" | "check" | null>(null);
   const [savedProviders, setSavedProviders] = useState<AssetSourceProviderId[]>([]);
   const [uncertainId, setUncertainId] = useState<string | null>(null);
@@ -116,14 +115,16 @@ export function AssetSourceFlow({ reauthorization }: { reauthorization?: Reautho
 
   useSourceProviderCatalog({ reauthorization, setProviders, setFields, setError });
 
-  useLongbridgePreviewCallback({
+  const callbackPending = useLongbridgePreviewCallback({
     previewUrl,
     providerId,
+    step,
     setProviderId,
     setError,
     setStep,
     setPreviews,
   });
+  const pending = operation !== null || callbackPending;
 
   useEvmServiceConfiguration(isEvm, step, setEvmServiceStatus);
 
@@ -135,7 +136,7 @@ export function AssetSourceFlow({ reauthorization }: { reauthorization?: Reautho
   }, [step]);
 
   function beginOperation(next: NonNullable<typeof operation>): boolean {
-    if (operationLock.current) return false;
+    if (operationLock.current || callbackPending) return false;
     operationLock.current = true;
     setOperation(next);
     setError("");
@@ -323,25 +324,32 @@ export function AssetSourceFlow({ reauthorization }: { reauthorization?: Reautho
     setError(body?.error ?? fallback);
   }
 
+  function confirmationUnknown(current?: Preview) {
+    setRecovery("check");
+    setUncertainId(current?.id ?? null);
+    setError("尚未确认来源是否保存。请先核对来源，避免重复保存。");
+  }
+
   async function confirmManualAsset() {
+    const signal = AbortSignal.timeout(30_000);
     const response = await fetch("/api/asset-sources/manual", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ label: manualLabel }),
+      signal,
     });
     if (lockOnUnauthorizedResponse(response)) {
       setError(OWNER_SESSION_EXPIRED_MESSAGE);
       return;
     }
-    if (!response.ok) {
-      const body = await readJsonResult<{ error?: string }>(response);
-      setError(body?.error ?? "手工资产记录保存失败");
+    const body = await readJsonResult<{ error?: string; ok?: boolean }>(response);
+    signal.throwIfAborted();
+    if (response.status >= 500 || (response.ok && body?.ok !== true)) {
+      confirmationUnknown();
       return;
     }
-    // 无效成功响应无法确认来源已创建，不能当作成功进入下一步。
-    const body = await readJsonResult<{ error?: string; ok?: boolean }>(response);
-    if (body?.ok !== true) {
-      setError("尚未确认来源是否创建，请刷新页面核对后再重试。");
+    if (!response.ok) {
+      setError(body?.error ?? "手工资产记录保存失败");
       return;
     }
     leaveFlow();
@@ -352,12 +360,14 @@ export function AssetSourceFlow({ reauthorization }: { reauthorization?: Reautho
     const remaining = [...previews];
     for (const current of previews) {
       const description = assetSourceProvider(current.provider);
+      const signal = AbortSignal.timeout(30_000);
       const response = await fetch(
         confirmUrl ?? `/api/asset-sources/${description.route}/confirm`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: current.id, provider: current.provider }),
+          signal,
         },
       );
       if (lockOnUnauthorizedResponse(response)) {
@@ -365,13 +375,13 @@ export function AssetSourceFlow({ reauthorization }: { reauthorization?: Reautho
         return;
       }
       const body = await readJsonResult<{ error?: string; code?: string; ok?: boolean }>(response);
-      if (!response.ok) {
-        confirmationFailed(body, `保存 ${description.label} 来源失败`, current);
+      signal.throwIfAborted();
+      if (response.status >= 500 || (response.ok && body?.ok !== true)) {
+        confirmationUnknown(current);
         return;
       }
-      if (body?.ok !== true) {
-        // 空 2xx 不是确定失败，不进恢复流，只保留预览让用户核对后重试。
-        setError(`尚未确认 ${description.label} 来源是否保存，请刷新页面核对后再重试。`);
+      if (!response.ok) {
+        confirmationFailed(body, `保存 ${description.label} 来源失败`, current);
         return;
       }
       remaining.shift();
@@ -388,10 +398,8 @@ export function AssetSourceFlow({ reauthorization }: { reauthorization?: Reautho
       if (providerId === "manual") await confirmManualAsset();
       else await confirmPreviews();
     } catch {
-      setRecovery("check");
       // 已收到成功响应的链已从 previews 移除；中断的请求不能当作未保存。
-      setUncertainId(null);
-      setError("网络连接异常，保存结果尚不确定。请先核对来源，避免重复保存。");
+      confirmationUnknown();
     } finally {
       endOperation();
     }
