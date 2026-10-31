@@ -1,10 +1,19 @@
 import { shanghaiDay } from "@/domain/daily-asset-snapshots";
+import type { BookRecord } from "@/domain/investment-books";
 import { dailyAssetAmount, dailyAssetQuery, dailyAssetRecordId, type LongbridgeDailyAsset, type LongbridgeDailyAssetsConfig } from "@/server/asset-sources/longbridge-daily-assets";
 import { sameAccount } from "@/server/asset-sources/longbridge-connection";
 import type { SqliteDashboardComposition } from "./sqlite-database-composition";
 
 const key = (sourceId: string) => `longbridge_daily_assets:${sourceId}`;
 const leaseKey = "longbridge_daily_assets_lease";
+
+function correctedAssetDays(records: BookRecord[], sourceId: string): Set<string> {
+  const replacedIds = new Set(records.flatMap(row => row.replacesId ? [row.replacesId] : []));
+  return new Set(records.filter(row => row.bookId === "us-stocks" && row.kind === "valuation" &&
+    (row.replacesId || replacedIds.has(row.id) ||
+      (row.origin === "provider" && row.voidedAt && row.id === dailyAssetRecordId(sourceId, row.day))))
+    .map(row => row.day));
+}
 
 /** 调用方持有共享 SQLite 事务；只替换资产，资金事实和其他来源不变。 */
 export class SqliteLongbridgeDailyAssets {
@@ -20,13 +29,16 @@ export class SqliteLongbridgeDailyAssets {
       const config = JSON.parse(value) as LongbridgeDailyAssetsConfig;
       if (source.id !== config.sourceId || source.accountId !== config.accountId || source.credentialReference !== config.credentialReference) return [];
       dailyAssetQuery(config.fromDay);
-      const amounts = new Map(state?.records.filter(row => row.bookId === "us-stocks" && row.origin === "provider" &&
-        row.kind === "valuation" && !row.voidedAt && row.id === dailyAssetRecordId(source.id, row.day)).map(row => [row.day, row.amount]));
+      const providerRecords = new Map(state?.records.filter(row => row.bookId === "us-stocks" && row.origin === "provider" &&
+        row.kind === "valuation" && row.id === dailyAssetRecordId(source.id, row.day)).map(row => [row.day, row]));
+      const correctedDays = correctedAssetDays(state?.records ?? [], source.id);
       const imported = new Map((database.prepare("SELECT day, total_usd FROM imported_asset_source_history_observations WHERE source_id = ?").all(source.id) as Array<{ day: string; total_usd: string | null }>).map(row => [row.day, row.total_usd]));
       const days: string[] = [];
       for (let time = Date.parse(config.fromDay); time < Date.parse(today); time += 86_400_000) {
         const day = new Date(time).toISOString().slice(0, 10);
-        if (!amounts.has(day) || imported.get(day) !== amounts.get(day)) days.push(day);
+        const record = providerRecords.get(day);
+        // 更正或作废保留的原件仍证明已补取，不能因此重新导入并复活旧金额。
+        if (imported.get(day) == null || (!correctedDays.has(day) && (!record || imported.get(day) !== record.amount))) days.push(day);
       }
       return [{ config, source, days }];
     });
@@ -60,13 +72,18 @@ export class SqliteLongbridgeDailyAssets {
           members[0].sourceId !== source.id || !members[0].confirmed) throw new Error("长桥每日资产与账本来源范围不匹配");
     }
     if (state.records.some(row => row.bookId === "us-stocks" && row.kind === "valuation" && days.has(row.day) && row.origin === "import")) throw new Error("需要先核对已有导入资产原件");
-    const removed = state.records.filter(row => row.bookId === "us-stocks" && row.kind === "valuation" && days.has(row.day)).length;
-    state.records = state.records.filter(row => !(row.bookId === "us-stocks" && row.kind === "valuation" && days.has(row.day)));
+    // 补取在途时也可能发生更正；写入时复核原件，保留其作废状态及更正链。
+    const correctedDays = correctedAssetDays(state.records, source.id);
+    const replaceDays = new Set([...days].filter(day => !correctedDays.has(day)));
+    const removed = state.records.filter(row => row.bookId === "us-stocks" && row.kind === "valuation" && replaceDays.has(row.day)).length;
+    state.records = state.records.filter(row => !(row.bookId === "us-stocks" && row.kind === "valuation" && replaceDays.has(row.day)));
     for (const row of rows) {
       const amount = dailyAssetAmount(row, now);
       const id = dailyAssetRecordId(source.id, row.day);
-      state.records.push({ id, originKey: id, bookId: "us-stocks", kind: "valuation", day: row.day, amount,
-        currency: "USD", origin: "provider", recordedAt: row.fetchedAt, note: "长桥每日资产 · 上海自然日 · ending_asset_value" });
+      if (replaceDays.has(row.day)) {
+        state.records.push({ id, originKey: id, bookId: "us-stocks", kind: "valuation", day: row.day, amount,
+          currency: "USD", origin: "provider", recordedAt: row.fetchedAt, note: "长桥每日资产 · 上海自然日 · ending_asset_value" });
+      }
       const capturedAt = new Date(Number(row.query.end) * 1000).toISOString();
       database.prepare("DELETE FROM source_investment_records WHERE source_id = ? AND day = ? AND kind = 'valuation'").run(source.id, row.day);
       database.prepare(`INSERT INTO imported_asset_source_history_observations
