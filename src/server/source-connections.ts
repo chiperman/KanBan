@@ -99,7 +99,7 @@ export class DatabaseAssetSourceLifecycle implements AssetSourceLifecycle {
         "原连接凭证已不存在，无法直接恢复。请重新输入原公开地址；原卡片和历史数据仍保留。",
       );
     }
-    await this.database.updateSource({ ...source, lifecycle: "connected" });
+    await this.database.restoreAssetSource(sourceId, source.credentialReference);
   }
 
   async deleteData(sourceId: string): Promise<void> {

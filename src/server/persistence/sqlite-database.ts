@@ -426,6 +426,10 @@ export class SqliteDashboardDatabase
     return this.transaction(() => this.stores.sourceConnections.disconnect(sourceId));
   }
 
+  async restoreAssetSource(sourceId: string, credentialReference: string): Promise<void> {
+    this.transaction(() => this.stores.sourceConnections.restore(sourceId, credentialReference));
+  }
+
   async deleteAssetSourceData(sourceId: string): Promise<string | null> {
     return this.transaction(() => this.stores.sourceConnections.delete(sourceId));
   }

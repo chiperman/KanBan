@@ -42,6 +42,7 @@ export interface AssetSourceDatabase {
     includedAssetKeys: string[],
   ): Promise<void>;
   disconnectAssetSource(sourceId: string): Promise<string | null>;
+  restoreAssetSource(sourceId: string, credentialReference: string): Promise<void>;
   deleteAssetSourceData(sourceId: string): Promise<string | null>;
 }
 

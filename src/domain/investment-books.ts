@@ -68,11 +68,16 @@ export function bookHistoryPrefix(history: Pick<SourceInvestmentHistory, "provid
 }
 export function bookHistoryRecords(history: SourceInvestmentHistory, bookId: InvestmentBookId): BookRecord[] {
   const prefix = bookHistoryPrefix(history);
-  return [{ id: "opening", kind: "opening" as const, ...history.openingInvestment }, ...history.records].map(row => ({
-    ...row, amount: decimalAdd("0", row.amount), id: `${prefix}:${encodeURIComponent(row.id)}`, bookId,
-    currency: investmentBook(bookId).currency, origin: "import", originKey: `${prefix}:${encodeURIComponent(row.id)}`,
-    recordedAt: history.importedAt, note: (row.kind === "opening" ? history.openingBasis : `${history.provider} · ${history.accountName} · 原始记录 ${row.id}`).slice(0, 1000),
-  }));
+  return [{ id: "opening", kind: "opening" as const, ...history.openingInvestment }, ...history.records].map(row => {
+    // 原始 ID 会编码冒号，独立前缀可避免外部 opening 与合成期初冲突。
+    const suffix = row.kind !== "opening" && row.id === "opening" ? "record:opening" : encodeURIComponent(row.id);
+    const id = `${prefix}:${suffix}`;
+    return {
+      ...row, amount: decimalAdd("0", row.amount), id, bookId,
+      currency: investmentBook(bookId).currency, origin: "import", originKey: id,
+      recordedAt: history.importedAt, note: (row.kind === "opening" ? history.openingBasis : `${history.provider} · ${history.accountName} · 原始记录 ${row.id}`).slice(0, 1000),
+    };
+  });
 }
 function assertDay(value: unknown): asserts value is string {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
@@ -216,7 +221,13 @@ export function migrateInvestmentBooks(input: {
   // Only link a complete, externally identified dataset. Equal date/amount alone is not identity.
   const linked = new Set<string>();
   for (const history of input.histories) {
-    const candidates = input.cashflows.filter(flow => flow.note?.includes(`外部账户 ${history.accountId}`));
+    // 旧备注没有平台身份；账户 ID 重名或不是完整字段时留待人工核对。
+    if (input.histories.some(other => other !== history && other.accountId === history.accountId)) continue;
+    const candidates = input.cashflows.filter(flow => {
+      const accounts = flow.note?.split(/[·\r\n]/).map(part => part.trim())
+        .filter(part => part.startsWith("外部账户 "));
+      return accounts?.length === 1 && accounts[0] === `外部账户 ${history.accountId}`;
+    });
     const imported = state.records.filter(row => row.origin === "import" && row.originKey.startsWith(`${bookHistoryPrefix(history)}:`) && (row.kind === "deposit" || row.kind === "withdrawal"));
     if (!candidates.length || candidates.length !== imported.length) continue;
     const remaining = [...imported];

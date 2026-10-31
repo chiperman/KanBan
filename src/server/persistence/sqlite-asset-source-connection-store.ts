@@ -103,6 +103,15 @@ export class SqliteAssetSourceConnectionStore {
       : null;
   }
 
+  restore(sourceId: string, credentialReference: string): void {
+    const result = this.database.prepare(`
+      UPDATE asset_sources SET lifecycle = 'connected'
+      WHERE id = ? AND kind <> 'manual' AND lifecycle = 'disconnected'
+        AND credential_reference = ?
+    `).run(sourceId, credentialReference);
+    if (result.changes === 0) throw new Error("资产来源连接已改变，请刷新后重试");
+  }
+
   delete(sourceId: string): string | null {
     const source = this.database
       .prepare(
