@@ -24,7 +24,10 @@
 }
 
 .command-menu-panel {
+  display: flex;
+  flex-direction: column;
   width: min(620px, 100%);
+  max-height: calc(100dvh - min(14vh, 120px) - var(--vibe-space-5));
   overflow: hidden;
   border: 0.5px solid var(--line-2);
   border-radius: var(--r-md);
@@ -34,6 +37,7 @@
 
 .command-menu-head {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
@@ -60,6 +64,7 @@
 
 .command-menu-search {
   display: grid;
+  flex-shrink: 0;
   gap: 6px;
   padding: 16px 18px 10px;
   color: var(--secondary);
@@ -78,12 +83,17 @@
 }
 
 .command-menu-results {
-  display: grid;
-  gap: 4px;
+  min-height: 0;
   max-height: min(52vh, 420px);
   padding: 6px 10px 12px;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+.command-menu-list {
+  display: grid;
+  gap: var(--vibe-space-1);
+  min-width: 0;
 }
 
 .command-menu-item {

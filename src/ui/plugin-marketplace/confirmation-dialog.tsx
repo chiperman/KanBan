@@ -1,16 +1,21 @@
 import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
 import { VibeDialog } from "@/ui/vibe/vibe-dialog";
+import type { ReactNode } from "react";
 
 import type { Confirmation } from "./requests";
 
 export function PluginConfirmationDialog({
   confirmation,
   pending,
+  blocked,
+  feedback,
   setConfirmation,
   perform,
 }: {
   confirmation: Confirmation;
   pending: boolean;
+  blocked: boolean;
+  feedback: ReactNode;
   setConfirmation(confirmation: Confirmation | null): void;
   perform(confirmation: Confirmation): Promise<void>;
 }) {
@@ -25,6 +30,8 @@ export function PluginConfirmationDialog({
       onClose={() => {
         if (!pending) setConfirmation(null);
       }}
+      pending={pending}
+      className="plugin-marketplace__dialog"
       description={
         confirmation.action === "uninstall"
           ? "移除插件后会停止此接入的读取，账户、凭证与历史仍然保留。"
@@ -37,14 +44,15 @@ export function PluginConfirmationDialog({
           <VibeButton disabled={pending} variant="text" onClick={() => setConfirmation(null)}>
             取消
           </VibeButton>
-          <VibeButton disabled={pending} onClick={() => void perform(confirmation)}>
+          <VibeButton disabled={pending || blocked} onClick={() => void perform(confirmation)}>
             {pending ? "正在处理…" : "确认"}
           </VibeButton>
         </>
       }
     >
+      {feedback}
       {confirmation.action === "import" ? (
-        <div>
+        <div className="plugin-marketplace__install">
           <p>
             {confirmation.info.publisher} · v{confirmation.info.version} · {confirmation.info.id}
           </p>
@@ -53,7 +61,7 @@ export function PluginConfirmationDialog({
         </div>
       ) : null}
       {confirmation.action !== "import" && ["install", "update"].includes(confirmation.action) ? (
-        <div>
+        <div className="plugin-marketplace__install">
           <p>v{confirmation.version}</p>
           {confirmation.repository ? (
             <VibeLink
@@ -61,6 +69,7 @@ export function PluginConfirmationDialog({
               target="_blank"
               rel="noreferrer"
               variant="text"
+              wrap
             >
               {confirmation.repository}
             </VibeLink>

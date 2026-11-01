@@ -61,17 +61,30 @@ function completeAssetPoint(
     validTime(point.observedAt);
 }
 
-function latestCloseAt(
-  candles: MarketBenchmarkCandlestick[],
-  observedAt: string,
-): string | null {
-  const observedTime = new Date(observedAt).valueOf();
-  const valid = candles.filter((candle) =>
-    validPositiveDecimal(candle.close) &&
-    !Number.isNaN(new Date(candle.time).valueOf()) &&
-    new Date(candle.time).valueOf() <= observedTime
-  ).toSorted((left, right) => left.time.localeCompare(right.time));
-  return valid.at(-1)?.close ?? null;
+/** 每组行情只校验、排序一次；调用方决定收盘价何时可以用于比较。 */
+export function createMarketBenchmarkPriceLookup(
+  candles: readonly MarketBenchmarkCandlestick[],
+  availableAt: (time: number) => number = (time) => time,
+): (cutoff: number) => string | null {
+  const prices = candles.flatMap((candle) => {
+    const time = Date.parse(candle.time);
+    if (!Number.isFinite(time) || !validPositiveDecimal(candle.close)) return [];
+    const availableTime = availableAt(time);
+    return Number.isFinite(availableTime)
+      ? [{ close: candle.close, availableAt: availableTime }]
+      : [];
+  }).toSorted((left, right) => left.availableAt - right.availableAt);
+
+  return (cutoff) => {
+    let start = 0;
+    let end = prices.length;
+    while (start < end) {
+      const middle = Math.floor((start + end) / 2);
+      if (prices[middle]!.availableAt <= cutoff) start = middle + 1;
+      else end = middle;
+    }
+    return prices[start - 1]?.close ?? null;
+  };
 }
 
 /**
@@ -89,10 +102,16 @@ export function buildMarketBenchmarkComparison(input: {
   if (completePoints.length < 2 || symbols.length === 0) {
     return { baselineDay: null, points: [], reason: "完整资产观测或指数行情不足。" };
   }
+  const prices = new Map(symbols.map((symbol) => [
+    symbol,
+    createMarketBenchmarkPriceLookup(input.candles[symbol]),
+  ]));
+  const closeAt = (symbol: MarketBenchmarkSymbol, observedAt: string) =>
+    prices.get(symbol)!(Date.parse(observedAt));
 
   const firstComparableIndex = completePoints.findIndex((point) =>
     symbols.every((symbol) =>
-      latestCloseAt(input.candles[symbol], point.observedAt) !== null
+      closeAt(symbol, point.observedAt) !== null
     )
   );
   if (firstComparableIndex < 0) {
@@ -102,7 +121,7 @@ export function buildMarketBenchmarkComparison(input: {
   const baseline = completePoints[firstComparableIndex]!;
   const baselineCloses = Object.fromEntries(symbols.map((symbol) => [
     symbol,
-    latestCloseAt(input.candles[symbol], baseline.observedAt),
+    closeAt(symbol, baseline.observedAt),
   ])) as Record<MarketBenchmarkSymbol, string | null>;
   const results: MarketBenchmarkComparison["points"] = [{
     assets: "0",
@@ -119,7 +138,7 @@ export function buildMarketBenchmarkComparison(input: {
       ".NDX.US": null,
     };
     for (const symbol of symbols) {
-      const close = latestCloseAt(input.candles[symbol], point.observedAt);
+      const close = closeAt(symbol, point.observedAt);
       const baselineClose = baselineCloses[symbol];
       comparisonPoint[symbol] = close === null || baselineClose === null
         ? null

@@ -1,7 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 import {
   ignoredAssetKeySet,
@@ -18,7 +17,7 @@ import type {
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeDialog } from "@/ui/vibe/vibe-dialog";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
-import { lockOnUnauthorizedResponse, OWNER_SESSION_EXPIRED_MESSAGE, readJsonResult } from "@/ui/owner-request-lock";
+import { AssetSourceCommandFeedback, useAssetSourceCommand } from "@/ui/asset-source-command";
 
 export interface EvmTokenPreferenceSettingsSource {
   id: string;
@@ -122,17 +121,17 @@ export function EvmTokenPreferenceSettings({
 }: {
   sources: EvmTokenPreferenceSettingsSource[];
 }) {
-  const router = useRouter();
-  const [pendingAssetKey, setPendingAssetKey] = useState<string | null>(null);
-  const pendingRef = useRef(false);
-  const [refreshing, startRefresh] = useTransition();
-  const busy = pendingAssetKey !== null || refreshing;
+  const saving = useAssetSourceCommand();
+  const pendingCommand = saving.pendingRequest?.command;
+  const pendingAssetKey = pendingCommand?.action === "evm-token-preference"
+    ? pendingCommand.assetKeys[0]
+    : null;
+  const { busy, blocked, refreshing } = saving;
   const [saved, setSaved] = useState(false);
   const [nativeAssetToIgnore, setNativeAssetToIgnore] = useState<{
     source: EvmTokenPreferenceSettingsSource;
     asset: PreferenceAsset;
   } | null>(null);
-  const [error, setError] = useState("");
   const recognizedGroups = tokenGroups(sources, (source) =>
     recognizedEvmAssets(source).filter(
       ({ sourceAsset }) => !ignoredAssetKeySet(source).has(sourceAsset),
@@ -175,50 +174,23 @@ export function EvmTokenPreferenceSettings({
     token: PreferenceAsset,
     status: PreferenceStatus,
   ) {
-    const assetKey = token.sourceAsset;
-    if (pendingRef.current || busy) return;
-    pendingRef.current = true;
-    setPendingAssetKey(assetKey);
-    setError("");
+    if (!saving.clearFailure()) return;
     setSaved(false);
-    try {
-      const response = await fetch(
-        `/api/asset-sources/${encodeURIComponent(sourceId)}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "evm-token-preference",
-            assetKeys: [assetKey],
-            status,
-          }),
-        },
-      );
-      const body = await readJsonResult<{ error?: string; ok?: boolean }>(response);
-      if (lockOnUnauthorizedResponse(response)) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
-      if (!response.ok || body?.ok !== true) {
-        // 空 2xx 无法确认服务端已保存，不能当作成功提示或刷新页面。
-        throw new Error(body?.error ?? "尚未确认资产范围是否保存，请刷新页面核对后再重试。");
-      }
+    await saving.run(sourceId, {
+      action: "evm-token-preference",
+      assetKeys: [token.sourceAsset],
+      status,
+    }, () => {
       setNativeAssetToIgnore(null);
       setSaved(true);
-      startRefresh(() => router.refresh());
-    } catch (caught) {
-      setError(
-        caught instanceof TypeError ? "连接中断，尚未确认资产范围是否保存，请检查连接后重试。" : caught instanceof Error ? caught.message : "资产范围设置保存失败",
-      );
-    } finally {
-      pendingRef.current = false;
-      setPendingAssetKey(null);
-    }
+    });
   }
 
   function ignoreAsset(
     source: EvmTokenPreferenceSettingsSource,
     asset: PreferenceAsset,
   ) {
-    if (pendingRef.current || busy) return;
-    setError("");
+    if (!saving.clearFailure()) return;
     setSaved(false);
     if (asset.native) {
       setNativeAssetToIgnore({ source, asset });
@@ -275,7 +247,7 @@ export function EvmTokenPreferenceSettings({
                         <small>{token.native ? "原生币" : token.name ?? "ERC-20"}</small>
                       </div>
                       <VibeButton
-                        disabled={busy}
+                        disabled={blocked}
                         onClick={() => ignoreAsset(source, token)}
                         type="button"
                         variant="text"
@@ -325,7 +297,7 @@ export function EvmTokenPreferenceSettings({
                       </div>
                       <div className="evm-token-settings__actions">
                         <VibeButton
-                          disabled={busy}
+                          disabled={blocked}
                           onClick={() =>
                             void updatePreference(source.id, token, "included")
                           }
@@ -335,7 +307,7 @@ export function EvmTokenPreferenceSettings({
                           {pending ? "正在保存…" : "需要关注"}
                         </VibeButton>
                         <VibeButton
-                          disabled={busy}
+                          disabled={blocked}
                           onClick={() =>
                             void ignoreAsset(source, token)
                           }
@@ -384,7 +356,7 @@ export function EvmTokenPreferenceSettings({
                         ) : null}
                       </div>
                       <VibeButton
-                        disabled={busy}
+                        disabled={blocked}
                         onClick={() =>
                           void updatePreference(source.id, token, "unrecognized")
                         }
@@ -433,7 +405,7 @@ export function EvmTokenPreferenceSettings({
                         ) : null}
                       </div>
                       <VibeButton
-                        disabled={busy}
+                        disabled={blocked}
                         onClick={() =>
                           void updatePreference(source.id, token, "unrecognized")
                         }
@@ -443,7 +415,7 @@ export function EvmTokenPreferenceSettings({
                         {pending ? "正在保存…" : "取消关注"}
                       </VibeButton>
                       <VibeButton
-                        disabled={busy}
+                        disabled={blocked}
                         onClick={() => ignoreAsset(source, token)}
                         type="button"
                         variant="text"
@@ -470,11 +442,7 @@ export function EvmTokenPreferenceSettings({
       ) : null}
 
       <div role="status">{saved ? <VibeNotice tone="success">{refreshing ? "资产范围已保存，正在更新页面…" : "资产范围已保存。"}</VibeNotice> : null}</div>
-      {error && !nativeAssetToIgnore ? (
-        <VibeNotice role="alert" tone="error">
-          {error}
-        </VibeNotice>
-      ) : null}
+      {!nativeAssetToIgnore ? <AssetSourceCommandFeedback failure={saving.failure} focusRecoveryOnMount onContinue={saving.continueAfterCheck} /> : null}
 
       {nativeAssetToIgnore ? (
         <VibeDialog
@@ -488,16 +456,18 @@ export function EvmTokenPreferenceSettings({
               >
                 取消
               </VibeButton>
-              <VibeButton
-                disabled={busy}
-                onClick={() => {
-                  const target = nativeAssetToIgnore;
-                  void updatePreference(target.source.id, target.asset, "ignored");
-                }}
-                type="button"
-              >
-                {busy ? "正在保存…" : error ? "重试忽略" : "仍要忽略"}
-              </VibeButton>
+              {!saving.needsCheck ? (
+                <VibeButton
+                  disabled={blocked}
+                  onClick={() => {
+                    const target = nativeAssetToIgnore;
+                    void updatePreference(target.source.id, target.asset, "ignored");
+                  }}
+                  type="button"
+                >
+                  {busy ? "正在保存…" : saving.failure ? "重试忽略" : "仍要忽略"}
+                </VibeButton>
+              ) : null}
             </>
           }
           description="不计入总额，不影响链上资产。"
@@ -506,7 +476,7 @@ export function EvmTokenPreferenceSettings({
           title={`确认忽略 ${nativeAssetToIgnore.asset.symbol ?? "原生币"}`}
           titleId="ignore-native-asset-dialog-title"
         >
-          {error ? <VibeNotice role="alert" tone="error">{error}</VibeNotice> : null}
+          <AssetSourceCommandFeedback failure={saving.failure} onContinue={saving.continueAfterCheck} />
         </VibeDialog>
       ) : null}
     </section>

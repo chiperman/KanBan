@@ -74,7 +74,7 @@ export function MarketBenchmarkControls({
       ? undefined
       : `${assetsLabel}与指数从共同起点比较；资产变化包含资金进出。`;
   } else if (dataState.kind === "loading") {
-    stateDescription = undefined;
+    stateDescription = "正在加载指数…";
   } else if (dataState.kind === "unavailable") {
     stateDescription = "接入长桥行情后可对比。";
   } else if (dataState.kind === "failed") {

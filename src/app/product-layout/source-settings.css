@@ -673,7 +673,24 @@ details.asset-refresh-recovery {
 .manual-asset-history-list { margin: var(--vibe-space-2) 0 0; padding: 0; list-style: none; }
 .manual-asset-history-list li { display: grid; grid-template-columns: 1fr auto auto; gap: var(--vibe-space-2); align-items: center; padding: var(--vibe-space-2) 0; border-bottom: 0.5px solid var(--line); font-family: var(--f-mono); font-size: var(--vibe-type-caption); }
 .manual-asset-history-list strong { color: var(--primary); font-weight: 500; }
-.manual-asset-history-actions { display: flex; gap: var(--vibe-space-1); }
+.manual-asset-history > .manual-asset-history-list > li {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.manual-asset-history > .manual-asset-history-list > li > strong {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  margin-inline-start: auto;
+  overflow-wrap: anywhere;
+  text-align: end;
+}
+
+.manual-asset-history-actions {
+  display: flex;
+  gap: var(--vibe-space-1);
+  margin-inline-start: auto;
+}
 .manual-asset-history-actions .vibe-button {
    min-height: 32px;
    padding-inline: var(--vibe-space-1);
@@ -1687,7 +1704,6 @@ details.asset-refresh-recovery {
 
 .external-service-statuses__input .vibe-field__input {
   max-width: 500px;
-  font-size: var(--vibe-type-body-sm);
 }
 
 .external-service-form {
@@ -1740,6 +1756,23 @@ details.asset-refresh-recovery {
     justify-self: start;
     text-align: left;
   }
+}
+
+.asset-source-command-feedback {
+  display: grid;
+  min-width: 0;
+  gap: var(--vibe-space-2);
+}
+
+.asset-source-command-check {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--vibe-space-2);
+}
+
+.asset-source-command-check > .vibe-button {
+  flex: 1 1 12rem;
+  min-width: 0;
 }
 
 .evm-token-settings__head,

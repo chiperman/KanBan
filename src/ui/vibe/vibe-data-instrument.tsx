@@ -92,18 +92,24 @@ export function VibeSegmentedBar({
 interface VibeMetricProps extends HTMLAttributes<HTMLDivElement> {
   animate?: boolean;
   animationKey?: string;
+  masked?: boolean;
   unit: string;
   value: string;
 }
+
+const METRIC_MASK = "\u2022".repeat(6);
 
 export function VibeMetric({
   animate = false,
   animationKey,
   className,
+  masked = false,
   unit,
   value,
   ...props
 }: VibeMetricProps) {
+  // Tabular placeholders reserve space without duplicating sensitive digits.
+  const sizingValue = value.replace(/[0-9]/g, "0");
   return (
     <div
       className={["vibe-metric", className].filter(Boolean).join(" ")}
@@ -111,7 +117,16 @@ export function VibeMetric({
       {...props}
     >
       <span className="vibe-metric__value">
-        <VibeLiveCounter animate={animate} animationKey={animationKey} resetKey={unit} value={value} />
+        <span aria-hidden="true" className="vibe-metric__sizer">
+          {sizingValue}
+        </span>
+        <span aria-hidden="true" className="vibe-metric__sizer">{METRIC_MASK}</span>
+        <VibeLiveCounter
+          animate={animate && !masked}
+          animationKey={animationKey}
+          resetKey={unit}
+          value={masked ? METRIC_MASK : value}
+        />
       </span>{" "}
       <span className="vibe-metric__unit">{unit}</span>
     </div>

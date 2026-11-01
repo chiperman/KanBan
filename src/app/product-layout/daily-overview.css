@@ -104,10 +104,6 @@
   line-height: 1.3;
 }
 
-.daily-overview__balance .vibe-metric__value {
-  overflow-wrap: anywhere;
-}
-
 .daily-overview__balance .asset-financial-number {
   font-weight: 700;
 }
@@ -121,10 +117,6 @@
 
 .daily-overview__private {
   color: var(--secondary);
-  font-family: var(--f-display);
-  font-size: var(--vibe-type-heading);
-  font-variant-numeric: tabular-nums;
-  line-height: 1.3;
 }
 
 .daily-overview__unavailable {
@@ -135,10 +127,6 @@
 
 .daily-overview__balance > .daily-overview__unavailable {
   font-size: var(--vibe-type-title);
-}
-
-.daily-overview__change > .daily-overview__private {
-  font-size: var(--vibe-type-subheading);
 }
 
 .daily-overview__confidence {
@@ -279,13 +267,14 @@
 }
 
 .daily-overview__source-heading {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: var(--vibe-space-3);
 }
 
 .daily-overview__source-heading h3 {
+  flex: 1 1 auto;
   min-width: 0;
   margin: 0;
   color: var(--primary);
@@ -296,13 +285,16 @@
 }
 
 .daily-overview__source-total {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  margin-inline-start: auto;
   color: var(--primary);
   font-family: var(--f-display);
   font-size: var(--vibe-type-subheading);
   font-variant-numeric: tabular-nums;
   font-weight: 500;
   text-align: end;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .daily-overview__source-comparison {

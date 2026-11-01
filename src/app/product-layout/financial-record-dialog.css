@@ -1,0 +1,19 @@
+.financial-record-dialog__fields {
+  display: grid;
+  min-width: 0;
+  gap: var(--vibe-space-4);
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.financial-record-dialog__fields > .vibe-field,
+.financial-record-dialog__fields > .vibe-amount-field,
+.financial-record-dialog__fields > .vibe-date-field {
+  width: 100%;
+  margin: 0;
+}
+
+.financial-record-dialog__fields > .trend-note {
+  margin: 0;
+}

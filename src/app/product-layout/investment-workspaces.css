@@ -459,25 +459,6 @@
   }
 }
 
-.investment-books__fields {
-  display: grid;
-  min-width: 0;
-  gap: var(--vibe-space-4);
-  border: 0;
-  padding: 0;
-  margin: 0;
-}
-
-.investment-books__fields > .vibe-field,
-.investment-books__fields > .vibe-date-field {
-  width: 100%;
-  margin: 0;
-}
-
-.investment-books__fields > .trend-note {
-  margin: 0;
-}
-
 .investment-books__basis {
   display: block;
   color: var(--muted);
@@ -557,6 +538,7 @@
 
 .asset-trend-panel {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
   gap: var(--vibe-space-4);
 }

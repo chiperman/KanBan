@@ -10,7 +10,7 @@ export function PluginCard({
   installed,
   published,
   demoMode,
-  pending,
+  blocked,
   setConfirmation,
   perform,
 }: {
@@ -18,7 +18,7 @@ export function PluginCard({
   installed: PluginManagementStatus["installed"][number] | undefined;
   published: AvailablePluginStatus | undefined;
   demoMode: boolean;
-  pending: boolean;
+  blocked: boolean;
   setConfirmation(confirmation: Confirmation): void;
   perform(confirmation: Confirmation): Promise<void>;
 }) {
@@ -48,7 +48,7 @@ export function PluginCard({
       <div className="plugin-marketplace__actions">
         {!installed ? (
           <VibeButton
-            disabled={demoMode || pending || !p.version}
+            disabled={demoMode || blocked || !p.version}
             onClick={() =>
               setConfirmation({
                 action: "install",
@@ -66,7 +66,8 @@ export function PluginCard({
           <>
             {update ? (
               <VibeButton
-                disabled={demoMode || pending}
+                disabled={demoMode || blocked}
+                wrap
                 onClick={() =>
                   setConfirmation({
                     action: "update",
@@ -82,7 +83,7 @@ export function PluginCard({
               </VibeButton>
             ) : null}
             <VibeButton
-              disabled={demoMode || pending}
+              disabled={demoMode || blocked}
               onClick={() =>
                 void perform({
                   action: installed.enabled ? "disable" : "enable",
@@ -94,7 +95,7 @@ export function PluginCard({
               {installed.enabled ? "停用" : "启用"}
             </VibeButton>
             <VibeButton
-              disabled={demoMode || pending}
+              disabled={demoMode || blocked}
               variant="text"
               onClick={() => setConfirmation({ action: "uninstall", id: p.id, label: p.label })}
             >
@@ -126,9 +127,10 @@ export function PluginCard({
             {installed.retainedVersions.map((v) => (
               <VibeButton
                 key={v}
-                disabled={demoMode || pending}
+                disabled={demoMode || blocked}
                 size="compact"
                 variant="text"
+                wrap
                 onClick={() =>
                   setConfirmation({ action: "rollback", id: p.id, label: p.label, version: v })
                 }

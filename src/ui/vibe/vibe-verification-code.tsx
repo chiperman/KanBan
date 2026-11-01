@@ -28,7 +28,9 @@ interface VibeVerificationCodeProps
   label: string;
   length?: number;
   name: string;
+  onValueChange?(value: string): void;
   ref?: Ref<HTMLInputElement>;
+  value?: string;
 }
 
 export function VibeVerificationCode({
@@ -37,15 +39,18 @@ export function VibeVerificationCode({
   label,
   length = 6,
   name,
+  onValueChange,
   onBlur,
   onClick,
   onFocus,
   ref,
+  value: controlledValue,
   ...inputProps
 }: VibeVerificationCodeProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [focused, setFocused] = useState(false);
-  const [value, setValue] = useState("");
+  const [internalValue, setInternalValue] = useState("");
+  const value = controlledValue ?? internalValue;
   const invalid =
     inputProps["aria-invalid"] === true ||
     inputProps["aria-invalid"] === "true";
@@ -54,7 +59,9 @@ export function VibeVerificationCode({
   useImperativeHandle(ref, () => inputRef.current as HTMLInputElement);
 
   function handleChange(event: ChangeEvent<HTMLInputElement>) {
-    setValue(event.currentTarget.value.replace(/\D/gu, "").slice(0, length));
+    const nextValue = event.currentTarget.value.replace(/\D/gu, "").slice(0, length);
+    if (controlledValue === undefined) setInternalValue(nextValue);
+    onValueChange?.(nextValue);
   }
 
   function handleFocus(event: FocusEvent<HTMLInputElement>) {

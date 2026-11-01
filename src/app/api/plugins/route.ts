@@ -1,6 +1,6 @@
 import { getServices } from '@/server/composition';
 import { rejectCrossOrigin } from '@/server/auth/request-origin';
-import { PluginManagementError } from '@/server/asset-source-plugins/installation';
+import { pluginManagementFailure } from '@/server/asset-source-plugins/http-response';
 import type { PluginManagementAction } from '@/domain/plugin-management';
 export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   try {
     return Response.json(new URL(request.url).searchParams.get('catalog') === '1'
       ? await services.pluginManagement.available(new URL(request.url).searchParams.get('refresh') === '1') : services.pluginManagement.status());
-  } catch (e) { return failure(e); }
+  } catch (e) { return pluginManagementFailure(e, '无法读取插件信息，请重试'); }
 }
 export async function POST(request: Request) {
   const originError = rejectCrossOrigin(request); if (originError) return originError;
@@ -21,8 +21,5 @@ export async function POST(request: Request) {
   if (!body || typeof body.action !== 'string' || !['install', 'update', 'enable', 'disable', 'uninstall', 'rollback'].includes(body.action) || typeof body.id !== 'string' || body.id.length > 128 || (body.version !== undefined && typeof body.version !== 'string')) return Response.json({ error: '插件操作无效' }, { status: 400 });
   if ((body.repository !== undefined && (typeof body.repository !== 'string' || !/^[\w.-]+\/[\w.-]+$/.test(body.repository))) || (body.sha256 !== undefined && (typeof body.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(body.sha256)))) return Response.json({ error: '插件发布来源无效' }, { status: 400 });
   try { return Response.json(await services.pluginManagement.change(body.action as PluginManagementAction, body.id, body.version as string | undefined, undefined, { repository: body.repository as string | undefined, sha256: body.sha256 as string | undefined })); }
-  catch (e) { return failure(e); }
-}
-function failure(e: unknown) {
-  return Response.json({ error: e instanceof PluginManagementError ? e.message : '插件操作失败，请检查插件文件和发行目录后重试' }, { status: 400 });
+  catch (e) { return pluginManagementFailure(e, '无法确认插件操作结果，请核对当前插件状态'); }
 }

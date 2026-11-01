@@ -42,6 +42,8 @@ export type AssetTrendBenchmark = {
 };
 
 export const TREND_CHART_ANIMATION_DURATION = 200;
+// Recharts rounds measured axis widths; leave room for fractional glyph bounds.
+export const TREND_CHART_AXIS_INSET = 4;
 // Keep event shapes above the cursor and active dot.
 export const FUNDING_EVENT_Z_INDEX = 1300;
 

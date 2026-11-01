@@ -11,7 +11,11 @@ import {
 import { FundingEventLegend, FundingEventMarker } from "./funding-events";
 import { CurveLine, TrendEffects, TrendExtentLabels } from "./plot-parts";
 import type { ChartDatum, ResolvedChartProps } from "./shared";
-import { FUNDING_EVENT_Z_INDEX, TREND_CHART_ANIMATION_DURATION } from "./shared";
+import {
+  FUNDING_EVENT_Z_INDEX,
+  TREND_CHART_ANIMATION_DURATION,
+  TREND_CHART_AXIS_INSET,
+} from "./shared";
 import {
   TrendChartSurface,
   TrendChartTooltip,
@@ -115,7 +119,7 @@ export function renderValuePlot({
               top: minimalPlot ? 32 : 12,
               right: minimalPlot ? 8 : variant === "source" ? 12 : 20,
               bottom: minimalPlot ? 32 : 6,
-              left: 0,
+              left: minimalPlot ? 0 : TREND_CHART_AXIS_INSET,
             }}
             role="img"
           >
@@ -129,6 +133,7 @@ export function renderValuePlot({
               domain={[axisMinimum, axisMaximum]}
               hide={minimalPlot}
               tick={{
+                className: "asset-trend-axis-tick",
                 fill: "var(--muted)",
                 fontFamily: "var(--f-display)",
                 fontSize: 12,
@@ -136,7 +141,7 @@ export function renderValuePlot({
               }}
               tickFormatter={axisValue}
               tickLine={false}
-              width={minimalPlot ? 0 : currency === "%" ? 56 : 84}
+              width={minimalPlot ? 0 : "auto"}
             />
             <TrendChartTooltip
               content={(props) => (

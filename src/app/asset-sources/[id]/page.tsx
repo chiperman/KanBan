@@ -71,6 +71,7 @@ export default async function AssetSourceDetailPage({
       >
         <WorkbenchPage className="page-workbench-destination page-asset-source-detail">
             <AssetSourceDetail
+              key={source.id}
               view={query?.view === "manage" ? "manage" : "overview"}
               initialUpdate={query?.action === "update"}
               checkRecordDay={validDay(query?.checkDay) ? query.checkDay : undefined}

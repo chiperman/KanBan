@@ -1,9 +1,7 @@
 import { decimalAdd, decimalCompare, decimalMultiply } from "@/domain/decimal";
-import {
+import type {
   analyzeInvestmentBook,
-  analyzeInvestmentBookInterval,
-  type InvestmentBookId,
-  type InvestmentBookState,
+  createInvestmentBookIntervalAnalyzer,
 } from "@/domain/investment-books";
 import { rangeDays } from "@/domain/investment-performance-trend";
 import type { AssetTrendEvent } from "@/ui/asset-trend-chart";
@@ -17,20 +15,13 @@ export type BookAnalysis = ReturnType<typeof analyzeInvestmentBook>;
 
 export function buildBookRange({
   analysis,
-  state,
-  bookId,
   currentDay,
   trendRange,
 }: {
   analysis: BookAnalysis;
-  state: InvestmentBookState;
-  bookId: InvestmentBookId;
   currentDay: string;
   trendRange: Pick<AssetTrendRangeSelection, "preset" | "customRange">;
 }) {
-  const current = analysis.summary;
-  const firstValuationDay = analysis.points.find((point) => point.total !== null)?.day;
-  const pointMap = new Map(analysis.points.map((row) => [row.day, row]));
   const days = rangeDays(
     trendRange.preset,
     currentDay,
@@ -41,24 +32,12 @@ export function buildBookRange({
   const isInterval = trendRange.preset !== "all";
   const startDay = days[0] ?? currentDay;
   const endDay = days.at(-1) ?? currentDay;
-  const interval = analyzeInvestmentBookInterval({
-    points: analysis.points,
-    state,
-    bookId,
-    startDay,
-    endDay,
-  });
-
   return {
-    current,
-    firstValuationDay,
-    pointMap,
     days,
     selectedDays,
     isInterval,
     startDay,
     endDay,
-    interval,
   };
 }
 
@@ -82,43 +61,33 @@ export function buildBookFundingEvents(analysis: BookAnalysis) {
 
 export function buildBookChartPoints({
   days,
-  pointMap,
   isInterval,
   startDay,
   analysis,
-  state,
-  bookId,
+  analyzeInterval,
   curve,
   fundingEvents,
-}: ReturnType<typeof buildBookRange> & {
+}: Pick<ReturnType<typeof buildBookRange>, "days" | "isInterval" | "startDay"> & {
   analysis: BookAnalysis;
-  state: InvestmentBookState;
-  bookId: InvestmentBookId;
+  analyzeInterval: ReturnType<typeof createInvestmentBookIntervalAnalyzer>;
   curve: "return" | "total";
   fundingEvents: ReturnType<typeof buildBookFundingEvents>;
 }) {
+  const pointMap = new Map(analysis.points.map((row) => [row.day, row]));
   const points = days.map((day) => {
     const row = pointMap.get(day);
-    const periodReturn = isInterval
-      ? day === startDay &&
-        row?.total != null &&
-        row.netInvestment != null &&
-        decimalCompare(row.total, "0") > 0
-        ? "0"
-        : analyzeInvestmentBookInterval({
-            points: analysis.points,
-            state,
-            bookId,
-            startDay,
-            endDay: day,
-          }).returnRatio
-      : (row?.returnRatio ?? null);
-    const amount =
-      curve === "total"
-        ? (row?.total ?? null)
-        : periodReturn === null
-          ? null
-          : decimalMultiply(periodReturn, "100");
+    let amount = row?.total ?? null;
+    if (curve === "return") {
+      const periodReturn = isInterval
+        ? day === startDay &&
+          row?.total != null &&
+          row.netInvestment != null &&
+          decimalCompare(row.total, "0") > 0
+          ? "0"
+          : analyzeInterval(day).returnRatio
+        : (row?.returnRatio ?? null);
+      amount = periodReturn === null ? null : decimalMultiply(periodReturn, "100");
+    }
     return {
       day,
       amount,

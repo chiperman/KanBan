@@ -36,7 +36,7 @@ const stableId = (account: LongbridgeAccountIdentity) => `longbridge:${createHas
 /** 一个来源对应一个真实账户；CLI / SDK 只决定读取通道，不参与账本计算。 */
 export class LongbridgeConnections implements LongbridgeOAuth, AssetSourceRefresher {
   private readonly sdk = new LongbridgeKeychainSdk();
-  private login: Promise<void> | null = null;
+  private loginPending = false;
   private cliMarket: { reference: string; reader: LongbridgeServeMarketData } | null = null;
   constructor(private readonly store: ConnectionStore) {}
 
@@ -383,13 +383,15 @@ export class LongbridgeConnections implements LongbridgeOAuth, AssetSourceRefres
   }
 
   async loginCli(code: string) {
-    if (this.login) throw new Error("CLI 正在登录，请稍后重新检测");
+    if (this.loginPending) throw new Error("CLI 正在登录，请稍后重新检测");
     if (!code.trim() || code.length > 4096 || /\s/.test(code)) throw new Error("请输入长桥一次性授权码");
-    const status = await this.cliStatus();
-    if (!status.installed) throw new Error(status.error!);
-    if (status.account) throw new Error("CLI 已登录，请直接连接此账户");
-    this.login = runFile(process.env.LONGBRIDGE_SERVE_BIN ?? "longbridge", ["auth", "login", "--auth-code", code, "--format", "json"],
-      { timeout: 60_000, maxBuffer: 1_048_576 }).then(() => undefined).catch(() => { throw new Error("CLI 登录失败，请重新获取授权码"); });
-    try { await this.login; } finally { this.login = null; }
+    this.loginPending = true;
+    try {
+      const status = await this.cliStatus();
+      if (!status.installed) throw new Error(status.error!);
+      if (status.account) throw new Error("CLI 已登录，请直接连接此账户");
+      await runFile(process.env.LONGBRIDGE_SERVE_BIN ?? "longbridge", ["auth", "login", "--auth-code", code, "--format", "json"],
+        { timeout: 60_000, maxBuffer: 1_048_576 }).catch(() => { throw new Error("CLI 登录失败，请重新获取授权码"); });
+    } finally { this.loginPending = false; }
   }
 }

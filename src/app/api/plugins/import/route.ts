@@ -2,6 +2,7 @@ import { getServices } from '@/server/composition';
 import { rejectCrossOrigin } from '@/server/auth/request-origin';
 import { inspectPluginArchive, MAX_PLUGIN_ARCHIVE } from '@/server/asset-source-plugins/import-package';
 import { PluginManagementError } from '@/server/asset-source-plugins/installation';
+import { pluginManagementFailure } from '@/server/asset-source-plugins/http-response';
 export const dynamic = 'force-dynamic';
 export async function POST(request: Request) {
   const originError = rejectCrossOrigin(request); if (originError) return originError;
@@ -26,6 +27,6 @@ export async function POST(request: Request) {
     await services.pluginManagement.installer.install({ archive });
     return Response.json(services.pluginManagement.status());
   } catch (e) {
-    return Response.json({ error: e instanceof PluginManagementError ? e.message : '插件导入失败，请检查插件包后重试' }, { status: 400 });
+    return pluginManagementFailure(e, '无法确认插件导入结果，请核对当前插件状态');
   }
 }

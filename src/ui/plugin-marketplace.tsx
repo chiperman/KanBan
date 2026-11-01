@@ -1,6 +1,5 @@
 "use client";
 import type {
-  AvailablePluginStatus,
   PluginCatalogStatus,
   PluginManagementStatus,
 } from "@/domain/plugin-management";
@@ -9,10 +8,18 @@ import { VibeNotice } from "@/ui/vibe/vibe-notice";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { PluginCatalogBrowser } from "./plugin-marketplace/catalog-browser";
+import { PluginCommandFeedback } from "./plugin-marketplace/command-feedback";
 import { PluginConfirmationDialog } from "./plugin-marketplace/confirmation-dialog";
 import { GitHubPluginInstallDialog } from "./plugin-marketplace/github-install-dialog";
-import { PluginCard } from "./plugin-marketplace/plugin-card";
-import { result, type Confirmation, type ImportInfo } from "./plugin-marketplace/requests";
+import {
+  inspectImportedPlugin,
+  requestPluginCatalog,
+  requestPluginCommand,
+  type Confirmation,
+  type PluginCommand,
+  type PluginCommandFailure,
+} from "./plugin-marketplace/requests";
 
 export function PluginMarketplace({
   initialStatus,
@@ -28,115 +35,154 @@ export function PluginMarketplace({
   const [catalogError, setCatalogError] = useState(""),
     [error, setError] = useState(""),
     [message, setMessage] = useState("");
-  const [checking, setChecking] = useState(false),
+  const [checking, setChecking] = useState(!demoMode && initialCatalog === null),
     [pending, setPending] = useState(false);
-  const [query, setQuery] = useState(""),
-    [filter, setFilter] = useState("all");
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [githubOpen, setGithubOpen] = useState(false);
+  const [failure, setFailure] = useState<PluginCommandFailure | null>(null);
+  const failureRef = useRef<PluginCommandFailure | null>(null);
   const upload = useRef<HTMLInputElement>(null),
     busy = useRef(false),
     router = useRouter();
+  const catalogRequest = useRef<AbortController | null>(null),
+    importRequest = useRef<AbortController | null>(null),
+    commandRequest = useRef<AbortController | null>(null);
+  const needsCheck = failure?.outcome === "unconfirmed";
+  const blocked = pending || needsCheck;
   const checkCatalog = useCallback(
     async (refresh = false) => {
       if (demoMode) return;
+      catalogRequest.current?.abort();
+      const controller = new AbortController();
+      catalogRequest.current = controller;
       setChecking(true);
       setCatalogError("");
       try {
-        setCatalog(
-          await result<PluginCatalogStatus>(
-            await fetch(`/api/plugins?catalog=1${refresh ? "&refresh=1" : ""}`, {
-              cache: "no-store",
-            }),
-          ),
-        );
+        const next = await requestPluginCatalog(refresh, controller.signal);
+        if (!controller.signal.aborted) setCatalog(next);
       } catch (e) {
-        setCatalogError(e instanceof Error ? e.message : "无法读取插件目录");
+        if (!controller.signal.aborted)
+          setCatalogError(e instanceof Error ? e.message : "无法读取插件目录");
       } finally {
-        setChecking(false);
+        if (catalogRequest.current === controller) {
+          catalogRequest.current = null;
+          setChecking(false);
+        }
       }
     },
     [demoMode],
   );
   useEffect(() => {
     void checkCatalog();
+    return () => {
+      catalogRequest.current?.abort();
+      catalogRequest.current = null;
+    };
   }, [checkCatalog]);
+  useEffect(
+    () => () => {
+      importRequest.current?.abort();
+      importRequest.current = null;
+      commandRequest.current?.abort();
+      commandRequest.current = null;
+    },
+    [],
+  );
   async function inspect(file: File) {
-    if (demoMode || busy.current) return;
+    if (demoMode || busy.current || failureRef.current?.outcome === "unconfirmed") return;
+    const controller = new AbortController();
+    importRequest.current = controller;
     busy.current = true;
     setPending(true);
+    updateFailure(null);
     setError("");
     setMessage("");
     try {
       if (file.size > 16 * 1024 * 1024) throw new Error("插件包不能超过 16 MiB");
-      const body = new FormData();
-      body.set("file", file);
-      body.set("action", "inspect");
-      const info = await result<ImportInfo>(
-        await fetch("/api/plugins/import", { method: "POST", body }),
-      );
+      const info = await inspectImportedPlugin(file, controller.signal);
+      if (controller.signal.aborted) return;
       setConfirmation({ action: "import", file, info });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "无法读取插件包");
+      if (!controller.signal.aborted) setError(e instanceof Error ? e.message : "无法读取插件包");
     } finally {
-      busy.current = false;
-      setPending(false);
-      if (upload.current) upload.current.value = "";
+      if (importRequest.current === controller) {
+        importRequest.current = null;
+        busy.current = false;
+        setPending(false);
+        if (upload.current) upload.current.value = "";
+      }
     }
   }
-  async function change(operation: Exclude<Confirmation, { action: "import" }>) {
-    return result<PluginManagementStatus>(
-      await fetch("/api/plugins", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(operation),
-      }),
-    );
+  function updateFailure(value: PluginCommandFailure | null) {
+    failureRef.current = value;
+    setFailure(value);
   }
-  async function perform(operation: Confirmation) {
-    if (demoMode || busy.current) return;
+  function continueAfterCheck() {
+    if (!busy.current) updateFailure(null);
+  }
+  function clearRejectedFailure() {
+    if (failureRef.current?.outcome === "rejected") updateFailure(null);
+  }
+  function changeConfirmation(value: Confirmation | null) {
+    if (busy.current || (value && failureRef.current?.outcome === "unconfirmed")) return;
+    if (value) {
+      updateFailure(null);
+      setError("");
+      setMessage("");
+    }
+    setConfirmation(value);
+  }
+  async function perform(operation: PluginCommand) {
+    if (demoMode || busy.current || failureRef.current?.outcome === "unconfirmed") return;
+    const controller = new AbortController();
+    commandRequest.current = controller;
     busy.current = true;
     setPending(true);
+    updateFailure(null);
     setError("");
     setMessage("");
     try {
-      let updated: PluginManagementStatus;
-      if (operation.action === "import") {
-        const body = new FormData();
-        body.set("file", operation.file);
-        body.set("action", "install");
-        body.set("trusted", "true");
-        body.set("sha256", operation.info.sha256);
-        updated = await result<PluginManagementStatus>(
-          await fetch("/api/plugins/import", { method: "POST", body }),
-        );
-      } else updated = await change(operation);
-      setStatus(updated);
+      const result = await requestPluginCommand(operation, controller.signal);
+      if (commandRequest.current !== controller) return;
+      if (result.outcome !== "confirmed") {
+        updateFailure(result);
+        return;
+      }
+      setStatus(result.status);
       setConfirmation(null);
-      setMessage("插件已更新。");
+      setGithubOpen(false);
+      setMessage({
+        install: "插件已安装。",
+        import: "插件已安装。",
+        "github-install": "插件已安装。",
+        update: "插件已更新。",
+        enable: "插件已启用。",
+        disable: "插件已停用。",
+        uninstall: "插件已卸载。",
+        rollback: "插件已回滚。",
+      }[operation.action]);
       router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "插件操作失败");
-      setConfirmation(null);
+      if (operation.action === "github-install") void checkCatalog();
     } finally {
-      busy.current = false;
-      setPending(false);
+      if (commandRequest.current === controller) {
+        controller.abort();
+        commandRequest.current = null;
+        busy.current = false;
+        setPending(false);
+      }
     }
   }
-  const entries = new Map<string, AvailablePluginStatus>();
-  for (const p of catalog?.plugins ?? []) entries.set(p.id, p);
-  for (const p of status.installed) if (!entries.has(p.id)) entries.set(p.id, p);
-  const visible = [...entries.values()].filter(
-    (p) =>
-      (filter !== "installed" || status.installed.some((i) => i.id === p.id)) &&
-      `${p.label} ${p.id} ${p.summary} ${p.publisher}`
-        .toLowerCase()
-        .includes(query.trim().toLowerCase()),
+  const feedback = (
+    <PluginCommandFeedback
+      failure={failure}
+      onContinue={continueAfterCheck}
+      focusRecoveryOnMount={!githubOpen && !confirmation}
+    />
   );
   return (
     <section className="plugin-marketplace" aria-labelledby="plugin-marketplace-title">
       <header className="plugin-marketplace__heading">
-        <div>
+        <div className="plugin-marketplace__intro">
           <h2 id="plugin-marketplace-title">集成插件</h2>
           <p>按需添加账户接入、行情与链上服务。</p>
         </div>
@@ -147,10 +193,18 @@ export function PluginMarketplace({
           >
             {checking ? "正在检查…" : "检查更新"}
           </VibeButton>
-          <VibeButton disabled={demoMode || pending} onClick={() => setGithubOpen(true)}>
+          <VibeButton
+            disabled={demoMode || blocked}
+            onClick={() => {
+              updateFailure(null);
+              setError("");
+              setMessage("");
+              setGithubOpen(true);
+            }}
+          >
             从 GitHub 安装
           </VibeButton>
-          <VibeButton disabled={demoMode || pending} onClick={() => upload.current?.click()}>
+          <VibeButton disabled={demoMode || blocked} onClick={() => upload.current?.click()}>
             导入插件包
           </VibeButton>
           <input
@@ -158,7 +212,7 @@ export function PluginMarketplace({
             type="file"
             accept=".tar.gz,application/gzip"
             hidden
-            disabled={demoMode}
+            disabled={demoMode || blocked}
             aria-label="选择插件包"
             onChange={(e) => {
               const file = e.currentTarget.files?.[0];
@@ -167,44 +221,6 @@ export function PluginMarketplace({
           />
         </div>
       </header>
-      <div className="plugin-marketplace__filters">
-        <div role="group" aria-label="插件范围" className="plugin-marketplace__actions">
-          <VibeButton
-            aria-pressed={filter === "all"}
-            variant={filter === "all" ? "outline" : "text"}
-            onClick={() => setFilter("all")}
-          >
-            全部插件
-          </VibeButton>
-          <VibeButton
-            aria-pressed={filter === "installed"}
-            variant={filter === "installed" ? "outline" : "text"}
-            onClick={() => setFilter("installed")}
-          >
-            已安装（{status.installed.length}）
-          </VibeButton>
-        </div>
-        <label className="vibe-field">
-          <span className="vibe-field__label">搜索插件</span>
-          <input
-            className="vibe-field__input"
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.currentTarget.value)}
-            placeholder="名称、用途或开发者"
-          />
-        </label>
-      </div>
-      {catalogError ? (
-        <VibeNotice tone="info" role="status">
-          {catalogError} 已安装插件仍可管理，也可从 GitHub 安装或导入插件包。
-        </VibeNotice>
-      ) : null}
-      {catalog?.notice ? (
-        <VibeNotice tone="info" role="status">
-          {catalog.notice}
-        </VibeNotice>
-      ) : null}
       {error ? (
         <VibeNotice tone="error" role="alert">
           {error}
@@ -215,32 +231,20 @@ export function PluginMarketplace({
           {message}
         </VibeNotice>
       ) : null}
-      <div className="plugin-marketplace__grid" aria-busy={pending || checking}>
-        {visible.map((p) => (
-          <PluginCard
-            key={p.id}
-            p={p}
-            installed={status.installed.find((i) => i.id === p.id)}
-            published={catalog?.plugins.find((i) => i.id === p.id)}
-            demoMode={demoMode}
-            pending={pending}
-            setConfirmation={setConfirmation}
-            perform={perform}
-          />
-        ))}
-      </div>
-      {!visible.length ? (
-        <p role="status">
-          {checking
-            ? "正在获取插件目录…"
-            : query
-              ? "没有匹配的插件。"
-              : filter === "installed"
-                ? "尚未安装插件。"
-                : "插件目录暂不可用。"}
-        </p>
-      ) : null}
-      <footer className="plugin-marketplace__heading">
+      {!githubOpen && !confirmation ? feedback : null}
+      <PluginCatalogBrowser
+        status={status}
+        catalog={catalog}
+        catalogError={catalogError}
+        checking={checking}
+        pending={pending}
+        blocked={blocked}
+        demoMode={demoMode}
+        retry={() => void checkCatalog(true)}
+        setConfirmation={changeConfirmation}
+        perform={perform}
+      />
+      <footer className="plugin-marketplace__heading plugin-marketplace__footer">
         <span>
           目录：{status.repository}
           {catalog?.release ? ` · ${catalog.release}` : ""}
@@ -266,22 +270,23 @@ export function PluginMarketplace({
       </footer>
       {githubOpen ? (
         <GitHubPluginInstallDialog
-          onClose={() => setGithubOpen(false)}
-          onInstalled={(updated) => {
-            setStatus(updated);
-            setGithubOpen(false);
-            setError("");
-            setMessage("插件已安装。");
-            router.refresh();
-            void checkCatalog();
+          pending={pending}
+          blocked={needsCheck}
+          feedback={feedback}
+          onClose={() => {
+            if (!busy.current) setGithubOpen(false);
           }}
+          onInstall={perform}
+          onPreviewChange={clearRejectedFailure}
         />
       ) : null}
       {confirmation ? (
         <PluginConfirmationDialog
           confirmation={confirmation}
           pending={pending}
-          setConfirmation={setConfirmation}
+          blocked={needsCheck}
+          feedback={feedback}
+          setConfirmation={changeConfirmation}
           perform={perform}
         />
       ) : null}

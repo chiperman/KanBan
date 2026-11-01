@@ -9,11 +9,12 @@ const HISTORY_DAY_COUNT = 35;
 const USD_TO_CNY = 7.18;
 const USD_TO_HKD = 7.81;
 
-type DemoSource = Omit<AssetSourceSummary, "credentialReference" | "permissions"> & { manualRecords?: ManualAssetRecord[] };
+type DemoSource = Omit<AssetSourceSummary, "credentialReference" | "permissions">;
 
 export interface DemoDashboardData {
   cards: Card[];
   assetSources: DemoSource[];
+  manualRecords: ManualAssetRecord[];
   dailyAssetTrendObservations: DailyAssetTrendObservation[];
   currentDay: string;
 }
@@ -189,7 +190,6 @@ function source(input: {
   status?: "current" | "expired";
   hasManualRecord?: boolean;
   manualAssetClass?: DemoSource["manualAssetClass"];
-  manualRecords?: ManualAssetRecord[];
 }): DemoSource {
   const status = input.status ?? "current";
   const holdings = input.holdings.map((holding) =>
@@ -233,9 +233,6 @@ function source(input: {
     ...(input.manualAssetClass === undefined
       ? {}
       : { manualAssetClass: input.manualAssetClass }),
-    ...(input.manualRecords === undefined
-      ? {}
-      : { manualRecords: input.manualRecords }),
     lifecycle: "connected",
   };
 }
@@ -245,10 +242,18 @@ function totalInCurrency(usd: number, currency: "USD" | "CNY" | "HKD"): string {
   return money(usd * (currency === "CNY" ? USD_TO_CNY : USD_TO_HKD));
 }
 
-function historyFor(
-  sources: DemoSource[],
-  currentDay: string,
-): DailyAssetTrendObservation[] {
+function historyFor({
+  sources,
+  currentDay,
+  currentObservedAt,
+  manualRecords,
+}: {
+  sources: DemoSource[];
+  currentDay: string;
+  currentObservedAt: string;
+  manualRecords: ManualAssetRecord[];
+}): DailyAssetTrendObservation[] {
+  const sortedManualRecords = manualRecords.toSorted((a, b) => b.day.localeCompare(a.day));
   const dailyChangeBySource = new Map([
     ["demo-longbridge", 680],
     ["demo-binance", -420],
@@ -270,6 +275,7 @@ function historyFor(
 
   return Array.from({ length: HISTORY_DAY_COUNT }, (_, index) => {
     const day = dayAtOffset(currentDay, index - HISTORY_DAY_COUNT + 1);
+    const observedAt = day === currentDay ? currentObservedAt : capturedAt(day);
     const sourceSnapshots: DailyAssetSourceSnapshot[] = sources.map(
       (source) => {
         const daysBeforeToday = HISTORY_DAY_COUNT - 1 - index;
@@ -285,7 +291,13 @@ function historyFor(
             volatility.amplitude +
             Math.cos(daysBeforeToday * 0.43 + volatility.phase) *
             volatility.amplitude * 0.38;
-        const usd = Math.max(
+        const manualRecord = source.kind === "manual"
+          ? sortedManualRecords.find(record => record.sourceId === source.id && record.day <= day)
+          : null;
+        if (source.kind === "manual" && !manualRecord) {
+          throw new Error("演示手工来源缺少期初记录");
+        }
+        const usd = manualRecord ? Number(manualRecord.amount) : Math.max(
           0,
           Math.round(
             (currentTotal - daysBeforeToday * dailyChange + wave) * 100,
@@ -301,7 +313,7 @@ function historyFor(
           sourceId: source.id,
           label: source.label,
           kind: source.kind,
-          capturedAt: capturedAt(day),
+          capturedAt: observedAt,
           complete: status === "complete",
           status,
           total: {
@@ -326,8 +338,8 @@ function historyFor(
 
     return {
       day,
-      capturedAt: capturedAt(day),
-      exchangeRates: rates(capturedAt(day)),
+      capturedAt: observedAt,
+      exchangeRates: rates(observedAt),
       complete: status === "complete",
       status,
       total: {
@@ -346,8 +358,9 @@ function historyFor(
  */
 export function createDemoDashboardData(now: Date): DemoDashboardData {
   const currentDay = shanghaiDay(now);
-  const observedAt = capturedAt(currentDay);
+  const observedAt = now.toISOString();
   const manualRecords: ManualAssetRecord[] = [
+    { sourceId: "demo-manual", day: dayAtOffset(currentDay, 1 - HISTORY_DAY_COUNT), amount: "47000.00", currency: "USD" as const, recordedAt: capturedAt(dayAtOffset(currentDay, 1 - HISTORY_DAY_COUNT)) },
     { sourceId: "demo-manual", day: dayAtOffset(currentDay, -2), amount: "50200.00", currency: "USD" as const, recordedAt: capturedAt(dayAtOffset(currentDay, -2)) },
     { sourceId: "demo-manual", day: dayAtOffset(currentDay, -1), amount: "51100.00", currency: "USD" as const, recordedAt: capturedAt(dayAtOffset(currentDay, -1)) },
     { sourceId: "demo-manual", day: currentDay, amount: "51600.00", currency: "USD" as const, recordedAt: observedAt },
@@ -453,7 +466,6 @@ export function createDemoDashboardData(now: Date): DemoDashboardData {
       coverage: completeCoverage("手工记录"),
       hasManualRecord: true,
       manualAssetClass: "other",
-      manualRecords,
       holdings: [],
     }),
   ] satisfies DemoSource[];
@@ -471,7 +483,13 @@ export function createDemoDashboardData(now: Date): DemoDashboardData {
   return {
     cards,
     assetSources,
-    dailyAssetTrendObservations: historyFor(assetSources, currentDay),
+    manualRecords,
+    dailyAssetTrendObservations: historyFor({
+      sources: assetSources,
+      currentDay,
+      currentObservedAt: observedAt,
+      manualRecords,
+    }),
     currentDay,
   };
 }

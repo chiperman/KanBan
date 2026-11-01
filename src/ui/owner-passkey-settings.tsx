@@ -4,6 +4,12 @@ import { startRegistration } from "@simplewebauthn/browser";
 import { useEffect, useRef, useState } from "react";
 
 import { RecoverySetup } from "@/ui/recovery-setup";
+import {
+  requestPasskeyBinding,
+  requestPasskeyOptions,
+  requestPasskeyRemoval,
+  requestPasskeyStatus,
+} from "@/ui/security-settings-requests";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeDialog } from "@/ui/vibe/vibe-dialog";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
@@ -53,33 +59,16 @@ export function OwnerPasskeySettings({
     setPending("registering");
     let stage: "options" | "ceremony" | "verify" = "options";
     try {
-      const optionsResponse = await fetch("/api/auth/register/options", {
-        method: "POST",
-      });
-      if (!optionsResponse.ok) {
-        const result = await optionsResponse.json().catch(() => null);
-        setError(result?.error ?? "无法开始 Passkey 绑定，请稍后重试。");
-        return;
-      }
-      const optionsJSON = await optionsResponse.json();
+      const optionsJSON = await requestPasskeyOptions();
       stage = "ceremony";
       const attestation = await startRegistration({
         optionsJSON,
       });
       stage = "verify";
-      const verifyResponse = await fetch("/api/auth/register/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(attestation),
-      });
-      const result = await verifyResponse.json().catch(() => null);
-      if (verifyResponse.status >= 500 || (verifyResponse.ok && result?.ok !== true)) {
-        setNeedsCheck(true);
-        setError("尚未确认 Passkey 绑定结果，请先重新读取状态，再决定是否重新绑定。");
-        return;
-      }
-      if (!verifyResponse.ok) {
-        setError(result?.error ?? "Passkey 绑定未通过，请重试。");
+      const result = await requestPasskeyBinding(attestation);
+      if (result.outcome !== "confirmed") {
+        setNeedsCheck(result.outcome === "unconfirmed");
+        setError(result.message);
         return;
       }
       setConfiguredNow(true);
@@ -98,7 +87,7 @@ export function OwnerPasskeySettings({
           setError("设备未能创建 Passkey，请重试或改用支持 Passkey 的浏览器与设备。");
         }
       } else {
-        setError("无法连接到服务，尚未开始绑定；请检查连接后重试。");
+        setError(caught instanceof Error ? caught.message : "无法开始 Passkey 绑定，请检查连接后重试。");
       }
     } finally {
       pendingRef.current = false;
@@ -114,18 +103,10 @@ export function OwnerPasskeySettings({
     setNoticeTone("success");
     setPending("removing");
     try {
-      const response = await fetch("/api/auth/passkey", { method: "DELETE" });
-      const result = await response.json().catch(() => null);
-      if (response.ok && result?.ok !== true) {
-        setNeedsCheck(true);
-        setError("尚未确认移除结果，请先重新读取 Passkey 状态。");
-        return;
-      }
-      if (!response.ok) {
-        if (response.status >= 500) {
-          setNeedsCheck(true);
-          setError("尚未确认移除结果，请先重新读取 Passkey 状态。");
-        } else setError(result?.error ?? "未能移除 Passkey，请重试。");
+      const result = await requestPasskeyRemoval();
+      if (result.outcome !== "confirmed") {
+        setNeedsCheck(result.outcome === "unconfirmed");
+        setError(result.message);
         return;
       }
       setConfiguredNow(false);
@@ -147,12 +128,7 @@ export function OwnerPasskeySettings({
     setPending("checking");
     setError("");
     try {
-      const response = await fetch("/api/auth/passkey", { cache: "no-store", signal: AbortSignal.timeout(15_000) });
-      const result = await response.json().catch(() => null);
-      if (!response.ok || typeof result?.configured !== "boolean" || typeof result?.recoveryConfigured !== "boolean" || (result.boundAt !== null && typeof result.boundAt !== "string")) {
-        setError(result?.error ?? "无法读取 Passkey 状态，请检查连接后重试。");
-        return;
-      }
+      const result = await requestPasskeyStatus();
       setConfiguredNow(result.configured);
       setBoundAtNow(result.boundAt);
       setRecoveryConfiguredNow(result.recoveryConfigured);
@@ -160,8 +136,8 @@ export function OwnerPasskeySettings({
       setConfirmRemove(false);
       setNoticeTone("info");
       setNotice("已读取当前 Passkey 状态，请核对后再操作。");
-    } catch {
-      setError("无法读取 Passkey 状态，请检查连接后重试。");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "无法读取 Passkey 状态，请检查连接后重试。");
     } finally {
       pendingRef.current = false;
       setPending("idle");

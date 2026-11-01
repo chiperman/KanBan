@@ -18,6 +18,7 @@ interface VibeButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: VibeButtonSize;
   shape?: VibeButtonShape;
   tone?: VibeButtonTone;
+  wrap?: boolean;
 }
 
 interface VibeLinkProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
@@ -26,6 +27,7 @@ interface VibeLinkProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
   size?: VibeButtonSize;
   shape?: VibeButtonShape;
   tone?: VibeButtonTone;
+  wrap?: boolean;
 }
 
 function actionClasses(
@@ -33,6 +35,7 @@ function actionClasses(
   size: VibeButtonSize,
   shape: VibeButtonShape,
   tone: VibeButtonTone,
+  wrap: boolean,
   className?: string,
 ) {
   return [
@@ -41,6 +44,7 @@ function actionClasses(
     `vibe-button--${size}`,
     shape === "square" ? "vibe-button--square" : null,
     tone === "danger" ? "vibe-button--danger" : null,
+    wrap ? "vibe-button--wrap" : null,
     className,
   ]
     .filter(Boolean)
@@ -55,12 +59,13 @@ export function VibeButton({
   size = "regular",
   shape = "default",
   tone = "default",
+  wrap = false,
   ...props
 }: VibeButtonProps) {
   return (
     <button
       ref={ref}
-      className={actionClasses(variant, size, shape, tone, className)}
+      className={actionClasses(variant, size, shape, tone, wrap, className)}
       data-vibe-component="button"
       data-vibe-variant={variant}
       data-vibe-size={size}
@@ -80,9 +85,10 @@ export function VibeLink({
   size = "regular",
   shape = "default",
   tone = "default",
+  wrap = false,
   ...props
 }: VibeLinkProps) {
-  const classNames = actionClasses(variant, size, shape, tone, className);
+  const classNames = actionClasses(variant, size, shape, tone, wrap, className);
   if (typeof props.href === "string" && props.href.startsWith("/")) {
     return (
       <Link

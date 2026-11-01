@@ -51,14 +51,15 @@ function isDemoModeLocation(): boolean {
 export function ThemeInitializer() {
   useLayoutEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const initialChoice = () =>
+    const initialChoice =
       isDemoModeLocation() ? "system" : readSavedChoice();
-    const applySavedTheme = () => applyTheme(initialChoice());
     const updateSystemTheme = () => {
-      if (initialChoice() === "system") applySavedTheme();
+      if (document.documentElement.dataset.themeChoice === "system") {
+        applyTheme("system");
+      }
     };
 
-    applySavedTheme();
+    applyTheme(initialChoice);
     media.addEventListener("change", updateSystemTheme);
     return () => media.removeEventListener("change", updateSystemTheme);
   }, []);
@@ -120,6 +121,7 @@ export function ThemeSwitcher({
     <VibeTooltip align="end" label={tooltipLabel} side={tooltipSide}>
       <VibeButton
         type="button"
+        shape={showLabel ? "default" : "square"}
         className={showLabel ? "theme-toggle theme-toggle--labeled" : "theme-toggle"}
         aria-label={`当前主题：${THEME_LABELS[choice]}；点击切换为${THEME_LABELS[nextChoice]}`}
         onClick={() => selectTheme(nextChoice)}

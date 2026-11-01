@@ -3,20 +3,17 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import {
-  lockOnUnauthorizedResponse,
-  OWNER_SESSION_EXPIRED_MESSAGE,
-  readJsonResult,
-} from "@/ui/owner-request-lock";
+  BackupOutcomeUnknown,
+  readBackupUploadResponse,
+  type UploadedBackup,
+} from "@/ui/business-data-backup-requests";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 
 /** 与服务端 MAX_BACKUP_CONTENTS_BYTES 一致。 */
 const MAX_BYTES = 32 * 1024 * 1024;
 const UPLOAD_TIMEOUT_MS = 120_000;
 
-export interface UploadedBackup {
-  fileName: string;
-  warning: string;
-}
+export type { UploadedBackup } from "@/ui/business-data-backup-requests";
 
 interface BusinessDataBackupDropzoneProps {
   disabled?: boolean;
@@ -123,28 +120,19 @@ export function BusinessDataBackupDropzone({
       });
       request.addEventListener("load", async () => {
         if (requestRef.current !== request) return;
-        let outcomeUnknown = request.status >= 500 || (request.status >= 200 && request.status < 300);
         try {
-          const response = new Response(request.response, {
+          const response = new Response(request.response || null, {
             status: request.status,
             headers: { "Content-Type": "application/json" },
           });
-          if (lockOnUnauthorizedResponse(response)) {
-            throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
-          }
-          const result = await readJsonResult<
-            UploadedBackup & { error?: string }
-          >(response);
+          const result = await readBackupUploadResponse(response);
           if (requestRef.current !== request) return;
-          if (!response.ok || result === null || typeof result.fileName !== "string" || typeof result.warning !== "string" || "error" in result) {
-            throw new Error(outcomeUnknown ? "尚未确认备份是否保存，请重新读取备份列表后核对。" : result?.error ?? "备份上传未通过，请检查文件后重试。");
-          }
-          outcomeUnknown = false;
           setPhase({ kind: "done", fileName: result.fileName, size: file.size });
           onUploaded(result);
         } catch (error) {
+          if (requestRef.current !== request) return;
           setPhase({ kind: "idle" });
-          onError(error instanceof Error ? error.message : "上传备份未完成，请检查连接后重试。", outcomeUnknown);
+          onError(error instanceof Error ? error.message : "上传备份未完成，请检查连接后重试。", error instanceof BackupOutcomeUnknown);
         } finally {
           finish();
         }

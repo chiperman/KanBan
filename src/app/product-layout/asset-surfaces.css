@@ -775,15 +775,8 @@ body {
   letter-spacing: 0.08em;
 }
 
-.asset-trend-extent-labels {
-  font-family: var(--f-display);
-  font-variant-numeric: tabular-nums;
-  font-variation-settings: "ROND" 100;
-  font-weight: 500;
-  letter-spacing: -0.045em;
-}
-
-.asset-trend-comparison .recharts-yAxis .recharts-cartesian-axis-tick-value {
+.asset-trend-extent-labels,
+.asset-trend-axis-tick {
   font-family: var(--f-display);
   font-variant-numeric: tabular-nums;
   font-variation-settings: "ROND" 100;
@@ -1119,11 +1112,6 @@ body {
 .asset-total {
   margin-top: var(--vibe-space-5);
   font-size: var(--vibe-type-heading);
-}
-
-.asset-total > .vibe-metric__value {
-  display: inline-block;
-  min-inline-size: var(--asset-total-value-width, 0);
 }
 
 .asset-cash-balances {

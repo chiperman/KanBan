@@ -3,12 +3,16 @@
 import { useRef, useState, type FormEvent } from "react";
 
 import type {
+  ExternalServiceConfigurationInput,
   ExternalServiceConfigurationStatus,
 } from "@/server/ports";
+import {
+  requestExternalServiceSave,
+  requestExternalServiceStatus,
+} from "@/ui/external-service-requests";
 import { formatShanghaiDateTime } from "@/ui/shanghai-date-time";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
-import { lockOnUnauthorizedResponse, OWNER_SESSION_EXPIRED_MESSAGE, readJsonResult } from "@/ui/owner-request-lock";
 
 const FIELD_LABELS = {
   coinGecko: "CoinGecko Demo API Key",
@@ -37,7 +41,12 @@ const SERVICE_FIELDS = [
     name: "bscRpcUrl",
     placeholderEmpty: "https://…",
   },
-] as const;
+] as const satisfies readonly {
+  fieldId: string;
+  id: keyof ExternalServiceConfigurationStatus;
+  name: keyof ExternalServiceConfigurationInput;
+  placeholderEmpty: string;
+}[];
 
 function stateText(configured: boolean, verifiedAt: string | null): string {
   if (!configured) return "未配置";
@@ -62,48 +71,26 @@ export function ExternalServiceSettings({
     if (requestLock.current || needsCheck) return;
     const form = event.currentTarget;
     const data = new FormData(form);
-    const body = Object.fromEntries(
-      [
-        ["coinGeckoDemoApiKey", data.get("coinGeckoDemoApiKey")],
-        ["ethereumRpcUrl", data.get("ethereumRpcUrl")],
-        ["bscRpcUrl", data.get("bscRpcUrl")],
-      ].flatMap(([key, value]) =>
-        typeof value === "string" && value.trim() ? [[key, value]] : [],
-      ),
-    );
+    const body: ExternalServiceConfigurationInput = {};
+    for (const { name } of SERVICE_FIELDS) {
+      const value = data.get(name);
+      if (typeof value === "string" && value.trim()) body[name] = value;
+    }
     requestLock.current = true;
     setPending(true);
     setError("");
     setSaved(false);
     setChecked(false);
     try {
-      const signal = AbortSignal.timeout(30_000);
-      const response = await fetch("/api/external-services", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-        signal,
-      });
-      if (lockOnUnauthorizedResponse(response)) {
-        setError(OWNER_SESSION_EXPIRED_MESSAGE);
+      const result = await requestExternalServiceSave(body);
+      if (result.outcome !== "confirmed") {
+        setNeedsCheck(result.outcome === "unconfirmed");
+        setError(result.message);
         return;
       }
-      const result = await readJsonResult<ExternalServiceConfigurationStatus & { error?: string }>(response);
-      signal.throwIfAborted();
-      if (response.status >= 500) throw new Error("保存结果待核对");
-      if (!response.ok) {
-        setError(result?.error ?? "外部服务保存失败，请重试。");
-        return;
-      }
-      if (!result?.coinGecko || !result.ethereumRpc || !result.bscRpc) {
-        throw new Error("保存响应不完整");
-      }
-      setStatus(result);
+      setStatus(result.status);
       setSaved(true);
       form.reset();
-    } catch {
-      setNeedsCheck(true);
-      setError("尚未确认服务配置是否保存。请先核对服务状态，再决定是否重新保存；输入已保留。");
     } finally {
       requestLock.current = false;
       setPending(false);
@@ -116,25 +103,12 @@ export function ExternalServiceSettings({
     setPending(true);
     setError("");
     try {
-      const signal = AbortSignal.timeout(15_000);
-      const response = await fetch("/api/external-services", { cache: "no-store", signal });
-      if (lockOnUnauthorizedResponse(response)) {
-        setError(OWNER_SESSION_EXPIRED_MESSAGE);
-        return;
-      }
-      const result = await readJsonResult<ExternalServiceConfigurationStatus>(response);
-      signal.throwIfAborted();
-      if (!response.ok || !result?.coinGecko || !result.ethereumRpc || !result.bscRpc) {
-        setError("未能读取服务状态，请重试核对。输入已保留。");
-        return;
-      }
+      const result = await requestExternalServiceStatus();
       setStatus(result);
       setNeedsCheck(false);
       setChecked(true);
     } catch (caught) {
-      setError(caught instanceof Error && caught.name === "TimeoutError"
-        ? "核对服务状态超时，请重试核对。输入与上次状态已保留。"
-        : "网络连接异常，尚未核对服务状态，请重试核对。输入已保留。");
+      setError(caught instanceof Error ? caught.message : "未能读取服务状态，请重试核对。输入已保留。");
     } finally {
       requestLock.current = false;
       setPending(false);

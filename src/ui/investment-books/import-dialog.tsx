@@ -1,13 +1,14 @@
 import { investmentBook, type InvestmentBookId } from "@/domain/investment-books";
 import { parseSourceInvestmentHistory } from "@/domain/source-investment-history";
 import { AssetFinancialValue } from "@/ui/asset-financial-value";
+import { bookRequest } from "@/ui/financial-record-requests";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeTextAreaField } from "@/ui/vibe/vibe-field";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
 import { useWorkbenchDisplayPreferences } from "@/ui/workbench-display-preferences";
 import { useState } from "react";
 
-import { ActionDialog, bookRequest } from "./action-dialog";
+import { ActionDialog } from "./action-dialog";
 import { bookMoney } from "./shared";
 
 export function ImportDialog({ bookId, onClose }: { bookId: InvestmentBookId; onClose(): void }) {
@@ -37,7 +38,7 @@ export function ImportDialog({ bookId, onClose }: { bookId: InvestmentBookId; on
       onClose={onClose}
       disabled={!preview}
       button="确认导入"
-      submit={() => bookRequest({ action: "import", bookId, history: preview })}
+      submit={(signal) => bookRequest({ action: "import", bookId, history: preview }, signal)}
     >
       <VibeTextAreaField
         fieldId="book-import-json"

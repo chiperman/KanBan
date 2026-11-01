@@ -56,6 +56,7 @@ export default async function AssetSourceSettingsPage({
               title="管理资产范围"
             />
             <EvmTokenPreferenceSettings
+              key={source.id}
               sources={[{
                 id: source.id,
                 kind: source.kind,

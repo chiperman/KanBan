@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 
@@ -10,6 +10,7 @@ import { useAssetRefresh } from "@/ui/asset-refresh-provider";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeField } from "@/ui/vibe/vibe-field";
 import { VibeIcon } from "@/ui/vibe/vibe-icon";
+import type { VibeTooltipTriggerProps } from "@/ui/vibe/vibe-tooltip";
 
 interface NavigationTarget {
   id: string;
@@ -32,32 +33,61 @@ function navigationTargets(): NavigationTarget[] {
     });
 }
 
-export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
+export function CommandMenu({
+  refreshEnabled,
+  "aria-describedby": describedBy,
+}: VibeTooltipTriggerProps & { refreshEnabled: boolean }) {
   const router = useRouter();
   const refresh = useAssetRefresh();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [targets, setTargets] = useState<NavigationTarget[]>([]);
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const menuId = useId();
+  const resultsId = `${menuId}-results`;
   const triggerRef = useRef<HTMLButtonElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const invokerRef = useRef<HTMLElement | null>(null);
+  const returnFocusFrameRef = useRef<number | null>(null);
 
   function close(returnFocus = true) {
     setOpen(false);
     setQuery("");
-    if (returnFocus) requestAnimationFrame(() => triggerRef.current?.focus());
+    if (returnFocus) {
+      const invoker = invokerRef.current;
+      returnFocusFrameRef.current = requestAnimationFrame(() => {
+        const destination = invoker?.isConnected && !invoker.matches(":disabled")
+          ? invoker
+          : triggerRef.current;
+        destination?.focus();
+        returnFocusFrameRef.current = null;
+      });
+    }
   }
 
   function show() {
+    if (returnFocusFrameRef.current !== null) {
+      cancelAnimationFrame(returnFocusFrameRef.current);
+      returnFocusFrameRef.current = null;
+    }
+    invokerRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
     setTargets(navigationTargets());
     setQuery("");
-    setActiveIndex(0);
+    setActiveId(null);
     setOpen(true);
   }
 
+  useEffect(() => () => {
+    if (returnFocusFrameRef.current !== null) {
+      cancelAnimationFrame(returnFocusFrameRef.current);
+    }
+  }, []);
+
   useEffect(() => {
     function shortcut(event: globalThis.KeyboardEvent) {
-      if (event.isComposing) return;
+      if (event.defaultPrevented || event.isComposing) return;
       if (open && event.key === "Escape") {
         event.preventDefault();
         close();
@@ -77,8 +107,9 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
     if (!open) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    requestAnimationFrame(() => searchRef.current?.focus());
+    const frame = requestAnimationFrame(() => searchRef.current?.focus());
     return () => {
+      cancelAnimationFrame(frame);
       document.body.style.overflow = previousOverflow;
     };
   }, [open]);
@@ -124,7 +155,7 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
         label: "立即刷新资产",
         keywords: "立即 刷新 同步 资产 refresh",
         action() {
-          close(false);
+          close();
           void refresh.request({ reason: "manual-global" });
         },
       });
@@ -145,13 +176,27 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
   const filtered = commands.filter((command) =>
     `${command.label} ${command.keywords}`.toLocaleLowerCase("zh-CN").includes(normalized),
   );
+  const activeCommand = filtered.find((command) => command.id === activeId) ?? filtered[0];
+  const activeOptionId = activeCommand
+    ? `${menuId}-option-${encodeURIComponent(activeCommand.id)}`
+    : undefined;
+
+  if (activeId !== null && !filtered.some((command) => command.id === activeId)) {
+    setActiveId(null);
+  }
 
   useEffect(() => {
-    setActiveIndex(0);
-  }, [query]);
+    if (open && activeOptionId) {
+      document.getElementById(activeOptionId)?.scrollIntoView({
+        block: "nearest",
+        inline: "nearest",
+        behavior: "instant",
+      });
+    }
+  }, [open, activeOptionId]);
 
   function keyboard(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.nativeEvent.isComposing) return;
+    if (event.defaultPrevented || event.nativeEvent.isComposing) return;
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
@@ -162,19 +207,20 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
       event.preventDefault();
       if (filtered.length === 0) return;
       const direction = event.key === "ArrowDown" ? 1 : -1;
-      setActiveIndex((current) =>
-        (current + direction + filtered.length) % filtered.length,
-      );
+      const currentIndex = filtered.findIndex((command) => command.id === activeCommand?.id);
+      setActiveId(filtered[(currentIndex + direction + filtered.length) % filtered.length].id);
       return;
     }
-    if (event.target === searchRef.current && event.key === "Enter" && filtered[activeIndex]) {
+    if (event.target === searchRef.current && event.key === "Enter") {
       event.preventDefault();
-      filtered[activeIndex].action();
+      activeCommand?.action();
       return;
     }
     if (event.key === "Tab") {
-      const focusable = event.currentTarget.querySelectorAll<HTMLElement>(
-        'input, button:not([disabled])',
+      const focusable = [...event.currentTarget.querySelectorAll<HTMLElement>(
+        'input, button',
+      )].filter((element) =>
+        element.tabIndex >= 0 && !element.matches(":disabled") && element.getClientRects().length > 0,
       );
       if (focusable.length === 0) return;
       const first = focusable[0];
@@ -183,6 +229,9 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
         event.preventDefault();
         last.focus();
       } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      } else if (!event.currentTarget.contains(document.activeElement)) {
         event.preventDefault();
         first.focus();
       }
@@ -196,6 +245,9 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
         type="button"
         className="command-menu-trigger"
         aria-label="打开快捷命令"
+        aria-describedby={describedBy}
+        aria-haspopup="dialog"
+        aria-expanded={open}
         onClick={show}
         variant="outline"
       >
@@ -231,34 +283,47 @@ export function CommandMenu({ refreshEnabled }: { refreshEnabled: boolean }) {
             <div className="command-menu-search">
               <VibeField
                 ref={searchRef}
-                fieldId="command-menu-search"
+                fieldId={`${menuId}-search`}
                 label="搜索命令"
                 type="search"
-                role="searchbox"
-                aria-label="搜索命令"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded="true"
+                aria-controls={resultsId}
+                aria-activedescendant={activeOptionId}
                 autoComplete="off"
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setActiveId(null);
+                }}
               />
             </div>
-            <div className="command-menu-results" aria-live="polite">
-              {filtered.length === 0 ? (
-                <p className="command-menu-empty">无匹配命令</p>
-              ) : (
-                filtered.map((command, index) => (
+            <div className="command-menu-results">
+              <div className="command-menu-list" id={resultsId} role="listbox" aria-label="命令">
+                {filtered.map((command) => (
                   <VibeButton
                     key={command.id}
+                    className="command-menu-item"
+                    id={`${menuId}-option-${encodeURIComponent(command.id)}`}
                     type="button"
-                    data-active={index === activeIndex ? "true" : "false"}
-                    aria-label={command.label}
-                    onMouseMove={() => setActiveIndex(index)}
+                    role="option"
+                    tabIndex={-1}
+                    aria-selected={command.id === activeCommand?.id}
+                    onMouseMove={() => setActiveId(command.id)}
+                    onMouseDown={(event) => {
+                      if (event.button === 0) event.preventDefault();
+                    }}
                     onClick={command.action}
                     variant="text"
                   >
                     <span>{command.label}</span>
                   </VibeButton>
-                ))
-              )}
+                ))}
+              </div>
+              {filtered.length === 0 ? (
+                <p className="command-menu-empty" role="status">无匹配命令</p>
+              ) : null}
             </div>
           </div>
         </div>,

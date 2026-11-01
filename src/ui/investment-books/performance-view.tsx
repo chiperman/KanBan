@@ -1,5 +1,8 @@
 import { decimalMultiply } from "@/domain/decimal";
-import { type InvestmentBookId } from "@/domain/investment-books";
+import {
+  createInvestmentBookIntervalAnalyzer,
+  type InvestmentBookState,
+} from "@/domain/investment-books";
 import { type MarketBenchmarkSymbol } from "@/domain/market-benchmark";
 import { AssetFinancialValue } from "@/ui/asset-financial-value";
 import { AssetTrendPanel } from "@/ui/asset-trend-panel";
@@ -9,49 +12,73 @@ import { formatShanghaiDayLabel, formatShanghaiFullDayLabel } from "@/ui/shangha
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeMetric } from "@/ui/vibe/vibe-data-instrument";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
+import { useMemo } from "react";
 
-import { bookMoney } from "./shared";
+import { buildBookChartPoints, buildBookFundingEvents } from "./model";
+import { bookMoney, type InvestmentBookSource } from "./shared";
 
 import type { AssetTrendRangeSelection } from "@/ui/asset-trend-panel";
-import type { BookAnalysis, buildBookChartPoints, buildBookRange } from "./model";
+import type { BookAnalysis, buildBookRange } from "./model";
 
 type PerformanceViewProps = ReturnType<typeof buildBookRange> & {
   analysis: BookAnalysis;
-  bookId: InvestmentBookId;
+  state: InvestmentBookState;
+  sources: InvestmentBookSource[];
   showSensitiveInfo: boolean;
-  benchmarkVisible: boolean;
-  benchmarkDataState: ReturnType<typeof useInvestmentBookBenchmarkComparison>;
   enabledSymbols: MarketBenchmarkSymbol[];
   setEnabledSymbols(value: MarketBenchmarkSymbol[]): void;
   trendRange: AssetTrendRangeSelection;
   currentDay: string;
   curve: "return" | "total";
   setCurve(value: "return" | "total"): void;
-  points: ReturnType<typeof buildBookChartPoints>;
 };
 
 export function BookPerformanceView({
   analysis,
-  bookId,
+  state,
+  sources,
   showSensitiveInfo,
-  benchmarkVisible,
-  benchmarkDataState,
   enabledSymbols,
   setEnabledSymbols,
   trendRange,
   currentDay,
   curve,
   setCurve,
-  points,
-  current,
-  firstValuationDay,
-  pointMap,
   days,
+  selectedDays,
   isInterval,
   startDay,
   endDay,
-  interval,
 }: PerformanceViewProps) {
+  const bookId = analysis.book.id;
+  const current = analysis.summary;
+  const firstValuationDay = analysis.points.find((point) => point.total !== null)?.day;
+  const startPoint = analysis.points.find((point) => point.day === startDay);
+  const endPoint = analysis.points.find((point) => point.day === endDay);
+  const analyzeInterval = useMemo(
+    () => createInvestmentBookIntervalAnalyzer({ points: analysis.points, state, bookId, startDay }),
+    [analysis.points, state, bookId, startDay],
+  );
+  const interval = useMemo(() => analyzeInterval(endDay), [analyzeInterval, endDay]);
+  const fundingEvents = useMemo(() => buildBookFundingEvents(analysis), [analysis]);
+  const selectedPoints = useMemo(
+    () => analysis.points.filter((point) => selectedDays.has(point.day)),
+    [analysis.points, selectedDays],
+  );
+  const benchmarkVisible = curve === "return" && showSensitiveInfo;
+  const benchmarkDataState = useInvestmentBookBenchmarkComparison({
+    enabledSymbols,
+    points: selectedPoints,
+    records: analysis.records,
+    sources,
+    visible: benchmarkVisible,
+  });
+  const points = useMemo(
+    () => buildBookChartPoints({
+      days, isInterval, startDay, analysis, analyzeInterval, curve, fundingEvents,
+    }),
+    [days, isInterval, startDay, analysis, analyzeInterval, curve, fundingEvents],
+  );
   const metrics = [
     {
       label: isInterval ? "期末资产" : "资产总额",
@@ -101,12 +128,13 @@ export function BookPerformanceView({
         {metrics.map((metric) => (
           <article key={metric.label}>
             <p className="card-label">{metric.label}</p>
-            {showSensitiveInfo && metric.value == null ? (
+            {metric.value == null ? (
               <p className="investment-books__metric-unavailable">数据不足</p>
             ) : (
               <VibeMetric
                 animate={false}
-                value={!showSensitiveInfo ? "••••••" : bookMoney(metric.value!)}
+                masked={!showSensitiveInfo}
+                value={bookMoney(metric.value)}
                 unit={metric.unit}
               />
             )}
@@ -121,7 +149,7 @@ export function BookPerformanceView({
       ) : null}
       {showSensitiveInfo &&
       isInterval &&
-      (pointMap.get(startDay)?.total == null || pointMap.get(endDay)?.total == null) ? (
+      (startPoint?.total == null || endPoint?.total == null) ? (
         <VibeNotice tone="info" role="status">
           所选起止日期缺少完整资产估值，区间收益暂不可算。可调整日期，或在记账记录中补齐估值。
         </VibeNotice>

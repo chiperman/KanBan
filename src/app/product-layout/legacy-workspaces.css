@@ -191,6 +191,7 @@ html {
 
 .investment-performance__benchmark {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--vibe-space-4);
 }
 
@@ -215,10 +216,11 @@ html {
 }
 
 .investment-performance__benchmark-baseline {
+  min-inline-size: 0;
   color: var(--secondary);
   font-family: var(--f-mono);
   font-size: var(--vibe-type-caption);
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .investment-performance__benchmark-controls {
@@ -811,17 +813,6 @@ html {
   }
 
   .investment-performance__scope-option.vibe-button {
-
-    width: 100%;
-    min-width: 0;
-}
-
-  .investment-performance__benchmark-controls {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .investment-performance__benchmark-toggle.vibe-button {
 
     width: 100%;
     min-width: 0;

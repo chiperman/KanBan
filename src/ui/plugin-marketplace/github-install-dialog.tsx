@@ -1,83 +1,91 @@
-import type { GitHubPluginCatalog, PluginManagementStatus } from "@/domain/plugin-management";
+import type { GitHubPluginCatalog } from "@/domain/plugin-management";
 import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
 import { VibeDialog } from "@/ui/vibe/vibe-dialog";
 import { VibeField, VibeSelect } from "@/ui/vibe/vibe-field";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import { result } from "./requests";
+import { inspectGitHubPlugins, type GitHubPluginCommand } from "./requests";
 
 export function GitHubPluginInstallDialog({
   onClose,
-  onInstalled,
+  onInstall,
+  onPreviewChange,
+  pending: installing,
+  blocked,
+  feedback,
 }: {
   onClose: () => void;
-  onInstalled: (status: PluginManagementStatus) => void;
+  onInstall: (command: GitHubPluginCommand) => Promise<void>;
+  onPreviewChange: () => void;
+  pending: boolean;
+  blocked: boolean;
+  feedback: ReactNode;
 }) {
   const [source, setSource] = useState(""),
     [catalog, setCatalog] = useState<GitHubPluginCatalog | null>(null);
   const [selectedId, setSelectedId] = useState(""),
     [error, setError] = useState("");
-  const [pending, setPending] = useState<"inspect" | "install" | null>(null),
+  const [checking, setChecking] = useState(false),
     busy = useRef(false);
+  const pending = checking || installing;
+  const inspection = useRef<AbortController | null>(null);
   const selected = catalog?.plugins.find((p) => p.id === selectedId);
+  useEffect(
+    () => () => {
+      inspection.current?.abort();
+      inspection.current = null;
+    },
+    [],
+  );
+  function close() {
+    if (installing) return;
+    inspection.current?.abort();
+    onClose();
+  }
   async function inspect() {
-    if (busy.current || !source.trim()) return;
+    if (busy.current || installing || blocked || !source.trim()) return;
+    const controller = new AbortController();
+    inspection.current = controller;
     busy.current = true;
-    setPending("inspect");
+    setChecking(true);
     setError("");
+    onPreviewChange();
     try {
-      const next = await result<GitHubPluginCatalog>(
-        await fetch("/api/plugins/github", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "inspect", source }),
-        }),
-      );
+      const next = await inspectGitHubPlugins(source, controller.signal);
+      if (controller.signal.aborted) return;
       setCatalog(next);
       setSelectedId(next.plugins[0]?.id ?? "");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "无法查看插件，请检查仓库地址后重试");
+      if (!controller.signal.aborted)
+        setError(e instanceof Error ? e.message : "无法查看插件，请检查仓库地址后重试");
     } finally {
-      busy.current = false;
-      setPending(null);
+      if (inspection.current === controller) {
+        inspection.current = null;
+        busy.current = false;
+        setChecking(false);
+      }
     }
   }
   async function install() {
-    if (busy.current || !catalog || !selected) return;
-    busy.current = true;
-    setPending("install");
+    if (busy.current || installing || blocked || !catalog || !selected) return;
     setError("");
-    try {
-      const updated = await result<PluginManagementStatus>(
-        await fetch("/api/plugins/github", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "install",
-            source: `https://github.com/${catalog.repository}/releases/tag/${catalog.release}`,
-            id: selected.id,
-            version: selected.version,
-            repository: catalog.repository,
-            sha256: selected.sha256,
-          }),
-        }),
-      );
-      onInstalled(updated);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "安装未完成，请重试；已有插件保持不变");
-    } finally {
-      busy.current = false;
-      setPending(null);
-    }
+    await onInstall({
+      action: "github-install",
+      source: `https://github.com/${catalog.repository}/releases/tag/${catalog.release}`,
+      id: selected.id,
+      version: selected.version,
+      repository: catalog.repository,
+      sha256: selected.sha256,
+    });
   }
   return (
     <VibeDialog
       titleId="github-plugin-install-title"
       title="从 GitHub 安装"
-      onClose={() => {
-        if (!busy.current) onClose();
-      }}
+      onClose={close}
+      className="plugin-marketplace__dialog"
+      pending={installing}
       description="填写开发者提供的公开仓库或 Release 地址，无需先上架插件目录。"
       onSubmit={(event) => {
         event.preventDefault();
@@ -85,12 +93,12 @@ export function GitHubPluginInstallDialog({
       }}
       actions={
         <>
-          <VibeButton type="button" disabled={!!pending} variant="text" onClick={onClose}>
+          <VibeButton type="button" disabled={installing} variant="text" onClick={close}>
             取消
           </VibeButton>
           {catalog ? (
-            <VibeButton disabled={!!pending || !selected} type="submit">
-              {pending === "install" ? "正在安装…" : "确认安装"}
+            <VibeButton disabled={pending || blocked || !selected} type="submit">
+              {installing ? "正在安装…" : "确认安装"}
             </VibeButton>
           ) : null}
         </>
@@ -102,11 +110,12 @@ export function GitHubPluginInstallDialog({
           label="GitHub 仓库或 Release 地址"
           value={source}
           maxLength={500}
-          disabled={!!pending}
+          disabled={pending || blocked}
           placeholder="owner/repo 或 https://github.com/owner/repo"
           autoCapitalize="none"
           spellCheck={false}
           onChange={(event) => {
+            onPreviewChange();
             setSource(event.currentTarget.value);
             setCatalog(null);
             setSelectedId("");
@@ -116,10 +125,10 @@ export function GitHubPluginInstallDialog({
         <div className="plugin-marketplace__actions">
           <VibeButton
             type="button"
-            disabled={!!pending || !source.trim()}
+            disabled={pending || blocked || !source.trim()}
             onClick={() => void inspect()}
           >
-            {pending === "inspect" ? "正在查看…" : catalog ? "重新查看" : "查看插件"}
+            {checking ? "正在查看…" : catalog ? "重新查看" : "查看插件"}
           </VibeButton>
         </div>
         {error ? (
@@ -127,6 +136,7 @@ export function GitHubPluginInstallDialog({
             {error}
           </VibeNotice>
         ) : null}
+        {feedback}
         {catalog ? (
           <>
             {catalog.plugins.length > 1 ? (
@@ -134,8 +144,9 @@ export function GitHubPluginInstallDialog({
                 fieldId="github-plugin-selection"
                 label="选择插件"
                 value={selectedId}
-                disabled={!!pending}
+                disabled={pending || blocked}
                 onValueChange={(id) => {
+                  onPreviewChange();
                   setSelectedId(id);
                   setError("");
                 }}
@@ -159,6 +170,7 @@ export function GitHubPluginInstallDialog({
                   target="_blank"
                   rel="noreferrer"
                   variant="text"
+                  wrap
                 >
                   {catalog.repository} · {catalog.release}
                 </VibeLink>

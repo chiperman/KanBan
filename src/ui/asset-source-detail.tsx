@@ -3,7 +3,7 @@
 import { LongbridgeConnectionSummary } from "@/ui/longbridge-connection-settings";
 
 import { WorkspaceViewNavigation } from "@/ui/workspace-view-navigation";
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { lazy, Suspense, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
 import { AssetSourceRefreshButton } from "@/ui/asset-refresh-controls";
@@ -41,12 +41,15 @@ import {
   VibeSelect,
 } from "@/ui/vibe/vibe-field";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
-import { lockOnUnauthorizedResponse, OWNER_SESSION_EXPIRED_MESSAGE, readJsonResult } from "@/ui/owner-request-lock";
 import { CURRENCY_OPTIONS } from "@/ui/reporting-currency-options";
+import { useSourceSettingDraft } from "@/ui/use-source-setting-draft";
+import { AssetSourceCommandFeedback, useAssetSourceCommand } from "@/ui/asset-source-command";
 
 type DetailSource = AssetSourceView & {
   permissions: AssetPermission[];
 };
+
+type SourceCommandController = ReturnType<typeof useAssetSourceCommand>;
 
 // 资产类别表单只服务手工来源，动态导入避免自动来源页面下载其代码。
 const SourceManualAssetClassForm = lazy(() =>
@@ -54,22 +57,6 @@ const SourceManualAssetClassForm = lazy(() =>
     default: module.SourceManualAssetClassForm,
   })),
 );
-
-async function sourceRequest(
-  url: string,
-  method: "PATCH" | "DELETE",
-  body: unknown,
-) {
-  const response = await fetch(url, {
-    method,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const result = await readJsonResult<{ ok?: boolean; error?: string }>(response);
-  if (lockOnUnauthorizedResponse(response)) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
-  if (!response.ok) throw new Error(result?.error ?? "来源操作失败");
-  if (result?.ok !== true) throw new Error("尚未确认操作结果，请刷新页面核对后再重试。");
-}
 
 function permissionSummary(permissions: AssetPermission[]): string {
   const labels: Record<AssetPermission, string> = {
@@ -102,95 +89,64 @@ function formatTime(value: string): string {
 }
 
 function ManualRecordDeleteDialog({
+  operation,
   onClose,
   record,
   source,
 }: {
+  operation: SourceCommandController;
   onClose(): void;
   record: ManualAssetRecord;
   source: DetailSource;
 }) {
-  const router = useRouter();
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState("");
   const name = assetSourceDisplayName(source);
 
   async function remove() {
-    setPending(true);
-    setError("");
-    try {
-      await sourceRequest(`/api/asset-sources/${encodeURIComponent(source.id)}`, "DELETE", {
-        action: "manual-record",
-        day: record.day,
-      });
-      router.refresh();
-      onClose();
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "删除数据失败");
-    } finally {
-      setPending(false);
-    }
+    await operation.run(source.id, { action: "delete-manual-record", day: record.day }, onClose);
   }
 
   return (
     <VibeDialog
       actions={
         <>
-          <VibeButton disabled={pending} onClick={onClose} type="button" variant="text">
+          <VibeButton disabled={operation.busy} onClick={onClose} type="button" variant="text">
             取消
           </VibeButton>
-          <VibeButton tone="danger" disabled={pending} onClick={() => void remove()} type="button" variant="outline">
-            删除数据
-          </VibeButton>
+          {!operation.needsCheck ? (
+            <VibeButton tone="danger" disabled={operation.blocked} onClick={() => void remove()} type="button" variant="outline">
+              {operation.pending ? "正在删除…" : "删除数据"}
+            </VibeButton>
+          ) : null}
         </>
       }
       aria-label={`删除 ${name} ${record.day} 数据`}
       description="将显示上一条保留记录。"
-      pending={pending}
+      pending={operation.busy}
       onClose={onClose}
       title={`删除 ${name} ${record.day} 数据`}
       titleId="manual-record-delete-dialog-title"
     >
-      {error ? (
-        <VibeNotice role="alert" tone="error">{error}</VibeNotice>
-      ) : null}
+      <AssetSourceCommandFeedback failure={operation.failure} onContinue={() => {
+        operation.continueAfterCheck();
+        onClose();
+      }} />
     </VibeDialog>
   );
 }
 
 function SourceDisplayNameForm({ source }: { source: DetailSource }) {
-  const router = useRouter();
-  const [displayName, setDisplayName] = useState(source.displayName ?? "");
-  const [savedName, setSavedName] = useState(source.displayName ?? "");
-  const [pending, setPending] = useState(false);
-  const [refreshing, startRefresh] = useTransition();
-  const pendingRef = useRef(false);
-  const [error, setError] = useState("");
-  const [saved, setSaved] = useState(false);
-  const busy = pending || refreshing;
-
-  useEffect(() => { setSavedName(source.displayName ?? ""); }, [source.displayName]);
+  const {
+    value: displayName,
+    dirty,
+    saved,
+    setValue: setDisplayName,
+    markSaved,
+  } = useSourceSettingDraft(source.displayName ?? "", (value) => value.trim());
+  const saving = useAssetSourceCommand();
 
   async function save() {
-    if (pendingRef.current || busy || displayName.trim() === savedName) return;
-    pendingRef.current = true;
-    setPending(true);
-    setError("");
-    setSaved(false);
-    try {
-      await sourceRequest(`/api/asset-sources/${encodeURIComponent(source.id)}`, "PATCH", {
-        action: "rename", displayName,
-      });
-      setDisplayName(displayName.trim());
-      setSavedName(displayName.trim());
-      setSaved(true);
-      startRefresh(() => router.refresh());
-    } catch (caught) {
-      setError(caught instanceof TypeError ? "连接中断，尚未确认名称是否保存，请检查连接后重试。" : caught instanceof Error ? caught.message : "保存名称失败");
-    } finally {
-      pendingRef.current = false;
-      setPending(false);
-    }
+    if (!dirty) return;
+    await saving.run(source.id, { action: "rename", displayName }, () => markSaved(displayName));
   }
 
   return (
@@ -199,24 +155,24 @@ function SourceDisplayNameForm({ source }: { source: DetailSource }) {
         <VibeField
           aria-describedby="source-display-name-hint"
           autoComplete="off"
-          disabled={busy}
+          disabled={saving.blocked}
           fieldId="source-display-name"
           label="自定义名称"
-          onChange={(event) => { setDisplayName(event.target.value); setSaved(false); }}
+          onChange={(event) => setDisplayName(event.target.value)}
           placeholder={assetSourceDefaultDisplayName(source)}
           value={displayName}
         />
         <VibeButton
-          disabled={busy || displayName.trim() === savedName}
+          disabled={saving.blocked || !dirty}
           type="submit"
           variant="outline"
         >
-          {pending ? "正在保存…" : refreshing ? "正在更新…" : "保存名称"}
+          {saving.pending ? "正在保存…" : saving.refreshing ? "正在更新…" : "保存名称"}
         </VibeButton>
       </div>
       <p className="trend-note" id="source-display-name-hint">仅修改本看板中的显示名称。清空后恢复默认名称。</p>
-      <div role="status">{saved ? <VibeNotice tone="success">{refreshing ? "名称已保存，正在更新页面…" : "名称已保存。"}</VibeNotice> : null}</div>
-      {error ? <VibeNotice role="alert" tone="error">{error}</VibeNotice> : null}
+      <div role="status">{saved ? <VibeNotice tone="success">{saving.refreshing ? "名称已保存，正在更新页面…" : "名称已保存。"}</VibeNotice> : null}</div>
+      <AssetSourceCommandFeedback failure={saving.failure} onContinue={saving.continueAfterCheck} />
     </form>
   );
 }
@@ -224,50 +180,41 @@ function SourceDisplayNameForm({ source }: { source: DetailSource }) {
 type SourceLifecycleAction = "disconnect" | "restore" | "delete";
 
 function SourceLifecycleActions({
+  operation,
   source,
 }: {
+  operation: SourceCommandController;
   source: DetailSource;
 }) {
-  const router = useRouter();
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [deleteStep, setDeleteStep] = useState<1 | 2 | null>(null);
-  const [pending, setPending] = useState(false);
-  const pendingRef = useRef(false);
-  const [failure, setFailure] = useState<{ action: SourceLifecycleAction; message: string } | null>(null);
   const name = assetSourceDisplayName(source);
   const manual = source.kind === "manual";
+  const { busy, blocked, needsCheck, failure } = operation;
+  const pendingAction = operation.pendingRequest?.command.action;
 
   async function run(action: SourceLifecycleAction) {
-    // React 状态更新有间隙；用 ref 立即挡住同一次事件循环里的第二次点击。
-    if (pendingRef.current) return;
-    pendingRef.current = true;
-    setPending(true);
-    setFailure(null);
-    try {
-      if (action === "delete") {
-        await sourceRequest(`/api/asset-sources/${encodeURIComponent(source.id)}`, "DELETE", {
-          confirmation: "DELETE_SOURCE_DATA",
-        });
-        router.push("/settings?view=data#asset-sources");
-      } else {
-        await sourceRequest(`/api/asset-sources/${encodeURIComponent(source.id)}`, "PATCH", {
-          action,
-        });
-      }
+    if (action === "delete" && deleteStep !== 2) return;
+    if (action === "disconnect" && !confirmDisconnect) return;
+    await operation.run(source.id, action === "delete"
+      ? { action: "delete-source-data", confirmation: "DELETE_SOURCE_DATA" }
+      : { action }, () => {
       setConfirmDisconnect(false);
       setDeleteStep(null);
-      router.refresh();
-    } catch (caught) {
-      setFailure({ action, message: caught instanceof Error ? caught.message : "来源操作失败" });
-    } finally {
-      pendingRef.current = false;
-      setPending(false);
-    }
+    });
   }
+
+  function continueAfterCheck() {
+    operation.continueAfterCheck();
+    setConfirmDisconnect(false);
+    setDeleteStep(null);
+  }
+
+  const feedback = <AssetSourceCommandFeedback failure={failure} onContinue={continueAfterCheck} />;
 
   return (
     <>
-      <section aria-labelledby="source-danger-heading" className="asset-source-detail__setting-section">
+      <section aria-busy={busy} aria-labelledby="source-danger-heading" className="asset-source-detail__setting-section">
         <h2 id="source-danger-heading">危险操作</h2>
         <div className="asset-source-detail__setting-content">
           {!manual ? (
@@ -278,17 +225,17 @@ function SourceLifecycleActions({
               </div>
               {source.lifecycle === "disconnected" ? (
                 <VibeButton
-                  disabled={pending}
+                  disabled={blocked}
                   onClick={() => void run("restore")}
                   type="button"
                   variant="outline"
                 >
-                  恢复连接
+                  {pendingAction === "restore" ? "正在恢复…" : operation.refreshing ? "正在更新…" : "恢复连接"}
                 </VibeButton>
               ) : (
                 <VibeButton
-                  disabled={pending}
-                  onClick={() => { setFailure(null); setConfirmDisconnect(true); }}
+                  disabled={blocked}
+                  onClick={() => { if (operation.clearFailure()) setConfirmDisconnect(true); }}
                   type="button"
                   variant="outline"
                   tone="danger"
@@ -304,8 +251,8 @@ function SourceLifecycleActions({
               <p>永久删除来源及全部历史记录，无法恢复。</p>
             </div>
             <VibeButton
-              disabled={pending}
-              onClick={() => { setFailure(null); setDeleteStep(1); }}
+              disabled={blocked}
+              onClick={() => { if (operation.clearFailure()) setDeleteStep(1); }}
               type="button"
               variant="outline"
               tone="danger"
@@ -313,8 +260,8 @@ function SourceLifecycleActions({
               永久删除数据
             </VibeButton>
           </div>
-          {failure && !confirmDisconnect && deleteStep === null ? (
-            <VibeNotice role="alert" tone="error">{failure.message}</VibeNotice>
+          {!confirmDisconnect && deleteStep === null ? (
+            <AssetSourceCommandFeedback failure={failure} focusRecoveryOnMount onContinue={continueAfterCheck} />
           ) : null}
         </div>
       </section>
@@ -323,63 +270,63 @@ function SourceLifecycleActions({
         <VibeDialog
           actions={
             <>
-              <VibeButton disabled={pending} onClick={() => setConfirmDisconnect(false)} type="button" variant="text">
+              <VibeButton disabled={busy} onClick={() => setConfirmDisconnect(false)} type="button" variant="text">
                 取消
               </VibeButton>
-              <VibeButton tone="danger" disabled={pending} onClick={() => void run("disconnect")} type="button" variant="outline">
-                确认断开
-              </VibeButton>
+              {!needsCheck ? (
+                <VibeButton tone="danger" disabled={blocked} onClick={() => void run("disconnect")} type="button" variant="outline">
+                  {operation.pending ? "正在断开…" : "确认断开"}
+                </VibeButton>
+              ) : null}
             </>
           }
           description="停止同步；历史数据保留。"
-          pending={pending}
+          pending={busy}
           onClose={() => setConfirmDisconnect(false)}
           title={`确认断开 ${name}`}
           titleId="source-disconnect-dialog-title"
         >
-          {failure?.action === "disconnect" ? <VibeNotice role="alert" tone="error">{failure.message}</VibeNotice> : null}
+          {feedback}
         </VibeDialog>
       ) : null}
 
-      {deleteStep === 1 ? (
+      {deleteStep !== null ? (
         <VibeDialog
           actions={
             <>
-              <VibeButton disabled={pending} onClick={() => setDeleteStep(null)} type="button" variant="text">
+              <VibeButton disabled={busy} onClick={() => setDeleteStep(null)} type="button" variant="text">
                 取消
               </VibeButton>
-              <VibeButton tone="danger" disabled={pending} onClick={() => setDeleteStep(2)} type="button" variant="outline">
-                继续删除
-              </VibeButton>
+              {!needsCheck ? (
+                <VibeButton
+                  key={deleteStep}
+                  tone="danger"
+                  disabled={blocked}
+                  onClick={(event) => {
+                    if (event.detail > 1) return;
+                    if (deleteStep === 1) setDeleteStep(2);
+                    else void run("delete");
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && event.repeat) event.preventDefault();
+                  }}
+                  type="button"
+                  variant="outline"
+                >
+                  {operation.pending ? "正在删除…" : deleteStep === 1 ? "继续删除" : "确认永久删除"}
+                </VibeButton>
+              ) : null}
             </>
           }
-          description="将永久删除来源及全部历史数据，无法恢复。"
-          pending={pending}
+          description={deleteStep === 1
+            ? "将永久删除来源及全部历史数据，无法恢复。"
+            : `将永久删除 ${name} 及全部历史数据。`}
+          pending={busy}
           onClose={() => setDeleteStep(null)}
-          title="永久删除来源数据"
-          titleId="source-delete-dialog-title"
-        />
-      ) : null}
-
-      {deleteStep === 2 ? (
-        <VibeDialog
-          actions={
-            <>
-              <VibeButton disabled={pending} onClick={() => setDeleteStep(null)} type="button" variant="text">
-                取消
-              </VibeButton>
-              <VibeButton tone="danger" disabled={pending} onClick={() => void run("delete")} type="button" variant="outline">
-                确认永久删除
-              </VibeButton>
-            </>
-          }
-          description={`将永久删除 ${name} 及全部历史数据。`}
-          pending={pending}
-          onClose={() => setDeleteStep(null)}
-          title="第二次确认永久删除"
-          titleId="source-delete-confirmation-dialog-title"
+          title={deleteStep === 1 ? "永久删除来源数据" : "第二次确认永久删除"}
+          titleId={deleteStep === 1 ? "source-delete-dialog-title" : "source-delete-confirmation-dialog-title"}
         >
-          {failure?.action === "delete" ? <VibeNotice role="alert" tone="error">{failure.message}</VibeNotice> : null}
+          {deleteStep === 2 ? feedback : null}
         </VibeDialog>
       ) : null}
     </>
@@ -431,6 +378,7 @@ export function AssetSourceDetail({
   const preset = initialPreset;
   const customRange = initialCustomRange;
   const router = useRouter();
+  const destructiveOperation = useAssetSourceCommand();
   const [rangePending, startRangeTransition] = useTransition();
   function navigateRange(value: InvestmentPerformanceIntervalPreset, range: InvestmentPerformanceCustomRange | null) {
     const params = new URLSearchParams({interval:value});
@@ -513,7 +461,7 @@ export function AssetSourceDetail({
             if (current.id === source.id) setEditingRecord(record ?? undefined);
           }}
           onManualAssetRecordDelete={(current, record) => {
-            if (current.id === source.id) setDeletingRecord(record);
+            if (current.id === source.id && destructiveOperation.clearFailure()) setDeletingRecord(record);
           }}
           profitColorScheme={profitColorScheme}
           reportingCurrency={currency}
@@ -593,8 +541,12 @@ export function AssetSourceDetail({
           </section>
         ) : null}
 
-        <SourceLifecycleActions key={source.id} source={source} />
+        <SourceLifecycleActions key={source.id} source={source} operation={destructiveOperation} />
       </div>}
+
+      {view === "overview" && !deletingRecord ? (
+        <AssetSourceCommandFeedback failure={destructiveOperation.failure} focusRecoveryOnMount onContinue={destructiveOperation.continueAfterCheck} />
+      ) : null}
 
       {manual && editingRecord !== null ? <ManualAssetRecordDialog sourceId={source.id} sourceName={name}
         checkBookId={bookId}
@@ -605,6 +557,7 @@ export function AssetSourceDetail({
 
       {manual && deletingRecord ? (
         <ManualRecordDeleteDialog
+          operation={destructiveOperation}
           onClose={() => setDeletingRecord(null)}
           record={deletingRecord}
           source={source}

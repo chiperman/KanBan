@@ -2,69 +2,191 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { LongbridgeConnectionMode } from "@/server/asset-sources/longbridge-connection";
-import type { LongbridgeConnections } from "@/server/asset-sources/longbridge-connections";
+import {
+  ConnectionStatusReadError,
+  requestLongbridgeCliLogin,
+  requestLongbridgeCliStatus,
+  requestLongbridgeConnectionStatus,
+  type CliLoginResult,
+  type ConnectionStatus,
+} from "@/ui/longbridge-connection-requests";
 import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
 import { VibeField, VibeSelectField } from "@/ui/vibe/vibe-field";
 import { VibeStatusTag } from "@/ui/vibe/vibe-data-instrument";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
 import { formatShanghaiDateTime } from "@/ui/shanghai-date-time";
-import { lockOnUnauthorizedResponse, OWNER_SESSION_EXPIRED_MESSAGE, readJsonResult } from "@/ui/owner-request-lock";
 
-type ConnectionStatus = Awaited<ReturnType<LongbridgeConnections["status"]>>;
 const modeLabel: Record<LongbridgeConnectionMode, string> = { cli: "CLI", sdk: "SDK", both: "CLI 优先，SDK 备用" };
 
 function useConnectionStatus(sourceId?: string) {
   const [snapshot, setSnapshot] = useState<{ sourceId?: string; status: ConnectionStatus; checkedAt: string } | null>(null);
   const status = snapshot?.sourceId === sourceId ? snapshot?.status ?? null : null;
   const checkedAt = status ? snapshot?.checkedAt ?? null : null;
-  const [error, setError] = useState("");
-  const [checking, setChecking] = useState(false);
-  const [checkingCli, setCheckingCli] = useState(false);
-  const [cliError, setCliError] = useState("");
-  const generation = useRef(0);
-  const reload = useCallback(async () => {
-    const current = ++generation.current;
-    setChecking(true);
-    setCheckingCli(false);
-    setError("");
-    setCliError("");
-    const signal = AbortSignal.timeout(60_000);
+  const [readState, setReadState] = useState<{
+    sourceId?: string;
+    pending: "all" | "cli" | null;
+    error: string;
+    cliError: string;
+  }>({ sourceId, pending: "all", error: "", cliError: "" });
+  const activeScope = useRef<{ sourceId?: string } | null>(null);
+  const activeRequest = useRef<AbortController | null>(null);
+  const load = useCallback(async (transport: "all" | "cli") => {
+    if (!activeScope.current || activeScope.current.sourceId !== sourceId) return null;
+    activeRequest.current?.abort();
+    const controller = new AbortController();
+    activeRequest.current = controller;
+    const isCurrent = () => activeRequest.current === controller && !controller.signal.aborted;
+    setReadState(previous => ({
+      sourceId,
+      pending: transport,
+      error: transport === "cli" && previous.sourceId === sourceId ? previous.error : "",
+      cliError: "",
+    }));
     try {
-      const query = sourceId ? `?sourceId=${encodeURIComponent(sourceId)}` : "";
-      const response = await fetch(`/api/asset-sources/longbridge/connection${query}`, { cache: "no-store", signal });
-      if ([401, 403, 404].includes(response.status) && current === generation.current) setSnapshot(null);
-      if (lockOnUnauthorizedResponse(response)) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
-      const body = await readJsonResult<ConnectionStatus & { error?: string }>(response);
-      signal.throwIfAborted();
-      if (!response.ok || !body) throw new Error(body?.error ?? "检测长桥连接失败");
-      if (current === generation.current) setSnapshot({ sourceId, status: body, checkedAt: new Date().toISOString() });
-      return body;
+      if (transport === "all") {
+        const nextStatus = await requestLongbridgeConnectionStatus(sourceId, controller.signal);
+        if (!isCurrent()) return null;
+        setSnapshot({ sourceId, status: nextStatus, checkedAt: new Date().toISOString() });
+        return nextStatus.cli;
+      } else {
+        const cli = await requestLongbridgeCliStatus(sourceId, controller.signal);
+        if (!isCurrent()) return null;
+        setSnapshot(previous => previous && previous.sourceId === sourceId
+          ? { ...previous, status: { ...previous.status, cli } }
+          : previous);
+        return cli;
+      }
     } catch (caught) {
-      if (current === generation.current) setError(signal.aborted ? "长桥连接检测超时，请重新检测。" : caught instanceof TypeError ? "连接中断，请检查连接后重新检测。" : caught instanceof Error ? caught.message : "检测长桥连接失败");
-      return null;
-    } finally { if (current === generation.current) setChecking(false); }
+      if (!isCurrent()) return null;
+      const clearSnapshot = caught instanceof ConnectionStatusReadError && caught.clearSnapshot;
+      if (clearSnapshot) setSnapshot(null);
+      const message = caught instanceof Error ? caught.message : "检测长桥连接失败，请重新检测。";
+      setReadState(previous => ({
+        ...previous,
+        [transport === "all" || clearSnapshot ? "error" : "cliError"]: message,
+      }));
+    } finally {
+      if (isCurrent()) {
+        activeRequest.current = null;
+        setReadState(previous => ({ ...previous, pending: null }));
+      }
+    }
+    return null;
   }, [sourceId]);
-  const reloadCli = useCallback(async () => {
-    const current = ++generation.current;
-    setCheckingCli(true);
-    setCliError("");
-    const signal = AbortSignal.timeout(60_000);
+  const reload = useCallback(() => load("all"), [load]);
+  const reloadCli = useCallback(() => load("cli"), [load]);
+  useEffect(() => {
+    activeScope.current = { sourceId };
+    void reload();
+    return () => {
+      activeScope.current = null;
+      activeRequest.current?.abort();
+      activeRequest.current = null;
+    };
+  }, [reload, sourceId]);
+  const currentScope = readState.sourceId === sourceId;
+  return {
+    status,
+    checkedAt,
+    error: currentScope ? readState.error : "",
+    cliError: currentScope ? readState.cliError : "",
+    checking: !currentScope || readState.pending === "all",
+    checkingCli: currentScope && readState.pending === "cli",
+    reload,
+    reloadCli,
+  };
+}
+
+interface CliLoginState {
+  sourceId?: string;
+  code: string;
+  phase: "idle" | "login" | "check";
+  needsCheck: boolean;
+  error: string;
+}
+
+function initialCliLoginState(sourceId?: string): CliLoginState {
+  return { sourceId, code: "", phase: "idle", needsCheck: false, error: "" };
+}
+
+function useCliLogin({ sourceId, pending, canLogin, readAll, readCli }: {
+  sourceId?: string;
+  pending: boolean;
+  canLogin: boolean;
+  readAll(): Promise<ConnectionStatus["cli"] | null>;
+  readCli(): Promise<ConnectionStatus["cli"] | null>;
+}) {
+  const [state, setState] = useState(() => initialCliLoginState(sourceId));
+  const scope = useRef<{ sourceId?: string; request: AbortController | null } | null>(null);
+  useEffect(() => {
+    const current = { sourceId, request: null as AbortController | null };
+    scope.current = current;
+    setState(previous => previous.sourceId === sourceId ? previous : initialCliLoginState(sourceId));
+    return () => {
+      if (scope.current === current) scope.current = null;
+      current.request?.abort();
+    };
+  }, [sourceId]);
+  const currentState = state.sourceId === sourceId ? state : initialCliLoginState(sourceId);
+
+  async function run(action: "login" | "all" | "cli") {
+    const current = scope.current;
+    if (!current || current.sourceId !== sourceId || current.request || pending) return;
+    const code = currentState.code.trim();
+    if (action === "login") {
+      if (!canLogin || currentState.needsCheck || !code) return;
+      if (code.length > 4096 || /\s/.test(code)) {
+        setState(previous => ({ ...previous, error: "请输入有效的长桥一次性授权码，授权码中不能包含空格。" }));
+        return;
+      }
+    }
+    const controller = new AbortController();
+    current.request = controller;
+    const isCurrent = () => scope.current === current && current.request === controller && !controller.signal.aborted;
+    setState(previous => ({
+      ...previous,
+      code: action === "login" ? "" : previous.code,
+      phase: action === "login" ? "login" : "check",
+      error: "",
+    }));
     try {
-      const query = new URLSearchParams({ transport: "cli" });
-      if (sourceId) query.set("sourceId", sourceId);
-      const response = await fetch(`/api/asset-sources/longbridge/connection?${query}`, { cache: "no-store", signal });
-      if ([401, 403, 404].includes(response.status) && current === generation.current) setSnapshot(null);
-      if (lockOnUnauthorizedResponse(response)) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
-      const body = await readJsonResult<{ cli: ConnectionStatus["cli"]; error?: string }>(response);
-      signal.throwIfAborted();
-      if (!response.ok || !body?.cli) throw new Error(body?.error ?? "检测 CLI 失败");
-      if (current === generation.current) setSnapshot(previous => previous && previous.sourceId === sourceId ? { ...previous, status: { ...previous.status, cli: body.cli } } : previous);
-    } catch (caught) {
-      if (current === generation.current) setCliError(signal.aborted ? "CLI 检测超时，请重新检测。" : caught instanceof TypeError ? "连接中断，请重新检测 CLI。" : caught instanceof Error ? caught.message : "检测 CLI 失败");
-    } finally { if (current === generation.current) setCheckingCli(false); }
-  }, [sourceId]);
-  useEffect(() => { void reload(); return () => { generation.current++; }; }, [reload]);
-  return { status, checkedAt, error, checking, reload, checkingCli, cliError, reloadCli };
+      let result: CliLoginResult | undefined;
+      if (action === "login") {
+        const response = await requestLongbridgeCliLogin(code, controller.signal);
+        result = response;
+        if (!isCurrent()) return;
+        if (response.outcome === "rejected") {
+          setState(previous => ({ ...previous, phase: "idle", error: response.message }));
+          return;
+        }
+        setState(previous => ({ ...previous, phase: "check", needsCheck: true }));
+      }
+      const cli = await (action === "all" ? readAll() : readCli());
+      if (!isCurrent()) return;
+      let message = "";
+      if (result && !cli?.authorized) {
+        message = !cli
+          ? `${result.outcome === "accepted" ? "CLI 登录请求已完成。" : result.message} 请重新检测 CLI，核对当前授权状态。`
+          : "尚未检测到 CLI 授权，请稍后重新检测；再次登录请获取新授权码。";
+      }
+      setState(previous => ({ ...previous, phase: "idle", needsCheck: !cli, error: message }));
+    } catch {
+      if (isCurrent()) setState(previous => ({
+        ...previous, phase: "idle", needsCheck: true, error: "尚未核对 CLI 授权状态，请重新检测后继续。",
+      }));
+    } finally {
+      if (isCurrent()) current.request = null;
+    }
+  }
+
+  return {
+    ...currentState,
+    busy: currentState.phase !== "idle",
+    setCode: (code: string) => setState(previous => ({ ...previous, code, error: "" })),
+    login: () => run("login"),
+    reload: () => run("all"),
+    reloadCli: () => run("cli"),
+  };
 }
 
 export function LongbridgeConnectionSummary({ sourceId, permissions, lastAttemptLabel }: {
@@ -117,63 +239,72 @@ export function LongbridgeConnectionSettings({ sourceId, mode, onMode, onReady, 
   onAuthorizeSdk(): void;
   pending: boolean;
 }) {
-  const { status, checkedAt, error, checking, reload, checkingCli, cliError, reloadCli } = useConnectionStatus(sourceId);
+  const { status, checkedAt, error, checking, reload: readAll, checkingCli, cliError, reloadCli: readCli } = useConnectionStatus(sourceId);
   const initialized = useRef<string | null>(null);
-  const [code, setCode] = useState("");
-  const [loginPending, setLoginPending] = useState(false);
-  const [loginError, setLoginError] = useState("");
+  const canLogin = Boolean(!pending && !checking && !checkingCli && !error && status?.cli.installed && !status.cli.authorized);
+  const { code, setCode, busy: loginPending, phase, needsCheck, error: loginError, login, reload, reloadCli } =
+    useCliLogin({ sourceId, pending, canLogin, readAll, readCli });
   useEffect(() => {
     if (sourceId && status && initialized.current !== sourceId) { initialized.current = sourceId; onMode(status.mode); }
   }, [sourceId, status, onMode]);
   const cliReady = Boolean(!error && !cliError && status?.cli.authorized && status.cli.matches !== false);
   const sdkReady = Boolean(!error && status?.sdk.authorized && status.sdk.matches !== false);
+  const visibleError = error || (mode !== "sdk" ? loginError : "");
   useEffect(() => {
-    onReady(!checking && !checkingCli && !loginPending && (mode === "cli" ? cliReady : mode === "sdk" ? sdkReady : cliReady && sdkReady));
-  }, [mode, cliReady, sdkReady, checking, checkingCli, loginPending, onReady]);
-
-  async function login() {
-    setLoginPending(true);
-    setLoginError("");
-    try {
-      const response = await fetch("/api/asset-sources/longbridge/connection", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: code.trim() }) });
-      setCode("");
-      const body = await readJsonResult<{ error?: string }>(response);
-      if (lockOnUnauthorizedResponse(response)) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
-      if (!response.ok) throw new Error(body?.error ?? "CLI 登录失败");
-      await reloadCli();
-    } catch (caught) { setLoginError(caught instanceof Error ? caught.message : "CLI 登录失败"); }
-    finally { setCode(""); setLoginPending(false); }
-  }
+    onReady(!checking && !checkingCli && !loginPending && (mode === "sdk" || !needsCheck) && (mode === "cli" ? cliReady : mode === "sdk" ? sdkReady : cliReady && sdkReady));
+  }, [mode, cliReady, sdkReady, checking, checkingCli, loginPending, needsCheck, onReady]);
 
   const cliChecking = checking || checkingCli;
+  const cliStatusText = (() => {
+    if (phase === "login") return "正在登录 CLI…";
+    if (cliChecking) return "正在检测 CLI…";
+    if (cliError) return cliError;
+    if (error && !status) return "暂时无法检测 CLI";
+    const label = status?.cli.matches === false
+      ? "CLI 账户与此来源不一致，请连接原账户。"
+      : status?.cli.authorized ? status.cli.account ?? "已授权" : status?.cli.error ?? "尚未检测到 CLI";
+    return `${error && status ? "上次：" : ""}${label}`;
+  })();
+  const sdkStatusText = (() => {
+    if (checking) return "正在检测 SDK…";
+    if (error && !status) return "暂时无法检测 SDK";
+    const label = status?.sdk.matches === false
+      ? "SDK 账户与此来源不一致，请重新授权原账户。"
+      : status?.sdk.authorized ? status.sdk.account ?? "已授权" : status?.sdk.error ?? "SDK 尚未授权";
+    return `${error && status ? "上次：" : ""}${label}`;
+  })();
 
   return <div className="source-credential-fields longbridge-connection-settings">
     <VibeSelectField fieldId="longbridge-connection-mode" label="连接方式" disabled={pending || checking || checkingCli || loginPending} value={mode} onValueChange={value => onMode(value as LongbridgeConnectionMode)} options={[
       { value: "cli", label: "CLI（推荐）" }, { value: "sdk", label: "SDK" }, { value: "both", label: "CLI 优先，SDK 备用" },
     ]} />
-    {error || loginError ? <VibeNotice tone="error" role="alert">
-      {loginError || error}
+    {visibleError ? <VibeNotice tone="error" role="alert">
+      {visibleError}
       {error && status && checkedAt ? ` 以下为 ${formatShanghaiDateTime(checkedAt)} 的上次完整检测结果；请重新检测通过后继续。` : null}
       {error ? <VibeButton type="button" variant="text" disabled={checking || pending || loginPending} onClick={() => void reload()}>重新检测连接</VibeButton> : null}
     </VibeNotice> : null}
     {mode !== "sdk" ? <section className="longbridge-connection-settings__transport" aria-labelledby="longbridge-cli-heading" aria-busy={cliChecking || loginPending}>
       <div className="longbridge-connection-settings__copy">
         <h3 id="longbridge-cli-heading">CLI</h3>
-        <VibeStatusTag role="status" tone={cliChecking ? "muted" : error && status ? "warning" : cliReady ? "success" : cliError || error || (status && (sourceId || status.cli.installed)) ? "error" : "muted"}>{cliChecking ? "正在检测 CLI…" : cliError || `${error && status ? "上次：" : ""}${status?.cli.matches === false ? "CLI 账户与此来源不一致，请连接原账户。" : status?.cli.authorized ? status.cli.account ?? "已授权" : status?.cli.error ?? "尚未检测到 CLI"}`}</VibeStatusTag>
+        <VibeStatusTag role="status" tone={cliChecking || phase === "login" ? "muted" : error && status ? "warning" : cliReady ? "success" : cliError || error || (status && (sourceId || status.cli.installed)) ? "error" : "muted"}>{cliStatusText}</VibeStatusTag>
         <p className="source-field-help">{status?.cli.version ? `${status.cli.version}，KanBan 所在机器` : "检测 KanBan 所在机器的 CLI，无需手动启动服务。"}</p>
       </div>
       <VibeButton type="button" variant="outline" disabled={cliChecking || pending || loginPending || !status || Boolean(error)} onClick={() => void reloadCli()}>{cliChecking ? "检测中…" : "重新检测 CLI"}</VibeButton>
       {status && !status.cli.installed ? <VibeLink href="https://open.longbridge.com/docs/cli" target="_blank" rel="noreferrer" variant="text">查看 CLI 安装说明</VibeLink> : null}
-      {status?.cli.installed && !status.cli.authorized ? <div className="source-credential-fields longbridge-connection-settings__login">
+      {status?.cli.installed && !status.cli.authorized ? <form
+        aria-label="CLI 登录"
+        className="source-credential-fields longbridge-connection-settings__login"
+        onSubmit={event => { event.preventDefault(); void login(); }}
+      >
         <VibeLink href="https://open.longbridge.com/connect" target="_blank" rel="noreferrer" variant="outline">获取长桥一次性授权码</VibeLink>
-        <VibeField fieldId="longbridge-cli-code" label="一次性授权码" type="password" autoComplete="off" value={code} disabled={cliChecking || loginPending || pending} onChange={event => setCode(event.currentTarget.value)} />
-        <VibeButton type="button" variant="outline" disabled={cliChecking || loginPending || pending || !code.trim()} onClick={() => void login()}>{loginPending ? "登录中…" : "登录 CLI"}</VibeButton>
-      </div> : null}
+        <VibeField fieldId="longbridge-cli-code" label="一次性授权码" type="password" autoComplete="off" maxLength={4096} value={code} disabled={cliChecking || loginPending || pending || Boolean(error) || needsCheck} onChange={event => setCode(event.currentTarget.value)} />
+        <VibeButton type="submit" variant="outline" disabled={!canLogin || loginPending || needsCheck || !code.trim()}>{phase === "login" ? "登录中…" : "登录 CLI"}</VibeButton>
+      </form> : null}
     </section> : null}
     {mode !== "cli" ? <section className="longbridge-connection-settings__transport" aria-labelledby="longbridge-sdk-heading" aria-busy={checking}>
       <div className="longbridge-connection-settings__copy">
         <h3 id="longbridge-sdk-heading">SDK</h3>
-        <VibeStatusTag role="status" tone={checking ? "muted" : error && status ? "warning" : sdkReady ? "success" : error || status?.sdk.error || (status && sourceId) ? "error" : "muted"}>{checking ? "正在检测 SDK…" : `${error && status ? "上次：" : ""}${status?.sdk.matches === false ? "SDK 账户与此来源不一致，请重新授权原账户。" : status?.sdk.authorized ? status.sdk.account ?? "已授权" : status?.sdk.error ?? "SDK 尚未授权"}`}</VibeStatusTag>
+        <VibeStatusTag role="status" tone={checking ? "muted" : error && status ? "warning" : sdkReady ? "success" : error || status?.sdk.error || (status && sourceId) ? "error" : "muted"}>{sdkStatusText}</VibeStatusTag>
         {sdkReady && !checking ? <p className="source-field-help">已授权</p> : null}
       </div>
       <VibeButton type="button" variant="outline" disabled={pending || checking || loginPending} onClick={onAuthorizeSdk}>{status?.sdk.authorized ? "重新授权 SDK" : "授权 SDK"}</VibeButton>

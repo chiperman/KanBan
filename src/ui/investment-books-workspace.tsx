@@ -21,9 +21,9 @@ import type {
 } from "@/server/ports";
 import { AssetFinancialValue } from "@/ui/asset-financial-value";
 import { AssetGlobalRefreshControl } from "@/ui/asset-refresh-controls";
+import { bookRequest } from "@/ui/financial-record-requests";
 import { useAssetTrendRange } from "@/ui/asset-trend-panel";
 import { LongbridgeRealtimeNotice } from "@/ui/longbridge-realtime-notice";
-import { useInvestmentBookBenchmarkComparison } from "@/ui/market-benchmark";
 import { useLongbridgeRealtime } from "@/ui/use-longbridge-realtime";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { useTablePagination } from "@/ui/vibe/vibe-table-pagination";
@@ -32,14 +32,12 @@ import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
 import { WorkspaceViewNavigation } from "@/ui/workspace-view-navigation";
 import { useMemo, useState } from "react";
 
-import { ActionDialog, bookRequest } from "./investment-books/action-dialog";
+import { ActionDialog } from "./investment-books/action-dialog";
 import { AssetDialog } from "./investment-books/asset-dialog";
 import { FundDialog } from "./investment-books/fund-dialog";
 import { ImportDialog } from "./investment-books/import-dialog";
 import {
-  buildBookChartPoints,
   buildBookDepositTotals,
-  buildBookFundingEvents,
   buildBookRange,
   buildBookTimeline,
 } from "./investment-books/model";
@@ -109,28 +107,25 @@ export function InvestmentBooksWorkspace({
       }),
     [state, bookId, liveSources, observations, manualRecords, currentDay],
   );
-  const range = buildBookRange({ analysis, state, bookId, currentDay, trendRange });
+  const { preset, customRange } = trendRange;
+  const range = useMemo(
+    () => buildBookRange({ analysis, currentDay, trendRange: { preset, customRange } }),
+    [analysis, currentDay, preset, customRange],
+  );
   const { days, selectedDays } = range;
-  const fundingEvents = buildBookFundingEvents(analysis);
-  const benchmarkVisible = view === "performance" && curve === "return" && showSensitiveInfo;
-  const benchmarkDataState = useInvestmentBookBenchmarkComparison({
-    enabledSymbols,
-    points: analysis.points.filter((point) => selectedDays.has(point.day)),
-    records: analysis.records,
-    sources: liveSources,
-    visible: benchmarkVisible,
-  });
-  const points = buildBookChartPoints({ ...range, analysis, state, bookId, curve, fundingEvents });
   const depositTotals = useMemo(
     () => buildBookDepositTotals(analysis, state.unassignedLegacyIds.length),
     [analysis, state.unassignedLegacyIds.length],
   );
-  const timeline = buildBookTimeline(analysis);
-  const filteredTimeline = timeline.filter(
-    (row) =>
-      selectedDays.has(row.day) &&
-      (recordFilter === "all" ||
-        (recordFilter === "valuations" ? row.kind === "valuation" : row.kind !== "valuation")),
+  const timeline = useMemo(() => buildBookTimeline(analysis), [analysis]);
+  const filteredTimeline = useMemo(
+    () => timeline.filter(
+      (row) =>
+        selectedDays.has(row.day) &&
+        (recordFilter === "all" ||
+          (recordFilter === "valuations" ? row.kind === "valuation" : row.kind !== "valuation")),
+    ),
+    [timeline, selectedDays, recordFilter],
   );
   const recordPagination = useTablePagination(
     filteredTimeline,
@@ -253,17 +248,15 @@ export function InvestmentBooksWorkspace({
         <BookPerformanceView
           {...range}
           analysis={analysis}
-          bookId={bookId}
+          state={state}
+          sources={liveSources}
           showSensitiveInfo={showSensitiveInfo}
-          benchmarkVisible={benchmarkVisible}
-          benchmarkDataState={benchmarkDataState}
           enabledSymbols={enabledSymbols}
           setEnabledSymbols={setEnabledSymbols}
           trendRange={trendRange}
           currentDay={currentDay}
           curve={curve}
           setCurve={setCurve}
-          points={points}
         />
       ) : null}
       {view === "records" ? (
@@ -341,8 +334,8 @@ export function InvestmentBooksWorkspace({
           }
           button="确认作废"
           onClose={() => setVoiding(null)}
-          submit={() =>
-            bookRequest({ action: "void", bookId, id: voiding.id, confirmation: "VOID_RECORD" })
+          submit={(signal) =>
+            bookRequest({ action: "void", bookId, id: voiding.id, confirmation: "VOID_RECORD" }, signal)
           }
         >
           {voiding.kind === "opening" ? <p>作废期初本金后，需补齐起点才能重新计算收益。</p> : null}

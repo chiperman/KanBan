@@ -28,42 +28,44 @@ export interface SourceInvestmentPoint {
   returnRatio: string | null;
 }
 
+export class InvalidSourceInvestmentHistoryError extends Error {}
+
 const dayTime = (day: string) => Date.parse(day + "T00:00:00.000Z");
 function assertDay(day: unknown): asserts day is string {
   if (typeof day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(day) ||
       !Number.isFinite(dayTime(day)) || new Date(dayTime(day)).toISOString().slice(0, 10) !== day) {
-    throw new Error("来源历史日期无效");
+    throw new InvalidSourceInvestmentHistoryError("来源历史日期无效");
   }
 }
 function assertAmount(amount: unknown, signed = false): asserts amount is string {
   if (typeof amount !== "string" || !(signed ? /^-?\d{1,18}(\.\d{1,8})?$/ : /^\d{1,18}(\.\d{1,8})?$/).test(amount)) {
-    throw new Error("来源历史金额无效");
+    throw new InvalidSourceInvestmentHistoryError("来源历史金额无效");
   }
 }
 function text(value: unknown): string {
-  if (typeof value !== "string" || !value.trim() || value.length > 500) throw new Error("来源历史身份无效");
+  if (typeof value !== "string" || !value.trim() || value.length > 500) throw new InvalidSourceInvestmentHistoryError("来源历史身份无效");
   return value;
 }
 function object(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("来源历史格式无效");
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new InvalidSourceInvestmentHistoryError("来源历史格式无效");
   return value as Record<string, unknown>;
 }
 
 /** 导入是独立账户事实；不自动创建组合资金进出，也不补造历史汇率或组合快照。 */
 export function parseSourceInvestmentHistory(value: unknown): SourceInvestmentHistory {
   const raw = object(value);
-  if (typeof raw.provider !== "string" || !raw.provider.trim() || raw.provider.length > 500) throw new Error("来源历史平台无效");
-  if (!["CNY", "USD", "HKD"].includes(String(raw.currency))) throw new Error("来源历史币种无效");
+  if (typeof raw.provider !== "string" || !raw.provider.trim() || raw.provider.length > 500) throw new InvalidSourceInvestmentHistoryError("来源历史平台无效");
+  if (!["CNY", "USD", "HKD"].includes(String(raw.currency))) throw new InvalidSourceInvestmentHistoryError("来源历史币种无效");
   const opening = object(raw.openingInvestment);
   assertDay(opening.day); assertAmount(opening.amount);
-  if (!Array.isArray(raw.records) || raw.records.length === 0) throw new Error("来源历史记录不能为空");
+  if (!Array.isArray(raw.records) || raw.records.length === 0) throw new InvalidSourceInvestmentHistoryError("来源历史记录不能为空");
   const ids = new Set<string>(); const valuationDays = new Set<string>();
   const records = raw.records.map(value => {
     const row = object(value); const id = text(row.id);
     assertDay(row.day); assertAmount(row.amount);
-    if (!["valuation", "deposit", "withdrawal"].includes(String(row.kind))) throw new Error("来源历史操作无效");
-    if (ids.has(id) || (row.kind === "valuation" && valuationDays.has(row.day))) throw new Error("来源历史记录重复");
-    if (row.day < opening.day!) throw new Error("来源历史早于期初本金日期");
+    if (!["valuation", "deposit", "withdrawal"].includes(String(row.kind))) throw new InvalidSourceInvestmentHistoryError("来源历史操作无效");
+    if (ids.has(id) || (row.kind === "valuation" && valuationDays.has(row.day))) throw new InvalidSourceInvestmentHistoryError("来源历史记录重复");
+    if (row.day < opening.day!) throw new InvalidSourceInvestmentHistoryError("来源历史早于期初本金日期");
     ids.add(id); if (row.kind === "valuation") valuationDays.add(row.day);
     return { id, day: row.day, amount: row.amount, kind: row.kind as SourceInvestmentHistory["records"][number]["kind"] };
   }).sort((a, b) => a.day.localeCompare(b.day) || a.id.localeCompare(b.id));
@@ -71,7 +73,7 @@ export function parseSourceInvestmentHistory(value: unknown): SourceInvestmentHi
   assertDay(reconciliation.asOf); assertAmount(reconciliation.netInvestment, true);
   assertAmount(reconciliation.total); assertAmount(reconciliation.profit, true);
   const importedAt = text(raw.importedAt);
-  if (!Number.isFinite(Date.parse(importedAt))) throw new Error("来源历史导入时间无效");
+  if (!Number.isFinite(Date.parse(importedAt))) throw new InvalidSourceInvestmentHistoryError("来源历史导入时间无效");
   const result: SourceInvestmentHistory = {
     sourceId: text(raw.sourceId), sourceLabel: text(raw.sourceLabel), provider: raw.provider,
     accountId: text(raw.accountId), accountName: text(raw.accountName), currency: raw.currency as InvestmentCashflowCurrency,
@@ -83,7 +85,7 @@ export function parseSourceInvestmentHistory(value: unknown): SourceInvestmentHi
   if (!last || last.day !== reconciliation.asOf || last.total === null || last.profit === null ||
       decimalCompare(last.netInvestment, reconciliation.netInvestment) !== 0 ||
       decimalCompare(last.total, reconciliation.total) !== 0 || decimalCompare(last.profit, reconciliation.profit) !== 0 ||
-      records.some(row => row.day > result.reconciliation.asOf)) throw new Error("来源历史对账不一致");
+      records.some(row => row.day > result.reconciliation.asOf)) throw new InvalidSourceInvestmentHistoryError("来源历史对账不一致");
   return result;
 }
 

@@ -23,6 +23,7 @@ import type {
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { sourceSyncStatus, sourceSyncFailureReason } from "@/ui/asset-source-status";
 import { VibeSelect } from "@/ui/vibe/vibe-field";
+import { useAssetSourceFilter } from "@/ui/use-asset-source-filter";
 import { useTablePagination, VibeTablePagination } from "@/ui/vibe/vibe-table-pagination";
 
 export type DataHealthSource = Omit<
@@ -31,7 +32,6 @@ export type DataHealthSource = Omit<
 >;
 
 type TimeRange = Extract<TrendRange, "7d" | "30d" | "all">;
-type SourceFilter = "all" | string;
 type CompletenessFilter = "all" | "complete" | "incomplete";
 type HistoryState = "complete" | "incomplete" | "gap";
 
@@ -272,13 +272,8 @@ export function DataHealthDiagnostics({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [range, setRange] = useState<TimeRange>("30d");
-  const [sourceId, setSourceId] = useState<SourceFilter>("all");
+  const { sourceId, setSourceId, selectedSource, sourceOptions } = useAssetSourceFilter(sources);
   const [completeness, setCompleteness] = useState<CompletenessFilter>("incomplete");
-  const selectedSource = sources.find((source) => source.id === sourceId) ?? null;
-  const sourceOptions = [
-    { value: "all", label: "全部来源" },
-    ...sources.map((source) => ({ value: source.id, label: assetSourceDisplayName(source) })),
-  ];
   const entries = useMemo(
     () => historyEntries(history, currentDay, range, selectedSource),
     [currentDay, history, range, selectedSource],

@@ -2,35 +2,26 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
-import { lockOnUnauthorizedResponse, OWNER_SESSION_EXPIRED_MESSAGE, readJsonResult } from "@/ui/owner-request-lock";
+import {
+  requestRecoveryCheck,
+  requestRecoveryOptions,
+  requestRecoverySave,
+  type RecoverySetupOptions,
+} from "@/ui/security-settings-requests";
 import { VibeButton } from "@/ui/vibe/vibe-button";
 import { VibeDialog } from "@/ui/vibe/vibe-dialog";
 import { VibeField } from "@/ui/vibe/vibe-field";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
 import { VibeVerificationCode } from "@/ui/vibe/vibe-verification-code";
 
-interface SetupOptions {
-  secret: string;
-  provisioningUri: string;
-}
-
 interface RecoverySetupProps {
   configured: boolean;
   onConfigured?(): void;
 }
 
-function validOptions(value: SetupOptions | null): value is SetupOptions {
-  if (typeof value?.secret !== "string" || !/^[A-Z2-7]{32}$/u.test(value.secret) || typeof value.provisioningUri !== "string") return false;
-  try {
-    const uri = new URL(value.provisioningUri);
-    return uri.protocol === "otpauth:" && uri.hostname === "totp" && uri.searchParams.get("secret") === value.secret;
-  } catch {
-    return false;
-  }
-}
-
 export function RecoverySetup({ configured, onConfigured }: RecoverySetupProps) {
-  const [options, setOptions] = useState<SetupOptions | null>(null);
+  const [options, setOptions] = useState<RecoverySetupOptions | null>(null);
+  const [code, setCode] = useState("");
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -54,6 +45,7 @@ export function RecoverySetup({ configured, onConfigured }: RecoverySetupProps) 
     setNotice("");
     setSaved(false);
     setOptions(null);
+    setCode("");
     setShowSecret(false);
     setSecretStatus("");
   }
@@ -64,21 +56,9 @@ export function RecoverySetup({ configured, onConfigured }: RecoverySetupProps) 
     setPending(true);
     setError("");
     try {
-      const signal = AbortSignal.timeout(15_000);
-      const response = await fetch("/api/auth/recovery/setup", { cache: "no-store", signal });
-      if (lockOnUnauthorizedResponse(response)) {
-        setError(OWNER_SESSION_EXPIRED_MESSAGE);
-        return;
-      }
-      const result = await readJsonResult<SetupOptions>(response);
-      signal.throwIfAborted();
-      if (!response.ok || !validOptions(result)) {
-        setError("未能生成 TOTP 密钥，请重试；现有登录方式未改变。");
-        return;
-      }
-      setOptions(result);
-    } catch {
-      setError("未能获取 TOTP 密钥，请检查连接后重试；现有登录方式未改变。");
+      setOptions(await requestRecoveryOptions());
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "未能获取 TOTP 密钥，请检查连接后重试；现有登录方式未改变。");
     } finally {
       pendingRef.current = false;
       setPending(false);
@@ -92,6 +72,7 @@ export function RecoverySetup({ configured, onConfigured }: RecoverySetupProps) 
     setSecretStatus("");
     if (needsCheckRef.current) return;
     setOptions(null);
+    setCode("");
     setError("");
   }
 
@@ -111,6 +92,7 @@ export function RecoverySetup({ configured, onConfigured }: RecoverySetupProps) 
     setConfiguredNow(true);
     setOpen(false);
     setOptions(null);
+    setCode("");
     setError("");
     setSaved(true);
     onConfigured?.();
@@ -122,32 +104,15 @@ export function RecoverySetup({ configured, onConfigured }: RecoverySetupProps) 
     setPending(true);
     setError("");
     try {
-      const signal = AbortSignal.timeout(15_000);
-      const response = await fetch("/api/auth/recovery/setup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "check", secret: options.secret }),
-        signal,
-      });
-      if (lockOnUnauthorizedResponse(response)) {
-        setError(OWNER_SESSION_EXPIRED_MESSAGE);
-        return;
-      }
-      const result = await readJsonResult<{ ok?: boolean; matches?: boolean }>(response);
-      signal.throwIfAborted();
-      if (!response.ok || result?.ok !== true || typeof result.matches !== "boolean") {
-        setError("未能核对当前密钥，请检查连接后重试；密钥已保留。");
-        return;
-      }
-      if (result.matches) savedSuccessfully();
+      if (await requestRecoveryCheck(options.secret)) savedSuccessfully();
       else {
         needsCheckRef.current = false;
         setNeedsCheck(false);
         setNotice("当前保存的密钥与本次密钥不一致。请检查验证码后重新保存。");
         window.requestAnimationFrame(() => codeRef.current?.focus());
       }
-    } catch {
-      setError("未能核对当前密钥，请检查连接后重试；密钥已保留。");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "未能核对当前密钥，请检查连接后重试；密钥已保留。");
     } finally {
       pendingRef.current = false;
       setPending(false);
@@ -157,26 +122,19 @@ export function RecoverySetup({ configured, onConfigured }: RecoverySetupProps) 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pendingRef.current || needsCheckRef.current || !options) return;
-    const data = new FormData(event.currentTarget);
     pendingRef.current = true;
     setPending(true);
     setError("");
     setNotice("");
     try {
-      const response = await fetch("/api/auth/recovery/setup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: data.get("code"), secret: options.secret }),
-      });
-      if (lockOnUnauthorizedResponse(response)) {
-        setError(OWNER_SESSION_EXPIRED_MESSAGE);
-        return;
-      }
-      const result = await readJsonResult<{ ok?: boolean; error?: string }>(response);
-      if (response.status >= 500 || (response.ok && result?.ok !== true)) throw new Error("unconfirmed");
-      if (!response.ok) {
-        setError(result?.error ?? "未能保存 TOTP 登录，请检查验证码后重试。");
-        window.requestAnimationFrame(() => codeRef.current?.focus());
+      const result = await requestRecoverySave(options.secret, code);
+      if (result.outcome !== "confirmed") {
+        needsCheckRef.current = result.outcome === "unconfirmed";
+        setNeedsCheck(needsCheckRef.current);
+        setError(result.message);
+        if (result.outcome === "rejected") {
+          window.requestAnimationFrame(() => codeRef.current?.focus());
+        }
         return;
       }
       savedSuccessfully();
@@ -214,72 +172,77 @@ export function RecoverySetup({ configured, onConfigured }: RecoverySetupProps) 
           {error}
         </VibeNotice>
       ) : null}
-      {open && options ? (
+      {open ? (
         <VibeDialog
           actions={
             <>
               <VibeButton type="button" disabled={pending} onClick={closeDialog} variant="text">
                 {needsCheck ? "稍后核对" : "取消"}
               </VibeButton>
-              {needsCheck ? <VibeButton type="button" disabled={pending} onClick={() => void checkSavedSecret()} variant="primary">
+              {/* 阶段切换时替换按钮，防止核对点击变成表单提交。 */}
+              {!options ? <VibeButton key="generate" type="button" disabled={pending} onClick={() => void begin()} variant="primary">
+                {pending ? "正在生成…" : "开始配置"}
+              </VibeButton> : needsCheck ? <VibeButton key="check" type="button" disabled={pending} onClick={() => void checkSavedSecret()} variant="primary">
                 {pending ? "正在核对…" : "核对本次密钥"}
-              </VibeButton> : <VibeButton type="submit" disabled={pending} variant="primary">
+              </VibeButton> : <VibeButton key="save" type="submit" disabled={pending} variant="primary">
                 {pending ? "正在保存…" : "保存 TOTP 登录"}
               </VibeButton>}
             </>
           }
-          description={
-            <>
-              添加密钥并输入验证码确认；密钥仅本次显示。
-            </>
-          }
+          description={options
+            ? "添加密钥并输入验证码确认；密钥仅本次显示。"
+            : "将生成新密钥，请注意防窥。"}
           onClose={closeDialog}
           onSubmit={save}
           pending={pending}
           title="配置 TOTP 登录"
           titleId="recovery-setup-title"
         >
-          <VibeField
-            fieldId="recovery-setup-secret"
-            label="TOTP 密钥"
-            readOnly
-            type={showSecret ? "text" : "password"}
-            value={options.secret}
-          />
-          <div className="recovery-secret-actions">
-            <VibeButton
-              type="button"
-              disabled={pending}
-              onClick={() => setShowSecret((visible) => !visible)}
-              variant="text"
-            >
-              {showSecret ? "隐藏密钥" : "显示密钥"}
-            </VibeButton>
-            <VibeButton type="button" disabled={pending} onClick={() => void copySecret()} variant="text">
-              复制密钥
-            </VibeButton>
-            {secretStatus ? (
-              <VibeNotice
-                className="vibe-notice--compact"
-                role="status"
-                tone="info"
+          {options ? <>
+            <VibeField
+              fieldId="recovery-setup-secret"
+              label="TOTP 密钥"
+              readOnly
+              type={showSecret ? "text" : "password"}
+              value={options.secret}
+            />
+            <div className="recovery-secret-actions">
+              <VibeButton
+                type="button"
+                disabled={pending}
+                onClick={() => setShowSecret((visible) => !visible)}
+                variant="text"
               >
-                {secretStatus}
-              </VibeNotice>
-            ) : null}
-          </div>
-          <VibeVerificationCode
-            aria-describedby={error ? "recovery-setup-code-error" : undefined}
-            aria-invalid={error ? true : undefined}
-            fieldId="recovery-setup-code"
-            disabled={pending || needsCheck}
-            label="当前 TOTP 验证码"
-            name="code"
-            ref={codeRef}
-            required
-            spellCheck={false}
-          />
-          <div role="status">{notice ? <VibeNotice tone="info">{notice}</VibeNotice> : null}</div>
+                {showSecret ? "隐藏密钥" : "显示密钥"}
+              </VibeButton>
+              <VibeButton type="button" disabled={pending} onClick={() => void copySecret()} variant="text">
+                复制密钥
+              </VibeButton>
+              {secretStatus ? (
+                <VibeNotice
+                  className="vibe-notice--compact"
+                  role="status"
+                  tone="info"
+                >
+                  {secretStatus}
+                </VibeNotice>
+              ) : null}
+            </div>
+            <VibeVerificationCode
+              aria-describedby={error ? "recovery-setup-code-error" : undefined}
+              aria-invalid={error ? true : undefined}
+              fieldId="recovery-setup-code"
+              disabled={pending || needsCheck}
+              label="当前 TOTP 验证码"
+              name="code"
+              onValueChange={setCode}
+              ref={codeRef}
+              required
+              spellCheck={false}
+              value={code}
+            />
+            <div role="status">{notice ? <VibeNotice tone="info">{notice}</VibeNotice> : null}</div>
+          </> : null}
           {error ? (
             <VibeNotice
               className="login-error"
@@ -287,40 +250,6 @@ export function RecoverySetup({ configured, onConfigured }: RecoverySetupProps) 
               role="alert"
               tone="error"
             >
-              {error}
-            </VibeNotice>
-          ) : null}
-        </VibeDialog>
-      ) : null}
-      {open && !options ? (
-        <VibeDialog
-          actions={
-            <>
-              <VibeButton type="button" disabled={pending} onClick={closeDialog} variant="text">
-                取消
-              </VibeButton>
-              <VibeButton
-                type="button"
-                disabled={pending}
-                onClick={() => void begin()}
-                variant="primary"
-              >
-                {pending ? "正在生成…" : "开始配置"}
-              </VibeButton>
-            </>
-          }
-          description={
-            <>
-              将生成新密钥，请注意防窥。
-            </>
-          }
-          onClose={closeDialog}
-          pending={pending}
-          title="配置 TOTP 登录"
-          titleId="recovery-setup-title"
-        >
-          {error ? (
-            <VibeNotice className="login-error" role="alert" tone="error">
               {error}
             </VibeNotice>
           ) : null}

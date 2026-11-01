@@ -43,6 +43,7 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 | `size` | `regular` / `compact` | 标准高度 / 紧凑芯片与工具条 |
 | `shape` | `default` / `square` | 常规按钮 / 图标按钮 |
 | `tone` | `default` / `danger` | 常规语义 / 危险操作；危险仍是描边，不是红色填充 |
+| `wrap` | `boolean`，默认 `false` | 长内容允许自然换行及断开连续字符，高度随内容增长；沿用共享字体、颜色与焦点配方 |
 
 | 变体 | 视觉 | 用于 |
 |---|---|---|
@@ -83,6 +84,7 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 - `VibeField density="compact"` 用于工具条的短数字输入：44px 高、字号 `--vibe-type-body`（16px），隐藏数字步进按钮；其他字段保持默认配方。
 - **聚焦只把边框色改为 `--primary`**：没有发光、没有强调色、没有阴影。
 - 手工资产与投资记账金额使用 [VibeAmountField](../../src/ui/vibe/vibe-amount-field.tsx)，复用写入端校验规则；资产余额最多两位小数，投资记录最多八位，入金与出金必须大于零。失焦或提交后在字段旁显示错误并关联读屏说明，修正输入时更新提示；不以禁用保存按钮代替校验。
+- 金额输入与错误反馈作为同一布局单元，使用紧邻输入的错误文字；按当前规则提示随宽度和字号自然换行的尺寸预留反馈空间。提示出现、清除或从空值提示切换为格式提示时，不改变表单高度或移动操作目标；预留内容不参与读屏，实际错误通过关联说明和礼貌播报提供。
 - 占位符 `--muted`；禁用 `opacity .55`。
 - 多行变体 `textarea.vibe-field__input` 最小高 112px，字距收到 `.02em`，行高 1.55。
 
@@ -92,7 +94,9 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 <div class="vibe-select vibe-select--compact|--wide">
   <button class="vibe-select__trigger" aria-expanded="false"><span>当前值</span><span class="vibe-select__chevron"></span></button>
   <div class="vibe-select__options">
-    <button class="vibe-select__option" aria-selected="true">选项<span class="vibe-select__selected-mark"></span></button>
+    <div class="vibe-select__listbox" role="listbox">
+      <button class="vibe-select__option" role="option" aria-selected="true">选项<span class="vibe-select__selected-mark"></span></button>
+    </div>
   </div>
 </div>
 ```
@@ -101,6 +105,9 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 - 选中项底色 `--raised`，右侧 6×6 方块用 `--accent` 标记。这是沿用上游的限定例外，不扩展到按钮、标签页或整个选项填充。
 - 面板挂在 portal 中，`z-index: 101`。
 - 键盘支持 `Enter` / `Space` 展开、方向键移动、`Home` / `End` 到首尾、`Esc` 收起并归还焦点；`Tab` / `Shift+Tab` 收起后沿原字段顺序继续，不逐项遍历选项。标签、展开状态和选中状态可被读屏识别。
+- 选中状态只由受控值决定；值不在选项中时显示「请选择」，不把第一项显示或标记为已选，也不自动触发选择。展开时优先聚焦已选项，无匹配项时聚焦首项；业务回退或提交限制由状态所属调用方处理。
+- 展开期间更新选项或受控值，保留仍存在的导航焦点；焦点项移除后回到已选项或首项，不自动改写选中值。没有可选项时显示「暂无可选项」，焦点留在列表区域，仍支持 `Esc` 和 `Tab`；选项恢复后聚焦已选项或首项。
+- 当前值和选项中的长名称允许换行，完整保留名称、焦点轮廓与选中标记，面板只需纵向滚动。弹层按实际尺寸定位，名称或可用空间变化后重新测量，保持在视口内。
 
 ## 复选行 · `.vibe-choice`
 
@@ -169,8 +176,9 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 - 金额计数默认静态显示最终值；不以滚动过程延迟用户读取。
 - `VibeLiveCounter` 可用 `paused` 暂停并保留当前显示值，解除后从该值接续；默认不暂停。
 - `aria-label` 必须是**最终值**，而不是动画中间值。
+- 调用方将完整展示值与 `masked` 一并传给 `VibeMetric`，不先把金额替换为遮罩。组件统一显示六个圆点，并用不含真实数字、对读屏隐藏的占位保留读数与遮罩所需的宽高；长金额换行及 200% 文字下切换隐私状态时，读数区域和币种位置保持稳定。数据不足等不可用提示由调用方保留。
 
-> 注意：`.vibe-live-counter` 与 `.vibe-metric__value` **本身没有样式**，视觉完全来自父级 `.vibe-metric`。不要为它们另写样式。
+> 数值字体与排版继承父级 `.vibe-metric`；内部读数与占位的布局由共享配方管理，页面不另行估算金额宽度或覆盖内部布局。
 
 ---
 
@@ -214,8 +222,18 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 - 标题 `--f-head` / 600，字号 `--vibe-type-subheading`（16px）；不使用 eyebrow，description 可选，仅在影响决策时提供。
 - 页脚 = `.vibe-button--text` 取消 + `.vibe-button--primary` 确认。
 - 行为：`Esc` 关闭、遮罩内焦点循环、打开时把焦点移入、关闭后归还原元素、锁定 body 滚动。
-- 记账、编辑与历史导入设置 `dirty`：未修改时直接关闭，修改后由同一弹窗确认放弃；取消按钮通过 `actions(requestClose)` 使用相同保护。继续编辑保留输入，保存成功直接关闭。设置 `pending` 时阻止 Esc、遮罩及重复提交，操作按钮由调用者同步禁用。
+- 记账、编辑与历史导入设置 `dirty`：未修改时直接关闭，修改后由同一弹窗确认放弃；取消按钮通过 `actions(requestClose)` 使用相同保护。放弃提示只描述关闭后丢弃当前输入，不据此断言服务端是否保存。继续编辑保留输入，保存成功直接关闭。设置 `pending` 时阻止 Esc、遮罩及重复提交，操作按钮由调用者同步禁用。
+- 放弃或切换确认保留原表单实例，以 `hidden` / `inert` 暂停原表单的显示与交互，保留草稿和字段校验状态；确认操作与保存表单使用独立控件，连续点击或按键连发不能跨过确认视图触发下一阶段动作，新一次操作仍可执行。继续编辑恢复原控件焦点，无需字段 ID。业务切换通过 `confirmation` 提供标题、说明、操作及 `onCancel`，沿用同一弹窗的焦点和滚动生命周期。
 - 移动端（≤639px）遮罩贴底、面板 `max-height: calc(100dvh - 24px)`；来源向导类对话框升为全屏，页头页脚吸顶。
+
+## 快捷命令
+
+实现入口为 [CommandMenu](../../src/ui/command-menu.tsx)，结果复用共享按钮配方。
+
+- 搜索采用组合框与列表框语义，输入焦点通过 `aria-activedescendant` 关联活动命令；方向键循环选择，`Enter` 执行，输入法组词期间不执行命令或关闭面板。
+- 活动项按命令 ID 跟踪，前序命令增减不改变选择；搜索变化或活动命令移除时回到首项，无结果时清除活动关联。活动项滚动进入可视区，使用共享按钮的黑白反转选中态，长名称自然换行。
+- 面板高度受可用视口约束，搜索与关闭入口保持可见，结果区独立滚动；窄屏沿用贴底布局。
+- 命令结果不逐项进入 Tab 顺序，Tab 在搜索与关闭按钮间循环；关闭或执行刷新后归还实际打开面板的元素，页面跳转与锁定由相应流程接管焦点。无匹配命令单独播报，不将整份结果列表设为 live region。
 
 ---
 
@@ -231,15 +249,17 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 
 复用 [VibeTooltip](../../src/ui/vibe/vibe-tooltip.tsx)，提示不承载完成操作所必需的唯一信息。
 
-- 默认向下、水平居中；`data-align="end"` 靠右对齐。
-- `--floating` 变体（`side="right"`）挂到 body，`z-index: 120`，滚动/缩放/`Esc` 即消失。
+- 默认向下、水平居中；`align="end"` 靠右对齐，`side="right"` 优先向右显示。
+- 两种方向共用 React 管理的显示状态与 Portal 定位；挂到最近的模态弹窗或 body，`z-index: 120`。空间不足时换向并保持在视口内，长文和连续字符自然换行；触发器、内容尺寸或文案变化后重新测量。
+- 鼠标可跨过间隔移入提示正文，停留期间保持可见；离开触发器与提示且触发器未聚焦时关闭。`Esc` 只关闭当前提示并保留焦点，滚动或缩放也关闭；重新移入或聚焦后可再次显示，不由 CSS 悬停规则重新打开。
 - 内容用 `--f-mono` `--vibe-type-label`（12px），底色 `--raised`，`--r-sm`。
-- 触发器必须带 `aria-describedby` 指向提示节点。
+- 实际触发器必须带 `aria-describedby` 指向提示节点，并保留已有说明。自定义触发组件通过 `VibeTooltipTriggerProps` 将关联传给内部按钮或链接，不把关联停留在外层布局容器；提示不加入 Tab 顺序，业务 Portal 接管焦点时关闭原按钮提示。
 
 ## 验证码分格输入 · `.vibe-verification-code`
 
 - 6 个 40×50px 槽位，用 Doto 承载数字；真实 `<input>` 透明覆盖其上，保证原生输入与无障碍。
 - 复用 [VibeVerificationCode](../../src/ui/vibe/vibe-verification-code.tsx)，输入保留数字键盘与 `autocomplete="one-time-code"`；视觉槽位不重复进入读屏。
+- 默认由控件管理输入，也可通过 `value` / `onValueChange` 交由调用方管理；两种模式都过滤非数字并限制长度，真实输入与视觉槽位共用同一值。需要跨弹窗关闭保留的草稿归流程组件持有，控件不持久化验证码。
 - 聚焦时当前槽边框转 `--primary`；`aria-invalid="true"` 时全部转 `--error`（绝不用"抖动"表达错误）。
 - 宽度不足 360px 时槽位收窄到 36px。
 
@@ -248,8 +268,9 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 - 触发器 48px 高、`--r-sm`、Doto 数字、正常字距。
 - 日历：`--surface` + `--line-2` + `--r-md`，日期用 Doto，**今天 = 反转填充**，已选 = `--display` 描边。“今天”按上海当前自然日判断，与可选日期上限分开。
 - 服务于"按上海自然日保存"的手工记录。日历本身不写入任何数据。
-- 面板在视口四周留 12px，宽高受视口约束，内容超高时内部滚动。
-- 复用 [VibeDateField](../../src/ui/vibe/vibe-date-field.tsx)，展开后聚焦可选的已选日期，依次回退到今天或首个可选日期；月切换与日期均可键盘到达，`Esc` 收起并归还焦点，`Tab` 离开日历边界后沿原字段顺序继续；今天与已选状态可被读屏识别。
+- 面板在视口四周留 12px，宽高受视口约束，内容超高时内部滚动；七列日期不依赖浏览器默认按钮内边距，窄屏放大文字时月份与操作可换行，不产生横向滚动。
+- 复用 [VibeDateField](../../src/ui/vibe/vibe-date-field.tsx)，展开后聚焦可选的已选日期，依次回退到所在月的今天或首个可选日期；已有日期超出范围时落在最近的可选边界。日期区只保留一个 Tab 停靠点，方向键按日或周移动，`Home` / `End` 到周首尾，`PageUp` / `PageDown` 换月，配合 `Shift` 换年；跨月保留目标日，月末不足时取该月最后一天，均受日期范围限制。导航不改变已选值，`Enter` / `Space` 才确认。
+- 月切换与清空可通过键盘到达，月份变化礼貌播报；`Esc` 收起并归还焦点，`Tab` 离开日历边界后沿原字段顺序继续；今天与已选状态可被读屏识别。面板随月份行数、字体与字段尺寸变化重新定位，保持在视口内。
 
 ## 数据表 · `.vibe-data-table`
 
@@ -278,7 +299,8 @@ React 页面使用 [VibeButton / VibeLink](../../src/ui/vibe/vibe-button.tsx)，
 ## 通用交互与无障碍
 
 - 使用原生按钮、链接与输入语义，Tab 顺序与视觉顺序一致，无键盘陷阱；所有操作均可键盘完成，拖拽提供等价的非拖拽路径。
-- 弹窗焦点循环跳过禁用字段（含 `fieldset` 继承的禁用状态）和负 `tabindex` 元素，无可用控件时焦点留在弹窗；字段的 Portal 弹层同样遵守原字段的禁用状态。
+- 弹窗焦点循环跳过禁用字段（含 `fieldset` 继承的禁用状态）和负 `tabindex` 元素，无可用控件时焦点留在弹窗。
+- 日期与下拉字段共用 [禁用联动](../../src/ui/vibe/use-close-on-field-disabled.ts)：原字段因自身或外层 `fieldset` 实际禁用时收起 Portal 弹层，恢复可用后不自动展开；遵循首个 `legend` 的原生例外，迟到交互不能改写值。
 - 图标有相邻文字时隐藏装饰语义；纯图标按钮必须有可访问名称。装饰 SVG 使用 `aria-hidden="true"` 与 `focusable="false"`。
 - 不使用 `outline: none` 移除焦点而没有同等可见的替代。按钮焦点用 0.5px `--primary` 轮廓、外偏移 3px；菜单项用 0.5px 内轮廓，下拉选项用 0.5px 内轮廓；字段沿用聚焦配方。
 - 命中区按 [基础规范](foundations.md#7-控件尺寸) 执行，触控目标之间至少留出 8px；不让轻薄轮廓缩小实际可点范围。

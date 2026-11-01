@@ -49,6 +49,7 @@ import {
 import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
 import { LongbridgeRealtimeNotice, LongbridgeRealtimeStatus } from "@/ui/longbridge-realtime-notice";
 import { useLongbridgeRealtime } from "@/ui/use-longbridge-realtime";
+import { useAssetSourceFilter } from "@/ui/use-asset-source-filter";
 import { AssetGlobalRefreshControl } from "@/ui/asset-refresh-controls";
 import { CURRENCY_OPTIONS } from "@/ui/reporting-currency-options";
 
@@ -208,7 +209,6 @@ export function AssetsHoldingsWorkspace({
     setCurrency,
     showSensitiveInfo,
   } = useWorkbenchDisplayPreferences();
-  const [sourceId, setSourceId] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [assetClass, setAssetClass] = useState<AssetClassFilter>("all");
   const [valuation, setValuation] = useState<ValuationFilter>("all");
@@ -217,7 +217,7 @@ export function AssetsHoldingsWorkspace({
   const { active: realtimeActive, liveSources, state: realtimeState, retry } = useLongbridgeRealtime(
     sources, true, { immediateInitialQuotes: true },
   );
-  const selectedSource = liveSources.find((source) => source.id === sourceId);
+  const { sourceId, setSourceId, selectedSource, sourceOptions } = useAssetSourceFilter(liveSources);
 
   const recordedSources = useMemo(
     () =>
@@ -231,16 +231,6 @@ export function AssetsHoldingsWorkspace({
     [recordedSources],
   );
 
-  const sourceOptions = useMemo<readonly VibeSelectOption<string>[]>(
-    () => [
-      { value: "all", label: "全部来源" },
-      ...liveSources.map((source) => ({
-        value: source.id,
-        label: assetSourceDisplayName(source),
-      })),
-    ],
-    [liveSources],
-  );
   const observations = useMemo<HoldingObservation[]>(
     () =>
       liveSources.flatMap((source) =>

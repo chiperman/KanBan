@@ -63,15 +63,17 @@ function readCandles(cache: CandlesCache): Promise<MarketBenchmarkCandlesState> 
   if (cache.request) return cache.request;
   // 请求不随图表隐藏而中断，让再次勾选指数及其他消费者复用同一次读取。
   const request = (async (): Promise<MarketBenchmarkCandlesState> => {
+    const signal = AbortSignal.timeout(15_000);
     try {
       const response = await fetch("/api/market-benchmarks/candles", {
         cache: "no-store",
-        signal: AbortSignal.timeout(15_000),
+        signal,
       });
       if (lockOnUnauthorizedResponse(response)) return { kind: "failed" };
       if (response.status === 409) return { kind: "unavailable" };
       if (!response.ok) return { kind: "failed" };
       const body = await response.json().catch(() => null) as { candles?: unknown } | null;
+      signal.throwIfAborted();
       if (!isMarketBenchmarkCandles(body?.candles)) return { kind: "failed" };
       const state = { candles: body.candles, kind: "ready" } as const;
       if (MARKET_BENCHMARKS.every(({ symbol }) => state.candles[symbol].length > 0)) {
@@ -89,10 +91,9 @@ function readCandles(cache: CandlesCache): Promise<MarketBenchmarkCandlesState> 
   return request;
 }
 
-/** 丢弃失败或挂起的指数读取，并让在监听的图表立即重新拉取。 */
+/** 让在监听的图表重试失败的读取；在途请求仍由共享缓存去重。 */
 export function retryMarketBenchmarkCandles() {
   if (candlesCache?.state) return;
-  if (candlesCache) candlesCache.request = undefined;
   for (const listener of candlesRetryListeners) listener();
 }
 
@@ -115,6 +116,7 @@ function useMarketBenchmarkCandles(visible: boolean, sources: readonly Benchmark
       const key = cacheKey(scope);
       if (candlesCache?.key !== key) candlesCache = { key };
       const requestRevision = ++revision;
+      setState({ scope, value: candlesCache.state ?? { kind: "loading" } });
       void readCandles(candlesCache).then(value => {
         if (active && requestRevision === revision) setState({ scope, value });
       });

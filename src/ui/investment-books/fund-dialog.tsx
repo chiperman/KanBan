@@ -6,12 +6,13 @@ import {
   type InvestmentBookId,
   type InvestmentBookState,
 } from "@/domain/investment-books";
+import { bookRequest } from "@/ui/financial-record-requests";
 import { VibeAmountField } from "@/ui/vibe/vibe-amount-field";
 import { VibeDateField } from "@/ui/vibe/vibe-date-field";
 import { VibeField, VibeSelectField } from "@/ui/vibe/vibe-field";
 import { useState } from "react";
 
-import { ActionDialog, bookRequest } from "./action-dialog";
+import { ActionDialog } from "./action-dialog";
 import { labels } from "./shared";
 
 export function FundDialog({
@@ -50,7 +51,7 @@ export function FundDialog({
       description={record ? "更正后重算收益，原记录保留。" : undefined}
       dirty={dirty}
       onClose={onClose}
-      submit={() =>
+      submit={(signal) =>
         bookRequest({
           action: "save",
           bookId,
@@ -63,7 +64,7 @@ export function FundDialog({
             note,
             ...(record ? { replacesId: record.id } : {}),
           },
-        })
+        }, signal)
       }
     >
       <VibeSelectField

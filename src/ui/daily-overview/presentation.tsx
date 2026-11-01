@@ -24,17 +24,15 @@ export function MetricValue({
   unavailableLabel?: string;
   value: string | null;
 }) {
-  if (hidden) {
-    return <VibeMetric className="daily-overview__private" unit={currency} value="••••••" />;
-  }
   if (value === null) {
     return <span className="daily-overview__unavailable">{unavailableLabel}</span>;
   }
   return (
     <VibeMetric
-      className={profitColorScheme ? "profit-color-value" : undefined}
-      data-profit-color-scheme={profitColorScheme}
-      data-profit-direction={profitColorScheme ? profitDirection(value) : undefined}
+      className={hidden ? "daily-overview__private" : profitColorScheme ? "profit-color-value" : undefined}
+      data-profit-color-scheme={hidden ? undefined : profitColorScheme}
+      data-profit-direction={!hidden && profitColorScheme ? profitDirection(value) : undefined}
+      masked={hidden}
       unit={currency}
       value={signed ? signedAmount(value, amount, { signZero: true }) : amount(value)}
     />

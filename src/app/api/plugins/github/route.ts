@@ -1,6 +1,7 @@
 import { getServices } from '@/server/composition';
 import { rejectCrossOrigin } from '@/server/auth/request-origin';
 import { PluginManagementError } from '@/server/asset-source-plugins/installation';
+import { pluginManagementFailure } from '@/server/asset-source-plugins/http-response';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,6 +17,6 @@ export async function POST(request: Request) {
     if (typeof body.id !== 'string' || body.id.length > 128 || typeof body.version !== 'string' || body.version.length > 100 || typeof body.repository !== 'string' || body.repository.length > 200 || typeof body.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(body.sha256)) throw new PluginManagementError('请先查看插件并确认安装信息');
     return Response.json(await services.pluginManagement.installGitHub(body.source, body.id, { version: body.version, repository: body.repository, sha256: body.sha256 }));
   } catch (error) {
-    return Response.json({ error: error instanceof PluginManagementError ? error.message : '无法读取此仓库的插件，请检查 Release 附件或联系开发者' }, { status: 400 });
+    return pluginManagementFailure(error, '无法读取或安装此仓库的插件，请核对当前状态或联系开发者');
   }
 }

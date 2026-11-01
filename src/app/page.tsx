@@ -84,6 +84,7 @@ export default async function AssetDashboardPage({
               currentDay={demo.currentDay}
               currentObservedAt={now.toISOString()}
               demoMode
+              manualRecords={demo.manualRecords}
               profitColorScheme={DEFAULT_PROFIT_COLOR_SCHEME}
               sources={demo.assetSources}
               trendObservations={demo.dailyAssetTrendObservations}

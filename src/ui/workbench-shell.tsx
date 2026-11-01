@@ -17,7 +17,7 @@ import {
 } from "@/ui/workbench-display-preferences";
 import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
 import { VibeIcon } from "@/ui/vibe/vibe-icon";
-import { VibeTooltip } from "@/ui/vibe/vibe-tooltip";
+import { VibeTooltip, type VibeTooltipTriggerProps } from "@/ui/vibe/vibe-tooltip";
 import {
   AssetRefreshAvailabilityProvider,
   type AssetRefreshRegistration,
@@ -125,12 +125,13 @@ function WorkbenchDestinationLinks({
   );
 }
 
-function WorkbenchPrivacyToggle() {
+function WorkbenchPrivacyToggle({ "aria-describedby": describedBy }: VibeTooltipTriggerProps) {
   const { showSensitiveInfo, toggleSensitiveInfo } =
     useWorkbenchDisplayPreferences();
 
   return (
     <VibeButton
+      aria-describedby={describedBy}
       aria-label={showSensitiveInfo ? "隐藏关键信息" : "显示关键信息"}
       aria-pressed={!showSensitiveInfo}
       className="workbench-privacy-toggle"
@@ -160,11 +161,11 @@ function WorkbenchUtilities({
             <WorkbenchPrivacyToggle />
           </VibeTooltip>
           {commandMenu ? (
-            <VibeTooltip label="快捷命令 · ⌘K / Ctrl K" side="right">
-              <div className="workbench-command">
+            <div className="workbench-command">
+              <VibeTooltip label="快捷命令 · ⌘K / Ctrl K" side="right">
                 <CommandMenu refreshEnabled={refreshEnabled} />
-              </div>
-            </VibeTooltip>
+              </VibeTooltip>
+            </div>
           ) : null}
         </div>
       </div>

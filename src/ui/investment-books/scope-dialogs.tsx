@@ -9,13 +9,14 @@ import {
 } from "@/domain/investment-books";
 import type { InvestmentCashflow } from "@/server/ports";
 import { AssetFinancialValue } from "@/ui/asset-financial-value";
+import { bookRequest } from "@/ui/financial-record-requests";
 import { VibeDateField } from "@/ui/vibe/vibe-date-field";
 import { VibeSelectField } from "@/ui/vibe/vibe-field";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
 import { useWorkbenchDisplayPreferences } from "@/ui/workbench-display-preferences";
 import { useState } from "react";
 
-import { ActionDialog, bookRequest } from "./action-dialog";
+import { ActionDialog } from "./action-dialog";
 import { labels } from "./shared";
 
 export function MemberDialog({
@@ -39,14 +40,14 @@ export function MemberDialog({
       dirty={fromDay !== initial.fromDay || toDay !== initial.toDay}
       onClose={onClose}
       disabled={!validRange}
-      submit={() =>
+      submit={(signal) =>
         bookRequest({
           action: "member",
           bookId: member.bookId,
           sourceId: member.sourceId,
           fromDay,
           toDay: toDay || null,
-        })
+        }, signal)
       }
     >
       <VibeDateField
@@ -116,13 +117,13 @@ export function ResolveDialog({
       }
       dirty={target !== bookId || recordId !== ""}
       onClose={onClose}
-      submit={() =>
+      submit={(signal) =>
         bookRequest({
           action: "resolve",
           bookId: target,
           cashflowId: flow.id,
           recordId: recordId || null,
-        })
+        }, signal)
       }
     >
       <VibeSelectField

@@ -23,6 +23,7 @@ import {
   FUNDING_EVENT_Z_INDEX,
   percentage,
   TREND_CHART_ANIMATION_DURATION,
+  TREND_CHART_AXIS_INSET,
 } from "./shared";
 import {
   benchmarkTooltipRows,
@@ -130,7 +131,7 @@ export function renderBenchmarkPlot({
               top: 12,
               right: variant === "source" ? 12 : 20,
               bottom: 6,
-              left: 0,
+              left: TREND_CHART_AXIS_INSET,
             }}
             role="img"
           >
@@ -141,6 +142,7 @@ export function renderBenchmarkPlot({
               axisLine={false}
               domain={[benchmarkMinimum - benchmarkPadding, benchmarkMaximum + benchmarkPadding]}
               tick={{
+                className: "asset-trend-axis-tick",
                 fill: "var(--muted)",
                 fontFamily: "var(--f-display)",
                 fontSize: 12,
@@ -148,7 +150,7 @@ export function renderBenchmarkPlot({
               }}
               tickFormatter={(value: number) => (isSensitiveHidden ? "••••••" : percentage(value))}
               tickLine={false}
-              width={56}
+              width="auto"
             />
             <TrendChartTooltip
               content={(props) => (

@@ -5,72 +5,26 @@ import { useRouter } from "next/navigation";
 
 import type { BackupRestorePreview, BackupSummary } from "@/server/backup/business-data-backup";
 import { BusinessDataBackupDropzone } from "@/ui/business-data-backup-dropzone";
+import {
+  BackupOutcomeUnknown,
+  requestBackupExport,
+  requestBackupList,
+  requestBackupPreview,
+  requestBackupRestore,
+  type BackupExport,
+} from "@/ui/business-data-backup-requests";
 import { formatShanghaiDateTime } from "@/ui/shanghai-date-time";
 import { VibeSelectField } from "@/ui/vibe/vibe-field";
 import { VibeButton, VibeLink } from "@/ui/vibe/vibe-button";
 import { useAssetRefresh } from "@/ui/asset-refresh-provider";
 import { VibeDialog } from "@/ui/vibe/vibe-dialog";
 import { VibeNotice } from "@/ui/vibe/vibe-notice";
-import { lockOnUnauthorizedResponse, OWNER_SESSION_EXPIRED_MESSAGE, readJsonResult } from "@/ui/owner-request-lock";
 
 interface BackupPreview extends BackupRestorePreview {
   fileName: string;
 }
 
 type BackupOperation = "export" | "preview" | "restore" | "upload";
-
-/** 恢复可能已在服务端完成；响应丢失或服务端报错时结果不明，不能鼓励直接重放。 */
-class BackupOutcomeUnknown extends Error {}
-
-const READ_TIMEOUT_MESSAGE = "读取超时，请重试。";
-
-interface BackupExport {
-  checksum: string;
-  fileName: string;
-  warning: string;
-}
-
-async function requestBackup<T>(
-  action: "export" | "list" | "preview" | "restore",
-  fileName?: string,
-  discardConfirmation?: string,
-): Promise<T> {
-  const readOnly = action === "list" || action === "preview";
-  const signal = readOnly ? AbortSignal.timeout(30_000) : undefined;
-  const response = await fetch("/api/business-data-backups", {
-    method: action === "list" ? "GET" : "POST",
-    ...(action === "list" ? { cache: "no-store", signal } : signal ? { signal } : {}),
-    ...(action === "list"
-      ? {}
-      : {
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(
-            fileName === undefined
-              ? { action }
-              : { action, fileName, discardConfirmation },
-          ),
-        }),
-  }).catch((caught: unknown) => {
-    if (signal?.aborted) throw new Error(READ_TIMEOUT_MESSAGE);
-    // 写入请求中断时无法判断服务端是否已经执行，只能当作结果不明。
-    if (action === "restore") throw new BackupOutcomeUnknown("未能确认恢复结果，连接中断。");
-    throw caught;
-  });
-  if (lockOnUnauthorizedResponse(response)) throw new Error(OWNER_SESSION_EXPIRED_MESSAGE);
-  const result = await readJsonResult<T & { error?: string }>(response);
-  if (signal?.aborted) throw new Error(READ_TIMEOUT_MESSAGE);
-  if (!response.ok || result === null || "error" in result) {
-    if (action === "restore" && response.status >= 500) {
-      throw new BackupOutcomeUnknown("未能确认恢复结果，服务端返回错误。");
-    }
-    throw new Error(
-      result && "error" in result
-        ? result.error ?? "备份操作失败"
-        : "备份操作失败",
-    );
-  }
-  return result;
-}
 
 function previewSummary(preview: BackupPreview) {
   const range = preview.snapshotRange.from && preview.snapshotRange.to
@@ -120,7 +74,7 @@ export function BusinessDataBackupSettings() {
   const [backups, setBackups] = useState<BackupSummary[]>([]);
   const [loadingBackups, setLoadingBackups] = useState(true);
   const [listError, setListError] = useState("");
-  const listRequestRef = useRef(0);
+  const listRequestRef = useRef<AbortController | null>(null);
   const [fileName, setFileName] = useState(NO_BACKUP);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pending, setPending] = useState<BackupOperation | null>(null);
@@ -143,25 +97,29 @@ export function BusinessDataBackupSettings() {
   }
 
   async function loadBackups() {
-    const requestId = ++listRequestRef.current;
+    listRequestRef.current?.abort();
+    const request = new AbortController();
+    listRequestRef.current = request;
     setLoadingBackups(true);
     setListError("");
     try {
-      const result = await requestBackup<{ backups: BackupSummary[] }>("list");
-      if (requestId === listRequestRef.current) setBackups(result.backups);
-      return requestId === listRequestRef.current;
+      const result = await requestBackupList(request.signal);
+      if (request.signal.aborted) return false;
+      setBackups(result);
+      return true;
     } catch (caught) {
-      if (requestId === listRequestRef.current) {
+      if (!request.signal.aborted) {
         setListError(caught instanceof Error ? caught.message : "读取备份列表失败");
       }
       return false;
     } finally {
-      if (requestId === listRequestRef.current) setLoadingBackups(false);
+      if (!request.signal.aborted) setLoadingBackups(false);
     }
   }
 
   useEffect(() => {
     void loadBackups();
+    return () => listRequestRef.current?.abort();
   }, []);
 
   function selectBackup(next: string) {
@@ -176,7 +134,7 @@ export function BusinessDataBackupSettings() {
   async function exportBackup() {
     if (!beginOperation("export")) return;
     try {
-      const result = await requestBackup<BackupExport>("export");
+      const result = await requestBackupExport();
       setExported(result);
       setPreview(null);
       setRestored(null);
@@ -198,7 +156,7 @@ export function BusinessDataBackupSettings() {
     if (!beginOperation("preview")) return;
     setRestoreNeedsCheck(false);
     try {
-      const result = await requestBackup<BackupRestorePreview>("preview", candidate);
+      const result = await requestBackupPreview(candidate);
       setPreview({ ...result, fileName: candidate });
       setRestored(null);
     } catch (caught) {
@@ -219,7 +177,7 @@ export function BusinessDataBackupSettings() {
     const candidate = preview.fileName;
     if (!beginOperation("restore")) return;
     try {
-      const result = await requestBackup<BackupRestorePreview>("restore", candidate, preview.discardConfirmation);
+      const result = await requestBackupRestore(candidate, preview.discardConfirmation);
       const restoredPreview = { ...result, fileName: candidate };
       setPreview(null);
       setRestored(restoredPreview);
