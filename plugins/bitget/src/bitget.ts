@@ -157,14 +157,11 @@ export class ProductionBitgetSourceRefresher implements AssetSourceRefresher {
           usdtUsdSource: usdtUsd.source,
           targetCurrency: source.snapshot.total.currency === "USD" ? "USD" : "USDT",
           coverage: source.snapshot.coverage,
-          ...(source.snapshot.coverage?.status === "complete"
-            ? { authoritativeTotal: source.snapshot.total }
-            : {}),
+          authoritativeTotal: source.snapshot.total,
         });
       return {
         snapshot: preserveNewerPrices(source.snapshot, candidate, {
           holding: (source_) => source_.currency,
-          total: candidate.total.currency,
         }),
       };
     }
@@ -177,7 +174,6 @@ export class ProductionBitgetSourceRefresher implements AssetSourceRefresher {
     return {
       snapshot: preserveNewerPrices(source.snapshot, candidate, {
         holding: (source_) => source_.currency,
-        total: candidate.total.currency,
       }),
     };
   }

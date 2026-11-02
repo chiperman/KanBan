@@ -8,11 +8,10 @@ import {
   YAxis,
 } from "recharts";
 
-import { FundingEventLegend, FundingEventMarker } from "./funding-events";
+import { FundingEventLegend, FundingEventOverlay } from "./funding-events";
 import { CurveLine, TrendEffects, TrendExtentLabels } from "./plot-parts";
 import type { ChartDatum, ResolvedChartProps } from "./shared";
 import {
-  FUNDING_EVENT_Z_INDEX,
   TREND_CHART_ANIMATION_DURATION,
   TREND_CHART_AXIS_INSET,
 } from "./shared";
@@ -66,9 +65,6 @@ export function renderValuePlot({
     };
   });
   const historicalObserved = data.filter((point) => point.historicalValue !== null).length;
-  const eventPoints = data.filter(
-    (point) => point.value !== null && (point.events?.length ?? 0) > 0,
-  );
   const today = data.at(-1);
   const amounts = data.flatMap((point) => [
     ...(point.amount === null ? [] : [point.amount]),
@@ -151,23 +147,6 @@ export function renderValuePlot({
             {!minimalPlot && today?.amount != null ? (
               <ReferenceLine stroke="var(--secondary)" strokeWidth={1} x={today.day} />
             ) : null}
-            {!minimalPlot
-              ? eventPoints.map((point) => (
-                  <ReferenceDot
-                    key={`funding-event:${point.day}`}
-                    shape={({ cx, cy }) => (
-                      <FundingEventMarker
-                        cx={cx}
-                        cy={cy}
-                        kinds={point.events!.map((event) => event.kind)}
-                      />
-                    )}
-                    x={point.day}
-                    y={point.value!}
-                    zIndex={FUNDING_EVENT_Z_INDEX}
-                  />
-                ))
-              : null}
             {historicalObserved > 0 ? (
               <CurveLine
                 dot={historicalObserved === 1}
@@ -219,10 +198,13 @@ export function renderValuePlot({
                 y={data[lastValueIndex].value!}
               />
             ) : null}
+            {!minimalPlot && data.some((point) => point.events?.length) ? (
+              <FundingEventOverlay points={data} dataKey="value" type={lineType} />
+            ) : null}
           </ComposedChart>
         </ResponsiveContainer>
       </TrendChartSurface>
-      {!minimalPlot ? <FundingEventLegend points={eventPoints} /> : null}
+      {!minimalPlot ? <FundingEventLegend points={data} /> : null}
     </div>
   );
 }

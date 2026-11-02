@@ -169,11 +169,7 @@ function coverageHasKnownValueGap(
   coverage: NonNullable<AssetSnapshot["coverage"]>,
 ): boolean {
   return (
-    (
-      coverage.unexplainedValue !== null &&
-      !coverage.totalIsAuthoritative &&
-      decimalCompare(coverage.unexplainedValue.amount, "0") !== 0
-    ) ||
+    (coverage.status === "unknown" && coverage.totalIsAuthoritative !== true) ||
     coverage.excludedPositiveAccounts.length > 0
   );
 }
@@ -181,7 +177,7 @@ function coverageHasKnownValueGap(
 function coverageNeedsTotalWarning(
   coverage: NonNullable<AssetSnapshot["coverage"]>,
 ): boolean {
-  return coverage.status === "unknown" || coverageHasKnownValueGap(coverage);
+  return coverageHasKnownValueGap(coverage);
 }
 
 function rateFor(
@@ -395,7 +391,7 @@ export function buildTotalValuation(
       totalInReportingCurrency = decimalAdd(totalInReportingCurrency, total);
       sourceTotals.set(source.id, total);
     }
-    if (source.snapshot.coverage?.status !== "complete") {
+    if (source.snapshot.coverage?.totalIsAuthoritative !== true) {
       unvaluedCount += activeHoldings.filter(
         holdingMakesTotalIncomplete,
       ).length;
@@ -416,7 +412,6 @@ export function buildTotalValuation(
 
   const groupsInReportingCurrency = new Map<string, ValuationGroup>();
   const reconciliationIssuesInReportingCurrency: ValuationReconciliationIssue[] = [];
-  let hasNonAuthoritativePositiveResidual = false;
   for (const source of recordedSources) {
     const activeHoldings = activeSourceHoldings(source);
     const sourceTotal = sourceTotals.get(source.id);
@@ -432,27 +427,6 @@ export function buildTotalValuation(
         amount: null,
         unvaluedCount: 0,
         quoteUnavailableCount,
-      });
-    }
-    const coverage = source.snapshot.coverage;
-    const coverageResidual = coverage?.unexplainedValue;
-    if (
-      coverage?.totalIsAuthoritative &&
-      coverageResidual != null &&
-      decimalCompare(coverageResidual.amount, "0") !== 0
-    ) {
-      reconciliationIssuesInReportingCurrency.push({
-        kind: "mismatch",
-        sourceId: source.id,
-        sourceLabel: assetSourceDisplayName(source),
-        amount: convertCurrencyAmount(
-          coverageResidual.amount,
-          coverageResidual.currency,
-          currency,
-          sourceRates,
-        ),
-        unvaluedCount: 0,
-        quoteUnavailableCount: 0,
       });
     }
     if (dimension === "source" && sourceTotal) {
@@ -491,7 +465,6 @@ export function buildTotalValuation(
       continue;
     }
 
-    let holdingTotalInReportingCurrency = "0";
     for (const holding of activeHoldings) {
       if (holding.sourceMarketValue === null) continue;
       const amount = convertCurrencyAmount(
@@ -501,13 +474,8 @@ export function buildTotalValuation(
         sourceRates,
       );
       if (amount === null) {
-        incomplete = true;
         continue;
       }
-      holdingTotalInReportingCurrency = decimalAdd(
-        holdingTotalInReportingCurrency,
-        amount,
-      );
       if (dimension === "source") continue;
       if (dimension === "class") {
         addGroup(
@@ -529,40 +497,6 @@ export function buildTotalValuation(
         );
       }
     }
-    if (sourceTotal) {
-      const residual = decimalAdd(
-        sourceTotal,
-        `-${holdingTotalInReportingCurrency}`,
-      );
-      if (
-        dimension !== "source" &&
-        decimalCompare(residual, "0") > 0 &&
-        quoteUnavailableCount === 0
-      ) {
-        if (
-          coverage?.status !== "complete" &&
-          !coverage?.totalIsAuthoritative
-        ) {
-          hasNonAuthoritativePositiveResidual = true;
-        }
-        addGroup(
-          groupsInReportingCurrency,
-          dimension === "class" ? "other" : source.snapshot.total.currency,
-          dimension === "class" ? "现金及其他" : source.snapshot.total.currency,
-          residual,
-        );
-      }
-    }
-  }
-  if (
-    dimension === "class" &&
-    groupsInReportingCurrency.has("cash") &&
-    groupsInReportingCurrency.has("other") &&
-    hasNonAuthoritativePositiveResidual
-  ) {
-    const other = groupsInReportingCurrency.get("other")!;
-    groupsInReportingCurrency.set("other", { ...other, label: "未解释差额" });
-    incomplete = true;
   }
 
   const displayAmount =

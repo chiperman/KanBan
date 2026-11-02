@@ -533,11 +533,16 @@
 
 .workbench-page-header__actions > .vibe-button,
 .workbench-page-header__actions > .vibe-select,
+.workbench-page-header__actions > .vibe-menu,
 .workbench-page-header__actions > .asset-refresh-controls,
 .workbench-page-header__actions > .asset-source-refresh-control {
 
   width: auto;
   min-width: 112px;
+}
+
+.workbench-page-header__actions > .vibe-menu > .vibe-menu__trigger {
+  width: 100%;
 }
 
 .workbench-page-header__actions > .vibe-select {
@@ -685,6 +690,7 @@
 
   .workbench-page-header__actions > .vibe-button,
   .workbench-page-header__actions > .vibe-select,
+  .workbench-page-header__actions > .vibe-menu,
   .workbench-page-header__actions > .asset-refresh-controls,
   .workbench-page-header__actions > .asset-source-refresh-control,
   .asset-source-detail__actions > .vibe-select,

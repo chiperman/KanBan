@@ -4,7 +4,7 @@ import { isPersistedAssetSourceKind } from "@/domain/asset-source-kinds";
 import { normalizedSourceBookId } from "@/domain/source-investment-book";
 import { assertPluginSnapshot } from "@/server/asset-source-plugins/snapshot-validation";
 import { shanghaiDay, sourceTrendClassTotals } from "@/domain/daily-asset-snapshots";
-import { decimalAdd, decimalCompare, decimalDivide } from "@/domain/decimal";
+import { decimalCompare, decimalDivide } from "@/domain/decimal";
 import { normalizeIgnoredAssetKeys } from "@/domain/evm-token-preferences";
 import { parseAssetCards } from "@/server/asset-cards";
 import { isLongbridgeUsOptionSymbol } from "@/domain/longbridge-symbols";
@@ -30,15 +30,6 @@ export function migrateAssetSource(raw: unknown): AssetSourceSummary {
   }
   const snapshot = source.snapshot as AssetSnapshot;
   if (source.kind.startsWith("plugin:")) assertPluginSnapshot(snapshot);
-  const legacySnapshot =
-    !Array.isArray(snapshot.exchangeRates) ||
-    snapshot.holdings.some(
-      (holding) =>
-        !Object.hasOwn(holding, "assetClass") ||
-        !Object.hasOwn(holding, "currentPrice") ||
-        !Object.hasOwn(holding, "sourceMarketValue") ||
-        !Object.hasOwn(holding, "valuation"),
-    );
   const exchangeRates = Array.isArray(snapshot.exchangeRates)
     ? snapshot.exchangeRates
     : [];
@@ -101,25 +92,6 @@ export function migrateAssetSource(raw: unknown): AssetSourceSummary {
       valuation,
     };
   });
-  const hasUnvaluedLegacyHolding =
-    legacySnapshot &&
-    holdings.some(
-      (holding) =>
-        holding.valuation.status === "unvalued" ||
-        holding.sourceMarketValue === null,
-    );
-  const total = hasUnvaluedLegacyHolding
-    ? {
-        amount: decimalAdd(
-          ...holdings.flatMap((holding) =>
-            holding.sourceMarketValue?.currency === snapshot.total.currency
-              ? [holding.sourceMarketValue.amount]
-              : [],
-          ),
-        ),
-        currency: snapshot.total.currency,
-      }
-    : snapshot.total;
   const coverage =
     snapshot.coverage ??
     (source.kind === "binance"
@@ -147,7 +119,6 @@ export function migrateAssetSource(raw: unknown): AssetSourceSummary {
       : {}),
     snapshot: {
       ...snapshot,
-      total,
       holdings,
       exchangeRates,
       ...(coverage === undefined ? {} : { coverage }),

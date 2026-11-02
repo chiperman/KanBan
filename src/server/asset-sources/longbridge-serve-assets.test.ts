@@ -44,13 +44,13 @@ function fixture(options: { fail?: string; malformed?: string; mismatch?: boolea
   return { refresher, calls, closes: () => closes };
 }
 
-test("serve 完整读取按盘外报价加现金计算总资产，并保留账户原值与官方汇率", async () => {
+test("serve 完整读取以账户总额为主，行情只更新持仓明细", async () => {
   const f = fixture();
   const { snapshot } = await f.refresher.refresh(input);
   assert.equal(f.closes(), 1);
-  assert.equal(snapshot.total.amount, "4130.56");
+  assert.equal(snapshot.total.amount, "5000");
   assert.deepEqual(snapshot.longbridgeValuation, {
-    basis: "latest-quotes", reportedTotal: { amount: "5000", currency: "USD" }, reportedAt: at,
+    basis: "reported", reportedTotal: { amount: "5000", currency: "USD" }, reportedAt: at,
   });
   assert.equal(snapshot.holdings.length, 2);
   assert.equal(snapshot.holdings.find(h => h.assetClass === "cash")?.marketValue, "4000");
@@ -113,12 +113,12 @@ test("取消关闭本次 serve，不启动 SDK 回退", async () => {
   assert.ok(f.closes() >= 1);
 });
 
-test("价格刷新按行情与已有汇率更新总资产，保留账户原值且不读取资产接口", async () => {
+test("价格刷新只更新持仓明细，保留账户总额且不读取资产接口", async () => {
   const f = fixture();
   const full = await f.refresher.refresh(input);
   const g = fixture();
   const result = await g.refresher.refresh({ ...input, source: { ...source, snapshot: full.snapshot }, mode: "prices" });
-  assert.equal(result.snapshot.total.amount, "4130.56");
+  assert.equal(result.snapshot.total.amount, "5000");
   assert.equal(result.snapshot.holdings.find(h => h.symbol === "700.HK")?.sourceMarketValue?.amount, "130.56");
   assert.deepEqual(result.snapshot.longbridgeValuation, full.snapshot.longbridgeValuation);
   assert.deepEqual(g.calls, ["quote.quote"]);
@@ -126,7 +126,7 @@ test("价格刷新按行情与已有汇率更新总资产，保留账户原值�
 
 test("授权预览复用 serve 完整快照与账户校验", async () => {
   const f = fixture();
-  assert.equal((await f.refresher.readSnapshot(at)).total.amount, "4130.56");
+  assert.equal((await f.refresher.readSnapshot(at)).total.amount, "5000");
   assert.equal(f.closes(), 1);
   const mismatched = fixture({ mismatch: true });
   await assert.rejects(mismatched.refresher.readSnapshot(at), /账户不一致/);

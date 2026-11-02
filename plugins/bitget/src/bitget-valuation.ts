@@ -3,7 +3,6 @@ import {
   decimalCompare,
   decimalDivide,
   decimalMultiply,
-  decimalSubtract,
 } from "@/domain/decimal";
 import { createJsonDecoder } from "../../sdk/json";
 import type { AssetHolding, AssetSnapshot, BitgetAccountMode } from "@/server/ports";
@@ -14,9 +13,6 @@ import type { BitgetPosition } from "./bitget-positions";
 
 const { record, list, text, nonNegativeDecimal: decimal } = createJsonDecoder("Bitget");
 const positive = positiveDecimal;
-const BITGET_RECONCILIATION_MIN_TOLERANCE = "0.5";
-const BITGET_RECONCILIATION_RATE = "0.0001";
-const BITGET_RECONCILIATION_MAX_TOLERANCE = "5";
 
 function scopeLabel(scope: AssetHolding["sourceAccount"]): string {
   if (scope === "spot") return "现货";
@@ -128,7 +124,6 @@ export function bitgetCoverage(
 
 export function classicAccountCoverage(input: {
   overview: unknown;
-  snapshot: AssetSnapshot;
   positions: readonly BitgetPosition[];
 }): {
   total: AssetSnapshot["total"];
@@ -151,7 +146,6 @@ export function classicAccountCoverage(input: {
     );
   }
   const totalTypes = ["spot", "funding", "earn", "bots", "futures"] as const;
-  const reconciledTypes = ["spot", "funding", "earn", "bots"] as const;
   const excludedPositiveAccounts = [...balances.entries()]
     .filter(([accountType, amount]) =>
       !totalTypes.includes(accountType as typeof totalTypes[number]) &&
@@ -166,78 +160,11 @@ export function classicAccountCoverage(input: {
         nativeValue?.currency === "USDT" ? nativeValue.amount : "0"
       ),
   );
-  const partitionByAccount = new Map<string, string>([
-    ["spot", "spot"],
-    ["funding", "funding"],
-    ["trading-bot", "bots"],
-    ["earn-flexible", "earn"],
-    ["earn-locked", "earn"],
-    ["earn", "earn"],
-    ["staking", "earn"],
-  ]);
-  const detailedTotals = new Map<string, string>();
-  const incompletePartitions = new Set<string>();
-  for (const holding of input.snapshot.holdings) {
-    if (holding.sourceProduct === "cash-plus") continue;
-    const partition = holding.sourceAccount
-      ? partitionByAccount.get(holding.sourceAccount)
-      : undefined;
-    if (!partition) continue;
-    if (holding.sourceMarketValue === null) {
-      incompletePartitions.add(partition);
-      continue;
-    }
-    detailedTotals.set(
-      partition,
-      decimalAdd(
-        detailedTotals.get(partition) ?? "0",
-        holding.sourceMarketValue.amount,
-      ),
-    );
-  }
-  let netDifference = "0";
-  for (const partition of reconciledTypes) {
-    if (incompletePartitions.has(partition)) continue;
-    const difference = decimalSubtract(
-      balances.get(partition) ?? "0",
-      detailedTotals.get(partition) ?? "0",
-    );
-    netDifference = decimalAdd(netDifference, difference);
-  }
-  const absoluteDifference = decimalCompare(netDifference, "0") < 0
-    ? decimalSubtract("0", netDifference)
-    : netDifference;
-  const proportionalTolerance = decimalMultiply(
-    total,
-    BITGET_RECONCILIATION_RATE,
-  );
-  const cappedTolerance = decimalCompare(
-      proportionalTolerance,
-      BITGET_RECONCILIATION_MAX_TOLERANCE,
-    ) > 0
-    ? BITGET_RECONCILIATION_MAX_TOLERANCE
-    : proportionalTolerance;
-  const reconciliationTolerance = decimalCompare(
-      cappedTolerance,
-      BITGET_RECONCILIATION_MIN_TOLERANCE,
-    ) < 0
-    ? BITGET_RECONCILIATION_MIN_TOLERANCE
-    : cappedTolerance;
-  const unexplainedValue = decimalCompare(
-      absoluteDifference,
-      reconciliationTolerance,
-    ) > 0
-    ? { amount: absoluteDifference, currency: "USDT" }
-    : null;
-  const status =
-    unexplainedValue === null && excludedPositiveAccounts.length === 0
-      ? "complete"
-      : "partial";
   return {
     total: { amount: total, currency: "USDT" },
     coverage: bitgetCoverage("classic", input.positions, {
-        status,
-        unexplainedValue,
+        status: excludedPositiveAccounts.length === 0 ? "complete" : "partial",
+        unexplainedValue: null,
         excludedPositiveAccounts,
       }),
   };

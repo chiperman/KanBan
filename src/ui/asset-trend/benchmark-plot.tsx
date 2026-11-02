@@ -10,7 +10,7 @@ import {
 
 import { marketBenchmarkLabel, type MarketBenchmarkComparison } from "@/domain/market-benchmark";
 
-import { FundingEventLegend, FundingEventMarker } from "./funding-events";
+import { FundingEventLegend, FundingEventOverlay } from "./funding-events";
 import { CurveLine, TrendEffects } from "./plot-parts";
 import type {
   AssetTrendBenchmark,
@@ -20,7 +20,6 @@ import type {
 } from "./shared";
 import {
   assetLabel,
-  FUNDING_EVENT_Z_INDEX,
   percentage,
   TREND_CHART_ANIMATION_DURATION,
   TREND_CHART_AXIS_INSET,
@@ -85,9 +84,6 @@ export function renderBenchmarkPlot({
   const benchmarkLastValueIndex = benchmarkData.reduce(
     (lastIndex, point, index) => (point.assets === null ? lastIndex : index),
     -1,
-  );
-  const benchmarkEventPoints = benchmarkData.filter(
-    (point) => point.assets !== null && (point.events?.length ?? 0) > 0,
   );
   const benchmarkValues = benchmarkData.flatMap((point) => [
     ...(point.assets === null ? [] : [point.assets]),
@@ -158,21 +154,6 @@ export function renderBenchmarkPlot({
               )}
             />
             <ReferenceLine stroke="var(--line-2)" strokeWidth={1} y={0} />
-            {benchmarkEventPoints.map((point) => (
-              <ReferenceDot
-                key={`funding-event:${point.day}`}
-                shape={({ cx, cy }) => (
-                  <FundingEventMarker
-                    cx={cx}
-                    cy={cy}
-                    kinds={point.events!.map((event) => event.kind)}
-                  />
-                )}
-                x={point.day}
-                y={point.assets!}
-                zIndex={FUNDING_EVENT_Z_INDEX}
-              />
-            ))}
             {showDotFill ? (
               <Area
                 activeDot={false}
@@ -224,10 +205,13 @@ export function renderBenchmarkPlot({
                 y={benchmarkData[benchmarkLastValueIndex].assets!}
               />
             ) : null}
+            {benchmarkData.some((point) => point.events?.length) ? (
+              <FundingEventOverlay points={benchmarkData} dataKey="assets" type={lineType} />
+            ) : null}
           </ComposedChart>
         </ResponsiveContainer>
       </TrendChartSurface>
-      <FundingEventLegend points={benchmarkEventPoints} />
+      <FundingEventLegend points={benchmarkData} />
     </div>
   );
 }

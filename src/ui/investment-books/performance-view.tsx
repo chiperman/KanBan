@@ -61,6 +61,10 @@ export function BookPerformanceView({
   );
   const interval = useMemo(() => analyzeInterval(endDay), [analyzeInterval, endDay]);
   const fundingEvents = useMemo(() => buildBookFundingEvents(analysis), [analysis]);
+  const chartDays = useMemo(
+    () => !isInterval && firstValuationDay ? days.filter((day) => day >= firstValuationDay) : days,
+    [days, firstValuationDay, isInterval],
+  );
   const selectedPoints = useMemo(
     () => analysis.points.filter((point) => selectedDays.has(point.day)),
     [analysis.points, selectedDays],
@@ -75,9 +79,9 @@ export function BookPerformanceView({
   });
   const points = useMemo(
     () => buildBookChartPoints({
-      days, isInterval, startDay, analysis, analyzeInterval, curve, fundingEvents,
+      days: chartDays, isInterval, startDay, analysis, analyzeInterval, curve, fundingEvents,
     }),
-    [days, isInterval, startDay, analysis, analyzeInterval, curve, fundingEvents],
+    [chartDays, isInterval, startDay, analysis, analyzeInterval, curve, fundingEvents],
   );
   const metrics = [
     {
@@ -214,7 +218,7 @@ export function BookPerformanceView({
               }
             : null
         }
-        range={{ ...trendRange, currentDay, firstDay: analysis.firstTrendDay ?? undefined }}
+        range={{ ...trendRange, currentDay, firstDay: firstValuationDay ?? analysis.firstTrendDay ?? undefined }}
         metricControls={
           <header className="source-performance__chart-toolbar investment-books__chart-heading">
             <h2>
@@ -269,7 +273,7 @@ export function BookPerformanceView({
         analysis.firstRecordDay < firstValuationDay &&
         days[0] < firstValuationDay ? (
           <p className="trend-note">
-            {formatShanghaiFullDayLabel(firstValuationDay)} 前缺少完整资产估值。
+            资产估值始于 {formatShanghaiFullDayLabel(firstValuationDay)}，此前出入金见记账记录。
           </p>
         ) : null}
       </AssetTrendPanel>

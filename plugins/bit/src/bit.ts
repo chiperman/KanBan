@@ -406,28 +406,11 @@ async function refreshBitReferencePrices(
       )
       : holding,
   );
-  const total = decimalAdd(
-    ...holdings.flatMap((holding) =>
-      holding.sourceMarketValue?.currency === "USD"
-        ? [holding.sourceMarketValue.amount]
-        : [],
-    ),
-  );
-  const hasUnvalued = holdings.some(({ valuation }) => valuation.status === "unvalued");
-  const productReadFailed = snapshot.coverage?.products.some(
-    ({ freshness }) => freshness === "expired",
-  ) ?? false;
   return {
     ...snapshot,
-    total: { amount: total, currency: "USD" },
+    total: snapshot.total,
     holdings,
     syncedAt: observedAt,
-    ...(snapshot.coverage === undefined ? {} : {
-      coverage: {
-        ...snapshot.coverage,
-        status: hasUnvalued || productReadFailed ? "partial" : "unknown",
-      },
-    }),
   };
 }
 

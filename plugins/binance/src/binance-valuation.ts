@@ -1,4 +1,4 @@
-import { decimalAdd, decimalCompare, decimalDivide, decimalMultiply, decimalSubtract, decimalToFixed } from "@/domain/decimal";
+import { decimalAdd, decimalDivide, decimalMultiply, decimalToFixed } from "@/domain/decimal";
 import { createJsonDecoder } from "../../sdk/json";
 import type { BinancePosition } from "./binance-positions";
 import {
@@ -88,18 +88,6 @@ export function reconcileWallet(input: {
   const walletValue = decimalAdd(
     decimalToFixed(decimalMultiply(includedBtc, btcPrice), 8),
   );
-  const difference = decimalSubtract(walletValue, input.snapshot.total.amount);
-  const absoluteDifference = decimalCompare(difference, "0") < 0
-    ? decimalSubtract("0", difference)
-    : difference;
-  const proportionalTolerance = decimalMultiply(walletValue, "0.001");
-  const tolerance = decimalCompare(proportionalTolerance, "1") < 0
-    ? "1"
-    : proportionalTolerance;
-  const material = decimalCompare(absoluteDifference, tolerance) > 0;
-  const unexplained = material
-    ? decimalAdd(decimalToFixed(absoluteDifference, 2))
-    : null;
   return {
     ...input.snapshot,
     total: {
@@ -107,16 +95,12 @@ export function reconcileWallet(input: {
       currency: input.snapshot.total.currency,
     },
     coverage: {
-      status:
-        input.incomplete || material || excludedPositiveAccounts.length > 0
-          ? "partial"
-          : "complete",
+      status: input.incomplete || excludedPositiveAccounts.length > 0
+        ? "partial"
+        : "complete",
       totalIsAuthoritative: excludedPositiveAccounts.length === 0,
       products: input.products,
-      unexplainedValue:
-        unexplained === null
-          ? null
-          : { amount: unexplained, currency: input.snapshot.total.currency },
+      unexplainedValue: null,
       excludedPositiveAccounts,
     },
   };
@@ -160,6 +144,7 @@ export function valuePositions(input: {
   usdtUsdQuote: PriceQuote | null;
   usdtUsdSource?: string | null;
   coverage?: AssetSnapshot["coverage"];
+  authoritativeTotal?: AssetSnapshot["total"];
 }): AssetSnapshot {
   const eligible = eligibleUsdtSymbols(input.exchangeInfo);
   const equityQuotes = input.equityQuotes ?? new Map<string, BinanceEquityQuote>();
@@ -351,7 +336,7 @@ export function valuePositions(input: {
   });
   holdings.sort(compareSourceHoldingValue);
   return {
-    total: { amount: total, currency: "USDT" },
+    total: input.authoritativeTotal ?? { amount: total, currency: "USDT" },
     holdings,
     exchangeRates: [{
       baseCurrency: "USDT",

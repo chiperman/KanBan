@@ -239,6 +239,7 @@ test("OKX 行情刷新丢弃超过五分钟的过期报价，不产出估值", a
 
 test("OKX 行情刷新对全部持仓按 USDT 计价，非 USDT 计价对不参与取值", async () => {
   const previous = snapshot({
+    total: { amount: "999", currency: "USDT" },
     holdings: [
       okxPositionHolding({ asset: "SOL", quantity: "3", positionId: "sol-1" }),
       okxPositionHolding({ asset: "XYZ", quantity: "10", positionId: "xyz-1" }),
@@ -263,7 +264,7 @@ test("OKX 行情刷新对全部持仓按 USDT 计价，非 USDT 计价对不参�
     assert.deepEqual(item.sourceMarketValue?.currency, "USDT");
   }
   assert.deepEqual(next.holdings.map((item) => item.symbol), ["SOL", "XYZ"]);
-  assert.deepEqual(next.total, { amount: "470", currency: "USDT" });
+  assert.deepEqual(next.total, { amount: "999", currency: "USDT" });
   assert.deepEqual(next.exchangeRates[0], {
     baseCurrency: "USDT",
     quoteCurrency: "USD",
@@ -273,10 +274,11 @@ test("OKX 行情刷新对全部持仓按 USDT 计价，非 USDT 计价对不参�
   });
 });
 
-test("OKX 保留较新价格时按 USDT 重算来源市值与总额", async () => {
+test("OKX 保留较新价格时只更新持仓市值并保留来源总额", async () => {
   const olderPricedAt = observedNow(-120_000);
   const newerPricedAt = observedNow(-30_000);
   const previous = snapshot({
+    total: { amount: "36000", currency: "USDT" },
     holdings: [
       holding({
         symbol: "BTC",
@@ -310,7 +312,7 @@ test("OKX 保留较新价格时按 USDT 重算来源市值与总额", async () =
     priceSource: "OKX 现货 BTC-USDT",
     pricedAt: newerPricedAt,
   });
-  assert.deepEqual(next.total, { amount: "35000", currency: "USDT" });
+  assert.deepEqual(next.total, { amount: "36000", currency: "USDT" });
 });
 
 test("OKX 旧快照缺少来源资产分区时行情刷新失败并说明原因", async () => {
@@ -453,7 +455,7 @@ async function refreshBitgetPrices(input: {
 
 test("Bitget 行情刷新缺少报价时不低估持仓，也不把来源总额归零", async () => {
   const previous = snapshot({
-    total: { amount: "0", currency: "USDT" },
+    total: { amount: "1234", currency: "USDT" },
     holdings: [
       bitgetPositionHolding({ asset: "BTC", quantity: "0.5", positionId: "btc-1" }),
     ],
@@ -469,14 +471,15 @@ test("Bitget 行情刷新缺少报价时不低估持仓，也不把来源总额�
   assert.equal(btc.marketValue, null);
   assert.equal(btc.sourceMarketValue, null);
   assert.deepEqual(btc.valuation, {
-    status: "unvalued",
-    reason: "Bitget 没有可靠的 BTC USDT 估值",
+    status: "quote-unavailable",
+    reason: "Bitget 平台总额已包含，但没有可靠的 BTC USDT 持仓行情",
   });
-  assert.deepEqual(next.total, { amount: "0", currency: "USDT" });
+  assert.deepEqual(next.total, { amount: "1234", currency: "USDT" });
 });
 
 test("Bitget 行情刷新跳过过期与非数字的 ticker 时间戳", async () => {
   const previous = snapshot({
+    total: { amount: "2222", currency: "USDT" },
     holdings: [
       bitgetPositionHolding({ asset: "ETH", quantity: "2", positionId: "eth-1" }),
     ],
@@ -493,15 +496,15 @@ test("Bitget 行情刷新跳过过期与非数字的 ticker 时间戳", async ()
   const [eth] = next.holdings;
   assert.equal(eth.currentPrice, null);
   assert.deepEqual(eth.valuation, {
-    status: "unvalued",
-    reason: "Bitget 没有可靠的 ETH USDT 估值",
+    status: "quote-unavailable",
+    reason: "Bitget 平台总额已包含，但没有可靠的 ETH USDT 持仓行情",
   });
-  assert.deepEqual(next.total, { amount: "0", currency: "USDT" });
+  assert.deepEqual(next.total, { amount: "2222", currency: "USDT" });
 });
 
 test("Bitget 按快照计价货币给出 USD 行情，并保持计价单位一致", async () => {
   const previous = snapshot({
-    total: { amount: "0", currency: "USD" },
+    total: { amount: "32100", currency: "USD" },
     holdings: [
       holding({
         symbol: "BTC",
@@ -527,16 +530,16 @@ test("Bitget 按快照计价货币给出 USD 行情，并保持计价单位一�
   const [btc] = next.holdings;
   assert.deepEqual(btc.currentPrice, { amount: "60000", currency: "USD" });
   assert.deepEqual(btc.sourceMarketValue, { amount: "30000", currency: "USD" });
-  assert.deepEqual(next.total, { amount: "30000", currency: "USD" });
+  assert.deepEqual(next.total, { amount: "32100", currency: "USD" });
   assert.equal(btc.currency, "USD");
   assert.deepEqual(next.exchangeRates, []);
 });
 
-test("Bitget 保留较新价格时按持仓计价货币重算市值和总额", async () => {
+test("Bitget 保留较新价格时只更新持仓市值并保留来源总额", async () => {
   const olderPricedAt = observedNow(-120_000);
   const newerPricedAt = observedNow(-30_000);
   const previous = snapshot({
-    total: { amount: "0", currency: "USDT" },
+    total: { amount: "1900", currency: "USDT" },
     holdings: [
       holding({
         symbol: "SOL",
@@ -566,7 +569,7 @@ test("Bitget 保留较新价格时按持仓计价货币重算市值和总额", a
   assert.deepEqual(sol.currentPrice, { amount: "180", currency: "USDT" });
   assert.equal(sol.marketValue, "1800");
   assert.deepEqual(sol.sourceMarketValue, { amount: "1800", currency: "USDT" });
-  assert.deepEqual(next.total, { amount: "1800", currency: "USDT" });
+  assert.deepEqual(next.total, { amount: "1900", currency: "USDT" });
 });
 
 test("Bitget 旧快照缺少来源资产分区时行情刷新失败并说明原因", async () => {

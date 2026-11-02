@@ -1,6 +1,5 @@
 import type { AssetHolding, AssetSnapshotCoverage, EvmUnrecognizedToken } from "@/domain/assets";
 import type { AssetSourceSummary } from "@/domain/asset-sources";
-import { decimalAdd } from "@/domain/decimal";
 
 const EVM_TOKEN_ASSET_KEY_PATTERN =
   /^evm:(1|56):0x[0-9a-f]{40}$/;
@@ -133,13 +132,11 @@ export function effectiveEvmSnapshotCoverage(
         (holding) => holding.sourceProduct === product,
       ),
   );
-  const effectiveCoverage = products.length === coverage.products.length
+  const effectiveCoverage = products.length === coverage.products.length &&
+      coverage.unexplainedValue === null
     ? coverage
-    : { ...coverage, products };
-  if (
-    effectiveCoverage.unexplainedValue !== null ||
-    effectiveCoverage.excludedPositiveAccounts.length > 0
-  ) {
+    : { ...coverage, products, unexplainedValue: null };
+  if (effectiveCoverage.excludedPositiveAccounts.length > 0) {
     return effectiveCoverage;
   }
   if (effectiveCoverage.products.some(({ capability }) => capability === "unknown")) {
@@ -197,23 +194,7 @@ export function activeSourceHoldings(
 export function portfolioSourceTotal(
   source: SourceWithEvmTokenPreferences,
 ): AssetSourceSummary["snapshot"]["total"] {
-  if (
-    !source.kind.startsWith("evm-watch-") ||
-    (source.ignoredAssetKeys?.length ?? 0) === 0
-  ) {
-    return source.snapshot.total;
-  }
-  const amount = decimalAdd(
-    ...activeSourceHoldings(source).flatMap((holding) =>
-      holding.sourceMarketValue?.currency === source.snapshot.total.currency
-        ? [holding.sourceMarketValue.amount]
-        : [],
-    ),
-  );
-  return {
-    amount,
-    currency: source.snapshot.total.currency,
-  };
+  return source.snapshot.total;
 }
 
 export function normalizeIgnoredAssetKeys(value: unknown): string[] {

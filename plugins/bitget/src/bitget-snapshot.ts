@@ -216,7 +216,6 @@ export async function readFullSnapshot(input: {
   if (input.accountMode === "classic") {
     const accountCoverage = classicAccountCoverage({
       overview: allAccountBalance,
-      snapshot: provisionalSnapshot,
       positions,
     });
     provisionalSnapshot.total = accountCoverage.total;

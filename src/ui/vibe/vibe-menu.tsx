@@ -27,10 +27,12 @@ export function VibeMenu({
   items,
   label,
   triggerLabel = "更多操作",
+  triggerVariant = "text",
 }: {
   items: VibeMenuItem[];
   label: string;
   triggerLabel?: string;
+  triggerVariant?: "primary" | "outline" | "text";
 }) {
   const [open, setOpen] = useState(false);
   const menuId = useId();
@@ -109,7 +111,7 @@ export function VibeMenu({
         aria-label={label}
         className="vibe-menu__trigger"
         onClick={() => setOpen((current) => !current)}
-        variant="text"
+        variant={triggerVariant}
       >
         {triggerLabel}
       </VibeButton>

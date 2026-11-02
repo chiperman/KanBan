@@ -26,6 +26,7 @@ import { useAssetTrendRange } from "@/ui/asset-trend-panel";
 import { LongbridgeRealtimeNotice } from "@/ui/longbridge-realtime-notice";
 import { useLongbridgeRealtime } from "@/ui/use-longbridge-realtime";
 import { VibeButton } from "@/ui/vibe/vibe-button";
+import { VibeMenu } from "@/ui/vibe/vibe-menu";
 import { useTablePagination } from "@/ui/vibe/vibe-table-pagination";
 import { useWorkbenchDisplayPreferences } from "@/ui/workbench-display-preferences";
 import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
@@ -144,14 +145,21 @@ export function InvestmentBooksWorkspace({
         actions={
           <>
             <AssetGlobalRefreshControl />
-            <VibeButton type="button" variant="primary" onClick={() => setDialog("fund")}>
-              记录出入金
-            </VibeButton>
             {bookId === "a-shares" ? (
-              <VibeButton type="button" variant="outline" onClick={() => setDialog("asset")}>
-                更新A股资产
+              <VibeMenu
+                label="A股记账操作"
+                triggerLabel="记账"
+                triggerVariant="primary"
+                items={[
+                  { key: "fund", label: "记录出入金", onSelect: () => setDialog("fund") },
+                  { key: "asset", label: "更新A股资产", onSelect: () => setDialog("asset") },
+                ]}
+              />
+            ) : (
+              <VibeButton type="button" variant="primary" onClick={() => setDialog("fund")}>
+                记录出入金
               </VibeButton>
-            ) : null}
+            )}
           </>
         }
       />

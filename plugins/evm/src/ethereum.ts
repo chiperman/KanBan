@@ -1225,7 +1225,6 @@ async function readFullSnapshot(input: {
     input.config,
     [...unreadableTokens, ...ignoredTokens, ...protocolCandidates],
   );
-  if (matchedProtocolAdapters.length === 0) return snapshot;
   const hasUnvalued = snapshot.holdings.some(
     ({ valuation }) => valuation.status === "unvalued",
   ) || (snapshot.unrecognizedEvmTokens ?? []).some(

@@ -97,14 +97,16 @@ function valuationSummary(
     };
   }
 
-  const reasons = unvaluedReasons(source);
+  const coverage = source.snapshot.coverage;
+  const reasons = coverage?.totalIsAuthoritative === true
+    ? []
+    : unvaluedReasons(source);
   const valuation = buildTotalValuation(
     [source],
     "USD",
     "source",
     rateSources,
   );
-  const coverage = source.snapshot.coverage;
   const coverageReasons = coverage?.products.flatMap(({ message }) =>
     message ? [message] : []
   ) ?? [];
@@ -133,18 +135,29 @@ function valuationSummary(
       tone: "warning",
     };
   }
+  if (coverage?.status === "partial" && coverage.totalIsAuthoritative === true) {
+    return {
+      label: "来源总额可用，明细范围有限",
+      reasons: [],
+      tone: "success",
+    };
+  }
   if (coverage?.status === "partial") {
     return {
-      label: "总额估值完整，持仓明细不全",
-      reasons: ["持仓明细覆盖不足", ...coverageReasons],
+      label: "来源总额覆盖不完整",
+      reasons: ["来源覆盖不完整", ...coverageReasons],
       tone: "warning",
     };
   }
   if (coverage?.status === "unknown") {
     return {
-      label: "总额估值完整，覆盖待确认",
-      reasons: ["尚未确认来源总额覆盖", ...coverageReasons],
-      tone: "warning",
+      label: coverage.totalIsAuthoritative === true
+        ? "来源总额可用，明细范围待确认"
+        : "来源总额待确认",
+      reasons: coverage.totalIsAuthoritative === true
+        ? []
+        : ["尚未确认来源总额覆盖", ...coverageReasons],
+      tone: coverage.totalIsAuthoritative === true ? "success" : "warning",
     };
   }
   return { label: "估值完整", reasons: [], tone: "success" };

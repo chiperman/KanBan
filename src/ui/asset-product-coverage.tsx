@@ -1,4 +1,3 @@
-import { formatAssetAmount } from "@/ui/asset-price-display";
 import { useId, useState } from "react";
 
 import type {
@@ -7,7 +6,6 @@ import type {
   AssetSnapshotCoverage,
 } from "@/server/ports";
 import { assetHoldingDisplayName } from "@/ui/asset-holding-display";
-import { AssetFinancialValue } from "@/ui/asset-financial-value";
 import { VibeStatusTag } from "@/ui/vibe/vibe-data-instrument";
 
 const ASSET_PRODUCT_LABELS: Record<string, string> = {
@@ -65,10 +63,6 @@ const CAPABILITY_ORDER: readonly AssetProductCoverage["capability"][] = [
   "unsupported",
   "unknown",
 ];
-
-function money(value: string): string {
-  return formatAssetAmount(value);
-}
 
 export function assetHoldingKey(holding: AssetHolding): string {
   return [
@@ -128,15 +122,17 @@ export function AssetProductCoverage({
     ({ capability, freshness }) =>
       capability === "aggregate-only" && freshness === "current",
   ).length ?? 0;
-  const label = coverage?.status === "partial"
-    ? coverage.totalIsAuthoritative
-      ? "持仓明细待对账"
-      : "当前总额不完整"
-    : coverage?.status === "unknown"
-      ? "当前总额未验证"
-      : aggregateOnlyCount > 0
-        ? "当前总额完整，部分产品仅汇总"
-        : null;
+  const label = coverage?.totalIsAuthoritative === true && coverage.status === "unknown"
+    ? "总额已确认，明细范围待确认"
+    : coverage?.status === "partial"
+      ? coverage.totalIsAuthoritative
+        ? "总额已确认，明细部分可见"
+        : "当前总额不完整"
+      : coverage?.status === "unknown"
+        ? "当前总额未验证"
+        : aggregateOnlyCount > 0
+          ? "当前总额完整，部分产品仅汇总"
+          : null;
   const expiredProductCount = coverage?.products.filter(
     ({ freshness }) => freshness === "expired",
   ).length ?? 0;
@@ -170,19 +166,11 @@ export function AssetProductCoverage({
           data-testid={`${sourceKind}-coverage-status`}
           tone={coverage?.status === "partial" && !coverage.totalIsAuthoritative
             ? "error"
-            : coverage?.status === "complete" && !coverage.unexplainedValue && coverage.excludedPositiveAccounts.length === 0
+            : coverage?.status === "complete" && coverage.excludedPositiveAccounts.length === 0
               ? "success"
               : "warning"}
         >
           {label}
-          {coverage?.unexplainedValue ? (
-            <>
-              {`，${coverage.totalIsAuthoritative ? "明细差额" : "未解释"} `}
-              <AssetFinancialValue unit={coverage.unexplainedValue.currency}>
-                {money(coverage.unexplainedValue.amount)}
-              </AssetFinancialValue>
-            </>
-          ) : ""}
           {coverage && coverage.excludedPositiveAccounts.length > 0
             ? `，未纳入 ${coverage.excludedPositiveAccounts.join("、")}`
             : ""}

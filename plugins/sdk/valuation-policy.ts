@@ -1,4 +1,4 @@
-import { decimalAdd, decimalCompare, decimalMultiply } from "@/domain/decimal";
+import { decimalCompare, decimalMultiply } from "@/domain/decimal";
 import type {
   AssetHolding,
   AssetSnapshot,
@@ -66,7 +66,6 @@ export function preserveNewerPrices(
   candidate: AssetSnapshot,
   currencies: {
     holding: (source: AssetHolding) => string;
-    total: string;
   },
 ): AssetSnapshot {
   const previousByPosition = new Map(
@@ -97,18 +96,9 @@ export function preserveNewerPrices(
     }
     return holding;
   });
-  const total = holdings.reduce(
-    (sum, holding) =>
-      holding.sourceMarketValue
-        ? decimalAdd(sum, holding.sourceMarketValue.amount)
-        : sum,
-    "0",
-  );
   return {
     ...candidate,
-    total: candidate.coverage?.status === "complete"
-      ? candidate.total
-      : { amount: total, currency: currencies.total },
+    total: candidate.total,
     holdings: holdings.sort(compareSourceHoldingValue),
   };
 }

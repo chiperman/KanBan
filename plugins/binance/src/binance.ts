@@ -494,11 +494,10 @@ export class ProductionBinanceSourceRefresher
         usdtUsdQuote: usdtUsd.quote,
         usdtUsdSource: usdtUsd.source,
         coverage: source.snapshot.coverage,
+        authoritativeTotal: source.snapshot.total,
       });
       return {
-        snapshot: source.snapshot.coverage?.totalIsAuthoritative
-          ? { ...snapshot, total: source.snapshot.total }
-          : snapshot,
+        snapshot,
       };
     }
     return {

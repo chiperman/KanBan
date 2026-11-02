@@ -21,7 +21,7 @@ export { validateOkxReadOnlyPermission } from "./okx-identity";
 export { OkxClient } from "./okx-client";
 export type { OkxFetch } from "./okx-client";
 
-const OKX_QUOTE_CURRENCIES = { holding: () => "USDT", total: "USDT" } as const;
+const OKX_QUOTE_CURRENCIES = { holding: () => "USDT" } as const;
 
 export class ProductionOkxReadOnly implements OkxReadOnly {
   constructor(

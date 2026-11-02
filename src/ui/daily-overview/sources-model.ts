@@ -31,11 +31,19 @@ function sourceHealth(source: OverviewSource): {
   }
   const sync = sourceSyncStatus(source);
   if (sync !== null) return sync;
+  if (source.snapshot.coverage?.totalIsAuthoritative === true) {
+    if (source.snapshot.coverage.status === "partial") {
+      return { label: "来源总额已确认，明细范围有限", tone: "success" };
+    }
+    if (source.snapshot.coverage.status === "unknown") {
+      return { label: "来源总额已确认，明细范围待确认", tone: "success" };
+    }
+  }
   if (source.snapshot.coverage?.status === "unknown") {
-    return { label: "来源总额可读，覆盖待确认", tone: "warning" };
+    return { label: "来源总额待确认", tone: "warning" };
   }
   if (source.snapshot.coverage?.status === "partial") {
-    return { label: "来源总额可读，明细覆盖不完整", tone: "warning" };
+    return { label: "来源总额覆盖不完整", tone: "warning" };
   }
   if (
     source.snapshot.coverage?.products.some(
@@ -44,7 +52,7 @@ function sourceHealth(source: OverviewSource): {
   ) {
     return { label: "来源账户/平台总额，部分仅汇总", tone: "success" };
   }
-  return { label: "来源账户/平台总额，当前", tone: "success" };
+  return { label: "来源总额已确认", tone: "success" };
 }
 
 function sourceTotalInCurrency(
@@ -106,13 +114,17 @@ export function buildOverviewSources({
       const health = sourceHealth(source);
       const valuation = buildTotalValuation([source], currency, "source", recordedSources);
       const sourceAmount = sourceTotalInCurrency(source, currency, longbridgeRates);
+      const currentComparable =
+        source.lifecycle !== "disconnected" &&
+        sourceSyncStatus(source) === null &&
+        !valuation.incomplete;
       return {
         source,
         amount: sourceAmount,
         health,
         comparison: sourceComparison(
           sourceAmount,
-          health.tone === "success" && !valuation.incomplete,
+          currentComparable,
           priorObservation,
           priorSourcesById.get(source.id),
           currency,

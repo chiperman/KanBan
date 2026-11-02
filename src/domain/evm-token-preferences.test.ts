@@ -69,7 +69,7 @@ function source(): AssetSourceSummary {
   };
 }
 
-test("EVM 观察钱包可忽略已估值 ERC-20 和原生币，并从总额排除", () => {
+test("EVM 观察钱包可忽略已估值 ERC-20 和原生币，但仍保留来源总额", () => {
   const initial = source();
   const token = "evm:1:0x6051c1354ccc51b4d561e43b02735deae64768b8";
   const tokenIgnored = updateEvmTokenPreferences(initial, [token], "ignored");
@@ -89,7 +89,7 @@ test("EVM 观察钱包可忽略已估值 ERC-20 和原生币，并从总额排�
       ...initial,
       ignoredAssetKeys: nativeIgnored.ignoredAssetKeys,
     }),
-    { amount: "0", currency: "USD" },
+    { amount: "5519", currency: "USD" },
   );
 });
 

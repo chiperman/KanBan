@@ -2,7 +2,6 @@ import {
   decimalAdd,
   decimalCompare,
   decimalMultiply,
-  decimalSubtract,
 } from "@/domain/decimal";
 import { createJsonDecoder } from "../../sdk/json";
 import type { AssetHolding, AssetSnapshot } from "@/server/ports";
@@ -12,10 +11,7 @@ import {
   compareSourceHoldingValue,
   effectiveUsdtUsdQuote,
 } from "../../sdk/valuation-policy";
-import {
-  first,
-  OKX_EQUITY_ROUNDING_TOLERANCE,
-} from "./okx-json";
+import { first } from "./okx-json";
 import type { OkxPosition } from "./okx-positions";
 
 const { record, list, text, nonNegativeDecimal: decimal } = createJsonDecoder("OKX");
@@ -41,44 +37,20 @@ export function accountValuation(value: unknown): {
     throw new Error("OKX asset-valuation ts 格式无效");
   }
   const details = record(row.details, "OKX asset-valuation details");
-  const trading = decimal(details.trading, "details.trading");
-  const funding = decimal(details.funding, "details.funding");
-  const earn = decimal(details.earn, "details.earn");
-  const classic = decimal(details.classic, "details.classic");
-  const partitionTotal = decimalAdd(trading, funding, earn, classic);
-  const difference = decimalSubtract(total, partitionTotal);
-  const absoluteDifference = decimalCompare(difference, "0") < 0
-    ? decimalSubtract("0", difference)
-    : difference;
-  const hasResidual = decimalCompare(
-    absoluteDifference,
-    OKX_EQUITY_ROUNDING_TOLERANCE,
-  ) > 0;
-  const excludedPositiveAccounts = positive(classic)
-    ? ["Classic account"]
-    : [];
+  decimal(details.trading, "details.trading");
+  decimal(details.funding, "details.funding");
+  decimal(details.earn, "details.earn");
+  decimal(details.classic, "details.classic");
   return {
     total,
-    coverage: okxCoverage({
-      unexplainedValue: hasResidual
-        ? { amount: absoluteDifference, currency: "USDT" }
-        : null,
-      excludedPositiveAccounts,
-    }),
+    coverage: okxCoverage(),
   };
 }
 
-function okxCoverage(input: {
-  unexplainedValue: NonNullable<
-    AssetSnapshot["coverage"]
-  >["unexplainedValue"];
-  excludedPositiveAccounts: string[];
-}): NonNullable<AssetSnapshot["coverage"]> {
-  const complete =
-    input.unexplainedValue === null &&
-    input.excludedPositiveAccounts.length === 0;
+function okxCoverage(): NonNullable<AssetSnapshot["coverage"]> {
   return {
-    status: complete ? "complete" : "partial",
+    status: "complete",
+    totalIsAuthoritative: true,
     products: [
       {
         product: "spot",
@@ -117,8 +89,8 @@ function okxCoverage(input: {
         message: null,
       },
     ],
-    unexplainedValue: input.unexplainedValue,
-    excludedPositiveAccounts: input.excludedPositiveAccounts,
+    unexplainedValue: null,
+    excludedPositiveAccounts: [],
   };
 }
 

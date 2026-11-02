@@ -83,9 +83,9 @@ test("实时行情只覆盖内存快照并重新计算市值和浮动盈亏", ()
   assert.equal(holding.marketValue, "900");
   assert.equal(holding.platformProfit, "300");
   assert.equal(holding.changePercent, "7.1428571428571428");
-  assert.equal(updated.snapshot.total.amount, "1100");
+  assert.equal(updated.snapshot.total.amount, "1000");
   assert.equal(updated.snapshot.longbridgeValuation?.reportedTotal.amount, "1000");
-  assert.equal(updated.snapshot.longbridgeValuation?.basis, "latest-quotes");
+  assert.equal(updated.snapshot.longbridgeValuation?.basis, "reported");
   assert.equal(holding.quoteEvidence?.freshness, "current");
 });
 
