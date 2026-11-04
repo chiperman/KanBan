@@ -16,8 +16,8 @@ function record(day: string, currency: ManualAssetRecord["currency"]): ManualAss
   };
 }
 
-for (const currency of ["CNY", "USD", "HKD"] as const) {
-  test(`历史多数币种为 ${currency} 时优先于最新记录的其他币种`, () => {
+test("历史多数币种优先于最新记录的其他币种", () => {
+  for (const currency of ["CNY", "USD", "HKD"] as const) {
     assert.equal(
       defaultManualAssetRecordCurrency([
         record("2026-08-05", currency),
@@ -26,8 +26,8 @@ for (const currency of ["CNY", "USD", "HKD"] as const) {
       ]),
       currency,
     );
-  });
-}
+  }
+});
 
 test("次数相同时取记录日期最新的币种，不依赖输入顺序或录入时间", () => {
   assert.equal(defaultManualAssetRecordCurrency([

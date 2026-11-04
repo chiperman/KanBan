@@ -44,17 +44,17 @@ test("两个指数使用 serve 的未复权日 K，不读取 SDK OAuth 或账户
   assert.equal(f.calls.length, 2);
 });
 
-for (const [period, rpcPeriod, count] of [
-  ["day", "day", 120], ["week", "week", 104], ["month", "month", 120], ["year", "year", 30], ["min-1", "1m", 240],
-] as const) {
-  test("持仓 " + period + " 保留周期、数量和 OHLCV 口径", async () => {
+test("持仓周期统一映射 RPC 周期、数量和 OHLCV 口径", async () => {
+  for (const [period, rpcPeriod, count] of [
+    ["day", "day", 120], ["week", "week", 104], ["month", "month", 120], ["year", "year", 30], ["min-1", "1m", 240],
+  ] as const) {
     const f = fixture();
     const result = await new ServeLongbridgeHoldingCandlestickReader(f.data).readCandlesticks({ source, symbol: "AAPL.US", period: period as LongbridgeHoldingCandlestickPeriod });
     assert.deepEqual(result, [{ time: "2026-09-28T04:00:00.000Z", open: "100", high: "110", low: "90", close: "105", volume: "1000", turnover: "105000" }]);
     assert.deepEqual(f.calls[0].params, { symbol: "AAPL.US", period: rpcPeriod, count, adjust: "none" });
     assert.equal(f.closes(), 1);
-  });
-}
+  }
+});
 
 test("近五日读取 1000 根五分钟 K，按交易所时区保留五天并排序", async () => {
   const rows = [21, 22, 23, 24, 25, 26].flatMap(day => [
@@ -87,17 +87,17 @@ test("错误来源引用与不支持的标的不启动行情读取", async () =>
   assert.equal(f.calls.length, 0);
 });
 
-for (const [label, result] of [
-  ["缺少列表", {}], ["盘后", [{ ...candle, trade_session: "Post" }]],
-  ["时间", [{ ...candle, timestamp: "invalid" }]], ["价格", [{ ...candle, close: "NaN" }]],
-  ["成交量", [{ ...candle, volume: Number.MAX_SAFE_INTEGER + 1 }]],
-] as const) {
-  test("拒绝无效行情 " + label + "，并关闭 serve", async () => {
+test("拒绝无效行情并关闭 serve", async () => {
+  for (const [_label, result] of [
+    ["缺少列表", {}], ["盘后", [{ ...candle, trade_session: "Post" }]],
+    ["时间", [{ ...candle, timestamp: "invalid" }]], ["价格", [{ ...candle, close: "NaN" }]],
+    ["成交量", [{ ...candle, volume: Number.MAX_SAFE_INTEGER + 1 }]],
+  ] as const) {
     const f = fixture(result);
     await assert.rejects(new ServeLongbridgeBenchmarkCandlestickReader(f.data).readDailyCandlesticks({ symbol: ".SPX.US", count: 1000 }), /列表|常规盘|格式/);
     assert.equal(f.closes(), 1);
-  });
-}
+  }
+});
 
 test("serve 异常和日结空数据不伪造结果，关闭本次客户端", async () => {
   const f = fixture(undefined, new Error("CLI expired"));

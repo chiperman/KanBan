@@ -158,8 +158,8 @@ test("有效校验和不能绕过来源类型校验，未知来源不被静默�
   }
 });
 
-for (const version of [1, 2, 3, 4, 5, 6]) {
-  test(`旧备份 v${version} 只补默认空集合，不推算缺失业务记录`, () => {
+test("旧备份只补默认空集合，不推算缺失业务记录", () => {
+  for (const version of [1, 2, 3, 4, 5, 6]) {
     const data = payload();
     if (version < 7) delete data.sourceInvestmentRecords;
     if (version < 6) delete data.sourceInvestmentHistories;
@@ -183,8 +183,8 @@ for (const version of [1, 2, 3, 4, 5, 6]) {
     assert.deepEqual(restored.state.sourceInvestmentRecords, []);
     assert.deepEqual(restored.state.investmentCashflows, []);
     assert.deepEqual(restored.state.formalDailySettlements, []);
-  });
-}
+  }
+});
 
 test("备份编解码拒绝深层和变体凭证字段，包括有效校验和的文档", () => {
   for (const field of ["API_Key", "access-token", "Credential_Reference", "nestedSecret"]) {

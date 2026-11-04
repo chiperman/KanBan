@@ -16,13 +16,7 @@ import type {
 } from "@/server/ports";
 
 export class FakeBinanceReadOnly implements BinanceReadOnly {
-  private scenario = "valid";
-
   constructor(private readonly prices: Prices) {}
-
-  configure(scenario: string): void {
-    this.scenario = scenario;
-  }
 
   async preview(input: {
     apiKey: string;
@@ -30,13 +24,9 @@ export class FakeBinanceReadOnly implements BinanceReadOnly {
     observedAt: string;
   }): Promise<BinanceAuthorizationResult> {
     const permissions = validateBinanceReadOnlyPermissions(
-      binancePermissions(this.scenario),
+      BINANCE_READ_ONLY_PERMISSIONS,
     );
-    const fixture = binanceFixture(
-      this.scenario === "missing-price",
-      false,
-      this.scenario === "dust",
-    );
+    const fixture = binanceFixture();
     return {
       credentials: JSON.stringify({
         apiKey: input.apiKey,
@@ -80,32 +70,13 @@ export class FakeBinanceReadOnly implements BinanceReadOnly {
   }
 }
 import { mapBinanceSnapshot, validateBinanceReadOnlyPermissions } from "@/server/asset-sources/binance";
-import { binanceFixture, binancePermissions } from "@/server/testing/binance-fixtures";
+import { binanceFixture, BINANCE_READ_ONLY_PERMISSIONS } from "@/server/testing/binance-fixtures";
 import { validateOkxReadOnlyPermission } from "@/server/asset-sources/okx";
 import { okxFixtureSnapshot } from "@/server/testing/okx-fixtures";
 import { validateBitgetReadOnlyPermission } from "@/server/asset-sources/bitget";
 import { bitgetFixtureSnapshot } from "@/server/testing/bitget-fixtures";
 
 export class FakeOkxReadOnly implements OkxReadOnly {
-  private scenario = "valid";
-
-  configure(scenario: string): void {
-    this.scenario = scenario;
-  }
-
-  private permission(): string {
-    const permissions: Record<string, string> = {
-      valid: "read_only",
-      trade: "trade",
-      withdraw: "withdraw",
-      "read-and-trade": "read_only,trade",
-      "unknown-permission": "read_only,new_permission",
-      "missing-read": "",
-      "commit-failure": "read_only",
-    };
-    return permissions[this.scenario] ?? "read_only";
-  }
-
   preview(input: {
     apiKey: string;
     apiSecret: string;
@@ -113,8 +84,8 @@ export class FakeOkxReadOnly implements OkxReadOnly {
     region?: OkxRegion;
     observedAt: string;
   }): Promise<OkxAuthorizationResult> {
-    const permissions = validateOkxReadOnlyPermission(this.permission());
-    const uid = this.scenario === "identity-changed" ? "880002" : "880001";
+    const permissions = validateOkxReadOnlyPermission("read_only");
+    const uid = "880001";
     return Promise.resolve({
       credentials: JSON.stringify({
         apiKey: input.apiKey,
@@ -144,26 +115,6 @@ export class FakeOkxReadOnly implements OkxReadOnly {
 }
 
 export class FakeBitgetReadOnly implements BitgetReadOnly {
-  private scenario = "valid";
-
-  configure(scenario: string): void {
-    this.scenario = scenario;
-  }
-
-  private authorities(): unknown {
-    const values: Record<string, unknown> = {
-      valid: ["stor", "wtor"],
-      trade: ["stor", "stow"],
-      transfer: ["stor", "wtow"],
-      withdraw: ["stor", "wow"],
-      "read-and-write": ["stor", "stow", "wtow"],
-      "unknown-permission": ["stor", "future_new_scope"],
-      "missing-read": [],
-      "commit-failure": ["stor", "wtor"],
-    };
-    return values[this.scenario] ?? ["stor", "wtor"];
-  }
-
   preview(input: {
     apiKey: string;
     apiSecret: string;
@@ -171,8 +122,8 @@ export class FakeBitgetReadOnly implements BitgetReadOnly {
     accountMode: BitgetAccountMode;
     observedAt: string;
   }): Promise<BitgetAuthorizationResult> {
-    const permissions = validateBitgetReadOnlyPermission(this.authorities());
-    const userId = this.scenario === "identity-changed" ? "770002" : "770001";
+    const permissions = validateBitgetReadOnlyPermission(["stor", "wtor"]);
+    const userId = "770001";
     return Promise.resolve({
       credentials: JSON.stringify({
         apiKey: input.apiKey,
@@ -206,14 +157,7 @@ export class FakeBitgetReadOnly implements BitgetReadOnly {
 }
 
 export class FakeBitReadOnly implements BitReadOnly {
-  private scenario = "valid";
-
-  configure(scenario: string): void {
-    this.scenario = scenario;
-  }
-
   private snapshot(observedAt: string) {
-    const dcpOrdersAvailable = this.scenario !== "dcp-orders-failure";
     return {
       total: { amount: "160", currency: "USD" },
       holdings: [
@@ -281,7 +225,7 @@ export class FakeBitReadOnly implements BitReadOnly {
           platformProfit: null,
           changePercent: null,
         },
-        ...(dcpOrdersAvailable ? [{
+        {
           symbol: "USDT",
           name: "DCP #7125082312731329000 · BTC-USDT · 进行中 · 2024-08-09 到期",
           sourceAsset: "bit:dcp:order:7125082312731329000",
@@ -302,7 +246,7 @@ export class FakeBitReadOnly implements BitReadOnly {
           costPrice: null,
           platformProfit: null,
           changePercent: null,
-        }] : []),
+        },
       ],
       exchangeRates: [],
       syncedAt: observedAt,
@@ -322,19 +266,12 @@ export class FakeBitReadOnly implements BitReadOnly {
             freshness: "current" as const,
             message: "逐币余额；total_balance_amount 未作为总资产口径",
           },
-          dcpOrdersAvailable
-            ? {
-              product: "dcp",
-              capability: "detailed" as const,
-              freshness: "current" as const,
-              message: "已读取 1 个活跃订单；总额仍以平台 USD 总头寸为准",
-            }
-            : {
-              product: "dcp",
-              capability: "aggregate-only" as const,
-              freshness: "current" as const,
-              message: "订单明细本次未读取；保留 USD 总头寸",
-            },
+          {
+            product: "dcp",
+            capability: "detailed" as const,
+            freshness: "current" as const,
+            message: "已读取 1 个活跃订单；总额仍以平台 USD 总头寸为准",
+          },
         ],
         unexplainedValue: null,
         excludedPositiveAccounts: [],
@@ -348,13 +285,10 @@ export class FakeBitReadOnly implements BitReadOnly {
     userId: string;
     observedAt: string;
   }): Promise<BitAuthorizationResult> {
-    if (this.scenario === "failure") {
-      return Promise.reject(new Error("BIT Wallet 暂时不可用"));
-    }
     if (!/^\d+$/.test(input.userId)) {
       return Promise.reject(new Error("BIT 用户 ID 格式无效"));
     }
-    const userId = this.scenario === "identity-changed" ? "609999" : input.userId;
+    const userId = input.userId;
     return Promise.resolve({
       credentials: JSON.stringify({
         apiKey: input.apiKey,
@@ -384,14 +318,7 @@ export class FakeBitReadOnly implements BitReadOnly {
 }
 
 export class FakeEvmWatchWallet implements EvmWatchWalletReadOnly {
-  private scenario = "valid";
-
-  configure(scenario: string): void {
-    this.scenario = scenario;
-  }
-
   async preview(input: { chain: EvmChain; addresses: string[]; observedAt: string }): Promise<EvmWatchAuthorizationResult> {
-    if (this.scenario === "failure") throw new Error("Ethereum RPC 暂时不可用");
     const addresses = input.addresses.map((address) => address.trim().toLowerCase()).filter(Boolean);
     if (addresses.length === 0 || addresses.some((address) => !/^0x[0-9a-f]{40}$/.test(address))) {
       throw new Error("Ethereum 地址格式无效");
@@ -400,7 +327,7 @@ export class FakeEvmWatchWallet implements EvmWatchWalletReadOnly {
     const config = input.chain === "ethereum"
       ? { chainId: "1", label: "Ethereum", symbol: "ETH", standard: "ERC-20", nativePrice: "2000", nativeValue: "5000", total: "5519" }
       : { chainId: "56", label: "BNB Smart Chain", symbol: "BNB", standard: "BEP-20", nativePrice: "600", nativeValue: "1500", total: "2019" };
-    const holdings: EvmWatchAuthorizationResult["snapshot"]["holdings"] = this.scenario === "empty" ? [] : [
+    const holdings: EvmWatchAuthorizationResult["snapshot"]["holdings"] = [
       {
         symbol: config.symbol,
         name: config.label,
@@ -462,132 +389,6 @@ export class FakeEvmWatchWallet implements EvmWatchWalletReadOnly {
         changePercent: null,
       },
     ];
-    const hasLidoWithdrawal = this.scenario === "lido-withdrawal" && config.chainId === "1";
-    const hasListaWithdrawal =
-      this.scenario === "lista-slisbnb-withdrawal" && config.chainId === "56";
-    if (hasLidoWithdrawal) {
-      const unknownIndex = holdings.findIndex(({ symbol }) => symbol === "UNKNOWN");
-      if (unknownIndex >= 0) holdings.splice(unknownIndex, 1);
-      holdings.push(
-        {
-          symbol: "ETH",
-          name: "Lido 提现申请 #18",
-          sourceAsset: "evm:1:lido-withdrawal:18",
-          sourceAccount: "wallet",
-          sourceProduct: "lido-withdrawal-request",
-          providerPositionId: "18",
-          providerPositionState: "排队中",
-          economicAssetKey: "lido-withdrawal:18",
-          positionState: "redeeming",
-          quantity: "1.5",
-          currency: "USD",
-          assetClass: "crypto",
-          currentPrice: { amount: "2000", currency: "USD" },
-          marketValue: "3000",
-          sourceMarketValue: { amount: "3000", currency: "USD" },
-          valuation: { status: "valued", priceSource: "CoinGecko Ethereum/USD 参考价格", pricedAt: input.observedAt },
-          costPrice: null,
-          platformProfit: null,
-          changePercent: null,
-        },
-        {
-          symbol: "ETH",
-          name: "Lido 提现申请 #27",
-          sourceAsset: "evm:1:lido-withdrawal:27",
-          sourceAccount: "wallet",
-          sourceProduct: "lido-withdrawal-request",
-          providerPositionId: "27",
-          providerPositionState: "可领取",
-          economicAssetKey: "lido-withdrawal:27",
-          positionState: "redeeming",
-          quantity: "0.49",
-          currency: "USD",
-          assetClass: "crypto",
-          currentPrice: { amount: "2000", currency: "USD" },
-          marketValue: "980",
-          sourceMarketValue: { amount: "980", currency: "USD" },
-          valuation: { status: "valued", priceSource: "CoinGecko Ethereum/USD 参考价格", pricedAt: input.observedAt },
-          costPrice: null,
-          platformProfit: null,
-          changePercent: null,
-        },
-      );
-    }
-    if (hasListaWithdrawal) {
-      const unknownIndex = holdings.findIndex(({ symbol }) => symbol === "UNKNOWN");
-      if (unknownIndex >= 0) {
-        holdings.splice(unknownIndex, 1, {
-          symbol: "slisBNB",
-          name: "slisBNB · BNB Smart Chain BEP-20",
-          sourceAsset: "evm:56:0xdddddddddddddddddddddddddddddddddddddddd",
-          quantity: "2",
-          currency: "USD",
-          assetClass: "crypto",
-          currentPrice: { amount: "620", currency: "USD" },
-          marketValue: "1240",
-          sourceMarketValue: { amount: "1240", currency: "USD" },
-          valuation: { status: "valued", priceSource: "CoinGecko BNB Smart Chain slisBNB/USD 参考价格", pricedAt: input.observedAt },
-          costPrice: null,
-          platformProfit: null,
-          changePercent: null,
-        });
-      }
-      holdings.push(
-        {
-          symbol: "BNB",
-          name: "Lista slisBNB 提现申请 #101",
-          sourceAsset: "evm:56:lista-slisbnb-withdrawal:101",
-          sourceAccount: "wallet",
-          sourceProduct: "lista-slisbnb-withdrawal-request",
-          providerPositionId: "101",
-          providerPositionState: "锁仓中",
-          providerPositionAvailableOn: "2026-08-27",
-          economicAssetKey: "lista-slisbnb-withdrawal:101",
-          positionState: "redeeming",
-          quantity: "1.2",
-          currency: "USD",
-          assetClass: "crypto",
-          currentPrice: { amount: "600", currency: "USD" },
-          marketValue: "720",
-          sourceMarketValue: { amount: "720", currency: "USD" },
-          valuation: { status: "valued", priceSource: "CoinGecko BNB Smart Chain/USD 参考价格", pricedAt: input.observedAt },
-          costPrice: null,
-          platformProfit: null,
-          changePercent: null,
-        },
-        {
-          symbol: "BNB",
-          name: "Lista slisBNB 提现申请 #102",
-          sourceAsset: "evm:56:lista-slisbnb-withdrawal:102",
-          sourceAccount: "wallet",
-          sourceProduct: "lista-slisbnb-withdrawal-request",
-          providerPositionId: "102",
-          providerPositionState: "可领取",
-          economicAssetKey: "lista-slisbnb-withdrawal:102",
-          positionState: "redeeming",
-          quantity: "2.45",
-          currency: "USD",
-          assetClass: "crypto",
-          currentPrice: { amount: "600", currency: "USD" },
-          marketValue: "1470",
-          sourceMarketValue: { amount: "1470", currency: "USD" },
-          valuation: { status: "valued", priceSource: "CoinGecko BNB Smart Chain/USD 参考价格", pricedAt: input.observedAt },
-          costPrice: null,
-          platformProfit: null,
-          changePercent: null,
-        },
-      );
-    }
-    const unrecognizedEvmTokens =
-      this.scenario === "metadata-decimals-failure" && config.chainId === "1"
-        ? [{
-          sourceAsset: "evm:1:0x889edc2edab5f40e902b864ad4d7ade8e412f9b1",
-          symbol: "unstETH",
-          name: "unstETH",
-          quantity: null,
-          reason: "代币合约未返回可靠 decimals，数量无法读取",
-        }]
-        : [];
     return {
       credentials: JSON.stringify({ chain: input.chain, addresses }),
       chain: input.chain,
@@ -598,36 +399,10 @@ export class FakeEvmWatchWallet implements EvmWatchWalletReadOnly {
       },
       snapshot: {
         total: {
-          amount: this.scenario === "empty"
-            ? "0"
-            : hasLidoWithdrawal
-              ? "9499"
-              : hasListaWithdrawal
-                ? "5449"
-              : config.total,
+          amount: config.total,
           currency: "USD",
         },
         holdings,
-        ...(unrecognizedEvmTokens.length > 0 ? { unrecognizedEvmTokens } : {}),
-        ...(hasLidoWithdrawal || hasListaWithdrawal
-          ? {
-              coverage: {
-                status: "complete" as const,
-                products: [{
-                  product: hasLidoWithdrawal
-                    ? "lido-withdrawal-request"
-                    : "lista-slisbnb-withdrawal-request",
-                  capability: "detailed" as const,
-                  freshness: "current" as const,
-                  message: hasLidoWithdrawal
-                    ? "已读取 2 笔未领取申请 · 1 笔排队中、1 笔可领取"
-                    : "已读取 2 笔未领取申请 · 1 笔锁仓中、1 笔可领取",
-                }],
-                unexplainedValue: null,
-                excludedPositiveAccounts: [],
-              },
-            }
-          : {}),
         exchangeRates: [],
         syncedAt: input.observedAt,
       },

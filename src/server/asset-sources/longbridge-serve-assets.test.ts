@@ -62,22 +62,22 @@ test("serve 完整读取以账户总额为主，行情只更新持仓明细", as
   assert.deepEqual(snapshot.exchangeRates[0], { baseCurrency: "HKD", quoteCurrency: "USD", rate: "0.128", source: "Longbridge 官方账户汇率", observedAt: at });
 });
 
-test("serve 失败直接保留错误，不再调用 SDK 回退", async () => {
-  const f = fixture({ fail: "trade.account_balance" });
-  await assert.rejects(f.refresher.refresh(input), /CLI failed/);
-});
+const assetReadMethods = ["trade.account_balance", "trade.stock_positions", "trade.fund_positions", "api.get", "quote.quote"] as const;
 
-for (const method of ["trade.account_balance", "trade.stock_positions", "trade.fund_positions", "api.get", "quote.quote"]) {
-  test(method + " 失败直接抛错且关闭 serve", async () => {
+test("serve 各资产读取方法失败时直接抛错并关闭客户端", async () => {
+  for (const method of assetReadMethods) {
     const f = fixture({ fail: method });
     await assert.rejects(f.refresher.refresh(input), /CLI|账户|列表|格式|字段/);
     assert.equal(f.closes(), 1);
-  });
-  test(method + " 缺失列表不能当成空账户成功", async () => {
+  }
+});
+
+test("serve 各资产读取方法返回错误结构时不能当成空账户成功", async () => {
+  for (const method of assetReadMethods) {
     const f = fixture({ malformed: method });
     await assert.rejects(f.refresher.refresh(input), /CLI|账户|列表|格式|字段/);
-  });
-}
+  }
+});
 
 test("不同账户拒绝读取 CLI 资产", async () => {
   const f = fixture({ mismatch: true });

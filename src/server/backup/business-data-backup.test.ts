@@ -295,8 +295,8 @@ test("业务备份排除运维执行记录，恢复业务数据也不改写最�
   } finally { await f.close(); }
 });
 
-for (const version of [1, 2, 3, 4]) {
-  test("旧版本 " + version + " 默认保护已有历史并绑定显式丢弃确认", async () => {
+test("旧版本默认保护已有历史并绑定显式丢弃确认", async () => {
+  for (const version of [1, 2, 3, 4]) {
     const f = await sqliteFixture();
     try {
       await f.backup.exportBackup("legacy.json");
@@ -325,8 +325,8 @@ for (const version of [1, 2, 3, 4]) {
       await f.backup.restore("legacy.json", preview.discardConfirmation);
       assert.deepEqual(await f.database.listFormalDailySettlements(), []);
     } finally { await f.close(); }
-  });
-}
+  }
+});
 
 test("恢复后手工记录仍可编辑，同日唯一，删除最新值回退", async () => {
   const f = await sqliteFixture();

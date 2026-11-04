@@ -5,8 +5,10 @@ import {
   createJsonDecoder,
 } from "@/server/asset-sources/json";
 
-for (const provider of ["Binance", "OKX", "Bitget"]) {
-  test(`${provider} 凭证解码保留字段原值，不改写平台专属字段`, () => {
+const providers = ["Binance", "OKX", "Bitget"] as const;
+
+test("各来源凭证解码保留字段原值，并拒绝畸形 JSON 或非对象", () => {
+  for (const provider of providers) {
     const decoder = createJsonDecoder(provider);
     const credentials = {
       apiKey: " readonly-key ",
@@ -17,10 +19,6 @@ for (const provider of ["Binance", "OKX", "Bitget"]) {
     };
     assert.deepEqual(decoder.credentialRecord(JSON.stringify(credentials)), credentials);
     assert.deepEqual(decoder.credentialRecord("{}"), {});
-  });
-
-  test(`${provider} 凭证解码拒绝畸形 JSON 和非对象，不泄露输入`, () => {
-    const decoder = createJsonDecoder(provider);
     for (const input of [
       '{"apiSecret":"must-not-leak",', "null", "[]", '"must-not-leak"', "1", "true",
     ]) {
@@ -29,9 +27,11 @@ for (const provider of ["Binance", "OKX", "Bitget"]) {
         new Error(`${provider} 只读凭证格式无效`),
       );
     }
-  });
+  }
+});
 
-  test(`${provider} JSON 解码保留结构与字段失败边界`, () => {
+test("各来源 JSON 解码保留结构，并拒绝无效字段", () => {
+  for (const provider of providers) {
     const decoder = createJsonDecoder(provider);
 
     assert.deepEqual(decoder.record({ asset: "BTC" }), { asset: "BTC" });
@@ -62,5 +62,5 @@ for (const provider of ["Binance", "OKX", "Bitget"]) {
       () => decoder.identifier(-1, "id"),
       new Error(`${provider} 响应缺少 id`),
     );
-  });
-}
+  }
+});

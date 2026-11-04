@@ -30,15 +30,15 @@ test("交易日历通过serve读官方完整/半日市集合，A股市场映射C
   assert.equal(f.closes(), 3);
 });
 
-for (const result of [null, {}, { trading_days: [], half_trading_days: null },
-  { trading_days: ["2026-11-31"], half_trading_days: [] },
-  { trading_days: ["2026-12-01"], half_trading_days: [] }]) {
-  test("日历缺失或无效时拒绝猜测，且释放CLI：" + JSON.stringify(result), async () => {
+test("日历缺失或无效时拒绝猜测，且释放 CLI", async () => {
+  for (const result of [null, {}, { trading_days: [], half_trading_days: null },
+    { trading_days: ["2026-11-31"], half_trading_days: [] },
+    { trading_days: ["2026-12-01"], half_trading_days: [] }]) {
     const f = fixture(result);
     await assert.rejects(f.calendar.readTradingDays({ market: "HK", start: "2026-11-01", end: "2026-11-30" }), /交易日历/);
     assert.equal(f.closes(), 1);
-  });
-}
+  }
+});
 
 test("合法空日历代表休市，网络失败不会伪装为空日历", async () => {
   const f = fixture({ trading_days: [], half_trading_days: [] });

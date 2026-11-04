@@ -191,8 +191,8 @@ test("正式日结没有可用长桥汇率时保留 CNY/HKD 缺失并标记不�
   });
 });
 
-for (const observedAt of ["2026-08-04T16:06:00.000Z", "2026-08-06T16:06:00.000Z"]) {
-  test("正式日结不从实时来源快照借用其他日期汇率：" + observedAt, async () => {
+test("正式日结不从实时来源快照借用其他日期汇率", async () => {
+  for (const observedAt of ["2026-08-04T16:06:00.000Z", "2026-08-06T16:06:00.000Z"]) {
     const longbridge = source({
       id: "longbridge-source",
       kind: "longbridge",
@@ -218,8 +218,8 @@ for (const observedAt of ["2026-08-04T16:06:00.000Z", "2026-08-06T16:06:00.000Z"
     assert.deepEqual(settlement.total, { USD: "202", CNY: null, HKD: null });
     assert.equal(settlement.sources[1]?.status, "incomplete");
     assert.deepEqual(settlement.sources[1]?.total, { USD: "102", CNY: null, HKD: null });
-  });
-}
+  }
+});
 
 test("采集异常与行情等待分离，不向执行结果泄露原始错误", async () => {
   const crypto = source({ id: "crypto", kind: "binance", label: "私有来源", snapshot: snapshot("100") });
@@ -301,14 +301,14 @@ test("半日市在实际提前收盘后采集，不等待美东16点", async () 
   assert.equal(f.settlements.values[0]?.anchor.scheduledCloseAt, "2026-11-27T18:00:00.000Z");
 });
 
-for (const now of ["2026-11-26T23:05:00.000Z", "2026-11-28T23:05:00.000Z"]) {
-  test("休市和周末不写不存在交易日的漏采记录：" + now, async () => {
+test("休市和周末不写不存在交易日的漏采记录", async () => {
+  for (const now of ["2026-11-26T23:05:00.000Z", "2026-11-28T23:05:00.000Z"]) {
     const f = calendarRun({ now, days: { US: { tradingDays: ["2026-11-25"], halfTradingDays: ["2026-11-27"] } } });
     assert.deepEqual(await f.runner.run(), { outcome: "not-due", reason: "market-closed" });
     assert.equal(f.settlements.values.length, 0);
     assert.equal(f.captures(), 0);
-  });
-}
+  }
+});
 
 test("美股休市而港股开市，以港股收盘为锚并保留美股上个交易日", async () => {
   const f = calendarRun({ now: "2026-11-26T08:15:00.000Z", symbols: ["NVDA.US", "700.HK"], days: {

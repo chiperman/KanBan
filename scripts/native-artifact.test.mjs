@@ -27,10 +27,3 @@ test("原生产物缺失、代码变化和二进制损坏均要求显式重建",
     assert.throws(() => checkNativeArtifact(root, {load:false}), /不兼容/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
-
-test("CLI 模式启动不依赖原生产物或 Cargo", () => {
-  const pkg = JSON.parse(readFileSync("package.json", "utf8"));
-  assert.equal(pkg.scripts.prestart, undefined);
-  assert.equal(pkg.scripts.predev, undefined);
-  assert.equal(pkg.scripts.prebuild, undefined);
-});

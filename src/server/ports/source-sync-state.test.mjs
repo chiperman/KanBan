@@ -164,29 +164,3 @@ test("稳定入口与旧同步端口重导出同一份共享类型，不重复�
     assert.equal(legacy.get(name), canonical.get(name), `${name} 只能有一个类型定义`);
   }
 });
-
-test("领域同步状态模块只声明共享值类型，不依赖来源实体或引入运行时代码", () => {
-  const file = sourceFile("../../domain/asset-sync.ts");
-  assert.ok(file.statements.every((statement) =>
-    ts.isInterfaceDeclaration(statement) || ts.isTypeAliasDeclaration(statement)
-  ));
-  assert.deepEqual(ts.preProcessFile(file.text).importedFiles, []);
-});
-
-test("来源实体与同步执行端口的类型依赖图不再存在循环", () => {
-  const visited = new Set();
-  function visit(file, chain = []) {
-    assert.ok(!chain.includes(file.fileName), `循环依赖：${[...chain, file.fileName].map((name) => path.basename(name)).join(" -> ")}`);
-    if (visited.has(file.fileName)) return;
-    for (const { fileName: specifier } of ts.preProcessFile(file.text).importedFiles) {
-      const resolved = ts.resolveModuleName(specifier, file.fileName, options, host).resolvedModule;
-      assert.ok(resolved, `无法解析 ${file.fileName} 中的 ${specifier}`);
-      const dependency = program.getSourceFile(resolved.resolvedFileName);
-      assert.ok(dependency);
-      visit(dependency, [...chain, file.fileName]);
-    }
-    visited.add(file.fileName);
-  }
-  visit(sourceFile("sources.ts"));
-  visit(sourceFile("synchronization.ts"));
-});

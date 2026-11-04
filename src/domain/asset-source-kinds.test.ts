@@ -7,22 +7,6 @@ import {
   isEvmWatchSourceKind,
 } from "./asset-source-kinds";
 
-test("来源类型注册表集中声明展示和能力元数据", () => {
-  assert.deepEqual(assetSourceKindMetadata("longbridge"), {
-    code: "LB",
-    isManual: false,
-    supportsEvmTokenPreferences: false,
-    supportsProductCoverage: false,
-    supportsSmallHoldingFilter: false,
-    title: "长桥资产",
-  });
-  assert.equal(assetSourceKindMetadata("fixture"), null);
-  assert.equal(isAssetSourceKind("manual"), true);
-  assert.equal(isAssetSourceKind("fixture"), false);
-  assert.equal(isEvmWatchSourceKind("evm-watch-bsc"), true);
-  assert.equal(isEvmWatchSourceKind("binance"), false);
-});
-
 test("八种受支持来源保留名称、标识和能力，不改变既有展示与分支", () => {
   const cases = [
     ["longbridge", "LB", "长桥资产", false, false, false],

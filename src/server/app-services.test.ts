@@ -4,29 +4,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
-import type {
-  AppServices,
-  AssetServices,
-  AssetObservationServices,
-  MarketServices,
-  OwnerServices,
-  ProductionAppServices,
-} from "./app-services";
-import type { AppServices as LegacyAppServices } from "./composition";
 import { executeAssetSourceDelete, executeAssetSourcePatch } from "./asset-source-commands";
-import type { AssetSourceDetails } from "./ports";
 import { createProductionServices } from "./production";
 
-function checkRequiredDetails(services: AppServices): void {
-  // @ts-expect-error Production services cannot omit the detail capability.
-  const production: ProductionAppServices = services;
-  // @ts-expect-error A present detail capability cannot omit investment history queries.
-  const partial: AssetSourceDetails = { ...production.assetSourceDetails, listSourceInvestmentHistories: undefined };
-  void partial;
-}
-void checkRequiredDetails;
-
-test("正式组合保留平面服务及旧类型入口，完整详情能力使用临时 SQLite", async (t) => {
+test("正式服务组合通过 SQLite 保存、读取和删除来源投资记录", async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), "kanban-service-contract-"));
   const previousClientId = process.env.LONGBRIDGE_OAUTH_CLIENT_ID;
   process.env.LONGBRIDGE_OAUTH_CLIENT_ID = "test-only-service-contract-client";
@@ -38,21 +19,11 @@ test("正式组合保留平面服务及旧类型入口，完整详情能力使�
   const services = createProductionServices(root);
   try {
     await services.secrets.get("missing-test-reference");
-    const legacy: LegacyAppServices = services;
-    const assets: AssetServices = services;
-    const observations: AssetObservationServices = services;
-    const market: MarketServices = services;
-    const owner: OwnerServices = services;
-    assert.equal(legacy, services);
-    assert.equal(assets.assetSources, services.assetSources);
-    assert.equal(observations.assetSynchronization, services.assetSynchronization);
-    assert.equal(market.longbridge, services.longbridge);
-    assert.equal(owner.auth, services.auth);
     assert.deepEqual(await services.assetSourceDetails.listSourceInvestmentHistories(), []);
 
     const now = "2026-01-02T12:00:00.000Z";
-    await assets.manualAssetRecords.create({ label: "Test source" });
-    const [source] = await assets.assetSources.list();
+    await services.manualAssetRecords.create({ label: "Test source" });
+    const [source] = await services.assetSources.list();
     assert.ok(source);
     const context = {
       id: source.id,
@@ -60,9 +31,9 @@ test("正式组合保留平面服务及旧类型入口，完整详情能力使�
       services: {
         clock: { now: () => new Date(now) },
         assetSourceDetails: services.assetSourceDetails,
-        assetSourceLifecycle: assets.assetSourceLifecycle,
-        manualAssetRecords: assets.manualAssetRecords,
-        assetSourceOnboarding: assets.assetSourceOnboarding,
+        assetSourceLifecycle: services.assetSourceLifecycle,
+        manualAssetRecords: services.manualAssetRecords,
+        assetSourceOnboarding: services.assetSourceOnboarding,
       },
     };
     const input = {

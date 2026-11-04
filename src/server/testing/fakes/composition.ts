@@ -34,7 +34,6 @@ import {
   FakeLongbridgeOAuth,
 } from "./longbridge";
 import { FakePrices } from "./prices";
-import { FakeAssetSourceRefresher, FakeAssetSynchronization } from "./refresh";
 import {
   InMemoryOwnerCredentialStore,
   InMemoryOwnerRecoveryCredentialStore,
@@ -54,7 +53,7 @@ export interface TestServices extends AppServices {
   formalSettlementExecutions: InMemoryFormalSettlementExecutions;
   formalSettlementScheduler: InMemoryFormalSettlementScheduler;
   externalServices: InMemoryExternalServiceConfiguration;
-  assetSynchronization: FakeAssetSynchronization;
+  assetSynchronization: SourceIsolatedAssetSynchronization;
   assetFullRefreshState: InMemoryAssetFullRefreshState;
   prices: FakePrices;
   auth: SessionOwnerAuth;
@@ -93,18 +92,14 @@ export function createTestServices(): TestServices {
   const secrets = new InMemorySecretStore();
   const externalServices = new InMemoryExternalServiceConfiguration(clock);
   const prices = new FakePrices();
-  const refreshAdapter = new FakeAssetSourceRefresher();
-  const assetSynchronization = new FakeAssetSynchronization(
-    new SourceIsolatedAssetSynchronization(
-      assetSources,
-      secrets,
-      clock,
-      refreshAdapter,
-      100,
-      dailyAssetSnapshots,
-      fullRefreshState,
-    ),
-    refreshAdapter,
+  const assetSynchronization = new SourceIsolatedAssetSynchronization(
+    assetSources,
+    secrets,
+    clock,
+    { refresh: async ({ source }) => ({ snapshot: source.snapshot }) },
+    100,
+    dailyAssetSnapshots,
+    fullRefreshState,
   );
   const assetSourceLifecycle = new InMemoryAssetSourceLifecycle(
     assetSources,

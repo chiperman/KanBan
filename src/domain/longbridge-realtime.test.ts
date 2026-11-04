@@ -4,8 +4,8 @@ import test from "node:test";
 import { applyLongbridgeRealtimeQuote } from "@/domain/longbridge-realtime";
 import type { AssetSourceSummary } from "@/server/ports";
 
-for (const [trade_session, session] of [["Intraday", "regular"], ["Pre", "pre-market"], ["Post", "post-market"], ["Overnight", "overnight"], [3, "overnight"]] as const) {
-  test(`真实 serve RFC3339 时间及 ${trade_session} 时段`, () => {
+test("真实 serve RFC3339 时间和各交易时段映射正确，并拒绝过期行情", () => {
+  for (const [trade_session, session] of [["Intraday", "regular"], ["Pre", "pre-market"], ["Post", "post-market"], ["Overnight", "overnight"], [3, "overnight"]] as const) {
     const current = source();
     const updated = applyLongbridgeRealtimeQuote(current, {
       symbol: "AAPL.US", last_done: "450", trade_session,
@@ -20,8 +20,8 @@ for (const [trade_session, session] of [["Intraday", "regular"], ["Pre", "pre-ma
     });
     assert.equal(stale, updated);
     assert.equal(current.snapshot.total.amount, "1000");
-  });
-}
+  }
+});
 
 test("缺少成交时间的消息不能将旧报价伪装成当前行情", () => {
   const current = source();

@@ -1,6 +1,5 @@
-import { createSession, SESSION_COOKIE } from "@/server/auth/session";
 import { isTestEnv } from "@/server/composition";
-import { getTestServices, resetTestServices } from "@/server/testing/composition";
+import { resetTestServices } from "@/server/testing/composition";
 
 export function testGuard(): Response | null {
   return isTestEnv()
@@ -13,16 +12,4 @@ export function resetTestStateResponse(): Response {
   if (denied) return denied;
   resetTestServices();
   return Response.json({ ok: true });
-}
-
-export function createTestOwnerSessionResponse(): Response {
-  const denied = testGuard();
-  if (denied) return denied;
-  const token = createSession("test-owner", getTestServices().clock.now());
-  const response = Response.json({ ok: true });
-  response.headers.set(
-    "Set-Cookie",
-    `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict`,
-  );
-  return response;
 }
