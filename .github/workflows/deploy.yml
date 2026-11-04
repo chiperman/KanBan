@@ -33,11 +33,10 @@ jobs:
         with:
           version: 11.25.0
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: 24.15.0
-          cache: pnpm
+      - name: Check Mac mini toolchain
+        run: |
+          test "$(node --version)" = "v24.15.0"
+          test "$(pnpm --version)" = "11.25.0"
 
       - name: Verify exact main commit
         run: pnpm ci:local verify
