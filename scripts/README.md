@@ -44,9 +44,9 @@
 | `pnpm ci:local run` | 从远程 `main` 拉取到独立 checkout，按 SHA 创建 worktree 后执行上述门禁；配置允许时再调用 `runtime:update` 和介绍页发布 |
 | `pnpm ci:local pages` | 使用当前配置的远端 `main` 生成并推送 `gh-pages`；仅在确认 `publishPages` 后执行 |
 | `pnpm ci:local release plugins-v1.0.0` | 针对指定插件标签完成验证、打包、逐包安装握手，并通过本机 `gh` 创建并发布 Release |
-| `pnpm ci:local:launchd install\|status\|remove\|print` | 安装、查询、移除或打印 Mac mini 上每 5 分钟运行一次的 LaunchAgent |
+| `pnpm ci:local:launchd install\|status\|remove\|print` | 仅用于回退演练时安装、查询、移除或打印 LaunchAgent；Actions 部署启用后不要安装轮询任务 |
 
-CI 的配置、日志、独立 checkout 和产物位于 `~/Library/Application Support/KanBan/ci/`，不使用当前开发工作树，也不读取正式 `data/`。首次安装默认只验证，不自动更新正式 3001 服务；确认稳定后，将配置中的 `deployRuntime` 改为 `true`，再重载 LaunchAgent。
+手动 CI 的配置、日志、独立 checkout 和产物位于 `~/Library/Application Support/KanBan/ci/`，不使用当前开发工作树，也不读取正式 `data/`。正式部署由 GitHub Actions 的 `main` workflow 负责。
 
 下列入口可能读取真实来源、写入业务数据或更改本机任务。命令索引仅说明现有能力，具体执行沿用本次授权与所属合同。
 
