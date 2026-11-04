@@ -4,6 +4,8 @@
 
 项目主页：[chiperman.github.io/KanBan](https://chiperman.github.io/KanBan/)
 
+CI/CD 与 Mac mini 部署见 [GitHub Actions CI/CD](docs/operations/github-actions.md)；本地排查入口见 [本地 CI 运维说明](docs/operations/local-ci.md)。
+
 ## 集成插件
 
 外部接入以独立插件提供，按需安装：Binance、OKX、Bitget、BIT / Matrixport、Ethereum 观察钱包、BNB 观察钱包、长桥和 CoinGecko。
@@ -91,7 +93,7 @@ pnpm exec tsc --noEmit --incremental false
 | [landing/](landing/) | 独立 GitHub Pages 介绍页及其资源，不参与应用构建 |
 | [scripts/](scripts/README.md) | 持续维护的开发、设计与运维脚本；入口、辅助模块和检查范围见索引 |
 | [docs/](docs/README.md) | 现行规范、源码导航与唯一待办入口 |
-| [.github/workflows/](.github/workflows/) | 介绍页发布与独立插件 Release 工作流 |
+| [.github/workflows/](.github/workflows/) | PR 验证、main 部署、介绍页发布与独立插件 Release 工作流 |
 | `data/` | 本机业务数据、凭证和备份，已忽略，不作为临时目录清理 |
 | `dist/plugins/` | 已忽略的独立插件包、发行目录与摘要，由插件构建命令生成 |
 | `tmp/` / `output/` | 已忽略的临时计划、一次性脚本与检查证据 |

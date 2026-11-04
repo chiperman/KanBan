@@ -14,7 +14,7 @@
 | `pnpm test:unit` | [run-unit-tests.mjs](run-unit-tests.mjs)：发现 `scripts/` 和 `src/` 中既有 `*.test.ts` / `*.test.mjs`，通过 Node 执行离线单测 |
 | `pnpm test` | 按顺序执行 `typecheck`、`design:lint`、`test:unit`；不启动应用构建或浏览器 |
 
-范围与新增测试约束见 [测试纪律](../AGENTS.md#测试纪律)。GitHub Actions 分别 [发布介绍页](../.github/workflows/pages.yml) 与 [插件 Release](../.github/workflows/plugins.yml)；插件发行包含路由类型生成、类型检查和包握手，不运行完整应用单测或浏览器验收。
+范围与新增测试约束见 [测试纪律](../AGENTS.md#测试纪律)。公开仓库由 [PR 验证 Action](../.github/workflows/verify.yml) 和 [main 部署 Action](../.github/workflows/deploy.yml) 负责正式门禁与部署；本地 CI 入口只用于手动排查或回退演练，不应与 GitHub Actions 部署并行。
 
 ## 原生扩展与本机授权
 
@@ -35,6 +35,18 @@
 验证范围和基线维护见 [设计契约](../DESIGN.md#变更与验证)，不能更新基线绕过检查。
 
 ## 数据与运维
+
+### 本地 CI（Mac mini）
+
+| 命令 | 入口与作用 |
+| --- | --- |
+| `pnpm ci:local verify [目录]` | 在隔离临时数据目录执行 frozen install、Next 路由类型生成、类型检查、设计守门、离线单测和生产构建；可追加 `--browser-smoke` 做浏览器冒烟，`--skip-build` 仅用于快速排查 |
+| `pnpm ci:local run` | 从远程 `main` 拉取到独立 checkout，按 SHA 创建 worktree 后执行上述门禁；配置允许时再调用 `runtime:update` 和介绍页发布 |
+| `pnpm ci:local pages` | 使用当前配置的远端 `main` 生成并推送 `gh-pages`；仅在确认 `publishPages` 后执行 |
+| `pnpm ci:local release plugins-v1.0.0` | 针对指定插件标签完成验证、打包、逐包安装握手，并通过本机 `gh` 创建并发布 Release |
+| `pnpm ci:local:launchd install\|status\|remove\|print` | 安装、查询、移除或打印 Mac mini 上每 5 分钟运行一次的 LaunchAgent |
+
+CI 的配置、日志、独立 checkout 和产物位于 `~/Library/Application Support/KanBan/ci/`，不使用当前开发工作树，也不读取正式 `data/`。首次安装默认只验证，不自动更新正式 3001 服务；确认稳定后，将配置中的 `deployRuntime` 改为 `true`，再重载 LaunchAgent。
 
 下列入口可能读取真实来源、写入业务数据或更改本机任务。命令索引仅说明现有能力，具体执行沿用本次授权与所属合同。
 

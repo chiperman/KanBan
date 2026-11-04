@@ -26,7 +26,9 @@
     "plugins:build": "node scripts/build-source-plugins.mjs",
     "plugin:build": "node scripts/build-source-plugin.mjs",
     "plugin": "node --experimental-transform-types --import ./scripts/register-ts-alias.mjs scripts/source-plugin.ts",
-    "plugins:release": "node scripts/release-source-plugins.mjs"
+    "plugins:release": "node scripts/release-source-plugins.mjs",
+    "ci:local": "node scripts/local-ci.mjs",
+    "ci:local:launchd": "node scripts/local-ci-launchd.mjs"
   },
   "dependencies": {
     "@radix-ui/colors": "^3.0.0",
