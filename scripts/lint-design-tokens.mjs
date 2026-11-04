@@ -56,6 +56,17 @@ const BREAKPOINTS = {
 const SVG_TEXT_SELECTORS = [".locked-flow-screen text", ".locked-flow-dashboard-label"];
 
 /**
+ * 全局减弱动效覆盖。该规则必须使用 !important 才能压过所有组件动效，
+ * 是明确的无障碍例外，不占基线额度。
+ */
+const GLOBAL_REDUCED_MOTION_SELECTOR = "*, *::before, *::after";
+const REDUCED_MOTION_IMPORTANT_DECLARATIONS = new Set([
+  "animation-duration: 0.01ms !important",
+  "animation-iteration-count: 1 !important",
+  "transition-duration: 0.01ms !important",
+]);
+
+/**
  * 页面级样式不得覆盖共享按钮的视觉属性：统一规范后，颜色 / 背景 / 边框 /
  * 圆角 / 字体 / 高度 / 透明度 / 过渡 / 变换 / outline / box-shadow 只能来自
  * `src/app/vibe-components.css`。本规则递归扫描 `src/app/` 的 CSS，排除共享组件文件，
@@ -323,7 +334,10 @@ function lintCss(file, source) {
       found.push(violation("box-shadow", file, declaration, line, `${selector} → box-shadow 需核定用途，见 docs/design-system/foundations.md#5-层次`));
     }
 
-    if (declaration.includes("!important")) {
+    const isReducedMotionOverride =
+      collapse(selector) === GLOBAL_REDUCED_MOTION_SELECTOR &&
+      REDUCED_MOTION_IMPORTANT_DECLARATIONS.has(declaration);
+    if (declaration.includes("!important") && !isReducedMotionOverride) {
       found.push(violation("important", file, declaration, line, `${selector} → !important，见 docs/design-system/foundations.md#6-动效 与 docs/backlog.md`));
     }
   });

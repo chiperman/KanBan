@@ -16,8 +16,7 @@ body {
 body {
   background: var(--bg);
   color: var(--primary);
-  font-family:
-    -apple-system, "PingFang SC", "Helvetica Neue", "Segoe UI", sans-serif;
+  font-family: var(--f-ui);
   font-size: var(--vibe-type-body-sm);
   line-height: 1.6;
 }
@@ -55,7 +54,7 @@ small {
 .header-label,
 .card-label {
   margin: 0;
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--f-mono);
   font-size: var(--vibe-type-caption);
   letter-spacing: 0.12em;
   color: var(--secondary);
@@ -70,7 +69,7 @@ small {
 }
 
 .header-time {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--f-mono);
   font-size: var(--vibe-type-caption);
   color: var(--secondary);
 }
@@ -216,20 +215,6 @@ small {
   padding: 6px 12px;
 }
 
-.layout-editing .card {
-  cursor: grab;
-  outline: 0.5px dashed var(--line-2);
-  outline-offset: -5px;
-}
-
-.layout-editing .card:active {
-  cursor: grabbing;
-}
-
-.card-dragging {
-  opacity: 0.5;
-}
-
 .source-status {
   display: block;
   margin-top: 14px;
@@ -325,7 +310,7 @@ small {
 
 .asset-total {
   margin: 12px 0 0;
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--f-mono);
   font-size: var(--vibe-type-heading);
   letter-spacing: -0.04em;
 }
@@ -341,31 +326,6 @@ small {
   font-size: var(--vibe-type-body);
 }
 
-.total-overview {
-  display: grid;
-  gap: 18px;
-}
-
-.total-overview-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-}
-
-.total-status,
-.conversion-observation {
-  margin: 8px 0 0;
-  color: var(--secondary);
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: var(--vibe-type-caption);
-}
-
-.total-status.incomplete,
-.total-status.expired {
-  color: var(--accent-text);
-}
-
 .asset-refresh-controls {
   display: flex;
   flex-wrap: wrap;
@@ -378,7 +338,7 @@ small {
 .asset-sync-status,
 .asset-sync-error {
   margin: 0;
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--f-mono);
   font-size: var(--vibe-type-caption);
 }
 
@@ -428,7 +388,7 @@ small {
 }
 
 .distribution-item strong {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--f-mono);
 }
 
 .today-asset-change,
@@ -462,7 +422,7 @@ small {
   grid-template-columns: minmax(68px, auto) 1fr auto;
   gap: 10px;
   align-items: baseline;
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--f-mono);
   font-size: var(--vibe-type-caption);
 }
 
@@ -632,7 +592,7 @@ small {
 .holding-top-list strong,
 .asset-updated,
 .asset-table td:not(:first-child) {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--f-mono);
 }
 
 .holding-profit-summary {
@@ -677,10 +637,6 @@ small {
 }
 
 @media (max-width: 639px) {
-  .total-overview-head {
-    display: grid;
-  }
-
   .valuation-controls {
     justify-content: stretch;
   }

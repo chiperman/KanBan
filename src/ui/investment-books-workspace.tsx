@@ -76,7 +76,7 @@ export function InvestmentBooksWorkspace({
 }) {
   const bookId = initialBookId;
   const [recordFilter, setRecordFilter] = useState(initialRecordFilter);
-  const [curve, setCurve] = useState<"return" | "total">("return");
+  const [curve, setCurve] = useState<"return" | "total">("total");
   const [enabledSymbols, setEnabledSymbols] = useState<MarketBenchmarkSymbol[]>([
     ...DEFAULT_MARKET_BENCHMARK_SYMBOLS,
   ]);
@@ -113,7 +113,6 @@ export function InvestmentBooksWorkspace({
     () => buildBookRange({ analysis, currentDay, trendRange: { preset, customRange } }),
     [analysis, currentDay, preset, customRange],
   );
-  const { days, selectedDays } = range;
   const depositTotals = useMemo(
     () => buildBookDepositTotals(analysis, state.unassignedLegacyIds.length),
     [analysis, state.unassignedLegacyIds.length],
@@ -122,15 +121,14 @@ export function InvestmentBooksWorkspace({
   const filteredTimeline = useMemo(
     () => timeline.filter(
       (row) =>
-        selectedDays.has(row.day) &&
         (recordFilter === "all" ||
           (recordFilter === "valuations" ? row.kind === "valuation" : row.kind !== "valuation")),
     ),
-    [timeline, selectedDays, recordFilter],
+    [timeline, recordFilter],
   );
   const recordPagination = useTablePagination(
     filteredTimeline,
-    JSON.stringify([bookId, recordFilter, days[0], days.at(-1)]),
+    JSON.stringify([bookId, recordFilter]),
   );
   const pendingMembers = analysis.members.filter((row) => !row.confirmed);
   const unassignedCashflows = cashflows.filter((flow) =>
@@ -277,8 +275,6 @@ export function InvestmentBooksWorkspace({
           manualRecords={manualRecords}
           recordFilter={recordFilter}
           setRecordFilter={setRecordFilter}
-          trendRange={trendRange}
-          currentDay={currentDay}
           filteredTimeline={filteredTimeline}
           recordPagination={recordPagination}
           depositTotals={depositTotals}

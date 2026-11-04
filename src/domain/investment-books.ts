@@ -380,6 +380,7 @@ export function analyzeInvestmentBook(input: {
   const opening = records.find(row => row.kind === "opening");
   const unresolved = input.state.unassignedLegacyIds.length > 0;
   const pendingFX = records.filter(row => (row.kind === "deposit" || row.kind === "withdrawal") && row.currency !== book.currency);
+  const fundingProjectionAvailable = !unresolved && pendingFX.length === 0;
   const firstRecordDay = records.map(row => row.day).toSorted()[0] ?? null;
   const firstAssetPointDay = [...values.values()]
     .filter(row => row.day <= input.currentDay)
@@ -410,6 +411,7 @@ export function analyzeInvestmentBook(input: {
   return {
     book, opening, records, members, points, current, summary,
     firstRecordDay, firstAssetPointDay, firstTrendDay, historyComparison, fundingMissingReason,
+    fundingProjectionAvailable,
     missingReason: fundingMissingReason ?? (current?.total == null ? assetMissingReason : null),
     summaryMissingReason: fundingMissingReason ?? (summary?.total == null ? assetMissingReason : null),
   };

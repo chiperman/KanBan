@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   type ReactNode,
@@ -116,7 +117,7 @@ function WorkbenchDestinationLinks({
           }}
           variant="text"
         >
-          {pending ? <span className="workbench-navigation-skeleton" /> : <WorkbenchNavigationIcon name={icon} />}
+          <WorkbenchNavigationIcon name={icon} />
           <span className="workbench-navigation-link__label">{mobile ? shortLabel : label}</span>
         </VibeLink>;
         return compact ? <VibeTooltip key={href} label={label} side="right">{link}</VibeTooltip> : link;
@@ -225,26 +226,63 @@ export function WorkbenchShell({
         <div className="workbench-sidebar__head">
           <VibeLink
             aria-label="返回资产总览"
-            className="workbench-navigation-brand"
+            className="workbench-navigation-brand workbench-navigation-brand--home"
             href="/"
             variant="text"
           >
+            <Image
+              alt=""
+              className="workbench-navigation-brand-icon"
+              height={24}
+              preload
+              src="/icon.svg"
+              width={24}
+            />
             <span className="workbench-navigation-brand-copy">
               <strong>资产看板</strong>
               <span lang="en">PERSONAL ASSET</span>
             </span>
           </VibeLink>
-          <VibeButton
-            aria-label={sidebarCollapsed ? "展开侧边栏" : "收起侧边栏"}
-            aria-expanded={!sidebarCollapsed}
-            aria-controls="workbench-sidebar"
-            className="workbench-sidebar-toggle"
-            onClick={toggleSidebar}
-            title={sidebarCollapsed ? "展开侧边栏" : "收起侧边栏"}
-            type="button" variant="text"
-          >
-            <VibeIcon name={sidebarCollapsed ? "panel-right" : "panel-left"} />
-          </VibeButton>
+          {sidebarCollapsed ? (
+            <VibeButton
+              aria-label="展开侧边栏"
+              aria-expanded={false}
+              aria-controls="workbench-sidebar"
+              className="workbench-navigation-brand workbench-navigation-brand--expand"
+              onClick={toggleSidebar}
+              title="展开侧边栏"
+              type="button"
+              variant="text"
+            >
+              <Image
+                alt=""
+                className="workbench-navigation-brand-icon"
+                height={24}
+                preload
+                src="/icon.svg"
+                width={24}
+              />
+              <span
+                aria-hidden="true"
+                className="workbench-navigation-brand-expand-icon"
+              >
+                <VibeIcon name="panel-right" />
+              </span>
+            </VibeButton>
+          ) : (
+            <VibeButton
+              aria-label="收起侧边栏"
+              aria-expanded
+              aria-controls="workbench-sidebar"
+              className="workbench-sidebar-toggle"
+              onClick={toggleSidebar}
+              title="收起侧边栏"
+              type="button"
+              variant="text"
+            >
+              <VibeIcon name="panel-left" />
+            </VibeButton>
+          )}
         </div>
         <nav
           aria-label="工作台主导航"

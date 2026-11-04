@@ -9,6 +9,7 @@ export type AssetTrendChartPoint = {
   amount: string | null;
   day: string;
   events?: AssetTrendEvent[];
+  inferred?: boolean;
   manualRecordDay?: string;
   observed: boolean;
   status: "complete" | "incomplete" | "expired";

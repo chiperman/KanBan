@@ -48,7 +48,7 @@
 .command-menu-eyebrow,
 .command-menu-empty {
   margin: 0;
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--f-mono);
 }
 
 .command-menu-eyebrow {

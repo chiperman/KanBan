@@ -180,10 +180,17 @@ export function trendTooltipRows(
   },
 ): TrendTooltipRow[] {
   const hasRecord = hasTrendRecord(point) || (point.events?.length ?? 0) > 0;
-  const amount = hasRecord ? (point.amount ?? point.historicalAmount) : point.historicalAmount;
-  const missing = !hasRecord && point.historicalAmount === null;
-  const showingHistorical = amount !== null && (!hasRecord || point.amount === null);
-  const quality = missing
+  const inferred = point.inferred === true;
+  const amount = inferred
+    ? point.amount
+    : hasRecord
+      ? (point.amount ?? point.historicalAmount)
+      : point.historicalAmount;
+  const missing = !inferred && !hasRecord && point.historicalAmount === null;
+  const showingHistorical = !inferred && amount !== null && (!hasRecord || point.amount === null);
+  const quality = inferred
+    ? "按累计资金推算"
+    : missing
     ? null
     : point.status === "expired"
       ? "过期"
@@ -200,7 +207,11 @@ export function trendTooltipRows(
     { tag: "span", text: formatTrendTooltipDay(point.day) },
     {
       tag: "strong",
-      text: missing
+      text: inferred
+        ? formattedAmount === null
+          ? "暂无资产估值"
+          : `推算 ${formattedAmount}`
+        : missing
         ? "暂无记录"
         : formattedAmount === null
           ? "—"
@@ -208,13 +219,13 @@ export function trendTooltipRows(
       counter:
         formattedAmount === null || isSensitiveHidden
           ? undefined
-          : { value: formattedAmount, prefix },
+          : { value: formattedAmount, prefix: inferred ? "推算 " : prefix },
       unit: showCurrency && !missing ? currency : undefined,
     },
     {
       tag: "small",
       text: [
-        !missing && amount === null ? "未估值" : null,
+        !inferred && !missing && amount === null ? "未估值" : null,
         showingHistorical ? "早期记录" : null,
         quality,
       ]

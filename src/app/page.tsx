@@ -108,7 +108,7 @@ export default async function AssetDashboardPage({
           跳到主要内容
         </a>
         <header className="page-header locked-header">
-          <Image alt="KanBan" className="locked-logo" height={40} src="/icon.svg" width={40} />
+          <Image alt="KanBan" className="locked-logo" height={40} preload src="/icon.svg" width={40} />
           <ThemeSwitcher />
         </header>
         <main id="main-content" className="login-main">

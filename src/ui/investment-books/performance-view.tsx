@@ -61,10 +61,6 @@ export function BookPerformanceView({
   );
   const interval = useMemo(() => analyzeInterval(endDay), [analyzeInterval, endDay]);
   const fundingEvents = useMemo(() => buildBookFundingEvents(analysis), [analysis]);
-  const chartDays = useMemo(
-    () => !isInterval && firstValuationDay ? days.filter((day) => day >= firstValuationDay) : days,
-    [days, firstValuationDay, isInterval],
-  );
   const selectedPoints = useMemo(
     () => analysis.points.filter((point) => selectedDays.has(point.day)),
     [analysis.points, selectedDays],
@@ -79,9 +75,9 @@ export function BookPerformanceView({
   });
   const points = useMemo(
     () => buildBookChartPoints({
-      days: chartDays, isInterval, startDay, analysis, analyzeInterval, curve, fundingEvents,
+      days, isInterval, startDay, analysis, analyzeInterval, curve, fundingEvents,
     }),
-    [chartDays, isInterval, startDay, analysis, analyzeInterval, curve, fundingEvents],
+    [days, isInterval, startDay, analysis, analyzeInterval, curve, fundingEvents],
   );
   const metrics = [
     {
@@ -218,7 +214,7 @@ export function BookPerformanceView({
               }
             : null
         }
-        range={{ ...trendRange, currentDay, firstDay: firstValuationDay ?? analysis.firstTrendDay ?? undefined }}
+        range={{ ...trendRange, currentDay, firstDay: analysis.firstTrendDay ?? undefined }}
         metricControls={
           <header className="source-performance__chart-toolbar investment-books__chart-heading">
             <h2>
@@ -268,12 +264,18 @@ export function BookPerformanceView({
           />
         ) : null}
         {showSensitiveInfo &&
-        firstValuationDay &&
+        analysis.fundingProjectionAvailable &&
         analysis.firstRecordDay &&
-        analysis.firstRecordDay < firstValuationDay &&
-        days[0] < firstValuationDay ? (
+        (!firstValuationDay || analysis.firstRecordDay < firstValuationDay) &&
+        (!firstValuationDay || days[0] < firstValuationDay) ? (
           <p className="trend-note">
-            资产估值始于 {formatShanghaiFullDayLabel(firstValuationDay)}，此前出入金见记账记录。
+            {curve === "total"
+              ? firstValuationDay
+                ? `资产估值始于 ${formatShanghaiFullDayLabel(firstValuationDay)}；此前总资产按累计资金推算。`
+                : "当前没有真实资产估值，总资产按累计资金推算。"
+              : firstValuationDay
+                ? `真实资产估值始于 ${formatShanghaiFullDayLabel(firstValuationDay)}；此前收益率留空，可切换「总资产」查看累计资金。`
+                : "当前没有真实资产估值，暂不能计算收益率；累计资金可切换「总资产」查看。"}
           </p>
         ) : null}
       </AssetTrendPanel>
@@ -281,11 +283,11 @@ export function BookPerformanceView({
         <summary>计算口径</summary>
         <div className="daily-trend-details-content">
           <p>
-            全部日期的累计指标统一截至最近完整估值日，不混入之后的资金，趋势缺口保持为空。选择其他区间后，指标严格按所选起止日计算；缺少端点估值时留空。
+            全部日期的累计指标统一截至最近完整估值日，不混入之后的资金。首条真实估值前的总资产曲线按期初本金与累计出入金推算，仅用于视觉衔接，不参与收益计算；其余趋势缺口保持为空。选择其他区间后，指标严格按所选起止日计算；缺少端点估值时留空。
           </p>
           <p>
             区间收益 = 期末资产 − 起点资产 −
-            区间净流入。估值按日末计，净流入包含起点之后、终点当日及之前的入金减出金；起点当日资金已包含在起点资产中。记录列表包含所选起止日的全部生效记录。
+            区间净流入。估值按日末计，净流入包含起点之后、终点当日及之前的入金减出金；起点当日资金已包含在起点资产中。记账记录展示全部日期的生效记录。
           </p>
           <p>
             累计收益 = 资产总额 − 期初本金 − 累计入金 + 累计出金。收益率采用 Modified Dietz

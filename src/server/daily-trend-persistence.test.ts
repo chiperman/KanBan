@@ -23,6 +23,7 @@ async function fixture(t: TestContext) {
     id, kind: id === "alpha" ? "longbridge" : "binance", label: id, accountId: id,
     permissions: [], credentialReference: "fixture-" + id,
     snapshot: { total: { amount: amounts[id], currency: "USD" }, holdings: [], syncedAt: now,
+      coverage: { status: "complete", totalIsAuthoritative: true, products: [], unexplainedValue: null, excludedPositiveAccounts: [] },
       exchangeRates: id === "alpha" ? [
         { baseCurrency: "USD", quoteCurrency: "CNY", rate: "7", source: "fixture", observedAt: now },
         { baseCurrency: "USD", quoteCurrency: "HKD", rate: "7.8", source: "fixture", observedAt: now },

@@ -290,7 +290,6 @@
   margin-inline-start: auto;
   color: var(--primary);
   font-family: var(--f-display);
-  font-size: var(--vibe-type-subheading);
   font-variant-numeric: tabular-nums;
   font-weight: 500;
   text-align: end;
@@ -314,6 +313,11 @@
 
 .daily-overview__source-change .vibe-metric {
   margin: 0;
+}
+
+.daily-overview__source-total,
+.daily-overview__source-change .vibe-metric,
+.daily-overview__source-previous .asset-financial-number {
   font-size: var(--vibe-type-body-sm);
   line-height: 1.5;
 }

@@ -432,17 +432,17 @@
 .locked-flow-screen .locked-flow-dashboard-point {
   fill: var(--accent);
   opacity: 0;
-  stroke: none !important;
+  stroke: none;
 }
 
 .locked-flow-screen .locked-flow-dashboard-point-base {
   fill: currentColor;
-  stroke: none !important;
+  stroke: none;
 }
 
-.locked-flow-route-runner {
-  fill: currentColor !important;
-  stroke: none !important;
+.locked-flow-screen .locked-flow-route-runner {
+  fill: currentColor;
+  stroke: none;
 }
 
 .locked-flow-screen text {
@@ -474,8 +474,8 @@
   color: var(--display);
 }
 
-.locked-flow-route-base,
-.locked-flow-route-active {
+.locked-flow-screen .locked-flow-route-base,
+.locked-flow-screen .locked-flow-route-active {
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -484,13 +484,13 @@
   vector-effect: non-scaling-stroke;
 }
 
-.locked-flow-route-base {
-  stroke: var(--secondary) !important;
+.locked-flow-screen .locked-flow-route-base {
+  stroke: var(--secondary);
   opacity: 0.48;
 }
 
-.locked-flow-route-active {
-  stroke: currentColor !important;
+.locked-flow-screen .locked-flow-route-active {
+  stroke: currentColor;
   opacity: 0.92;
 }
 
@@ -526,13 +526,13 @@
   opacity: 0.5;
 }
 
-.locked-flow-dashboard-label {
+.locked-flow-screen .locked-flow-dashboard-label {
   font-size: var(--vibe-type-caption);
-  letter-spacing: 0.12em !important;
+  letter-spacing: 0.12em;
 }
 
-.locked-flow-dashboard-chart {
-  stroke: currentColor !important;
+.locked-flow-screen .locked-flow-dashboard-chart {
+  stroke: currentColor;
 }
 
 @media (prefers-reduced-motion: reduce) {

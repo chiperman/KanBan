@@ -10,6 +10,7 @@
     "daily-settlement:launchd": "node ./scripts/formal-daily-settlement-launchd.mjs",
     "migrate:json-to-sqlite": "node --experimental-transform-types --import ./scripts/register-ts-alias.mjs ./scripts/migrate-json-to-sqlite.ts",
     "dev": "node scripts/run-local-next.mjs dev",
+    "dev:tailnet": "PAD_PUBLIC_ORIGIN=https://xiaox-mac-mini.tail72342.ts.net:3000 node scripts/run-local-next.mjs dev",
     "build": "next build",
     "start": "node scripts/run-local-next.mjs start",
     "typecheck": "tsc --noEmit",

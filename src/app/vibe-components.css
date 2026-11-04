@@ -299,14 +299,14 @@
 
 .vibe-verification-code__slots {
   display: flex;
-  gap: 8px;
+  gap: clamp(4px, 1.5vw, 8px);
 }
 
 .vibe-verification-code__slot {
   display: inline-flex;
-  width: 40px;
+  width: clamp(36px, 10vw, 40px);
   height: 50px;
-  flex: 0 0 40px;
+  flex: 0 0 clamp(36px, 10vw, 40px);
   align-items: center;
   justify-content: center;
   border: 0.5px solid var(--line-2);
@@ -603,18 +603,18 @@ textarea.vibe-field__input {
   cursor: wait;
 }
 
-.vibe-button[aria-busy="true"] .workbench-navigation-skeleton {
-  opacity: 1;
-  animation: workbench-navigation-skeleton-pulse 1.2s var(--ease) infinite;
+.vibe-button[aria-busy="true"] .workbench-navigation-icon {
+  animation: workbench-navigation-icon-pulse 1.2s var(--ease) infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .vibe-button[aria-busy="true"] .workbench-navigation-skeleton {
+  .vibe-button[aria-busy="true"] .workbench-navigation-icon {
     animation: none;
+    opacity: 0.55;
   }
 }
 
-@keyframes workbench-navigation-skeleton-pulse {
+@keyframes workbench-navigation-icon-pulse {
   50% {
     opacity: 0.45;
   }
@@ -1140,20 +1140,6 @@ body:has(.page-locked)::before {
 }
 
 
-.card-drag-overlay {
-  display: flex;
-  flex-direction: column;
-  border: 0;
-  border-radius: var(--r-md);
-  background: var(--glass);
-}
-
-
-
-
-
-
-
 .vibe-data-module {
   color: var(--primary);
 }
@@ -1574,40 +1560,6 @@ body:has(.page-locked)::before {
   font-size: var(--vibe-type-micro);
 }
 
-.layout-resize-preview {
-  border-color: var(--display);
-  background: var(--gray-3);
-  color: var(--display);
-  outline-color: var(--display);
-}
-
-.card-drop-preview {
-  border-color: var(--display);
-  background: transparent;
-  color: var(--display);
-  outline-color: var(--display);
-}
-
-.card-drop-candidate.is-active {
-  border-color: transparent;
-  background: transparent;
-  color: transparent;
-}
-
-.card-drag-overlay {
-  outline-color: var(--display);
-}
-
-.layout-resize-handle:hover::before,
-.layout-resize-handle:focus-visible::before,
-.card-resizing .layout-resize-handle::before,
-.layout-resize-handle:hover::after,
-.layout-resize-handle:focus-visible::after,
-.card-resizing .layout-resize-handle::after {
-  border-color: var(--display);
-  background: transparent;
-}
-
 @media (max-width: 639px) {
   .vibe-dialog-overlay {
     align-items: end;
@@ -1649,17 +1601,6 @@ body:has(.page-locked)::before {
 
   .source-dialog .vibe-dialog__footer {
     bottom: 0;
-  }
-}
-
-@media (max-width: 359px) {
-  .vibe-verification-code__slots {
-    gap: 4px;
-  }
-
-  .vibe-verification-code__slot {
-    width: 36px;
-    flex-basis: 36px;
   }
 }
 

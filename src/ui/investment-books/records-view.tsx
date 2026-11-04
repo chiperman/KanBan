@@ -2,7 +2,6 @@ import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
 import { type BookRecord } from "@/domain/investment-books";
 import type { ManualAssetRecord } from "@/server/ports";
 import { AssetFinancialValue } from "@/ui/asset-financial-value";
-import { AssetTrendRangeControls } from "@/ui/asset-trend-panel";
 import { InvestmentBookRecordAmount } from "@/ui/investment-book-record-amount";
 import { ManualAssetRecordCheck } from "@/ui/manual-asset-record-dialog";
 import { VibeButton } from "@/ui/vibe/vibe-button";
@@ -11,7 +10,6 @@ import { useTablePagination, VibeTablePagination } from "@/ui/vibe/vibe-table-pa
 
 import { bookMoney, type InvestmentBookSource } from "./shared";
 
-import type { AssetTrendRangeSelection } from "@/ui/asset-trend-panel";
 import type { BookAnalysis, buildBookTimeline } from "./model";
 
 export type BookRecordFilter = "all" | "funds" | "valuations";
@@ -26,8 +24,6 @@ export function BookRecordsView({
   manualRecords,
   recordFilter,
   setRecordFilter,
-  trendRange,
-  currentDay,
   filteredTimeline,
   recordPagination,
   depositTotals,
@@ -44,8 +40,6 @@ export function BookRecordsView({
   manualRecords: ManualAssetRecord[];
   recordFilter: BookRecordFilter;
   setRecordFilter(value: BookRecordFilter): void;
-  trendRange: AssetTrendRangeSelection;
-  currentDay: string;
   filteredTimeline: TimelineRow[];
   recordPagination: ReturnType<typeof useTablePagination<TimelineRow>>;
   depositTotals: Map<string, string | null>;
@@ -80,9 +74,9 @@ export function BookRecordsView({
         <div className="investment-books__record-filters" role="group" aria-label="记账记录类型">
           {(
             [
+              ["all", "全部记录"],
               ["funds", "出入金"],
               ["valuations", "资产估值"],
-              ["all", "全部记录"],
             ] as const
           ).map(([value, label]) => (
             <VibeButton
@@ -96,16 +90,11 @@ export function BookRecordsView({
             </VibeButton>
           ))}
         </div>
-        <div className="investment-books__record-range">
-          <AssetTrendRangeControls
-            range={{ ...trendRange, currentDay, firstDay: analysis.firstTrendDay ?? undefined }}
-          />
-        </div>
       </div>
       {showSensitiveInfo && filteredTimeline.length === 0 ? (
         <div className="investment-books__empty">
           <p className="trend-note">
-            所选区间暂无
+            暂无
             {recordFilter === "funds"
               ? "出入金"
               : recordFilter === "valuations"
@@ -113,15 +102,6 @@ export function BookRecordsView({
                 : "记账"}
             记录。
           </p>
-          {trendRange.preset !== "all" ? (
-            <VibeButton
-              type="button"
-              variant="text"
-              onClick={() => trendRange.onChange("all", null)}
-            >
-              查看全部日期
-            </VibeButton>
-          ) : null}
         </div>
       ) : null}
       {showSensitiveInfo ? (

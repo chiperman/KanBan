@@ -775,7 +775,7 @@ html {
   }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 639px) {
   .investment-performance {
     gap: var(--vibe-space-5);
   }
@@ -1013,7 +1013,7 @@ html {
   min-width: 0;
 }
 
-@media (min-width: 721px) {
+@media (min-width: 640px) {
   .workbench-page-header__actions > .vibe-button,
   .workbench-page-header__actions > .vibe-select,
   .workbench-page-header__actions > .asset-refresh-controls,
@@ -1039,7 +1039,7 @@ html {
 }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 639px) {
   .workbench-page-header__actions > .vibe-button,
   .workbench-page-header__actions > .vibe-select,
   .workbench-page-header__actions > .asset-refresh-controls,
@@ -1317,7 +1317,7 @@ html {
   }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 639px) {
   .assets-holdings__source-columns {
     display: none;
   }

@@ -57,9 +57,9 @@ pnpm runtime:update
 
 采集的小时锚点、补试计划和历史记录仍来自同一个正式数据库，不因更新重置；切换期间到期的任务在恢复后处理。更新进程存活时后台跳过新批次，进程异常退出后暂停标记不阻塞采集。若进程被强制杀死而遗留更新锁，应先核对锁目录 `owner.json` 中的进程与任务实际状态，再移除锁重试。自动回退恢复代码与任务，不自动覆盖已写入的业务数据；不兼容的数据结构变更仍需独立迁移方案。网页服务重启后可能需要重新登录，Passkey、备用登录及来源授权继续沿用。
 
-首次沿用现有数据时，先停止旧服务，完整备份并复制原数据目录，包括 SQLite、凭证、所有者认证与外部服务配置；保留原 `PAD_SECRET_ENCRYPTION_KEY`。不要让旧版开发进程与新版后台并行写正式库。开发默认端口 3000，正式副本默认 3001，使用不同数据目录与构建目录；复制的数据从分离后各自独立。
+首次沿用现有数据时，先停止旧服务，完整备份并复制原数据目录，包括 SQLite、凭证、所有者认证与外部服务配置；保留原 `PAD_SECRET_ENCRYPTION_KEY`。不要让旧版开发进程与新版后台并行写正式库。开发默认端口 3000，正式副本默认 3001，使用不同数据目录与构建目录；复制的数据从分离后各自独立。Tailscale Serve 外部端口与本地端口保持同号：开发 `3000`、正式 KanBan `3001`、Gallery `8787`；开发预览用 `pnpm dev:tailnet` 保持 Passkey 来源与 `3000` 入口一致。
 
-[launchd 管理脚本](../../scripts/background-launchd.mjs) 创建当前用户的 `com.xiaox.kanban.web`（持续运行）和 `com.xiaox.kanban.background-collection`（每分钟检查），固定 Node、PATH、数据目录与登录入口，日志保存在正式数据目录。默认入口为 `http://localhost:3001`；需要远程入口时用 `--origin` 指定现有 HTTPS 入口，并同步其转发端口。所有者登录保护保持生效；本机采集不需要网页 Cookie。
+[launchd 管理脚本](../../scripts/background-launchd.mjs) 创建当前用户的 `com.xiaox.kanban.web`（持续运行）和 `com.xiaox.kanban.background-collection`（每分钟检查），固定 Node、PATH、数据目录与登录入口，日志保存在正式数据目录。默认入口为 `http://localhost:3001`；需要远程入口时用 `--origin` 指定现有 HTTPS 入口，并同步其转发端口。当前正式入口为 `https://xiaox-mac-mini.tail72342.ts.net:3001`，运行副本配置、网页任务与采集任务的 `PAD_PUBLIC_ORIGIN` 必须一致。所有者登录保护保持生效；本机采集不需要网页 Cookie。
 
 `pnpm background:run` 是一次真实后台检查，必须显式提供绝对路径 `KANBAN_DATA_DIR`，拒绝 `APP_ENV=test`；排查时不能将它当演示命令运行。安装、移除任务与真实数据迁移分别按本次操作授权执行。
 

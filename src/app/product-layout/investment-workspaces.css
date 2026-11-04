@@ -148,7 +148,7 @@
   font-size: var(--vibe-type-body);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 639px) {
   .source-performance__heading {
     align-items: flex-start;
     flex-direction: column;

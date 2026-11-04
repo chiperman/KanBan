@@ -59,6 +59,42 @@ export function buildBookFundingEvents(analysis: BookAnalysis) {
   return fundingEvents;
 }
 
+/**
+ * Before the first real valuation, cumulative book funding can provide a
+ * visual capital line. It is deliberately kept out of BookAnalysis so it
+ * cannot affect profit, return, summaries, or benchmark comparisons.
+ */
+function buildBookInferredTotals(analysis: BookAnalysis, days: readonly string[]) {
+  const firstValuationDay = analysis.points.find((point) => point.total !== null)?.day;
+  const rows = analysis.records
+    .filter((row) => row.kind === "opening" || row.kind === "deposit" || row.kind === "withdrawal")
+    .toSorted(
+      (a, b) =>
+        a.day.localeCompare(b.day) ||
+        a.recordedAt.localeCompare(b.recordedAt) ||
+        a.id.localeCompare(b.id),
+    );
+  if (!rows.length || !analysis.fundingProjectionAvailable) return new Map<string, string>();
+
+  const totals = new Map<string, string>();
+  let total = "0";
+  let rowIndex = 0;
+  let hasFunding = false;
+  const signedAmount = (row: (typeof rows)[number]) =>
+    row.kind === "withdrawal" ? `-${row.amount}` : row.amount;
+
+  for (const day of days) {
+    if (firstValuationDay && day >= firstValuationDay) break;
+    while (rowIndex < rows.length && rows[rowIndex].day <= day) {
+      total = decimalAdd(total, signedAmount(rows[rowIndex]));
+      hasFunding = true;
+      rowIndex += 1;
+    }
+    if (hasFunding) totals.set(day, total);
+  }
+  return totals;
+}
+
 export function buildBookChartPoints({
   days,
   isInterval,
@@ -74,9 +110,11 @@ export function buildBookChartPoints({
   fundingEvents: ReturnType<typeof buildBookFundingEvents>;
 }) {
   const pointMap = new Map(analysis.points.map((row) => [row.day, row]));
+  const inferredTotals = buildBookInferredTotals(analysis, days);
   const points = days.map((day) => {
     const row = pointMap.get(day);
-    let amount = row?.total ?? null;
+    const inferred = curve === "total" && row?.total == null && inferredTotals.has(day);
+    let amount = row?.total ?? (inferred ? inferredTotals.get(day)! : null);
     if (curve === "return") {
       const periodReturn = isInterval
         ? day === startDay &&
@@ -92,8 +130,9 @@ export function buildBookChartPoints({
       day,
       amount,
       events: fundingEvents.get(day),
-      observed: !!row,
-      status: amount == null ? ("incomplete" as const) : ("complete" as const),
+      inferred: inferred || undefined,
+      observed: !!row && !inferred,
+      status: inferred || amount == null ? ("incomplete" as const) : ("complete" as const),
     };
   });
 
