@@ -20,7 +20,7 @@ jobs:
     env:
       CI: "1"
       NEXT_TELEMETRY_DISABLED: "1"
-      KANBAN_CI_HOME: ${{ github.workspace }}/.ci-run
+      KANBAN_CI_HOME: .ci-run
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -37,13 +37,13 @@ jobs:
           cache: pnpm
 
       - name: Verify repository
-        run: pnpm ci:local verify "$GITHUB_WORKSPACE"
+        run: pnpm ci:local verify
 
       - name: Upload verification evidence
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: verify-evidence-${{ github.run_id }}
-          path: ${{ github.workspace }}/.ci-run
+          path: .ci-run
           if-no-files-found: ignore
           retention-days: 7
