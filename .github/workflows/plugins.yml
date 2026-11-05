@@ -5,17 +5,24 @@ on:
     tags: ['plugins-v*']
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: plugin-release-${{ github.ref }}
+  group: plugin-release
   cancel-in-progress: false
+  queue: max
 
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: 11.25.0
@@ -26,22 +33,42 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec next typegen
       - run: pnpm typecheck
-      - name: Build portable plugin release
+      - name: Build and verify portable plugin release
         env:
           KANBAN_PLUGIN_REPOSITORY: ${{ github.repository }}
-        run: pnpm plugins:release "$GITHUB_REF_NAME"
-      - name: Check all plugin handshakes
-        run: |
-          for package in dist/plugins/release/*.tar.gz; do
-            pnpm plugin install "$package" --data-dir "$RUNNER_TEMP/plugin-probe"
-          done
-          pnpm plugin list --data-dir "$RUNNER_TEMP/plugin-probe"
-      - name: Publish complete release
+        run: pnpm plugins:verify --release "$GITHUB_REF_NAME" --output dist/plugins/release
+      - name: Check main CI and published versions
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          jq -n --arg tag "$GITHUB_REF_NAME" '{tag_name:$tag,name:$tag,draft:true,prerelease:false,make_latest:"false",body:"KanBan 集成插件。请在设置 → 插件中安装，或运行 pnpm plugin install <ID>。通用长桥包使用 CLI；本包不含平台专属 SDK。"}' > "$RUNNER_TEMP/release.json"
-          gh api --method POST "repos/$GITHUB_REPOSITORY/releases" --input "$RUNNER_TEMP/release.json" > "$RUNNER_TEMP/created-release.json"
-          gh release upload "$GITHUB_REF_NAME" dist/plugins/release/*
-          release_id=$(jq -r .id "$RUNNER_TEMP/created-release.json")
-          gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$release_id" --input - <<<'{"draft":false,"make_latest":"false"}'
+        run: node --experimental-transform-types scripts/check-plugin-release.mjs
+      - name: Save verified release bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: plugin-release-${{ github.sha }}
+          path: dist/plugins/release/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.15.0
+      - name: Download verified release bundle
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: plugin-release-${{ github.sha }}
+          path: dist/plugins/release/
+      - name: Resume draft, verify uploads and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node --experimental-transform-types scripts/publish-plugin-release.mjs

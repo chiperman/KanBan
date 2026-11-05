@@ -27,7 +27,8 @@ try {
     plugins.push({ id: manifest.id, label: manifest.description?.label || 'CoinGecko', version: manifest.version, asset, size: archive.length, sha256, manifest });
     sums.push(`${sha256}  ${asset}`);
   }
-  const catalog = { format: 1, protocolVersion: 1, nodeMajor: 24, repository, release, plugins };
+  const sourceCommit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: workspace, encoding: 'utf8' }).trim();
+  const catalog = { format: 1, protocolVersion: 1, nodeMajor: Number(process.versions.node.split('.')[0]), repository, release, sourceCommit, plugins };
   const content = JSON.stringify(catalog, null, 2) + '\n';
   writeFileSync(path.join(destination, 'catalog.json'), content);
   sums.push(`${createHash('sha256').update(content).digest('hex')}  catalog.json`);
