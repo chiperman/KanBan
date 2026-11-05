@@ -52,7 +52,7 @@ try {
   run("pnpm", ["design:lint"], testEnvironment);
   run("pnpm", ["test:unit"], testEnvironment);
   if (pluginsChanged()) run("pnpm", ["plugins:verify"], testEnvironment);
-  else console.log("本次未修改插件、源码或构建链路，跳过插件打包试装。");
+  else console.log("本次未修改集成、源码或构建链路，跳过官方集成打包验证。");
   run("pnpm", ["build"], buildEnvironment);
   evidence.status = "passed";
   console.log("CI 验证通过：类型、设计、单测和生产构建全部完成。");

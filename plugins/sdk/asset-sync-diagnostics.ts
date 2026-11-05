@@ -47,7 +47,7 @@ export class AssetSourcePluginExecutionError extends Error {
 
 /** 由主程序产生的固定错误，不接受插件或供应商原始文本。 */
 export class AssetSourcePluginUnavailableError extends Error {
-  constructor() { super("来源插件不可用，请安装或启用对应插件"); }
+  constructor() { super("官方集成不可用，请升级或重新构建 KanBan"); }
 }
 
 /** 仅暂存数值元数据，不携带 headers、正文、URL 或请求对象。 */
@@ -154,7 +154,7 @@ const MESSAGES: Record<AssetSyncDiagnostic["category"], string> = {
   network: "网络连接失败", timeout: "同步超时", "rate-limit": "来源请求被限流",
   server: "来源服务暂时不可用", authentication: "只读凭证不可用或认证失败",
   permission: "来源访问权限不足", restricted: "来源服务受地区或法律限制",
-  cancelled: "同步已取消", "invalid-response": "来源响应无效", "plugin-unavailable": "来源插件不可用，请安装或启用对应插件", unknown: "资产来源同步失败",
+  cancelled: "同步已取消", "invalid-response": "来源响应无效", "plugin-unavailable": "官方集成不可用，请升级或重新构建 KanBan", unknown: "资产来源同步失败",
 };
 export function assetSyncErrorMessage(diagnostic: AssetSyncDiagnostic): string {
   const detail = [diagnostic.httpStatus === null ? null : 'HTTP ' + diagnostic.httpStatus, diagnostic.code].filter(Boolean);

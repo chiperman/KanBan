@@ -8,13 +8,14 @@
 
 | 命令 | 入口与作用 |
 | --- | --- |
-| `pnpm dev` / `pnpm start` | [run-local-next.mjs](run-local-next.mjs)：校验工具链、准备本机网络环境并启动 Next.js；SDK 原生产物按需检查，`start` 使用已有应用构建 |
-| `pnpm build` | `next build`；SDK 原生产物按需显式构建 |
+| `pnpm dev` | 先构建官方集成包，再由 [run-local-next.mjs](run-local-next.mjs) 校验工具链、准备本机网络环境并启动 Next.js；SDK 原生产物按需检查 |
+| `pnpm start` | [run-local-next.mjs](run-local-next.mjs)：使用已有应用构建启动 Next.js；不会重新构建官方集成包 |
+| `pnpm build` | 先由 `prebuild` 构建官方集成包，再执行 `next build`；SDK 原生产物按需显式构建 |
 | `pnpm typecheck` | `tsc --noEmit`；首次检出或清除 Next.js 产物后，先按 [开发入口](../README.md#开发入口) 生成路由类型 |
 | `pnpm test:unit` | [run-unit-tests.mjs](run-unit-tests.mjs)：发现 `scripts/` 和 `src/` 中既有 `*.test.ts` / `*.test.mjs`，通过 Node 执行离线单测 |
 | `pnpm test` | 按顺序执行 `typecheck`、`design:lint`、`test:unit`；不启动应用构建或浏览器 |
-| `pnpm ci:verify` | [ci-verify.mjs](ci-verify.mjs)：在隔离临时数据目录执行 frozen install、Next 路由类型生成、类型检查、设计检查、离线单测和生产构建；相关源码、插件、脚本、依赖或 workflow 变化时附加插件验证；供 GitHub-hosted Runner 使用 |
-| `pnpm plugins:verify [--release plugins-v1.0.0 --output 新目录]` | [verify-plugins.ts](verify-plugins.ts)：静态校验浏览目录，构建全量官方包并核对附件与摘要，在临时数据目录逐包握手；第三方条目不下载执行；默认清理临时产物，指定输出目录时保留发行包 |
+| `pnpm ci:verify` | [ci-verify.mjs](ci-verify.mjs)：在隔离临时数据目录执行 frozen install、Next 路由类型生成、类型检查、设计检查、离线单测、官方集成验证和生产构建；供 GitHub-hosted Runner 使用 |
+| `pnpm plugins:verify` | [verify-plugins.ts](verify-plugins.ts)：构建并检查随应用提供的官方集成包，在临时目录逐包握手；不读取正式数据、不发布独立插件产物 |
 
 范围与新增测试约束见 [测试纪律](../AGENTS.md#测试纪律)。公开仓库由 [PR 验证 Action](../.github/workflows/verify.yml) 和 [main 构建 Action](../.github/workflows/main-build.yml) 负责正式门禁与构建。
 
@@ -52,12 +53,11 @@ Mac mini 不运行轮询器，也不作为公开仓库的 self-hosted Runner。�
 | --- | --- |
 | `pnpm runtime:prepare <新永久目录> [参数]` | [prepare-runtime.mjs](prepare-runtime.mjs)：准备独立的生产运行副本，不复制业务数据或安装任务；参数与迁移边界见 [后台自动采集](../docs/operations/service-composition.md#后台自动采集) |
 | `pnpm runtime:update [--check]` | [update-runtime.mjs](update-runtime.mjs)：从临时部署 worktree 更新已安装的 3001 正式版，沿用正式配置、数据与采集周期，验证失败恢复旧任务；`--check` 只检查配置，切换与备份边界见 [永久运行副本](../docs/operations/service-composition.md#永久运行副本) |
-| `pnpm plugin:build [源码目录] [新输出目录]` | [build-source-plugin.mjs](build-source-plugin.mjs)：将指定插件的静态运行时依赖发射为独立包，拒绝运行时依赖 `src/server/`；长桥 `--with-sdk` 校验并携带本机产物，默认构建 `plugins/binance`，不安装或接触来源 |
-| `pnpm plugins:build [新输出目录] [--with-sdk]` | [build-source-plugins.mjs](build-source-plugins.mjs)：构建全部八个外部来源与服务包，默认输出 `dist/plugins/packages/`，不安装插件 |
-| `pnpm plugin <available\|list\|inspect\|install\|update\|enable\|disable\|uninstall\|rollback> [参数]` | [source-plugin.ts](source-plugin.ts)：浏览发行目录；`inspect` 查看 GitHub 发行信息；按 ID、GitHub 仓库/Release 地址、包目录或压缩包安装及管理，多插件仓库用 `--plugin <ID>` 选择；读取 `.env.local`，下一次请求自动生效，详见 [插件安装](../docs/operations/asset-sources.md#独立包安装与生命周期) |
-| `pnpm plugin create <名称> <新目录>` / `pack <包目录> <新输出.tar.gz> [--repository owner/repo --release v1.0.0]` | [开发模板](../plugins/sdk/template/) 与独立包归档入口；带仓库和 tag 时还生成同目录 `catalog.json`，输出目录须先创建且文件须不存在；协议和分发见 [第三方插件开发](../docs/operations/plugin-development.md) |
-| `pnpm plugin release <包目录> [包目录...] --output <新目录> --repository owner/repo --release v1.0.0` | 一次生成全量插件压缩包与 `catalog.json`；每次传入仓库全部可运行包目录，未改动插件保持原版本；拒绝已有输出目录和重复 ID，失败清理本次产物；不执行发布 |
-| `pnpm plugins:release plugins-v1.0.0 [新输出目录]` | [release-source-plugins.mjs](release-source-plugins.mjs)：构建八个通用压缩包、目录与摘要，默认输出 `dist/plugins/release/`，不执行发布 |
+| `pnpm plugin:build [源码目录] [新输出目录]` | [build-source-plugin.mjs](build-source-plugin.mjs)：将指定官方集成的静态运行时依赖发射到应用构建目录，拒绝运行时依赖 `src/server/`；不安装或接触来源 |
+| `pnpm plugin <list|available>` | [source-plugin.ts](source-plugin.ts)：只读列出当前构建包含的官方集成；不支持安装、导入、更新、停用、卸载或第三方插件 |
+| `pnpm plugins:build [新输出目录]` | [build-source-plugins.mjs](build-source-plugins.mjs)：构建随应用提供的全部官方集成包，默认输出 `dist/plugins/packages/`；不接触来源数据 |
+| `pnpm build` | 先构建官方集成包，再构建 Next 应用；正式运行时只从应用构建目录加载这些包 |
+
 | `pnpm background:run` | [run-background.mjs](run-background.mjs) / [run-background-collection.ts](run-background-collection.ts)：一次后台检查，执行到期全量、失败补试及正式日结；必须显式指定正式数据目录 |
 | `pnpm background:launchd <install\|status\|remove\|print>` | [background-launchd.mjs](background-launchd.mjs)：管理永久副本的网页常驻与每分钟后台检查任务；移除不删除数据 |
 | `pnpm daily-settlement:run` | [run-formal-daily-settlement.ts](run-formal-daily-settlement.ts)：独立运行生产日结服务；`APP_ENV=test` 不会将此 CLI 切换为测试替身，合同见 [正式日结](../docs/operations/service-composition.md#正式日结) |
@@ -75,11 +75,6 @@ node --experimental-transform-types --import ./scripts/register-ts-alias.mjs ./s
 
 | 文件 | 职责 |
 | --- | --- |
-| [lib/plugin-archive.mjs](lib/plugin-archive.mjs) | 插件打包与受限 USTAR 解包，拒绝越界路径、链接、重复文件及超限内容 |
-| [lib/plugin-release.mjs](lib/plugin-release.mjs) | 发行附件及版本校验、GitHub 只读门禁与发行 API；不安装或执行插件 |
-| [lib/github-main.mjs](lib/github-main.mjs) | 插件发布与手动部署共用的主分支归属、最新 push/main 构建检查及 GitHub origin 解析 |
-| [check-plugin-release.mjs](check-plugin-release.mjs) | 标签发布的只读检查：目标提交、`main` 最新构建和上一稳定发行版本 |
-| [publish-plugin-release.mjs](publish-plugin-release.mjs) | 独立写权限任务：只上传已验证产物，续传草稿、下载核对后公开；不覆盖已公开附件 |
 | [check-toolchain.mjs](check-toolchain.mjs) | 安装、启动与 CLI 共用的 Node/pnpm 版本检查 |
 | [local-network-environment.mjs](local-network-environment.mjs) | 为本机启动准备 Node 网络环境，处理不可达的本地代理 |
 | [register-ts-alias.mjs](register-ts-alias.mjs) / [ts-alias-loader.mjs](ts-alias-loader.mjs) | TypeScript CLI 与单测的 `@/` 别名加载支持 |

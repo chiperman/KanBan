@@ -1,45 +1,54 @@
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
-import { parseMarketRegistry } from '@/server/asset-source-plugins/market-registry';
-import { assertPluginManifest } from '@/server/asset-source-plugins/manifest';
-import { PluginInstaller } from '@/server/asset-source-plugins/installation';
-import { readReleaseBundle, pluginReleasePattern } from './lib/plugin-release.mjs';
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { bundledPluginPackages } from "@/server/asset-source-plugins/registry";
+import { invokePlugin } from "@/server/asset-source-plugins/stdio-host";
+import { OFFICIAL_PLUGIN_IDS } from "@/server/asset-source-plugins/official";
+import officialCatalog from "../plugins/official.json" with { type: "json" };
 
-const args = process.argv.slice(2);
-function option(name: string) {
-  const at = args.indexOf(name);
-  if (at < 0) return undefined;
-  const value = args[at + 1];
-  if (!value || value.startsWith('--')) throw new Error(`缺少 ${name} 参数`);
-  args.splice(at, 2);
-  return value;
-}
-const release = option('--release') || 'plugins-v0.0.0';
-const output = option('--output');
-if (args.length || !pluginReleasePattern.test(release)) throw new Error('用法：pnpm plugins:verify [--release plugins-v1.0.0 --output 新目录]');
-const repository = process.env.KANBAN_PLUGIN_REPOSITORY || 'chiperman/KanBan';
-const temporary = mkdtempSync(path.join(tmpdir(), 'kanban-plugin-verify-'));
+const workspace = path.resolve(process.cwd());
+const temporary = mkdtempSync(path.join(tmpdir(), "kanban-official-integrations-"));
+const output = path.join(temporary, "packages");
+
 try {
-  const registry = parseMarketRegistry(JSON.parse(readFileSync('plugins/registry.json', 'utf8')));
-  const destination = output ? path.resolve(output) : path.join(temporary, 'release');
-  execFileSync(process.execPath, ['scripts/release-source-plugins.mjs', release, destination], { stdio: 'inherit' });
-  const commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
-  const { catalog, files } = readReleaseBundle(destination, repository, release, commit);
-  const installer = new PluginInstaller(path.join(temporary, 'source-plugins'));
-  const official = registry.plugins.filter(p => !p.repository);
-  const ids = new Set(catalog.plugins.map((entry: { id: string }) => entry.id));
-  if (official.length !== ids.size || official.some(p => !ids.has(p.id))) throw new Error('官方插件包与浏览目录不一致');
-  for (const entry of catalog.plugins) {
-    assertPluginManifest(entry.manifest);
-    const listed = official.find(p => p.id === entry.id);
-    if (!listed || listed.assetSource !== entry.manifest.capabilities.includes('assets.read')) throw new Error(`插件目录能力与清单不一致：${entry.id}`);
-    const id = await installer.install({ archive: files.get(entry.asset)!, id: entry.id, version: entry.version, manifest: entry.manifest });
-    if (id !== entry.id) throw new Error('试装结果与发行目录不一致');
-    console.log(`插件包及握手通过：${entry.id} ${entry.version}`);
+  const catalogIds = officialCatalog.plugins.map(plugin => plugin.id);
+  const officialIds = new Set<string>(OFFICIAL_PLUGIN_IDS);
+  if (new Set(catalogIds).size !== catalogIds.length ||
+      catalogIds.length !== OFFICIAL_PLUGIN_IDS.length ||
+      catalogIds.some(id => !officialIds.has(id))) {
+    throw new Error("官方集成运行白名单与展示清单不一致");
   }
-  console.log(`插件验证通过：${catalog.plugins.length} 个官方包；${registry.plugins.length - official.length} 个第三方目录条目仅作静态校验。`);
+
+  execFileSync(process.execPath, [
+    path.join(workspace, "scripts/build-source-plugins.mjs"),
+    output,
+  ], { cwd: workspace, stdio: "inherit" });
+
+  const packages = bundledPluginPackages(output);
+  const ids = new Set(packages.map(pkg => pkg.manifest.id));
+  if (packages.length !== OFFICIAL_PLUGIN_IDS.length || OFFICIAL_PLUGIN_IDS.some(id => !ids.has(id))) {
+    throw new Error("官方集成构建产物与官方清单不一致");
+  }
+
+  for (const pkg of packages) {
+    const listed = officialCatalog.plugins.find(plugin => plugin.id === pkg.manifest.id);
+    if (!listed || pkg.manifest.capabilities.includes("assets.read") !== listed.assetSource ||
+        pkg.manifest.metadata?.summary !== listed.summary || pkg.manifest.metadata?.publisher !== listed.publisher ||
+        pkg.manifest.metadata?.homepage !== listed.homepage ||
+        (listed.assetSource && pkg.manifest.description?.label !== listed.label)) {
+      throw new Error(`官方集成清单与展示元数据不一致：${pkg.manifest.id}`);
+    }
+    const initialized = await invokePlugin(pkg, "initialize", {}, {
+      signal: AbortSignal.timeout(5000),
+      persistCredentials: async () => { throw new Error("验证阶段不能保存凭证"); },
+    }, undefined, 5000);
+    if (JSON.stringify(initialized) !== JSON.stringify(pkg.manifest)) {
+      throw new Error(`官方集成握手清单不一致：${pkg.manifest.id}`);
+    }
+    console.log(`官方集成构建与握手通过：${pkg.manifest.id} v${pkg.manifest.version}`);
+  }
+  console.log(`官方集成验证通过：${packages.length} 个集成；未读取正式数据或网络账户。`);
 } finally {
   rmSync(temporary, { recursive: true, force: true });
 }

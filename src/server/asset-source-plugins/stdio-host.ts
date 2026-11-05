@@ -74,7 +74,8 @@ export class PluginSession {
   private receive(value: Record<string, unknown>) {
     if (!value || value.jsonrpc !== "2.0") throw new Error();
     if (typeof value.method === "string") {
-      const operationId = typeof value.operationId === "number" ? value.operationId : [...this.pending.keys()][0];
+      if (!Number.isSafeInteger(value.operationId)) throw new Error();
+      const operationId = value.operationId as number;
       if (this.cancelled.has(operationId)) return;
       const p = this.pending.get(operationId);
       if (!p || p.method === "initialize") throw new Error();
@@ -88,10 +89,11 @@ export class PluginSession {
       void this.host(value.method, value.params, p).then(result => reply({ jsonrpc: "2.0", id, result }), () => reply({ jsonrpc: "2.0", id, error: { code: -32000, message: "核心能力调用失败" } }));
       return;
     }
-    if (typeof value.id !== "number" || Object.hasOwn(value, "result") === Object.hasOwn(value, "error")) throw new Error();
-    if (this.cancelled.delete(value.id)) { this.releaseIdle(); return; }
-    const p = this.pending.get(value.id); if (!p) throw new Error();
-    this.pending.delete(value.id); p.cleanup();
+    if (!Number.isSafeInteger(value.id) || Object.hasOwn(value, "result") === Object.hasOwn(value, "error")) throw new Error();
+    const id = value.id as number;
+    if (this.cancelled.delete(id)) { this.releaseIdle(); return; }
+    const p = this.pending.get(id); if (!p) throw new Error();
+    this.pending.delete(id); p.cleanup();
     if (value.error) {
       const diagnostic = normalizeAssetSyncDiagnostic((value.error as { data?: unknown }).data);
       p.reject(diagnostic ? new AssetSourcePluginExecutionError(diagnostic) : new Error("插件读取或只读授权校验失败"));
@@ -149,6 +151,8 @@ export class PluginSession {
 
   async invoke(method: string, params: unknown, context: AssetSourcePluginContext, timeoutMs = 60_000, event?: (event: unknown) => void): Promise<unknown> {
     context.signal.throwIfAborted();
+    const required = method === "assets.read" || method === "authorization.preview" || method === "authorization.revalidate" || method === "extension.call" ? method : null;
+    if (required && !this.pkg.manifest.capabilities.includes(required)) throw new Error("插件未声明请求的能力");
     if (!this.pkg.available()) { this.close(); throw new AssetSourcePluginUnavailableError(); }
     const initialized = await this.start(context, timeoutMs);
     if (method === "initialize") return initialized;

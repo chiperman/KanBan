@@ -29,7 +29,7 @@ export function SourceChooseStep({
         ))}
       </div>
       <VibeLink href="/settings?view=plugins" variant="text">
-        浏览集成插件
+        浏览官方集成
       </VibeLink>
       <VibeButton onClick={leaveFlow} type="button" variant="text">
         取消返回

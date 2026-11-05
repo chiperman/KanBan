@@ -13,7 +13,7 @@ import type { AssetSourceProviderAdapter } from "@/server/asset-source-onboardin
 import type { AssetSourcePluginId } from "./protocol";
 import { assertPluginSnapshot } from "./snapshot-validation";
 
-/** 注册及执行与持久化身份分离；未安装插件不妨碍读取旧来源数据。 */
+/** 注册及执行与持久化身份分离；构建产物缺失时不妨碍读取旧来源数据。 */
 export class AssetSourcePluginManager implements AssetSourceRefresher {
   private readonly registered = new Map<string, AssetSourcePlugin>();
   private readonly supplier?: () => readonly AssetSourcePlugin[];

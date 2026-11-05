@@ -2,7 +2,7 @@ import type { BuiltinAssetSourceKind } from "@/domain/asset-source-kinds";
 import type { AssetSourceRefresher } from "@/server/ports";
 import { ASSET_SOURCE_PLUGIN_PROTOCOL_VERSION, type AssetSourcePlugin } from "./protocol";
 
-/** 旧路由及测试替身使用的兼容桥；生产装配仅加载安装包。 */
+/** 旧路由及测试替身使用的兼容桥；生产装配仅加载应用构建包。 */
 export function builtinAssetSourcePlugins(
   refreshers: Partial<Record<Exclude<BuiltinAssetSourceKind, "manual">, AssetSourceRefresher>>,
 ): AssetSourcePlugin[] {

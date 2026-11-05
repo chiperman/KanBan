@@ -12,6 +12,11 @@
   margin: 0;
   font-size: var(--vibe-type-subheading);
 }
+.plugin-marketplace__policy {
+  margin: 0;
+  color: var(--secondary);
+  font-size: var(--vibe-type-body-sm);
+}
 .plugin-marketplace__heading,
 .plugin-marketplace__filters,
 .plugin-marketplace__card > header,

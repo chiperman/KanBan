@@ -11,7 +11,6 @@ permissions:
 concurrency:
   group: main-build
   cancel-in-progress: false
-  queue: max
 
 jobs:
   build:

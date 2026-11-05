@@ -10,7 +10,7 @@ import { LongbridgeDailyAssets } from "@/server/asset-sources/longbridge-daily-a
 import { existsSync } from "node:fs";
 
 import { AssetSourceOnboarding } from "@/server/asset-source-onboarding";
-import { pluginPackageLoader, pluginRoot } from "@/server/asset-source-plugins/registry";
+import { bundledPluginPackageLoader } from "@/server/asset-source-plugins/registry";
 import { stdioAssetSourcePlugin } from "@/server/asset-source-plugins/stdio-host";
 import { LongbridgeOAuthState } from "@/server/asset-source-plugins/oauth-state";
 import { AssetSourcePluginManager } from "@/server/asset-source-plugins/manager";
@@ -71,8 +71,12 @@ export function createProductionServices(
   const dailyAssetSnapshots = new DatabaseDailyAssetSnapshots(database);
   const fullRefreshState = new DatabaseAssetFullRefreshState(database);
   const readySecrets = new ReadySecretStore(secrets, secretRecovery);
-  const packages = pluginPackageLoader(pluginRoot(dataDir));
-  const pluginManagement = new PluginDistribution(pluginRoot(dataDir));
+  // Official integrations are emitted into the application build. They are not
+  // installed into the business data directory and cannot be replaced through
+  // a web upload or a GitHub URL.
+  const bundledRoot = path.join(process.cwd(), "dist/plugins/packages");
+  const packages = bundledPluginPackageLoader(bundledRoot);
+  const pluginManagement = new PluginDistribution(bundledRoot);
   const externalServices: ExternalServiceConfiguration =
     new FileExternalServiceConfiguration(
       path.join(dataDir, "external-services.json"),
