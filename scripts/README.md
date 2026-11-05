@@ -13,8 +13,9 @@
 | `pnpm typecheck` | `tsc --noEmit`；首次检出或清除 Next.js 产物后，先按 [开发入口](../README.md#开发入口) 生成路由类型 |
 | `pnpm test:unit` | [run-unit-tests.mjs](run-unit-tests.mjs)：发现 `scripts/` 和 `src/` 中既有 `*.test.ts` / `*.test.mjs`，通过 Node 执行离线单测 |
 | `pnpm test` | 按顺序执行 `typecheck`、`design:lint`、`test:unit`；不启动应用构建或浏览器 |
+| `pnpm ci:verify` | [ci-verify.mjs](ci-verify.mjs)：在隔离临时数据目录执行 frozen install、Next 路由类型生成、类型检查、设计检查、离线单测和生产构建；供 GitHub-hosted Runner 使用 |
 
-范围与新增测试约束见 [测试纪律](../AGENTS.md#测试纪律)。公开仓库由 [PR 验证 Action](../.github/workflows/verify.yml) 和 [main 部署 Action](../.github/workflows/deploy.yml) 负责正式门禁与部署；本地 CI 入口只用于手动排查或回退演练，不应与 GitHub Actions 部署并行。
+范围与新增测试约束见 [测试纪律](../AGENTS.md#测试纪律)。公开仓库由 [PR 验证 Action](../.github/workflows/verify.yml) 和 [main 构建 Action](../.github/workflows/main-build.yml) 负责正式门禁与构建。
 
 ## 原生扩展与本机授权
 
@@ -36,24 +37,20 @@
 
 ## 数据与运维
 
-### 本地 CI（Mac mini）
+### Mac mini 手动部署
 
 | 命令 | 入口与作用 |
 | --- | --- |
-| `pnpm ci:local verify [目录]` | 在隔离临时数据目录执行 frozen install、Next 路由类型生成、类型检查、设计守门、离线单测和生产构建；可追加 `--browser-smoke` 做浏览器冒烟，`--skip-build` 仅用于快速排查 |
-| `pnpm ci:local run` | 从远程 `main` 拉取到独立 checkout，按 SHA 创建 worktree 后执行上述门禁；配置允许时再调用 `runtime:update` 和介绍页发布 |
-| `pnpm ci:local pages` | 使用当前配置的远端 `main` 生成并推送 `gh-pages`；仅在确认 `publishPages` 后执行 |
-| `pnpm ci:local release plugins-v1.0.0` | 针对指定插件标签完成验证、打包、逐包安装握手，并通过本机 `gh` 创建并发布 Release |
-| `pnpm ci:local:launchd install\|status\|remove\|print` | 仅用于回退演练时安装、查询、移除或打印 LaunchAgent；Actions 部署启用后不要安装轮询任务 |
+| `pnpm deploy:manual <commit-sha>` | [manual-deploy.mjs](manual-deploy.mjs)：确认提交属于 `origin/main`，在临时 worktree 中调用 `runtime:update`，完成独立构建和健康检查 |
 
-手动 CI 的配置、日志、独立 checkout 和产物位于 `~/Library/Application Support/KanBan/ci/`，不使用当前开发工作树，也不读取正式 `data/`。正式部署由 GitHub Actions 的 `main` workflow 负责。
+Mac mini 不运行轮询器，也不作为公开仓库的 self-hosted Runner。正式部署只有维护者在确认 `main` 构建通过后主动执行。
 
 下列入口可能读取真实来源、写入业务数据或更改本机任务。命令索引仅说明现有能力，具体执行沿用本次授权与所属合同。
 
 | 命令或脚本 | 入口与作用 |
 | --- | --- |
 | `pnpm runtime:prepare <新永久目录> [参数]` | [prepare-runtime.mjs](prepare-runtime.mjs)：准备独立的生产运行副本，不复制业务数据或安装任务；参数与迁移边界见 [后台自动采集](../docs/operations/service-composition.md#后台自动采集) |
-| `pnpm runtime:update [--check]` | [update-runtime.mjs](update-runtime.mjs)：从开发仓库更新已安装的 3001 正式版，沿用正式配置、数据与采集周期，验证失败恢复旧任务；`--check` 只检查配置，切换与备份边界见 [永久运行副本](../docs/operations/service-composition.md#永久运行副本) |
+| `pnpm runtime:update [--check]` | [update-runtime.mjs](update-runtime.mjs)：从临时部署 worktree 更新已安装的 3001 正式版，沿用正式配置、数据与采集周期，验证失败恢复旧任务；`--check` 只检查配置，切换与备份边界见 [永久运行副本](../docs/operations/service-composition.md#永久运行副本) |
 | `pnpm plugin:build [源码目录] [新输出目录]` | [build-source-plugin.mjs](build-source-plugin.mjs)：将指定插件的静态运行时依赖发射为独立包，拒绝运行时依赖 `src/server/`；长桥 `--with-sdk` 校验并携带本机产物，默认构建 `plugins/binance`，不安装或接触来源 |
 | `pnpm plugins:build [新输出目录] [--with-sdk]` | [build-source-plugins.mjs](build-source-plugins.mjs)：构建全部八个外部来源与服务包，默认输出 `dist/plugins/packages/`，不安装插件 |
 | `pnpm plugin <available\|list\|inspect\|install\|update\|enable\|disable\|uninstall\|rollback> [参数]` | [source-plugin.ts](source-plugin.ts)：浏览发行目录；`inspect` 查看 GitHub 发行信息；按 ID、GitHub 仓库/Release 地址、包目录或压缩包安装及管理，多插件仓库用 `--plugin <ID>` 选择；读取 `.env.local`，下一次请求自动生效，详见 [插件安装](../docs/operations/asset-sources.md#独立包安装与生命周期) |

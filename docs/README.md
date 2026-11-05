@@ -9,7 +9,7 @@
 | [CONTEXT](../CONTEXT.md) / [ADR 索引](adr/README.md) | 领域词汇、财务口径、业务约束与决策；ADR 按状态和替代关系阅读 |
 | [当前能力与源码导航](current-baseline.md) | 当前页面职责、实现入口和验证边界；不汇总历次测试通过数量 |
 | [设计契约与规范入口](../DESIGN.md) | 固定上游、项目适配，以及基础、组件与页面规范的阅读入口 |
-| [工具链](operations/toolchain.md) / [GitHub Actions CI/CD](operations/github-actions.md) / [本地 CI](operations/local-ci.md) / [脚本索引](../scripts/README.md) | 安装、构建、公开仓库 CI/CD 与脚本职责 |
+| [工具链](operations/toolchain.md) / [GitHub Actions CI/CD](operations/github-actions.md) / [脚本索引](../scripts/README.md) | 安装、构建、公开仓库 CI/CD 与脚本职责 |
 | [来源接入与读取边界](operations/asset-sources.md) | 接入事务、各来源适配器、估值覆盖与排查入口 |
 | [第三方插件开发](operations/plugin-development.md) | 独立接入模板、协议、打包与分发 |
 | [服务生命周期](operations/service-composition.md) | 服务装配、长桥读取链路与持久化生命周期 |

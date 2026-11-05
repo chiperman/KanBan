@@ -1,21 +1,25 @@
 name: Publish integration plugins
+
 on:
   push:
     tags: ['plugins-v*']
+
 permissions:
   contents: write
+
 concurrency:
   group: plugin-release-${{ github.ref }}
   cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: 11.25.0
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 24.15.0
           cache: pnpm

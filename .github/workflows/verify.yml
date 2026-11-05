@@ -23,25 +23,25 @@ jobs:
       KANBAN_CI_HOME: .ci-run
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: 11.25.0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 24.15.0
           cache: pnpm
 
       - name: Verify repository
-        run: pnpm ci:local verify
+        run: pnpm ci:verify
 
       - name: Upload verification evidence
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: verify-evidence-${{ github.run_id }}
           path: .ci-run

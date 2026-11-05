@@ -1,0 +1,48 @@
+name: Build main
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: main-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Verify and build main
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: 11.25.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24.15.0
+          cache: pnpm
+
+      - name: Verify and build
+        run: pnpm ci:verify
+
+      - name: Write build metadata
+        run: |
+          jq -n --arg sha "$GITHUB_SHA" --arg ref "$GITHUB_REF_NAME" --arg run "$GITHUB_RUN_ID" \
+            '{sha:$sha,ref:$ref,run_id:$run,kind:"main-build"}' > "$RUNNER_TEMP/kanban-build.json"
+
+      - name: Upload build metadata
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: kanban-main-build-${{ github.sha }}
+          path: ${{ runner.temp }}/kanban-build.json
+          retention-days: 30

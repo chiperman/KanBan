@@ -1,6 +1,6 @@
 # GitHub Actions CI/CD
 
-公开仓库使用 GitHub Actions 作为触发器和状态中心。PR 使用 GitHub-hosted Runner；`main` 的正式构建和部署使用 Mac mini 上只执行受信任 `main` 任务的 self-hosted Runner。
+公开仓库只使用 GitHub-hosted Runner。Mac mini 不注册为仓库 Runner，也不会因为公开 PR 或 `main` 更新自动改变本机。
 
 ## 日常开发
 
@@ -32,15 +32,7 @@ PR 的 `Verify` workflow 会在干净的 Ubuntu Runner 中再次执行安装、�
 
 ## 合并与部署
 
-合并到 `main` 后，`Build and deploy production` workflow 在 Mac mini Runner 上执行：
-
-1. 检出合并后的精确 SHA；
-2. 再次运行完整验证；
-3. 调用 `pnpm runtime:update`；
-4. 由既有运行时脚本构建独立副本、切换 launchd 任务并执行启动检查；
-5. 构建或启动检查失败时保留旧副本或自动恢复旧任务。
-
-生产部署使用 `production` Environment，并以并发组串行执行。PR workflow 永远不使用 Mac mini Runner，也不读取生产凭据。
+合并到 `main` 后，`Build main` 在 GitHub-hosted Runner 上再次验证并构建，保存提交元数据；`Deploy landing page` 发布 `landing/` 到 GitHub Pages。它们不会调用 Mac mini，不会读取本机数据或凭证。
 
 ## 插件和 Pages
 
@@ -49,19 +41,15 @@ PR 的 `Verify` workflow 会在干净的 Ubuntu Runner 中再次执行安装、�
 
 插件标签发布和应用部署相互独立。
 
-## Runner 约束
+## Mac mini 手动部署
 
-Mac mini Runner 的标签必须包含：
+Mac mini 是维护者的个人生产环境，和公开仓库分离。需要更新时，在 Mac mini 的 KanBan 工作副本执行已经通过 `main` 构建的固定提交：
 
-```text
-self-hosted
-macos
-arm64
-kanban-deploy
+```sh
+git fetch --prune origin main
+pnpm deploy:manual <commit-sha>
 ```
 
-Runner 服务使用当前 `xiaox` 用户运行，以便访问既有 launchd 服务、正式运行副本和必要的本机工具。公开 PR 不得选择这个标签；只有来自受保护 `main` 的部署 workflow 才能使用它。
+脚本只接受 `origin/main` 的提交，在临时 worktree 中调用 `pnpm runtime:update`。运行时脚本会构建独立副本、执行启动检查，失败时保留或恢复旧副本。PR、分支推送和普通 `main` 合并都不会自动更新 Mac mini。
 
-## 切换规则
-
-启用 GitHub Actions 部署后，不要同时安装 `pnpm ci:local:launchd` 的轮询任务。旧的 `ci:local verify` 仍可手动运行，作为本地排查入口；旧轮询器只在回退演练时临时启用。
+插件标签发布仍由 GitHub Actions 完成，与 Mac mini 更新相互独立。

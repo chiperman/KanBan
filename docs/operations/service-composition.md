@@ -45,13 +45,13 @@ pnpm background:launchd status
 
 [准备脚本](../../scripts/prepare-runtime.mjs) 不覆盖已有目录，不复制业务数据，也不安装任务；它复制当前源码（包括未提交且未忽略的修改），独立安装依赖和构建；已安装插件和 SDK 产物位于数据目录的插件包中，不随运行副本复制，保存 `.kanban-runtime.json`。构建使用一次性空数据目录，不接触正式库。运行副本禁止 `pnpm dev`。
 
-日常开发完成后，在开发仓库根目录执行：
+维护者确认 `main` 的 GitHub Actions 构建通过后，在 Mac mini 的仓库工作副本执行：
 
 ```sh
-pnpm runtime:update
+pnpm deploy:manual <main-commit-sha>
 ```
 
-[更新命令](../../scripts/update-runtime.mjs) 自动读取已安装的网页与采集任务，要求两者属于同一个 3001 正式副本，沿用其数据目录、`.env.local` 和登录入口；不会复制开发数据或替换来源凭证。`pnpm runtime:update --check` 只检查配置、显示更新目标，不构建或切换。
+[手动部署命令](../../scripts/manual-deploy.mjs) 先确认目标提交属于 `origin/main`，再在临时 worktree 中调用 [更新命令](../../scripts/update-runtime.mjs)。更新命令要求网页与采集任务属于同一个 3001 正式副本，沿用其数据目录、`.env.local` 和登录入口；不会复制开发数据或替换来源凭证。Mac mini 不作为公开仓库 Runner，PR 和 `main` 合并不会自动触发更新。
 
 新版在独立目录安装依赖并构建，期间旧版继续提供网页和采集。构建失败保留旧版；构建通过后暂停新后台批次并等待当前批次退出，再短暂重启网页、切换任务。安装与回退加载任务时，launchd 的临时 I/O 错误最多重试三十秒，其他错误立即报告。更新通过进程锁互斥；切换前使用 SQLite 在线接口保存数据库和原任务至新版 `.runtime-rollback/`，不直接复制可能遗漏 WAL 的主文件。启动后校验新构建的静态资源、首页及后台实际检查心跳；失败自动恢复原任务，保留正式数据库。旧副本保留用于回退，不自动清理。
 

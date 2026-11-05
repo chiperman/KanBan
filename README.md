@@ -4,7 +4,7 @@
 
 项目主页：[chiperman.github.io/KanBan](https://chiperman.github.io/KanBan/)
 
-CI/CD 与 Mac mini 部署见 [GitHub Actions CI/CD](docs/operations/github-actions.md)；本地排查入口见 [本地 CI 运维说明](docs/operations/local-ci.md)。
+CI/CD 与 Mac mini 手动部署见 [GitHub Actions CI/CD](docs/operations/github-actions.md)。公开仓库的 GitHub Actions 不会自动更新维护者的 Mac mini。
 
 ## 集成插件
 
@@ -66,7 +66,7 @@ pnpm dev
 
 需要 Mac 登录后持续采集时，使用独立生产运行副本和正式数据目录，无需每天手动启动开发服务器；准备、迁移及安装命令见 [后台自动采集](docs/operations/service-composition.md#后台自动采集)。
 
-已安装 3001 正式版后，开发完成在仓库根目录执行 `pnpm runtime:update` 即可更新；沿用正式数据与采集周期，构建失败保留旧版，启动检查失败恢复旧任务。使用 `pnpm runtime:update --check` 可只查看更新目标。切换时网页短暂重启，流程与回退边界见 [永久运行副本](docs/operations/service-composition.md#永久运行副本)。
+Mac mini 的正式版与公开仓库分离。维护者需要发布时，在 Mac mini 的仓库工作副本执行 `pnpm deploy:manual <main-commit-sha>`；脚本只部署 `main` 上的固定提交，并沿用正式数据与采集周期。构建失败保留旧版，启动检查失败恢复旧任务。流程与回退边界见 [永久运行副本](docs/operations/service-composition.md#永久运行副本)。
 
 清除构建目录或首次检出后，可单独生成路由类型并检查类型，无需完整构建：
 
@@ -93,7 +93,7 @@ pnpm exec tsc --noEmit --incremental false
 | [landing/](landing/) | 独立 GitHub Pages 介绍页及其资源，不参与应用构建 |
 | [scripts/](scripts/README.md) | 持续维护的开发、设计与运维脚本；入口、辅助模块和检查范围见索引 |
 | [docs/](docs/README.md) | 现行规范、源码导航与唯一待办入口 |
-| [.github/workflows/](.github/workflows/) | PR 验证、main 部署、介绍页发布与独立插件 Release 工作流 |
+| [.github/workflows/](.github/workflows/) | PR 验证、main 构建、介绍页发布与独立插件 Release 工作流 |
 | `data/` | 本机业务数据、凭证和备份，已忽略，不作为临时目录清理 |
 | `dist/plugins/` | 已忽略的独立插件包、发行目录与摘要，由插件构建命令生成 |
 | `tmp/` / `output/` | 已忽略的临时计划、一次性脚本与检查证据 |
