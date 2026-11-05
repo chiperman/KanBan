@@ -1,0 +1,13 @@
+{
+  "id": "plugin:my-provider",
+  "version": "1.0.0",
+  "protocolVersion": 1,
+  "entry": "main.mjs",
+  "capabilities": ["assets.read", "authorization.preview", "authorization.revalidate"],
+  "metadata": { "summary": "填写你的只读接入用途。", "publisher": "填写开发者名称" },
+  "description": {
+    "label": "my-provider",
+    "fields": [{ "id": "apiKey", "label": "只读 API Key", "control": "password", "required": true }],
+    "previewScope": "填写账户范围和支持的资产类型。"
+  }
+}

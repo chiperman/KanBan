@@ -1,0 +1,149 @@
+@import "@radix-ui/colors/gray.css";
+@import "@radix-ui/colors/gray-dark.css";
+@import "@radix-ui/colors/red.css";
+@import "@radix-ui/colors/red-dark.css";
+@import "@radix-ui/colors/green.css";
+@import "@radix-ui/colors/green-dark.css";
+@import "@radix-ui/colors/amber.css";
+@import "@radix-ui/colors/amber-dark.css";
+@import "@radix-ui/colors/blue.css";
+@import "@radix-ui/colors/blue-dark.css";
+@import "@radix-ui/colors/black-alpha.css";
+@import "@radix-ui/colors/white-alpha.css";
+
+/*
+ * Product tokens: Radix Colors, existing local font assets and shared component roles.
+ * Reference: https://github.com/wangbh030722/vibe-nothing-ui-design/blob/
+ * 46661e55ae04537215a229be49f2ac1bd37a4255/css/tokens.css
+ * Pinned upstream: 46661e55ae04537215a229be49f2ac1bd37a4255
+ */
+
+@font-face {
+  font-family: "Doto";
+  src: url("/fonts/nothing-open/Doto-ROND-wght.woff2") format("woff2");
+  font-display: block;
+  font-style: normal;
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: "Geist";
+  src: url("/fonts/nothing-open/Geist-Regular.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: "Geist";
+  src: url("/fonts/nothing-open/Geist-SemiBold.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 600;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("/fonts/nothing-open/GeistMono-Regular.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("/fonts/nothing-open/GeistMono-Medium.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 500;
+}
+
+@font-face {
+  font-family: "Newsreader";
+  src: url("/fonts/nothing-open/Newsreader-Italic.ttf") format("truetype");
+  font-display: swap;
+  font-style: italic;
+  font-weight: 400;
+}
+
+:root {
+  /* Radix: 1–2 canvas, 3–5 interactions, 6–8 boundaries, 9–10 fills, 11–12 text. */
+  --black: var(--black-a12);
+  --dark-grey: var(--gray-3);
+  --grey: var(--gray-5);
+  --light-grey: var(--gray-11);
+  --white: var(--white-a12);
+  --bg: var(--gray-1);
+  --surface: var(--gray-2);
+  --raised: var(--gray-3);
+  --line: var(--gray-6);
+  --line-2: var(--gray-8);
+  --muted: var(--gray-11);
+  --secondary: var(--gray-11);
+  --primary: var(--gray-12);
+  --display: var(--black-a12);
+  --accent: var(--red-9);
+  --accent-ink: var(--white-a12);
+  --accent-text: var(--red-11);
+  --success: var(--green-11);
+  --warning: var(--amber-11);
+  --error: var(--red-11);
+  --benchmark-spx: var(--blue-11);
+  --benchmark-ndx: var(--amber-11);
+  --dotbg: var(--gray-6);
+  --glass: var(--gray-2);
+  --glass-brd: var(--gray-6);
+  --restricted-dot: var(--gray-6);
+  --overlay: var(--black-a8);
+  --mask-ink: var(--white-a12);
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --display: var(--white-a12);
+  color-scheme: dark;
+}
+
+:root {
+  --f-display: "Doto", monospace;
+  --f-ui: "Geist", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+  --f-mono: "Geist Mono", "SF Mono", ui-monospace, monospace;
+  --f-head: "Geist", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+  --f-editorial: "Newsreader", Georgia, serif;
+  --r-sm: 4px;
+  --r-md: 8px;
+  --r-pill: 999px;
+  --ease: ease-out;
+
+  /* Four UI sizes. Legacy role names are aliases, never additional sizes. */
+  --vibe-type-display-xl: 24px;
+  --vibe-type-display-lg: 24px;
+  --vibe-type-display-md: 24px;
+  --vibe-type-display-sm: 24px;
+  --vibe-type-heading: 24px;
+  --vibe-type-subheading: 16px;
+  --vibe-type-title: 16px;
+  --vibe-type-body: 16px;
+  --vibe-type-body-sm: 14px;
+  --vibe-type-body-xs: 14px;
+  --vibe-type-caption: 12px;
+  --vibe-type-label: 12px;
+  --vibe-type-micro: 12px;
+  --vibe-space-0: 2px;
+  --vibe-space-1: 4px;
+  --vibe-space-2: 8px;
+  --vibe-space-3: 12px;
+  --vibe-space-4: 16px;
+  --vibe-space-5: 20px;
+  --vibe-space-6: 24px;
+  --vibe-space-8: 32px;
+  --vibe-space-10: 40px;
+  --vibe-space-12: 48px;
+  --vibe-space-16: 64px;
+  --vibe-space-24: 96px;
+  --vibe-control-height-compact: 40px;
+  --vibe-control-height: 44px;
+  --vibe-control-padding-inline: var(--vibe-space-4);
+  --vibe-duration-fast: 250ms;
+  --vibe-duration-theme: 0ms;
+}

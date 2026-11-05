@@ -1,0 +1,69 @@
+{
+  "format": 1,
+  "plugins": [
+    {
+      "id": "binance",
+      "label": "Binance",
+      "summary": "现货、资金、Simple Earn（只读）",
+      "publisher": "KanBan",
+      "homepage": "https://github.com/chiperman/KanBan",
+      "assetSource": true
+    },
+    {
+      "id": "okx",
+      "label": "OKX",
+      "summary": "现货、资金、Simple Earn、On-chain Earn（只读）",
+      "publisher": "KanBan",
+      "homepage": "https://github.com/chiperman/KanBan",
+      "assetSource": true
+    },
+    {
+      "id": "bitget",
+      "label": "Bitget",
+      "summary": "现货、资金与理财（只读）",
+      "publisher": "KanBan",
+      "homepage": "https://github.com/chiperman/KanBan",
+      "assetSource": true
+    },
+    {
+      "id": "bit",
+      "label": "BIT / Matrixport",
+      "summary": "Wallet 余额、Balance+、DCP（只读）",
+      "publisher": "KanBan",
+      "homepage": "https://github.com/chiperman/KanBan",
+      "assetSource": true
+    },
+    {
+      "id": "evm-watch-ethereum",
+      "label": "Ethereum 观察钱包",
+      "summary": "ETH、ERC-20（公开地址只读）",
+      "publisher": "KanBan",
+      "homepage": "https://github.com/chiperman/KanBan",
+      "assetSource": true
+    },
+    {
+      "id": "evm-watch-bsc",
+      "label": "BNB Smart Chain 观察钱包",
+      "summary": "BNB、BEP-20（公开地址只读）",
+      "publisher": "KanBan",
+      "homepage": "https://github.com/chiperman/KanBan",
+      "assetSource": true
+    },
+    {
+      "id": "longbridge",
+      "label": "长桥 Longbridge",
+      "summary": "账户、持仓、行情（只读）",
+      "publisher": "KanBan",
+      "homepage": "https://github.com/chiperman/KanBan",
+      "assetSource": true
+    },
+    {
+      "id": "plugin:coingecko",
+      "label": "CoinGecko",
+      "summary": "为加密资产提供 USD 参考行情与服务验证。",
+      "publisher": "KanBan",
+      "homepage": "https://github.com/chiperman/KanBan",
+      "assetSource": false
+    }
+  ]
+}

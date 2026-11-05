@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="zh-CN" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="KanBan 是一个本地优先、单所有者、只读的个人投资资产看板，用三本投资账统一查看美股、A 股与虚拟货币。"
+    />
+    <meta name="theme-color" content="#111111" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="KanBan，个人投资资产看板" />
+    <meta
+      property="og:description"
+      content="把散落在不同账户里的资产，收进一个只属于你的本地看板。"
+    />
+    <meta property="og:url" content="https://chiperman.github.io/KanBan/" />
+    <meta
+      property="og:image"
+      content="https://chiperman.github.io/KanBan/assets/icon.svg"
+    />
+    <title>KanBan，本地优先的个人投资资产看板</title>
+    <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="site-header__inner">
+        <a class="brand" href="#top" aria-label="KanBan 首页">
+          <img
+            src="assets/icon.svg"
+            width="40"
+            height="40"
+            alt=""
+            aria-hidden="true"
+          />
+          <span class="brand__copy">
+            <span class="brand__name">KANBAN</span>
+          </span>
+        </a>
+        <nav class="site-nav" aria-label="页面导航">
+          <a href="#preview">界面</a>
+          <a href="#capabilities">能力</a>
+          <a href="#sources">来源</a>
+          <a href="#start">开始使用</a>
+        </nav>
+        <a
+          class="button button--outline button--compact header-github"
+          href="https://github.com/chiperman/KanBan"
+          target="_blank"
+          rel="noreferrer"
+          aria-label="GitHub 仓库"
+        >
+          <svg
+            class="icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path
+              d="M12 2.8a9.2 9.2 0 0 0-2.9 17.9c.5.1.7-.2.7-.5v-1.7c-2.6.6-3.2-1.1-3.2-1.1-.4-1.1-1-1.4-1-1.4-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.4 1.1 2.9.8.1-.7.4-1.1.7-1.4-2.1-.2-4.3-1.1-4.3-4.8 0-1.1.4-2 1-2.7-.1-.2-.4-1.3.1-2.6 0 0 .8-.3 2.7 1a9.2 9.2 0 0 1 4.9 0c1.9-1.3 2.7-1 2.7-1 .5 1.3.2 2.4.1 2.6.6.7 1 1.6 1 2.7 0 3.7-2.2 4.6-4.3 4.8.4.3.8 1 .8 2v3c0 .3.2.6.7.5A9.2 9.2 0 0 0 12 2.8Z"
+            />
+          </svg>
+          <span>GitHub</span>
+        </a>
+      </div>
+    </header>
+
+    <main id="top">
+      <section class="hero shell" aria-labelledby="hero-title">
+        <div class="hero__copy">
+          <h1 id="hero-title">
+            个人资产看板
+          </h1>
+          <p class="hero__lede">
+            把美股、A 股与虚拟货币放进同一个看板。
+            三本投资账，保留各自的本金、盈亏与原币种。
+          </p>
+          <div class="hero__actions">
+            <a class="button button--primary" href="#start">
+              <span>开始本地部署</span>
+              <svg
+                class="icon"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path d="M5 12h13M14 7l5 5-5 5" />
+              </svg>
+            </a>
+            <a
+              class="button button--outline"
+              href="#preview"
+            >
+              <span>先看功能</span>
+            </a>
+          </div>
+        </div>
+
+        <div class="hero__visual">
+          <figure class="device-shell">
+            <div class="device-shell__bar">
+              <span class="window-dots" aria-hidden="true">
+                <i></i><i></i><i></i>
+              </span>
+              <span class="device-shell__label">资产看板</span>
+              <span class="device-shell__time">09:41</span>
+            </div>
+            <div class="dashboard mock-dashboard">
+              <aside class="mock-dashboard__rail">
+                <span class="mock-dashboard__rail-brand">K</span>
+                <span class="mock-dashboard__rail-active">总览</span>
+                <span>资产</span>
+                <span>投资账本</span>
+                <span class="mock-dashboard__rail-bottom">设置</span>
+              </aside>
+              <div class="mock-dashboard__content">
+                <div class="mock-dashboard__heading">
+                  <div>
+
+                    <p class="mock-title">今日总览</p>
+                  </div>
+                </div>
+                <div class="mock-dashboard__main">
+                  <article class="mock-total">
+                    <p class="mock-label">总资产（USD）</p>
+                    <p class="mock-total__value">$248,630<span>.42</span></p>
+                    <p class="mock-total__delta">+ 1,284.60 <span>今日</span></p>
+                    <div class="mock-chart" aria-hidden="true">
+                      <svg viewBox="0 0 520 150" preserveAspectRatio="none">
+                        <path
+                          class="mock-chart__area"
+                          d="M0 133C30 118 42 128 61 116s26-5 39 1 25 27 47 17 22-34 45-31 31 18 53 8 25-30 48-32 31 20 54 11 26-32 47-34 34 24 58 11 33-29 68-34v120H0Z"
+                        />
+                        <path
+                          class="mock-chart__line"
+                          d="M0 133C30 118 42 128 61 116s26-5 39 1 25 27 47 17 22-34 45-31 31 18 53 8 25-30 48-32 31 20 54 11 26-32 47-34 34 24 58 11 33-29 68-34"
+                        />
+                      </svg>
+                      <span class="mock-chart__marker"></span>
+                    </div>
+                    <div class="mock-chart__axis">
+                      <span>07.01</span><span>08.01</span><span>09.01</span
+                      ><span>10.19</span>
+                    </div>
+                  </article>
+                  <div class="mock-side-stack">
+                    <article class="mock-book">
+                      <p class="mock-label">美股账本</p>
+                      <p class="mock-book__value">$124,820<span>.10</span></p>
+                      <p class="mock-book__meta">本金 $96,000.00</p>
+                    </article>
+                    <article class="mock-book">
+                      <p class="mock-label">A 股账本</p>
+                      <p class="mock-book__value">¥531,204<span>.18</span></p>
+                      <p class="mock-book__meta">本金 ¥420,000.00</p>
+                    </article>
+                    <article class="mock-book">
+                      <p class="mock-label">虚拟货币</p>
+                      <p class="mock-book__value">$46,512<span>.08</span></p>
+                      <p class="mock-book__meta">本金 $37,400.00</p>
+                    </article>
+                  </div>
+                </div>
+                <div class="mock-dashboard__sources">
+                  <span class="mock-label">资产来源</span>
+                  <span><i></i>长桥</span>
+                  <span><i></i>Binance</span>
+                  <span><i></i>OKX</span>
+                  <span><i></i>观察钱包</span>
+                  <span class="mock-dashboard__sources-end">已覆盖 8 个来源</span>
+                </div>
+              </div>
+            </div>
+            <figcaption class="mock-caption">
+              <span>图示为虚构示例，不代表真实账户或在线数据。</span>
+
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="section shell" id="preview" aria-labelledby="preview-title">
+        <div class="section__intro">
+          <h2 id="preview-title">总览与资产记录</h2>
+          <p>
+            总览看全貌，投资账看本金与盈亏，历史趋势看变化。每个数字都能追溯来源，缺失的数据也清楚标明。
+          </p>
+        </div>
+
+        <div class="principles">
+          <article class="principle-card">
+            <h3>总资产与原币种</h3>
+            <p>
+              首页按选定展示币种汇总总资产，同时保留美股、A 股、虚拟货币三本账各自的本金与盈亏。
+            </p>
+            </article>
+          <article class="principle-card">
+            <h3>历史观测</h3>
+            <p>
+              趋势使用真实观测，并标注实际记录覆盖。没有数据时明确显示“数据不足”，不把空白伪装成零。
+            </p>
+            </article>
+          <article class="principle-card">
+            <h3>只读连接</h3>
+            <p>
+              连接用于读取资产，不提供交易、转账或调仓入口。凭证不回显，权限状态在来源管理中可见。
+            </p>
+            </article>
+        </div>
+      </section>
+
+      <section
+        class="section section--capabilities shell"
+        id="capabilities"
+        aria-labelledby="capabilities-title"
+      >
+        <div class="section__intro section__intro--split">
+          <div>
+            <h2 id="capabilities-title">主要功能</h2>
+          </div>
+          <p>
+            连接资产来源，查看历史记录，并备份本机数据。
+          </p>
+        </div>
+        <div class="capability-list">
+          <article>
+            <h3>统一资产视图</h3>
+            <p>可切换 USD、CNY、HKD 展示币种，三本投资账仍保留各自原币种。</p>
+          </article>
+          <article>
+            <h3>来源与持仓</h3>
+            <p>查看每个账户的总额、连接状态、同步诊断和持仓明细。</p>
+          </article>
+          <article>
+            <h3>历史趋势</h3>
+            <p>按近期、月度、年度或自定义区间查看变化，也可展开全部历史。</p>
+          </article>
+          <article>
+            <h3>本金与收益</h3>
+            <p>结合资金流与资产记录计算收益，数据不完整时明确标注。</p>
+          </article>
+          <article>
+            <h3>备份与恢复</h3>
+            <p>完整导出本机业务数据，并在需要时恢复和校验。</p>
+          </article>
+          <article>
+            <h3>私有访问</h3>
+            <p>使用 Passkey 登录，可配置 TOTP 备用认证；没有公开注册入口。</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section shell" id="sources" aria-labelledby="sources-title">
+        <div class="sources-panel">
+          <div class="sources-panel__intro">
+            <h2 id="sources-title">支持的资产来源</h2>
+            <p>
+              连接证券、数字货币账户与观察钱包，也能手动记录资产。每个来源的权限、同步状态和金额都可单独查看。
+            </p>
+            <a
+              class="text-link"
+              href="https://github.com/chiperman/KanBan#readme"
+              target="_blank"
+              rel="noreferrer"
+            >
+              查看接入说明
+              <svg
+                class="icon"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path d="M5 12h13M14 7l5 5-5 5" />
+              </svg>
+            </a>
+          </div>
+          <div class="source-matrix" role="list" aria-label="支持的资产来源">
+            <div role="listitem">
+              <strong>长桥 Longbridge</strong>
+              <span>证券账户</span>
+            </div>
+            <div role="listitem">
+              <strong>Binance</strong>
+              <span>数字货币账户</span>
+            </div>
+            <div role="listitem">
+              <strong>OKX</strong>
+              <span>数字货币账户</span>
+            </div>
+            <div role="listitem">
+              <strong>Bitget</strong>
+              <span>数字货币账户</span>
+            </div>
+            <div role="listitem">
+              <strong>BIT / Matrixport</strong>
+              <span>数字货币账户</span>
+            </div>
+            <div role="listitem">
+              <strong>Ethereum</strong>
+              <span>观察钱包</span>
+            </div>
+            <div role="listitem">
+              <strong>BNB Smart Chain</strong>
+              <span>观察钱包</span>
+            </div>
+            <div role="listitem">
+              <strong>手工资产记录</strong>
+              <span>维护资产总额</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section shell" id="start" aria-labelledby="start-title">
+        <div class="start-grid">
+          <div class="start-copy">
+            <h2 id="start-title">本地部署</h2>
+            <p>
+              KanBan 面向本地运行。首次启动需要 Node.js、pnpm 与 Rust；当前验收基线是
+              macOS arm64。
+            </p>
+            <div class="start-meta">
+              <span>NODE 24.15.0</span>
+              <span>PNPM 11.25.0</span>
+              <span>RUST</span>
+            </div>
+            <a
+              class="button button--outline"
+              href="https://github.com/chiperman/KanBan"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <span>打开 GitHub 仓库</span>
+            </a>
+          </div>
+          <div class="terminal" aria-label="首次启动命令">
+            <div class="terminal__bar">
+              <span>启动命令</span>
+              <button
+                class="copy-button"
+                type="button"
+                data-copy-target="setup-command"
+                aria-describedby="copy-status"
+              >
+                <svg
+                  class="icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <rect x="8" y="8" width="10" height="11" rx="1" />
+                  <path d="M6 16H4V4h12v2" />
+                </svg>
+                <span>复制</span>
+              </button>
+            </div>
+            <pre id="setup-command" tabindex="0" aria-label="部署命令，可横向滚动"><code><span class="terminal__prompt">$</span> git clone https://github.com/chiperman/KanBan.git
+<span class="terminal__prompt">$</span> cd KanBan
+<span class="terminal__prompt">$</span> pnpm install --frozen-lockfile
+<span class="terminal__prompt">$</span> pnpm native:longbridge:build
+<span class="terminal__prompt">$</span> pnpm dev</code></pre>
+            <div class="terminal__next">
+              <p>
+                打开 <code>http://localhost:3000/setup</code> 预置 Passkey，之后从
+                <code>/</code> 查看资产。
+              </p>
+            </div>
+            <p class="sr-only" id="copy-status" role="status" aria-live="polite"></p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section shell" id="boundaries" aria-labelledby="boundaries-title">
+        <div class="boundary-panel">
+          <div class="boundary-panel__copy">
+            <h2 id="boundaries-title">数据与权限</h2>
+            <p>
+              KanBan 专注个人投资资产的查看与记录。它不是交易终端，也不是完整的个人财务或税务系统。
+            </p>
+          </div>
+          <div class="boundary-grid">
+            <article>
+              <span class="boundary-grid__mark">×</span>
+              <h3>不交易</h3>
+              <p>不提供下单、转账、调仓或自动投资。</p>
+            </article>
+            <article>
+              <span class="boundary-grid__mark">×</span>
+              <h3>不代管资产</h3>
+              <p>只读取已授权来源，不持有资金或私钥。</p>
+            </article>
+            <article>
+              <span class="boundary-grid__mark">×</span>
+              <h3>不伪造完整</h3>
+              <p>缺失估值明确显示，不用零或估算值补齐。</p>
+            </article>
+            <article>
+              <span class="boundary-grid__mark">×</span>
+              <h3>不公开数据</h3>
+              <p>业务数据保存在本机，认证后才可访问。</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section shell faq" id="faq" aria-labelledby="faq-title">
+        <div class="section__intro">
+          <h2 id="faq-title">常见问题</h2>
+        </div>
+        <div class="faq-list">
+          <details>
+            <summary><span>KanBan 会进行自动交易吗？</span><i aria-hidden="true"></i></summary>
+            <p>
+              不会。KanBan 是纯粹的只读看板，不提供任何下单、转账或调仓功能。所有 API 凭证仅用于读取资产与同步快照。
+            </p>
+          </details>
+          <details>
+            <summary><span>数据会上传到云端吗？</span><i aria-hidden="true"></i></summary>
+            <p>
+              资产与账目数据保存在运行 KanBan 的本机。同步时会请求你配置的账户供应商、行情或链上服务；KanBan 不提供集中归集个人数据的云端服务。
+            </p>
+          </details>
+          <details>
+            <summary><span>为什么采用 Passkey 登录？</span><i aria-hidden="true"></i></summary>
+            <p>
+              首次启动在 /setup 注册所有者 Passkey，之后使用设备或密码管理器中的 Passkey 登录。可配置 TOTP 备用登录，没有公开注册入口。
+            </p>
+          </details>
+          <details>
+            <summary><span>目前支持哪些操作系统？</span><i aria-hidden="true"></i></summary>
+            <p>
+              官方验证并推荐 macOS (Apple Silicon)。Windows 与 Linux 开发者可基于开源源码自行构建与适配。
+            </p>
+          </details>
+          <details>
+            <summary><span>这个网页可以直接查看我的资产吗？</span><i aria-hidden="true"></i></summary>
+            <p>
+              当前网页仅作产品展示，图中的数据是虚构示例。先在本机启动 KanBan 服务，再通过浏览器访问本地地址，即可登录并接入自己的资产来源。
+            </p>
+          </details>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="site-footer__inner">
+        <div class="site-footer__brand">
+          <img
+            src="assets/icon.svg"
+            width="32"
+            height="32"
+            alt=""
+            aria-hidden="true"
+          />
+          <strong>KANBAN</strong>
+
+        </div>
+
+        <div class="site-footer__links">
+          <a
+            href="https://github.com/chiperman/KanBan"
+            target="_blank"
+            rel="noreferrer"
+            >GitHub</a
+          >
+          <a href="#start">开始使用</a>
+          <a href="#faq">常见问题</a>
+        </div>
+      </div>
+    </footer>
+
+    <script src="script.js"></script>
+  </body>
+</html>

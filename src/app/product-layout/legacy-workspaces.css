@@ -1,0 +1,1645 @@
+/*
+ * KanBan product layout and interaction adapter for Vibe-Nothing-UI.
+ * Visual semantics must use the pinned upstream tokens from design-tokens.css.
+ */
+
+html {
+  background: var(--bg);
+  scroll-behavior: auto;
+}
+
+/* R02 · 收益分析：资金账本与资产观测分层，不复制 Vibe 组件配方。 */
+.investment-performance {
+  display: grid;
+  gap: var(--vibe-space-6);
+  padding-bottom: var(--vibe-space-16);
+}
+
+.workbench-page-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  column-gap: var(--vibe-space-6);
+  row-gap: var(--vibe-space-3);
+  padding-bottom: var(--vibe-space-8);
+  border-bottom: 0.5px solid var(--line);
+}
+
+.workbench-page-header__copy > p:last-child {
+  max-width: 62ch;
+  margin: var(--vibe-space-3) 0 0;
+  color: var(--secondary);
+}
+
+.workbench-page-header__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: end;
+  gap: var(--vibe-space-3);
+}
+
+.workbench-page-header__utilities {
+  grid-column: 1 / -1;
+  display: block;
+  min-width: 0;
+}
+
+/* 抬头工具共用样式；下方断点仅声明布局差异，避免重复覆盖。 */
+.workbench-page-header__utilities > .workbench-utilities {
+  position: static;
+  z-index: auto;
+  width: auto;
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+  gap: var(--vibe-space-3);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.workbench-page-header__utilities .workbench-privacy-toggle.vibe-button {
+  width: auto;
+}
+
+.workbench-page-header__utilities .workbench-command {
+  background: var(--bg);
+}
+
+.workbench-page-header__utilities .workbench-utility-actions {
+  align-self: stretch;
+}
+
+.investment-performance__scope {
+  display: grid;
+  min-width: 0;
+}
+
+.investment-performance__scope-options {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: var(--vibe-space-2);
+}
+
+.investment-performance__custom-range-label {
+  margin-top: var(--vibe-space-2);
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
+}
+
+.investment-performance__scope-option.vibe-button {
+  min-width: 72px;
+}
+
+.investment-performance__current {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) repeat(2, minmax(0, 1fr));
+  gap: var(--vibe-space-3);
+}
+
+.investment-performance__current > article,
+.investment-performance__trend,
+.investment-performance__interval,
+.investment-performance__ledger {
+  min-width: 0;
+  border-radius: var(--r-md);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.investment-performance__current > article {
+  padding: var(--vibe-space-6);
+}
+
+.investment-performance__trend,
+.investment-performance__interval,
+.investment-performance__ledger {
+  padding: var(--vibe-space-6);
+}
+
+.investment-performance__current h2,
+.investment-performance__trend h2,
+.investment-performance__interval h2,
+.investment-performance__ledger h2 {
+  margin: var(--vibe-space-2) 0 0;
+  color: var(--display);
+  font-family: var(--f-head);
+  font-size: var(--vibe-type-subheading);
+  font-weight: 600;
+}
+
+.investment-performance__current .vibe-metric {
+  margin-top: var(--vibe-space-5);
+  font-size: var(--vibe-type-heading);
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.investment-performance__current > article > p:last-child,
+.investment-performance__ledger header > div > p:last-child {
+  margin: var(--vibe-space-4) 0 0;
+  color: var(--secondary);
+  font-size: var(--vibe-type-caption);
+  line-height: 1.6;
+}
+
+/* 读法脚注：属于说明而非告警，因此用正文脚注而不是提示条。
+   趋势区与区间结论都是带 gap 的网格，这里不能再叠外边距。 */
+.investment-performance__note {
+  margin: 0;
+  color: var(--secondary);
+  font-size: var(--vibe-type-caption);
+  line-height: 1.6;
+}
+
+.investment-performance > .vibe-notice {
+  max-width: none;
+  margin: 0;
+}
+
+.investment-performance__trend,
+.investment-performance__interval,
+.investment-performance__ledger {
+  padding: var(--vibe-space-6);
+}
+
+.investment-performance__trend {
+  display: grid;
+  gap: var(--vibe-space-5);
+}
+
+.investment-performance__trend > header,
+.investment-performance__benchmark-heading,
+.investment-performance__interval > header,
+.investment-performance__ledger > header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--vibe-space-5);
+}
+
+.investment-performance__trend > .vibe-notice,
+.investment-performance__interval > .vibe-notice {
+  max-width: none;
+  margin: 0;
+}
+
+.investment-performance__benchmark {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--vibe-space-4);
+}
+
+.investment-performance__benchmark-heading > div {
+  display: grid;
+  gap: var(--vibe-space-2);
+}
+
+.investment-performance__benchmark-heading strong {
+  color: var(--display);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.investment-performance__benchmark-description {
+  margin: 0;
+  color: var(--secondary);
+  font-size: var(--vibe-type-caption);
+  line-height: 1.6;
+}
+
+.investment-performance__benchmark-baseline {
+  min-inline-size: 0;
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
+  overflow-wrap: anywhere;
+}
+
+.investment-performance__benchmark-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--vibe-space-2);
+}
+
+.investment-performance__benchmark-toggle.vibe-button {
+  min-width: 132px;
+}
+
+.investment-performance__benchmark-series {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--vibe-space-3) var(--vibe-space-4);
+}
+
+.investment-performance__benchmark-series[aria-hidden="true"] {
+  visibility: hidden;
+}
+
+.investment-performance__benchmark-series > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--vibe-space-2);
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
+}
+
+.investment-performance__benchmark-series > span::before {
+  width: 20px;
+  height: 2px;
+  content: "";
+}
+
+.investment-performance__benchmark-series > .investment-performance__benchmark-series--assets {
+  color: var(--display);
+}
+
+.investment-performance__benchmark-series--assets::before {
+  background: currentColor;
+}
+
+.investment-performance__benchmark-series--spx::before {
+  background: currentColor;
+}
+
+.investment-performance__benchmark-series--ndx::before {
+  height: 4px;
+  background: radial-gradient(
+    circle,
+    currentColor 0 1.5px,
+    transparent 1.6px
+  ) 0 50% / 6px 4px repeat-x;
+}
+
+.investment-performance__benchmark-series > .investment-performance__benchmark-series--spx {
+  color: var(--benchmark-spx);
+}
+
+.investment-performance__benchmark-series > .investment-performance__benchmark-series--ndx {
+  color: var(--benchmark-ndx);
+}
+
+.benchmark-color-swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+
+.benchmark-color-swatch--spx {
+  background: var(--benchmark-spx);
+}
+
+.benchmark-color-swatch--ndx {
+  background: var(--benchmark-ndx);
+}
+
+.investment-performance__benchmark-state {
+  display: grid;
+  gap: var(--vibe-space-1);
+  color: var(--secondary);
+  font-size: var(--vibe-type-caption);
+  line-height: 1.6;
+}
+
+.investment-performance__benchmark-state > strong {
+  color: var(--display);
+  font-family: var(--f-ui);
+  font-size: var(--vibe-type-body-xs);
+  font-weight: 500;
+}
+
+.investment-performance__benchmark-state[data-vibe-tone="error"] > span {
+  color: var(--error);
+}
+
+.investment-performance__benchmark-state[data-vibe-tone="warning"] > span {
+  color: var(--warning);
+}
+
+.investment-performance__interval {
+  display: grid;
+  gap: var(--vibe-space-5);
+}
+
+.investment-performance__interval-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--vibe-space-3);
+  border-top: 0.5px solid var(--line);
+  border-bottom: 0.5px solid var(--line);
+}
+
+.investment-performance__interval-grid > article {
+  min-width: 0;
+  padding: var(--vibe-space-5) 0;
+}
+
+.investment-performance__interval-grid > article + article {
+  padding-left: var(--vibe-space-4);
+  border-left: 0.5px solid var(--line);
+}
+
+.investment-performance__interval-grid > article > p {
+  margin: 0;
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-label);
+  letter-spacing: 0.08em;
+}
+
+.investment-performance__interval-grid .vibe-metric {
+  min-width: 0;
+  margin-top: var(--vibe-space-3);
+  font-size: var(--vibe-type-heading);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.investment-performance__private,
+.investment-performance__unavailable {
+  display: inline-block;
+  margin-top: var(--vibe-space-3);
+  color: var(--secondary);
+  font-family: var(--f-display);
+  font-size: var(--vibe-type-heading);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+  line-height: 0.95;
+}
+
+.investment-performance__unavailable {
+  color: var(--warning);
+  font-family: var(--f-ui);
+  font-size: var(--vibe-type-body);
+  letter-spacing: 0;
+  line-height: 1.5;
+}
+
+.investment-performance__ledger {
+  display: grid;
+  gap: var(--vibe-space-5);
+}
+
+.investment-performance__ledger > header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+/* 卡头右侧：计数在上、排序说明在下，共用一个右对齐容器 */
+.investment-performance__ledger-heading-meta {
+  display: grid;
+  justify-items: end;
+  gap: var(--vibe-space-1);
+}
+
+.investment-performance__ledger-count {
+  margin: 0;
+  color: var(--secondary);
+  font-family: var(--f-display); /* 计数沿用点阵数字，字族不动 */
+  font-size: var(--vibe-type-title);
+  font-variant-numeric: tabular-nums;
+}
+
+.investment-performance__ledger-count-unit {
+  margin-left: var(--vibe-space-1);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-label);
+}
+
+/* 排序说明是事实描述，必须看起来不像控件：无 hover、无指针、无箭头 */
+.investment-performance__ledger-sort {
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-micro);
+  letter-spacing: 0.08em;
+}
+
+/* 只播报给读屏，不制造第二行可见文案 */
+.investment-performance__ledger-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.investment-performance__ledger-table {
+  /* 固定操作列宽，避免表头与每行各自测量 auto 列而错位。 */
+  --cashflow-columns: minmax(0, 1fr) minmax(0, 1.4fr) calc(var(--vibe-control-height) * 2 + var(--vibe-space-3));
+  display: grid;
+  min-width: 0;
+}
+
+.investment-performance__cashflow-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  /* 分隔线由上方列头的 border-bottom（--line-2）承担；
+     列头在 ≤720px 是 display:none，那里改由列表自己的 border-top 兜住。 */
+  list-style: none;
+}
+
+.investment-performance__cashflow-list > li {
+  min-width: 0;
+  border-bottom: 0.5px solid var(--line);
+}
+
+/* 最后一行不再画线，让表尾小计的上界线单独成立 */
+.investment-performance__cashflow-list > li:last-child {
+  border-bottom: 0;
+}
+
+.investment-performance__cashflow-list > li > article {
+  display: grid;
+  grid-template-columns: var(--cashflow-columns);
+  align-items: start;
+  gap: var(--vibe-space-5);
+  padding: var(--vibe-space-5) 0;
+}
+
+.investment-performance__cashflow-main,
+.investment-performance__cashflow-evidence {
+  display: grid;
+  gap: var(--vibe-space-2);
+  align-content: start;
+  min-width: 0;
+}
+
+/* 金额是行内第一视觉。26px 而非 18px：Doto 的光学尺寸小于 Geist，
+   18px 点阵数字会比 18px 标题还小。方向色不在这里写死，由 .profit-color-value 承担。
+   字重固定 400：账本内所有 Doto 读数（行金额、表尾小计、计数）统一 400，不动字重轴。 */
+.investment-performance__cashflow-main > strong {
+  color: var(--display);
+  font-family: var(--f-display);
+  font-size: var(--vibe-type-display-sm);
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+/* 元信息行：类型标签与时间并排。标签移出 grid 拉伸语境才会回到胶囊宽度 */
+.investment-performance__cashflow-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--vibe-space-3);
+}
+
+.investment-performance__cashflow-list .vibe-status-tag {
+  align-self: start;
+  width: max-content;
+}
+
+.investment-performance__cashflow-meta > time {
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.investment-performance__cashflow-evidence {
+  gap: var(--vibe-space-1);
+}
+
+.investment-performance__cashflow-evidence > span,
+.investment-performance__cashflow-evidence > p {
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* 备注是人给的上下文，比机器证据强一级 */
+.investment-performance__cashflow-evidence > p {
+  color: var(--secondary);
+}
+
+/* 只有真的缺汇率证据时才出现，且是信号不是装饰 */
+.investment-performance__cashflow-evidence > span[data-evidence="missing"] {
+  color: var(--warning);
+}
+
+.investment-performance__cashflow-actions {
+  display: flex;
+  align-self: center;
+  align-items: center;
+  justify-content: end;
+  gap: var(--vibe-space-3);
+}
+
+.investment-performance__cashflow-actions > .vibe-button {
+  min-width: var(--vibe-control-height);
+}
+
+/* 表头：给有视力用户的扫描辅助，读屏由每行自释，故整行 aria-hidden */
+.investment-performance__cashflow-head {
+  display: grid;
+  grid-template-columns: var(--cashflow-columns);
+  column-gap: var(--vibe-space-5);
+  padding-bottom: var(--vibe-space-2);
+  border-bottom: 0.5px solid var(--line-2);
+  color: var(--muted);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-micro);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.investment-performance__cashflow-head > :last-child {
+  text-align: end;
+}
+
+/* 表尾小计：与上方「累计净投入」同源，是账目对得上的核验点，不是第二个头条 */
+.investment-performance__ledger-total {
+  display: flex;
+  margin: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--vibe-space-4);
+  padding-top: var(--vibe-space-4);
+  border-top: 0.5px solid var(--line-2);
+}
+
+.investment-performance__ledger-total-label {
+  color: var(--muted);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-micro);
+  letter-spacing: 0.1em;
+}
+
+.investment-performance__ledger-total > strong {
+  color: var(--display);
+  font-family: var(--f-display);
+  font-size: var(--vibe-type-title);
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
+/* 隐藏值与「数据不足」在账本里要跟着行内读数走，不沿用大卡片那套尺寸 */
+.investment-performance__ledger .investment-performance__private,
+.investment-performance__ledger .investment-performance__unavailable {
+  margin-top: 0;
+  font-size: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+}
+
+.investment-performance__ledger-total .investment-performance__private,
+.investment-performance__ledger-total .investment-performance__unavailable {
+  font-size: var(--vibe-type-title);
+}
+
+/* 空状态：卡片内部的就地入口，留白比整页空态收敛。
+   基类在文件后段把上下内边距写成 --vibe-space-24（96px），卡内要显式压回来。 */
+.investment-performance__ledger .empty-state {
+  display: grid;
+  justify-items: center;
+  gap: var(--vibe-space-3);
+  padding: var(--vibe-space-12) var(--vibe-space-6);
+}
+
+/* 空状态标题不能比卡片标题还大：卡内 h2 是 18px/600，全局空态标题是 24px，
+   不压回来层级就倒挂。 */
+.investment-performance__ledger .empty-title {
+  color: var(--secondary);
+  font-family: var(--f-head);
+  font-size: var(--vibe-type-subheading);
+  font-weight: 600;
+}
+
+.investment-performance__ledger .empty-hint {
+  margin: 0;
+  max-width: 44ch;
+  color: var(--secondary);
+  font-size: var(--vibe-type-body-xs);
+}
+
+.investment-performance__ledger .empty-state > .vibe-button {
+  margin-top: var(--vibe-space-2);
+}
+
+.investment-performance__editor.vibe-dialog {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(100%, 640px);
+  overflow: hidden;
+}
+
+.investment-performance__editor > .vibe-dialog__header,
+.investment-performance__editor > .vibe-dialog__footer {
+  padding: var(--vibe-space-5) var(--vibe-space-6);
+}
+
+.investment-performance__editor > .vibe-dialog__body {
+  display: grid;
+  min-height: 0;
+  gap: var(--vibe-space-6);
+  padding: var(--vibe-space-6);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.investment-performance__editor .vibe-dialog__copy {
+  max-width: 58ch;
+}
+
+.investment-performance__editor-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: var(--vibe-space-6) var(--vibe-space-4);
+}
+
+.investment-performance__editor .vibe-field {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+.investment-performance__editor .vibe-field__input {
+  min-width: 0;
+  letter-spacing: 0.02em;
+}
+
+.investment-performance__editor input.vibe-field__input {
+  min-height: var(--vibe-control-height);
+}
+
+.investment-performance__editor input[type="datetime-local"] {
+  font-size: var(--vibe-type-body-sm);
+}
+
+.investment-performance__editor textarea {
+  display: block;
+  min-height: calc(var(--vibe-control-height) * 2);
+  line-height: 1.6;
+}
+
+.investment-performance__editor-note {
+  display: grid;
+  gap: var(--vibe-space-2);
+}
+
+.investment-performance__editor-note-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--vibe-space-3);
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
+}
+
+.investment-performance__custom-range-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--vibe-space-4);
+}
+
+.investment-performance__custom-range-fields .vibe-date-field {
+  width: 100%;
+  margin: 0;
+}
+
+.investment-performance__editor-field {
+  display: grid;
+  min-width: 0;
+  gap: var(--vibe-space-2);
+}
+
+.investment-performance__editor-hint,
+.investment-performance__editor-required-hint {
+  margin: 0;
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
+  line-height: 1.5;
+}
+
+.investment-performance__editor-hint > time {
+  white-space: nowrap;
+}
+
+.investment-performance__editor-required-hint {
+  padding-block-start: var(--vibe-space-4);
+  border-block-start: 0.5px solid var(--line);
+}
+
+.investment-performance__editor .vibe-notice {
+  max-width: none;
+  margin: 0;
+}
+
+@media (max-width: 1199px) {
+  .investment-performance__current {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .investment-performance__current > article:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .investment-performance__interval-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .investment-performance__interval-grid > article:nth-child(3) {
+    padding-left: 0;
+    border-left: 0;
+    border-top: 0.5px solid var(--line);
+  }
+
+  .investment-performance__interval-grid > article:nth-child(4) {
+    border-top: 0.5px solid var(--line);
+  }
+}
+
+@media (max-width: 639px) {
+  .investment-performance {
+    gap: var(--vibe-space-5);
+  }
+
+  .workbench-page-header,
+  .investment-performance__trend > header,
+  .investment-performance__benchmark-heading,
+  .investment-performance__interval > header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .workbench-page-header {
+    padding-bottom: var(--vibe-space-6);
+  }
+
+  .workbench-page-header__actions {
+    justify-content: stretch;
+  }
+
+  .workbench-page-header__actions > .vibe-button,
+  .workbench-page-header__actions > .vibe-select {
+    flex: 1 1 160px;
+}
+
+  .investment-performance__current,
+  .investment-performance__custom-range-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .investment-performance__scope-options {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .investment-performance__scope-option.vibe-button {
+
+    width: 100%;
+    min-width: 0;
+}
+
+  .investment-performance__current > article:first-child {
+    grid-column: auto;
+  }
+
+  .investment-performance__trend,
+  .investment-performance__interval,
+  .investment-performance__ledger,
+  .investment-performance__current > article {
+    padding: var(--vibe-space-5);
+  }
+
+  .investment-performance__interval-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .investment-performance__interval-grid > article + article,
+  .investment-performance__interval-grid > article:nth-child(3),
+  .investment-performance__interval-grid > article:nth-child(4) {
+    padding-left: 0;
+    border-top: 0.5px solid var(--line);
+    border-left: 0;
+  }
+
+  .investment-performance__cashflow-list > li > article {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--vibe-space-4);
+  }
+
+  .investment-performance__cashflow-actions {
+    justify-content: end;
+    padding-top: var(--vibe-space-3);
+    border-top: 0.5px solid var(--line);
+  }
+
+  /* 窄屏不摆列头（靠行内元信息自释），分隔线回到列表自己身上 */
+  .investment-performance__cashflow-head {
+    display: none;
+  }
+
+  .investment-performance__cashflow-list {
+    border-top: 0.5px solid var(--line);
+  }
+
+  /* 26px 在 390px 视口会抢位，金额回落一档 */
+  .investment-performance__cashflow-main > strong {
+    font-size: var(--vibe-type-title);
+  }
+
+  /* 长数值不能把「累计净投入」挤出视口 */
+  .investment-performance__ledger-total {
+    flex-wrap: wrap;
+    row-gap: var(--vibe-space-2);
+  }
+}
+
+@media (max-width: 639px) {
+  .investment-performance__editor > .vibe-dialog__header,
+  .investment-performance__editor > .vibe-dialog__body,
+  .investment-performance__editor > .vibe-dialog__footer {
+    padding: var(--vibe-space-4);
+  }
+
+  .investment-performance__editor-fields {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--vibe-space-4);
+  }
+
+  .investment-performance__editor > .vibe-dialog__body {
+    gap: var(--vibe-space-5);
+  }
+
+  .investment-performance__editor > .vibe-dialog__footer {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--vibe-space-4);
+  }
+
+  .investment-performance__current .vibe-metric {
+    font-size: var(--vibe-type-display-md);
+  }
+
+  .investment-performance__ledger .card-label {
+    overflow-wrap: anywhere;
+  }
+}
+
+/* 总览沿用资产主区、账本侧栏与来源明细的阅读顺序。 */
+.daily-overview {
+  display: grid;
+  gap: var(--vibe-space-6);
+  padding-bottom: var(--vibe-space-16);
+}
+
+@media (hover: hover) {
+  .workbench-page-header__actions > .vibe-select .vibe-select__trigger:hover {
+    background: var(--raised);
+  }
+}
+
+.workbench-page-header__actions
+  > .vibe-select
+  .vibe-select__trigger[aria-expanded="true"] {
+  background: var(--raised);
+}
+
+.workbench-page-header__actions .asset-refresh-controls {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  min-height: var(--vibe-control-height);
+  align-items: center;
+  justify-items: stretch;
+  margin: 0;
+}
+
+.workbench-page-header__actions .asset-refresh-status {
+  display: inline-flex;
+  min-width: 0;
+  white-space: normal;
+}
+
+/* R05 · 来源总额与跨来源持仓观察分层，避免用持仓合计替代账户真相。 */
+.assets-holdings {
+  display: grid;
+  gap: var(--vibe-space-6);
+  padding-bottom: var(--vibe-space-16);
+}
+
+.longbridge-realtime-status {
+  white-space: nowrap;
+}
+
+.assets-holdings__realtime-notice {
+  max-width: none;
+  margin: 0;
+}
+
+.assets-holdings__realtime-notice p {
+  margin: 0;
+}
+
+.assets-holdings__realtime-notice code {
+  color: var(--display);
+  font-family: var(--f-mono);
+  font-size: inherit;
+}
+
+.assets-holdings__realtime-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--vibe-space-2);
+  margin-top: var(--vibe-space-3);
+}
+
+.assets-holdings__source-totals,
+.assets-holdings__observations {
+  min-width: 0;
+  padding: var(--vibe-space-6);
+  border-radius: var(--r-md);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.assets-holdings__source-totals {
+  container-type: inline-size;
+}
+
+.assets-holdings__source-totals h2,
+.assets-holdings__observations h2 {
+  margin: 0;
+  color: var(--display);
+  font-family: var(--f-head);
+  font-size: var(--vibe-type-subheading);
+  font-weight: 600;
+}
+
+.assets-holdings__observations > header p {
+  max-width: 68ch;
+  margin: var(--vibe-space-3) 0 0;
+  color: var(--secondary);
+}
+
+.assets-holdings__filters {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr));
+  gap: var(--vibe-space-3);
+}
+
+.assets-holdings__source-access {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+@media (min-width: 640px) {
+  .workbench-page-header__actions > .vibe-button,
+  .workbench-page-header__actions > .vibe-select,
+  .workbench-page-header__actions > .asset-refresh-controls,
+  .workbench-page-header__actions > .asset-source-refresh-control {
+
+    min-width: 112px;
+
+    width: 112px;
+    flex: 0 0 112px;
+}
+
+  .workbench-page-header__actions .asset-refresh-controls > .vibe-button {
+
+    box-sizing: border-box;
+
+    width: auto;
+
+    min-width: 0;
+
+    justify-self: stretch;
+
+    gap: var(--vibe-space-1);
+}
+}
+
+@media (max-width: 639px) {
+  .workbench-page-header__actions > .vibe-button,
+  .workbench-page-header__actions > .vibe-select,
+  .workbench-page-header__actions > .asset-refresh-controls,
+  .workbench-page-header__actions > .asset-source-refresh-control {
+
+    min-width: 0;
+    flex: 1 1 160px;
+}
+
+  .workbench-page-header__actions .asset-refresh-controls > .vibe-button {
+
+    width: 100%;
+    flex: 1 1 160px;
+}
+}
+
+.assets-holdings__source-totals > header,
+.assets-holdings__observations > header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--vibe-space-5);
+}
+
+.assets-holdings__source-totals > header {
+  display: block;
+}
+
+.assets-holdings__source-list {
+  margin-top: var(--vibe-space-5);
+}
+
+.assets-holdings__source-columns,
+.assets-holdings__source-list > ol > li > article {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr)
+    auto;
+  align-items: center;
+  gap: var(--vibe-space-5);
+}
+
+.assets-holdings__source-columns {
+  padding-bottom: var(--vibe-space-2);
+  border-bottom: 0.5px solid var(--line);
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-label);
+  letter-spacing: 0.08em;
+}
+
+.assets-holdings__source-columns > span:last-child {
+  text-align: right;
+}
+
+.assets-holdings__source-list > ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.assets-holdings__source-list > ol > li {
+  min-width: 0;
+  border-bottom: 0.5px solid var(--line);
+}
+
+.assets-holdings__source-list > ol > li > article {
+  align-items: center;
+  padding: var(--vibe-space-2) 0;
+}
+
+.assets-holdings__source-name.vibe-button {
+
+  width: fit-content;
+
+  min-width: 0;
+
+  justify-content: start;
+
+  padding-inline: 0;
+  text-align: start;
+}
+
+.assets-holdings__source-name::after {
+  content: "↗";
+  color: var(--secondary);
+  font-size: var(--vibe-type-label);
+}
+
+.assets-holdings__source-totals strong {
+  color: var(--display);
+  font-family: var(--f-head);
+  font-size: var(--vibe-type-body);
+  font-weight: 600;
+}
+
+.assets-holdings__source-totals article > div:first-child {
+  display: grid;
+  gap: var(--vibe-space-1);
+  min-width: 0;
+}
+
+.assets-holdings__source-totals article > div:first-child > span,
+.assets-holdings__source-value > a {
+  color: var(--secondary);
+  font-size: var(--vibe-type-caption);
+}
+
+.assets-holdings__source-state {
+  display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  align-items: center;
+  gap: var(--vibe-space-2);
+  white-space: normal;
+}
+
+.assets-holdings__source-state > .vibe-status-tag {
+  width: fit-content;
+  flex: 0 0 auto;
+  max-width: 100%;
+  white-space: normal;
+}
+
+.assets-holdings__source-coverage {
+  display: flex;
+  min-width: 0;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--vibe-space-2);
+  white-space: nowrap;
+}
+
+.assets-holdings__source-coverage > .asset-sync-status {
+  margin-top: 0;
+  flex: 0 0 auto;
+}
+
+.assets-holdings__source-coverage .vibe-coverage-inline {
+  display: contents;
+}
+
+.assets-holdings__source-coverage .vibe-coverage-summary-trigger {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: auto;
+  min-height: var(--vibe-control-height-compact);
+  align-items: center;
+  gap: var(--vibe-space-2);
+  padding: 2px var(--vibe-space-2);
+  border: 0.5px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--secondary);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.assets-holdings__source-coverage .vibe-coverage-summary-trigger:focus-visible {
+  outline: 0;
+  box-shadow: none;
+  border-bottom: 0.5px solid var(--display);
+}
+
+.assets-holdings__source-coverage .vibe-coverage-summary-trigger.is-open
+  .vibe-coverage-summary-toggle {
+  color: var(--display);
+}
+
+.assets-holdings__source-coverage .vibe-coverage-summary-trigger.is-open
+  .vibe-coverage-summary-toggle::before {
+  transform: rotate(45deg);
+}
+
+.assets-holdings__source-coverage .vibe-coverage-summary-label,
+.assets-holdings__source-coverage .vibe-coverage-summary-count,
+.assets-holdings__source-coverage .vibe-coverage-summary-freshness {
+  font-size: var(--vibe-type-caption);
+  font-weight: 500;
+}
+
+.assets-holdings__source-coverage .vibe-coverage-summary-toggle {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+}
+
+.assets-holdings__source-coverage-panel {
+  min-width: 0;
+  grid-column: 1 / -1;
+  padding: var(--vibe-space-3) 0 0;
+  border-top: 0.5px solid var(--line);
+}
+
+.assets-holdings__source-coverage-panel .vibe-coverage-products {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.assets-holdings__source-value {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: end;
+  gap: var(--vibe-space-3);
+  text-align: right;
+}
+
+.assets-holdings__source-value > strong {
+  font-family: var(--f-display);
+  font-size: var(--vibe-type-subheading);
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.assets-holdings__source-value > strong.assets-holdings__source-value-hidden {
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
+  font-weight: 400;
+  letter-spacing: 0.06em;
+}
+
+.assets-holdings__source-value .vibe-metric {
+  margin: 0;
+  font-size: var(--vibe-type-subheading);
+}
+
+.assets-holdings__source-detail.vibe-button {
+
+  min-height: 24px;
+
+  justify-content: end;
+
+  gap: var(--vibe-space-1);
+  padding: 0;
+}
+
+.assets-holdings__source-detail.vibe-button::after {
+  content: "↗";
+}
+
+@container (max-width: 1100px) {
+  .assets-holdings__source-columns {
+    display: none;
+  }
+
+  .assets-holdings__source-list > ol > li > article {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--vibe-space-3) var(--vibe-space-4);
+  }
+
+  .assets-holdings__source-state {
+    align-items: start;
+  }
+
+  .assets-holdings__source-state > .vibe-status-tag {
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .assets-holdings__source-coverage {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: start;
+  }
+}
+
+@container (max-width: 460px) {
+  .assets-holdings__source-coverage .vibe-coverage-summary-trigger {
+    max-width: 100%;
+    flex-wrap: wrap;
+    white-space: normal;
+  }
+}
+
+@media (max-width: 639px) {
+  .assets-holdings__source-columns {
+    display: none;
+  }
+
+  .assets-holdings__source-list {
+    margin-top: var(--vibe-space-4);
+  }
+
+  .assets-holdings__source-list > ol > li > article {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--vibe-space-3) var(--vibe-space-4);
+  }
+
+  .assets-holdings__source-value {
+    grid-row: 1;
+    grid-column: 2;
+  }
+}
+
+.assets-holdings__observations {
+  display: grid;
+  gap: var(--vibe-space-5);
+}
+
+.assets-holdings__filters {
+  align-items: end;
+  padding: var(--vibe-space-4) 0;
+  border-top: 0.5px solid var(--line);
+  border-bottom: 0.5px solid var(--line);
+}
+
+.assets-holdings__observations > header .assets-holdings__count {
+  margin: 0;
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
+  white-space: nowrap;
+}
+
+.assets-holdings__table-wrap {
+  overflow-x: auto;
+  scrollbar-color: var(--line-2) transparent;
+}
+
+.assets-holdings__table-wrap table {
+  width: 100%;
+  min-width: 960px;
+  border-collapse: collapse;
+  font-size: var(--vibe-type-body-sm);
+}
+
+.assets-holdings__table-wrap th {
+  padding: 0 var(--vibe-space-3) var(--vibe-space-3);
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-label);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-align: left;
+}
+
+.assets-holdings__table-wrap td {
+  min-width: 0;
+  padding: var(--vibe-space-4) var(--vibe-space-3);
+  border-top: 0.5px solid var(--line);
+  color: var(--primary);
+  vertical-align: top;
+}
+
+.assets-holdings__table-wrap th:first-child,
+.assets-holdings__table-wrap td:first-child {
+  padding-left: 0;
+}
+
+.assets-holdings__table-wrap th:last-child,
+.assets-holdings__table-wrap td:last-child {
+  padding-right: 0;
+}
+
+@media (min-width: 640px) {
+  .assets-holdings__table-wrap th:not(:first-child):not(:last-child),
+  .assets-holdings__table-wrap td:not(:first-child):not(:last-child) {
+    text-align: end;
+  }
+}
+
+.assets-holdings__table-wrap td > strong,
+.assets-holdings__table-wrap td > span:not(.vibe-status-tag),
+.assets-holdings__table-wrap td > small {
+  display: block;
+}
+
+.assets-holdings__table-wrap td > strong {
+  color: var(--display);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-body-sm);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.assets-holdings__number {
+  font-family: var(--f-display);
+  font-variant-numeric: tabular-nums;
+  font-variation-settings: "ROND" 100;
+  font-weight: 500;
+  letter-spacing: -0.045em;
+}
+
+.assets-holdings__table-wrap td > span:not(.vibe-status-tag),
+.assets-holdings__table-wrap td > small {
+  margin-top: var(--vibe-space-1);
+  color: var(--secondary);
+  font-size: var(--vibe-type-caption);
+  line-height: 1.5;
+}
+
+.assets-holdings__asset-meta,
+.assets-holdings__price-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--vibe-space-3);
+  min-width: 0;
+  margin-top: var(--vibe-space-1);
+  color: var(--secondary);
+  font-size: var(--vibe-type-caption);
+  overflow-wrap: anywhere;
+}
+
+.assets-holdings__asset-meta > .vibe-entity-link {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.assets-holdings__price-meta {
+  display: block;
+}
+
+.assets-holdings__status {
+  display: grid;
+  justify-items: start;
+  gap: var(--vibe-space-1);
+}
+
+.assets-holdings__status > .vibe-status-tag {
+  max-width: 100%;
+}
+
+.assets-holdings__table-wrap .assets-holdings__evidence-row > td {
+  padding-top: 0;
+  border-top: 0;
+  text-align: start;
+}
+
+.asset-provider-position {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--vibe-space-1) var(--vibe-space-2);
+}
+
+.asset-provider-position > .vibe-status-tag {
+  min-height: 20px;
+  padding: 1px 7px;
+  font-size: var(--vibe-type-label);
+}
+
+.asset-provider-position > small {
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-caption);
+  line-height: 1.45;
+}
+
+.assets-holdings__table-wrap tr.is-unvalued td:first-child strong,
+.assets-holdings__table-wrap tr.is-unvalued td:nth-child(2) strong {
+  color: var(--error);
+}
+
+.assets-holdings__observations > .vibe-notice {
+  max-width: none;
+  margin: 0;
+}
+
+@media (max-width: 1199px) {
+  .workbench-page-header {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workbench-page-header__actions {
+    justify-content: start;
+  }
+
+}
+
+@media (max-width: 639px) {
+  .assets-holdings {
+    gap: var(--vibe-space-4);
+  }
+
+  .assets-holdings__source-totals,
+  .assets-holdings__observations {
+    padding: var(--vibe-space-5);
+  }
+
+  .workbench-page-header h1 {
+    font-size: var(--vibe-type-subheading);
+  }
+
+  .assets-holdings__source-totals > header,
+  .assets-holdings__observations > header {
+    display: grid;
+    gap: var(--vibe-space-3);
+  }
+
+  .assets-holdings__source-value .vibe-metric,
+  .assets-holdings__source-value > strong {
+    font-size: var(--vibe-type-body);
+  }
+
+  .assets-holdings__filters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .assets-holdings__filters > .vibe-select {
+    min-width: 0;
+  }
+
+  .assets-holdings__filters > .vibe-field,
+  .assets-holdings__filters > .vibe-select:last-of-type {
+    grid-column: 1 / -1;
+  }
+
+  .assets-holdings__table-wrap {
+    overflow: visible;
+  }
+
+  .assets-holdings__table-wrap table,
+  .assets-holdings__table-wrap thead,
+  .assets-holdings__table-wrap tbody,
+  .assets-holdings__table-wrap tr,
+  .assets-holdings__table-wrap td {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .assets-holdings__table-wrap thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .assets-holdings__table-wrap tr {
+    padding: var(--vibe-space-3) 0;
+    border-top: 0.5px solid var(--line);
+  }
+
+  .assets-holdings__table-wrap tbody tr:first-child {
+    border-top: 0;
+  }
+
+  .assets-holdings__table-wrap td {
+    display: grid;
+    grid-template-columns: minmax(104px, 0.72fr) minmax(0, 1fr);
+    gap: var(--vibe-space-2);
+    padding: var(--vibe-space-2) 0;
+    border: 0;
+  }
+
+  .assets-holdings__table-wrap td::before {
+    content: attr(data-label);
+    color: var(--secondary);
+    font-family: var(--f-mono);
+    font-size: var(--vibe-type-label);
+    letter-spacing: 0.08em;
+  }
+
+  .assets-holdings__table-wrap td > strong,
+  .assets-holdings__table-wrap td > span:not(.vibe-status-tag),
+  .assets-holdings__table-wrap td > small,
+  .assets-holdings__table-wrap td > .vibe-entity-link,
+  .assets-holdings__table-wrap td > .assets-holdings__price-evidence,
+  .assets-holdings__table-wrap td > .assets-holdings__asset-meta,
+  .assets-holdings__table-wrap td > .assets-holdings__price-meta,
+  .assets-holdings__table-wrap td > .assets-holdings__status,
+  .assets-holdings__table-wrap td > .vibe-status-tag {
+    grid-column: 2;
+  }
+
+  .assets-holdings__table-wrap .assets-holdings__evidence-row {
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .assets-holdings__table-wrap .assets-holdings__evidence-row > td {
+    display: block;
+  }
+
+  .assets-holdings__table-wrap .assets-holdings__evidence-row > td::before {
+    content: none;
+  }
+
+  .assets-holdings__table-wrap td > strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .assets-holdings__table-wrap td > .vibe-status-tag {
+    justify-self: start;
+    align-self: start;
+    max-width: 100%;
+  }
+
+  .assets-holdings__table-wrap td > span:not(.vibe-status-tag),
+  .assets-holdings__table-wrap td > small {
+    margin-top: calc(var(--vibe-space-1) * -1);
+    overflow-wrap: anywhere;
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "name": "personal-asset-dashboard",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "native:longbridge:build": "node scripts/build-longbridge-keychain-sdk.mjs",
+    "longbridge:keychain:repair": "node scripts/longbridge-keychain.mjs repair",
+    "daily-settlement:run": "node --experimental-transform-types --import ./scripts/register-ts-alias.mjs ./scripts/run-formal-daily-settlement.ts",
+    "daily-settlement:launchd": "node ./scripts/formal-daily-settlement-launchd.mjs",
+    "migrate:json-to-sqlite": "node --experimental-transform-types --import ./scripts/register-ts-alias.mjs ./scripts/migrate-json-to-sqlite.ts",
+    "dev": "node scripts/run-local-next.mjs dev",
+    "dev:tailnet": "PAD_PUBLIC_ORIGIN=https://xiaox-mac-mini.tail72342.ts.net:3000 node scripts/run-local-next.mjs dev",
+    "build": "next build",
+    "start": "node scripts/run-local-next.mjs start",
+    "typecheck": "tsc --noEmit",
+    "test:unit": "node scripts/run-unit-tests.mjs",
+    "test": "pnpm typecheck && pnpm design:lint && pnpm test:unit",
+    "preinstall": "node scripts/check-toolchain.mjs",
+    "design:lint": "node scripts/lint-design-tokens.mjs",
+    "native:longbridge:check": "node scripts/native-artifact.mjs",
+    "background:run": "node scripts/run-background.mjs",
+    "background:launchd": "node scripts/background-launchd.mjs",
+    "runtime:prepare": "node scripts/prepare-runtime.mjs",
+    "runtime:update": "node scripts/update-runtime.mjs",
+    "plugins:build": "node scripts/build-source-plugins.mjs",
+    "plugin:build": "node scripts/build-source-plugin.mjs",
+    "plugin": "node --experimental-transform-types --import ./scripts/register-ts-alias.mjs scripts/source-plugin.ts",
+    "plugins:release": "node scripts/release-source-plugins.mjs",
+    "ci:verify": "node scripts/ci-verify.mjs",
+    "deploy:manual": "node scripts/manual-deploy.mjs"
+  },
+  "dependencies": {
+    "@radix-ui/colors": "^3.0.0",
+    "@simplewebauthn/browser": "^13.3.0",
+    "@simplewebauthn/server": "^13.3.2",
+    "next": "^16.4.3",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-is": "19.2.8",
+    "recharts": "3.10.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "typescript": "^5.9.2"
+  },
+  "engines": {
+    "node": "24.15.0",
+    "pnpm": "11.25.0"
+  },
+  "packageManager": "pnpm@11.25.0"
+}

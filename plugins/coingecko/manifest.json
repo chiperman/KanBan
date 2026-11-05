@@ -1,0 +1,17 @@
+{
+  "id": "plugin:coingecko",
+  "version": "1.0.0",
+  "protocolVersion": 1,
+  "capabilities": [
+    "extension.call"
+  ],
+  "entry": "plugins/coingecko/src/main.mjs",
+  "configuration": [
+    "coingecko.apiKey"
+  ],
+  "metadata": {
+    "summary": "为加密资产提供 USD 参考行情与服务验证。",
+    "publisher": "KanBan",
+    "homepage": "https://github.com/chiperman/KanBan"
+  }
+}

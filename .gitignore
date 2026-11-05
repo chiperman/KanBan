@@ -1,0 +1,28 @@
+node_modules/
+.DS_Store
+.next/
+.next-*/
+data/
+test-results/
+playwright-report/
+.playwright-cli/
+output/
+tmp/
+.env*
+*.tsbuildinfo
+next-env.d.ts
+# Keep artifacts from checkouts created before the plugin migration ignored.
+/native/longbridge-keychain-sdk/target/
+/native/longbridge-keychain-sdk/vendor/longbridge-oauth/target/
+/native/longbridge-keychain-sdk/*.node
+/native/longbridge-keychain-sdk/artifact.json
+/plugins/longbridge/native/target/
+/plugins/longbridge/native/vendor/longbridge-oauth/target/
+/plugins/longbridge/native/*.node
+
+# 真实本地资产审计截图仅可本地保存；提交内容必须使用演示或已脱敏素材。
+docs/audits/**/assets/local/
+
+/plugins/longbridge/native/artifact.json
+
+/dist/

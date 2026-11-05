@@ -1,0 +1,5 @@
+{
+  "$comment": "设计 token 守门脚本的存量基线。签名格式为 <规则>|<文件>|<规范化声明文本>，不含行号，因此挪动或重排代码不会产生误报。用 `pnpm design:lint -- --update` 重建。数量下降时脚本会提示可收紧。现行规则见 DESIGN.md，待处理差异见 docs/backlog.md。",
+  "$generatedBy": "scripts/lint-design-tokens.mjs",
+  "counts": {}
+}

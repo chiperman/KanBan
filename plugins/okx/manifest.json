@@ -1,0 +1,61 @@
+{
+  "id": "okx",
+  "version": "1.0.0",
+  "protocolVersion": 1,
+  "capabilities": [
+    "assets.read",
+    "authorization.preview",
+    "authorization.revalidate"
+  ],
+  "entry": "plugins/okx/src/main.mjs",
+  "description": {
+    "label": "OKX",
+    "fields": [
+      {
+        "id": "region",
+        "label": "OKX 注册区域",
+        "control": "select",
+        "required": true,
+        "defaultValue": "global",
+        "options": [
+          {
+            "value": "global",
+            "label": "Global"
+          },
+          {
+            "value": "us",
+            "label": "US / AU"
+          },
+          {
+            "value": "eea",
+            "label": "EEA"
+          }
+        ]
+      },
+      {
+        "id": "apiKey",
+        "label": "OKX API Key",
+        "control": "text",
+        "required": true
+      },
+      {
+        "id": "apiSecret",
+        "label": "OKX API Secret",
+        "control": "password",
+        "required": true
+      },
+      {
+        "id": "passphrase",
+        "label": "OKX Passphrase",
+        "control": "password",
+        "required": true
+      }
+    ],
+    "previewScope": "现货、资金、Simple Earn、On-chain Earn（只读）"
+  },
+  "metadata": {
+    "summary": "现货、资金、Simple Earn、On-chain Earn（只读）",
+    "publisher": "KanBan",
+    "homepage": "https://github.com/chiperman/KanBan"
+  }
+}

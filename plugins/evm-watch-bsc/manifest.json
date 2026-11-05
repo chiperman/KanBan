@@ -1,0 +1,33 @@
+{
+  "id": "evm-watch-bsc",
+  "version": "1.0.0",
+  "protocolVersion": 1,
+  "capabilities": [
+    "assets.read",
+    "authorization.preview",
+    "authorization.revalidate",
+    "extension.call"
+  ],
+  "entry": "plugins/evm-watch-bsc/src/main.mjs",
+  "description": {
+    "label": "BNB Smart Chain 观察钱包",
+    "fields": [
+      {
+        "id": "addresses",
+        "label": "公开地址（每行一个）",
+        "control": "textarea",
+        "required": true
+      }
+    ],
+    "previewScope": "BNB、BEP-20（公开地址只读）"
+  },
+  "configuration": [
+    "rpc.bsc",
+    "coingecko.apiKey"
+  ],
+  "metadata": {
+    "summary": "BNB、BEP-20（公开地址只读）",
+    "publisher": "KanBan",
+    "homepage": "https://github.com/chiperman/KanBan"
+  }
+}

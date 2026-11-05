@@ -1,0 +1,47 @@
+name: Publish integration plugins
+
+on:
+  push:
+    tags: ['plugins-v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: plugin-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24.15.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec next typegen
+      - run: pnpm typecheck
+      - name: Build portable plugin release
+        env:
+          KANBAN_PLUGIN_REPOSITORY: ${{ github.repository }}
+        run: pnpm plugins:release "$GITHUB_REF_NAME"
+      - name: Check all plugin handshakes
+        run: |
+          for package in dist/plugins/release/*.tar.gz; do
+            pnpm plugin install "$package" --data-dir "$RUNNER_TEMP/plugin-probe"
+          done
+          pnpm plugin list --data-dir "$RUNNER_TEMP/plugin-probe"
+      - name: Publish complete release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          jq -n --arg tag "$GITHUB_REF_NAME" '{tag_name:$tag,name:$tag,draft:true,prerelease:false,make_latest:"false",body:"KanBan 集成插件。请在设置 → 插件中安装，或运行 pnpm plugin install <ID>。通用长桥包使用 CLI；本包不含平台专属 SDK。"}' > "$RUNNER_TEMP/release.json"
+          gh api --method POST "repos/$GITHUB_REPOSITORY/releases" --input "$RUNNER_TEMP/release.json" > "$RUNNER_TEMP/created-release.json"
+          gh release upload "$GITHUB_REF_NAME" dist/plugins/release/*
+          release_id=$(jq -r .id "$RUNNER_TEMP/created-release.json")
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$release_id" --input - <<<'{"draft":false,"make_latest":"false"}'

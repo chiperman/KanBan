@@ -1,0 +1,43 @@
+import { cookies } from "next/headers";
+
+import type { AssetSourceSummary } from "@/server/ports";
+import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
+import { readAssetRefreshState } from "@/server/refresh/asset-refresh-state";
+import {
+  DEFAULT_PROFIT_COLOR_SCHEME,
+  isProfitColorScheme,
+  PROFIT_COLOR_SCHEME_COOKIE_KEY,
+} from "@/domain/profit-color-scheme";
+
+export async function readSavedProfitColorScheme() {
+  const saved = (await cookies()).get(PROFIT_COLOR_SCHEME_COOKIE_KEY)?.value ?? null;
+  return isProfitColorScheme(saved) ? saved : null;
+}
+
+export async function readProfitColorScheme() {
+  return (await readSavedProfitColorScheme()) ?? DEFAULT_PROFIT_COLOR_SCHEME;
+}
+
+export function assetRefreshRegistration(
+  state: Awaited<ReturnType<typeof readAssetRefreshState>> | undefined,
+  sources: readonly AssetSourceSummary[],
+) {
+  if (state === undefined) return undefined;
+  return {
+    ...state,
+    sources: sources.map((source) => ({
+      id: source.id,
+      kind: source.kind,
+      displayName: assetSourceDisplayName(source),
+      lifecycle: source.lifecycle,
+      credentialAvailable: source.credentialReference !== null,
+      sync: {
+        status: source.sync.status,
+        lastSuccessfulAt: source.sync.lastSuccessfulAt,
+        lastAttemptAt: source.sync.lastAttemptAt,
+        error: source.sync.error,
+        diagnostic: source.sync.diagnostic,
+      },
+    })),
+  };
+}
