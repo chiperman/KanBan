@@ -11,40 +11,49 @@ permissions:
   contents: read
 
 concurrency:
-  group: native-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: native-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  native:
-    name: Rust native checks
-    runs-on: macos-latest
-    timeout-minutes: 30
+  changes:
+    name: Detect native changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      native: ${{ steps.scope.outputs.native }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Detect native changes
-        id: changes
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: |
-          if [[ ! "$BASE_SHA" =~ ^[a-f0-9]{40}$ ]] || ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
-            echo "native=true" >> "$GITHUB_OUTPUT"
-          else
-            changed="$(git diff --name-only "$BASE_SHA" HEAD)"
-            if grep -Eq '^(plugins/longbridge/native/|scripts/build-longbridge-keychain-sdk.mjs$|\.github/workflows/native.yml$)' <<< "$changed"; then
-              echo "native=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "native=false" >> "$GITHUB_OUTPUT"
-            fi
-          fi
+      - name: Select verification scope
+        id: scope
+        run: node scripts/ci-scope.mjs
+  native:
+    name: Rust native checks
+    needs: changes
+    if: ${{ !cancelled() }}
+    runs-on: ${{ needs.changes.outputs.native == 'true' && 'macos-latest' || 'ubuntu-latest' }}
+    timeout-minutes: 30
+    steps:
+      - name: Require successful scope detection
+        if: needs.changes.result != 'success'
+        run: exit 1
+      - name: Checkout
+        if: needs.changes.outputs.native == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - name: Setup Rust
-        if: steps.changes.outputs.native == 'true'
+        if: needs.changes.outputs.native == 'true'
         run: rustup toolchain install 1.99.0 --profile minimal
       - name: Compile and test native contracts
-        if: steps.changes.outputs.native == 'true'
+        if: needs.changes.outputs.native == 'true'
         run: |
           cargo +1.99.0 test --locked --manifest-path plugins/longbridge/native/Cargo.toml --lib
           cargo +1.99.0 test --locked --manifest-path plugins/longbridge/native/vendor/longbridge-oauth/Cargo.toml --lib
+      - name: Explain reduced verification
+        if: needs.changes.outputs.native != 'true'
+        run: echo "No native inputs changed; macOS compilation is not required."

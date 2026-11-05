@@ -93,8 +93,8 @@ pnpm exec tsc --noEmit --incremental false
 应用和独立介绍页分别保留字体资源及许可证，使两套发布入口都能独立提供字体；共享来源与授权见 [第三方声明](docs/third-party-notices.md)。
 
 GitHub Pages 由 `.github/workflows/pages.yml` 发布 `landing/`。首次启用时，在仓库
-`Settings > Pages` 的 `Build and deployment` 中选择 `GitHub Actions`；工作流只在 `main`
-分支推送或手动触发时运行。
+`Settings > Pages` 的 `Build and deployment` 中选择 `GitHub Actions`；工作流在 `main` 的介绍页或其 workflow
+有改动时运行，也可手动触发。
 
 ## 本机文件与清理
 

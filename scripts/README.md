@@ -14,10 +14,10 @@
 | `pnpm typecheck` | `tsc --noEmit`；首次检出或清除 Next.js 产物后，先按 [开发入口](../README.md#开发入口) 生成路由类型 |
 | `pnpm test:unit` | [run-unit-tests.mjs](run-unit-tests.mjs)：发现 `scripts/` 和 `src/` 中既有 `*.test.ts` / `*.test.mjs`，通过 Node 执行离线单测 |
 | `pnpm test` | 按顺序执行 `typecheck`、`design:lint`、`test:unit`；不启动应用构建或浏览器 |
-| `pnpm ci:verify` | [ci-verify.mjs](ci-verify.mjs)：在隔离临时数据目录执行 frozen install、Next 路由类型生成、类型检查、设计检查、离线单测、官方集成验证和生产构建；供 GitHub-hosted Runner 使用 |
-| `pnpm plugins:verify` | [verify-plugins.ts](verify-plugins.ts)：构建并检查随应用提供的官方集成包，在临时目录逐包握手；不读取正式数据、不发布独立插件产物 |
+| `pnpm ci:verify` | [ci-verify.mjs](ci-verify.mjs)：在隔离临时数据目录执行 frozen install、Next 路由类型生成、类型检查、设计检查、离线单测和生产构建，再校验这次构建的官方集成产物及握手，避免重复构建；供 GitHub-hosted Runner 使用 |
+| `pnpm plugins:verify [--built]` | [verify-plugins.ts](verify-plugins.ts)：默认在临时目录构建官方集成后逐包握手；`--built` 校验已有 `dist/plugins/packages/`，须先完成本次构建；不读取正式数据、不发布独立插件产物 |
 
-范围与新增测试约束见 [测试纪律](../AGENTS.md#测试纪律)。公开仓库由 [PR 验证 Action](../.github/workflows/verify.yml) 和 [main 构建 Action](../.github/workflows/main-build.yml) 负责正式门禁与构建。
+范围与新增测试约束见 [测试纪律](../AGENTS.md#测试纪律)。公开仓库由同一份 [CI workflow](../.github/workflows/ci.yml) 负责 PR 门禁与 main 构建。
 
 ## 原生扩展与本机授权
 
@@ -76,6 +76,7 @@ node --experimental-transform-types --import ./scripts/register-ts-alias.mjs ./s
 | 文件 | 职责 |
 | --- | --- |
 | [check-toolchain.mjs](check-toolchain.mjs) | 安装、启动与 CLI 共用的 Node/pnpm 版本检查 |
+| [ci-scope.mjs](ci-scope.mjs) | PR/main 共用的变更范围判定，输出应用检查与原生检查需求；无法确认基线时完整检查 |
 | [local-network-environment.mjs](local-network-environment.mjs) | 为本机启动准备 Node 网络环境，处理不可达的本地代理 |
 | [register-ts-alias.mjs](register-ts-alias.mjs) / [ts-alias-loader.mjs](ts-alias-loader.mjs) | TypeScript CLI 与单测的 `@/` 别名加载支持 |
 | [check-https-auth.mjs](check-https-auth.mjs) | 独立的 HTTPS 认证浏览器检查，使用隔离构建、临时 TLS 与虚拟 Passkey；运行前提与证据边界见 [认证传输](../docs/operations/auth-transport.md#验证入口) |

@@ -22,4 +22,4 @@ OAuth 4.x 使用其 `native-tls` 后端，在 macOS 通过系统 TLS 验证证�
 
 `pnpm runtime:prepare` 独立安装依赖并执行应用和官方集成的生产构建，不复制开发数据，也不把可执行集成写入正式数据目录；原生 SDK 仍需按长桥要求单独准备。运行副本、端口和正式数据与开发分离，准备步骤见 [后台自动采集](service-composition.md#后台自动采集)。
 
-后台入口加载运行副本的 `.env.local`，要求绝对路径 `KANBAN_DATA_DIR`；launchd 显式提供 Node 路径、PATH 与正式数据目录。网络环境准备后另起 Node 进程，使 Node 内置代理在初始化时生效。网页登录会话不参与采集，来源凭证、服务端加密密钥、CLI 登录与登录钥匙串仍须有效；来源授权失效不会由网页登录自动修复。
+后台入口加载运行副本的 `.env.local`，要求绝对路径 `KANBAN_DATA_DIR`；launchd 显式提供 Node 路径、PATH 与正式数据目录。运行副本只保存准备时 Node 的实际目录、用户 `.local/bin`、Homebrew 和系统命令目录，不继承开发终端、runner 或临时 worktree 的 PATH；长桥 CLI 装在其他位置时，在环境文件通过绝对路径 `LONGBRIDGE_SERVE_BIN` 指定。网络环境准备后另起 Node 进程，使 Node 内置代理在初始化时生效。网页登录会话不参与采集，来源凭证、服务端加密密钥、CLI 登录与登录钥匙串仍须有效；来源授权失效不会由网页登录自动修复。

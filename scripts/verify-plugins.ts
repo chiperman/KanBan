@@ -8,8 +8,10 @@ import { OFFICIAL_PLUGIN_IDS } from "@/server/asset-source-plugins/official";
 import officialCatalog from "../plugins/official.json" with { type: "json" };
 
 const workspace = path.resolve(process.cwd());
-const temporary = mkdtempSync(path.join(tmpdir(), "kanban-official-integrations-"));
-const output = path.join(temporary, "packages");
+const args = process.argv.slice(2);
+if (args.length > 1 || (args.length === 1 && args[0] !== "--built")) throw new Error("用法：pnpm plugins:verify [--built]");
+const temporary = args[0] === "--built" ? null : mkdtempSync(path.join(tmpdir(), "kanban-official-integrations-"));
+const output = temporary ? path.join(temporary, "packages") : path.join(workspace, "dist/plugins/packages");
 
 try {
   const catalogIds = officialCatalog.plugins.map(plugin => plugin.id);
@@ -20,10 +22,12 @@ try {
     throw new Error("官方集成运行白名单与展示清单不一致");
   }
 
-  execFileSync(process.execPath, [
-    path.join(workspace, "scripts/build-source-plugins.mjs"),
-    output,
-  ], { cwd: workspace, stdio: "inherit" });
+  if (temporary) {
+    execFileSync(process.execPath, [
+      path.join(workspace, "scripts/build-source-plugins.mjs"),
+      output,
+    ], { cwd: workspace, stdio: "inherit" });
+  }
 
   const packages = bundledPluginPackages(output);
   const ids = new Set(packages.map(pkg => pkg.manifest.id));
@@ -50,5 +54,5 @@ try {
   }
   console.log(`官方集成验证通过：${packages.length} 个集成；未读取正式数据或网络账户。`);
 } finally {
-  rmSync(temporary, { recursive: true, force: true });
+  if (temporary) rmSync(temporary, { recursive: true, force: true });
 }

@@ -38,7 +38,13 @@ for (const relative of new Set(files)) {
 }
 copyFileSync(envFile, path.join(destination, ".env.local"));
 chmodSync(path.join(destination, ".env.local"), 0o600);
-const executablePath = [...new Set([path.dirname(process.execPath), ...(process.env.PATH || "").split(path.delimiter), "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"])].join(path.delimiter);
+// A long-lived service must not inherit development or package-manager
+// PATH entries from the shell that happened to prepare this build.
+const executablePath = [...new Set([
+  path.dirname(realpathSync(process.execPath)), path.join(homedir(), ".local/bin"),
+  "/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin",
+  "/usr/bin", "/bin", "/usr/sbin", "/sbin",
+])].join(path.delimiter);
 const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: source, encoding: "utf8" }).trim();
 const dirty = execFileSync("git", ["status", "--porcelain"], { cwd: source, encoding: "utf8" }).trim().length > 0;
 const sourceInfo = {

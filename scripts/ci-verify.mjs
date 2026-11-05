@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -34,26 +34,14 @@ function run(command, args, env) {
   if (result.status !== 0) throw new Error(`${command} ${args.join(" ")} 失败（${result.status ?? "signal"}）`);
 }
 
-function pluginsChanged() {
-  if (!process.env.GITHUB_EVENT_PATH) return true;
-  const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, "utf8"));
-  const base = event.pull_request?.base?.sha ?? event.before;
-  if (!base || !/^[a-f0-9]{40}$/.test(base) || /^0+$/.test(base)) return true;
-  const diff = spawnSync("git", ["diff", "--name-only", base, "HEAD"], { cwd: root, encoding: "utf8" });
-  if (diff.status !== 0 || diff.error) return true;
-  return diff.stdout.split("\n").some(file =>
-    /^(plugins\/|src\/|scripts\/|\.github\/workflows\/|package\.json$|pnpm-lock\.yaml$|tsconfig\.json$|\.node-version$)/.test(file));
-}
-
 try {
   run("pnpm", ["install", "--frozen-lockfile"], process.env);
   run("pnpm", ["exec", "next", "typegen"], buildEnvironment);
   run("pnpm", ["typecheck"], testEnvironment);
   run("pnpm", ["design:lint"], testEnvironment);
   run("pnpm", ["test:unit"], testEnvironment);
-  if (pluginsChanged()) run("pnpm", ["plugins:verify"], testEnvironment);
-  else console.log("本次未修改集成、源码或构建链路，跳过官方集成打包验证。");
   run("pnpm", ["build"], buildEnvironment);
+  run("pnpm", ["plugins:verify", "--built"], testEnvironment);
   evidence.status = "passed";
   console.log("CI 验证通过：类型、设计、单测和生产构建全部完成。");
 } catch (error) {
