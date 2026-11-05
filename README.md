@@ -4,6 +4,8 @@
 
 项目主页：[chiperman.github.io/KanBan](https://chiperman.github.io/KanBan/)
 
+项目代码采用 [MIT License](LICENSE)；第三方资源的原有许可见 [第三方声明](docs/third-party-notices.md)。
+
 CI/CD 与 Mac mini 手动部署见 [GitHub Actions CI/CD](docs/operations/github-actions.md)。公开仓库的 GitHub Actions 不会自动更新维护者的 Mac mini。
 
 ## 集成插件

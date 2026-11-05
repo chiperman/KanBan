@@ -39,7 +39,15 @@ for (const relative of new Set(files)) {
 copyFileSync(envFile, path.join(destination, ".env.local"));
 chmodSync(path.join(destination, ".env.local"), 0o600);
 const executablePath = [...new Set([path.dirname(process.execPath), ...(process.env.PATH || "").split(path.delimiter), "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"])].join(path.delimiter);
-writeFileSync(path.join(destination, ".kanban-runtime.json"), JSON.stringify({ dataDir, port, origin, executablePath }, null, 2) + "\n", { mode: 0o600 });
+const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: source, encoding: "utf8" }).trim();
+const dirty = execFileSync("git", ["status", "--porcelain"], { cwd: source, encoding: "utf8" }).trim().length > 0;
+const sourceInfo = {
+  commit, dirty, preparedAt: new Date().toISOString(),
+  ...(!dirty && process.env.KANBAN_DEPLOY_COMMIT === commit &&
+    /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/actions\/runs\/\d+$/.test(process.env.KANBAN_DEPLOY_CI_URL || "")
+    ? { mainBuildUrl: process.env.KANBAN_DEPLOY_CI_URL } : {}),
+};
+writeFileSync(path.join(destination, ".kanban-runtime.json"), JSON.stringify({ dataDir, port, origin, executablePath, sourceInfo }, null, 2) + "\n", { mode: 0o600 });
 // 构建期间即使页面初始化服务，也只能接触一次性的空库，不能迁移或写入正式库。
 const buildData = mkdtempSync(path.join(tmpdir(), "kanban-build-"));
 const environment = { ...process.env, NODE_ENV: "production", NEXT_DIST_DIR: ".next", KANBAN_DATA_DIR: buildData, PAD_PUBLIC_ORIGIN: origin };

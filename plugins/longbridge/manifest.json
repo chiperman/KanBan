@@ -1,6 +1,6 @@
 {
   "id": "longbridge",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "protocolVersion": 1,
   "capabilities": [
     "assets.read",

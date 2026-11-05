@@ -1,6 +1,7 @@
 {
   "name": "personal-asset-dashboard",
   "version": "0.1.0",
+  "license": "MIT",
   "type": "module",
   "private": true,
   "scripts": {
@@ -27,6 +28,7 @@
     "plugin:build": "node scripts/build-source-plugin.mjs",
     "plugin": "node --experimental-transform-types --import ./scripts/register-ts-alias.mjs scripts/source-plugin.ts",
     "plugins:release": "node scripts/release-source-plugins.mjs",
+    "plugins:verify": "node --experimental-transform-types --import ./scripts/register-ts-alias.mjs scripts/verify-plugins.ts",
     "ci:verify": "node scripts/ci-verify.mjs",
     "deploy:manual": "node scripts/manual-deploy.mjs"
   },
@@ -42,7 +44,7 @@
   },
   "devDependencies": {
     "@playwright/test": "1.64.1",
-    "@types/node": "^26.6.6",
+    "@types/node": "^24.19.2",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "typescript": "^5.9.2"

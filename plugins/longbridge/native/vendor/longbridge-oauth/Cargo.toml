@@ -41,6 +41,8 @@ version = "4.1.0"
 
 [dependencies.oauth2]
 version = "4.4"
+default-features = false
+features = ["reqwest", "native-tls"]
 
 [dependencies.poem]
 version = "3.1.12"

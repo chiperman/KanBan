@@ -51,7 +51,7 @@ pnpm background:launchd status
 pnpm deploy:manual <main-commit-sha>
 ```
 
-[手动部署命令](../../scripts/manual-deploy.mjs) 先确认目标提交属于 `origin/main`，再在临时 worktree 中调用 [更新命令](../../scripts/update-runtime.mjs)。更新命令要求网页与采集任务属于同一个 3001 正式副本，沿用其数据目录、`.env.local` 和登录入口；不会复制开发数据或替换来源凭证。Mac mini 不作为公开仓库 Runner，PR 和 `main` 合并不会自动触发更新。
+[手动部署命令](../../scripts/manual-deploy.mjs) 先确认目标提交属于 `origin/main`，并通过已登录的 GitHub CLI 检查该提交最新主分支构建成功，再在临时 worktree 中调用 [更新命令](../../scripts/update-runtime.mjs)；`--check` 只核对提交与 CI。新运行配置保存来源 SHA、修改状态、准备时间，经过部署门禁时还保存构建记录链接。更新命令要求网页与采集任务属于同一个 3001 正式副本，沿用其数据目录、`.env.local` 和登录入口；不会复制开发数据或替换来源凭证。Mac mini 不作为公开仓库 Runner，PR 和 `main` 合并不会自动触发更新。
 
 新版在独立目录安装依赖并构建，期间旧版继续提供网页和采集。构建失败保留旧版；构建通过后暂停新后台批次并等待当前批次退出，再短暂重启网页、切换任务。安装与回退加载任务时，launchd 的临时 I/O 错误最多重试三十秒，其他错误立即报告。更新通过进程锁互斥；切换前使用 SQLite 在线接口保存数据库和原任务至新版 `.runtime-rollback/`，不直接复制可能遗漏 WAL 的主文件。启动后校验新构建的静态资源、首页及后台实际检查心跳；失败自动恢复原任务，保留正式数据库。旧副本保留用于回退，不自动清理。
 

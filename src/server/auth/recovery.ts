@@ -9,6 +9,7 @@ import {
 import type { OwnerRecoveryCredential } from "@/server/ports";
 
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+const MAX_TOTP_SECRET_LENGTH = 1024;
 
 const scope = globalThis as typeof globalThis & {
   __kanbanRecoveryCredentialQueue?: Promise<void>;
@@ -88,8 +89,11 @@ function encodeBase32(value: Uint8Array): string {
 }
 
 function decodeBase32(value: string): Buffer {
+  if (value.length > MAX_TOTP_SECRET_LENGTH) throw new Error("TOTP 密钥格式无效");
+  let end = value.length;
+  while (end > 0 && value[end - 1] === "=") end--;
   let bits = "";
-  for (const character of value.replace(/=+$/u, "").toUpperCase()) {
+  for (const character of value.slice(0, end).toUpperCase()) {
     const index = BASE32_ALPHABET.indexOf(character);
     if (index < 0) throw new Error("TOTP 密钥格式无效");
     bits += index.toString(2).padStart(5, "0");
@@ -140,7 +144,9 @@ export function matchingTotpCounter(
 }
 
 export function validateTotpSecret(value: unknown): string {
-  if (typeof value !== "string") throw new Error("TOTP 密钥格式无效");
+  if (typeof value !== "string" || value.length > MAX_TOTP_SECRET_LENGTH) {
+    throw new Error("TOTP 密钥格式无效");
+  }
   const secret = value.trim().toUpperCase();
   decodeBase32(secret);
   return secret;

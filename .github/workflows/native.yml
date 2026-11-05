@@ -1,0 +1,50 @@
+name: Native SDK
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    name: Rust native checks
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Detect native changes
+        id: changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [[ ! "$BASE_SHA" =~ ^[a-f0-9]{40}$ ]] || ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            echo "native=true" >> "$GITHUB_OUTPUT"
+          else
+            changed="$(git diff --name-only "$BASE_SHA" HEAD)"
+            if grep -Eq '^(plugins/longbridge/native/|scripts/build-longbridge-keychain-sdk.mjs$|\.github/workflows/native.yml$)' <<< "$changed"; then
+              echo "native=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "native=false" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+      - name: Setup Rust
+        if: steps.changes.outputs.native == 'true'
+        run: rustup toolchain install 1.99.0 --profile minimal
+      - name: Compile and test native contracts
+        if: steps.changes.outputs.native == 'true'
+        run: |
+          cargo +1.99.0 test --locked --manifest-path plugins/longbridge/native/Cargo.toml --lib
+          cargo +1.99.0 test --locked --manifest-path plugins/longbridge/native/vendor/longbridge-oauth/Cargo.toml --lib

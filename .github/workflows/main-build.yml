@@ -11,15 +11,21 @@ permissions:
 concurrency:
   group: main-build
   cancel-in-progress: false
+  queue: max
 
 jobs:
   build:
     name: Verify and build main
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      KANBAN_CI_HOME: .ci-run
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup pnpm
         uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
@@ -39,6 +45,15 @@ jobs:
         run: |
           jq -n --arg sha "$GITHUB_SHA" --arg ref "$GITHUB_REF_NAME" --arg run "$GITHUB_RUN_ID" \
             '{sha:$sha,ref:$ref,run_id:$run,kind:"main-build"}' > "$RUNNER_TEMP/kanban-build.json"
+
+      - name: Upload failure evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: main-evidence-${{ github.run_id }}
+          path: .ci-run
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Upload build metadata
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

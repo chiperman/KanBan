@@ -13,7 +13,8 @@
 | `pnpm typecheck` | `tsc --noEmit`；首次检出或清除 Next.js 产物后，先按 [开发入口](../README.md#开发入口) 生成路由类型 |
 | `pnpm test:unit` | [run-unit-tests.mjs](run-unit-tests.mjs)：发现 `scripts/` 和 `src/` 中既有 `*.test.ts` / `*.test.mjs`，通过 Node 执行离线单测 |
 | `pnpm test` | 按顺序执行 `typecheck`、`design:lint`、`test:unit`；不启动应用构建或浏览器 |
-| `pnpm ci:verify` | [ci-verify.mjs](ci-verify.mjs)：在隔离临时数据目录执行 frozen install、Next 路由类型生成、类型检查、设计检查、离线单测和生产构建；供 GitHub-hosted Runner 使用 |
+| `pnpm ci:verify` | [ci-verify.mjs](ci-verify.mjs)：在隔离临时数据目录执行 frozen install、Next 路由类型生成、类型检查、设计检查、离线单测和生产构建；相关源码、插件、脚本、依赖或 workflow 变化时附加插件验证；供 GitHub-hosted Runner 使用 |
+| `pnpm plugins:verify [--release plugins-v1.0.0 --output 新目录]` | [verify-plugins.ts](verify-plugins.ts)：静态校验浏览目录，构建全量官方包并核对附件与摘要，在临时数据目录逐包握手；第三方条目不下载执行；默认清理临时产物，指定输出目录时保留发行包 |
 
 范围与新增测试约束见 [测试纪律](../AGENTS.md#测试纪律)。公开仓库由 [PR 验证 Action](../.github/workflows/verify.yml) 和 [main 构建 Action](../.github/workflows/main-build.yml) 负责正式门禁与构建。
 
@@ -41,7 +42,7 @@
 
 | 命令 | 入口与作用 |
 | --- | --- |
-| `pnpm deploy:manual <commit-sha>` | [manual-deploy.mjs](manual-deploy.mjs)：确认提交属于 `origin/main`，在临时 worktree 中调用 `runtime:update`，完成独立构建和健康检查 |
+| `pnpm deploy:manual <commit-sha> [--check]` | [manual-deploy.mjs](manual-deploy.mjs)：通过 GitHub CLI 确认提交属于 `origin/main` 且最新主分支构建成功，再在临时 worktree 中调用 `runtime:update`；`--check` 不构建或切换服务 |
 
 Mac mini 不运行轮询器，也不作为公开仓库的 self-hosted Runner。正式部署只有维护者在确认 `main` 构建通过后主动执行。
 
@@ -75,6 +76,10 @@ node --experimental-transform-types --import ./scripts/register-ts-alias.mjs ./s
 | 文件 | 职责 |
 | --- | --- |
 | [lib/plugin-archive.mjs](lib/plugin-archive.mjs) | 插件打包与受限 USTAR 解包，拒绝越界路径、链接、重复文件及超限内容 |
+| [lib/plugin-release.mjs](lib/plugin-release.mjs) | 发行附件及版本校验、GitHub 只读门禁与发行 API；不安装或执行插件 |
+| [lib/github-main.mjs](lib/github-main.mjs) | 插件发布与手动部署共用的主分支归属、最新 push/main 构建检查及 GitHub origin 解析 |
+| [check-plugin-release.mjs](check-plugin-release.mjs) | 标签发布的只读检查：目标提交、`main` 最新构建和上一稳定发行版本 |
+| [publish-plugin-release.mjs](publish-plugin-release.mjs) | 独立写权限任务：只上传已验证产物，续传草稿、下载核对后公开；不覆盖已公开附件 |
 | [check-toolchain.mjs](check-toolchain.mjs) | 安装、启动与 CLI 共用的 Node/pnpm 版本检查 |
 | [local-network-environment.mjs](local-network-environment.mjs) | 为本机启动准备 Node 网络环境，处理不可达的本地代理 |
 | [register-ts-alias.mjs](register-ts-alias.mjs) / [ts-alias-loader.mjs](ts-alias-loader.mjs) | TypeScript CLI 与单测的 `@/` 别名加载支持 |
