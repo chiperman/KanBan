@@ -6,11 +6,15 @@ export async function assertMainCommit(client, repository, commit) {
   if (!['ahead', 'identical'].includes(comparison.status) || comparison.merge_base_commit?.sha !== commit) {
     throw new Error('只能使用已经合入 main 的提交');
   }
-  const runs = await client.json(`repos/${repository}/actions/workflows/main-build.yml/runs?head_sha=${commit}&event=push&branch=main&per_page=100`);
-  const latest = runs.workflow_runs?.filter(r => r.head_sha === commit && r.head_branch === 'main' && r.event === 'push')
+  // Keep successful historical main builds usable after consolidating CI.
+  const workflows = new Set(['.github/workflows/ci.yml', '.github/workflows/main-build.yml']);
+  const runs = await client.json(`repos/${repository}/actions/runs?head_sha=${commit}&event=push&branch=main&per_page=100`);
+  const latest = runs.workflow_runs?.filter(r =>
+    r.head_sha === commit && r.head_branch === 'main' && r.event === 'push' &&
+    workflows.has(r.path?.split('@')[0]))
     .sort((a, b) => b.id - a.id)[0];
   if (!latest || latest.status !== 'completed' || latest.conclusion !== 'success') {
-    throw new Error('目标提交的最新 Build main 尚未成功，请等待或修复主分支 CI 后重试');
+    throw new Error('目标提交的最新主分支 CI 尚未成功，请等待或修复后重试');
   }
   return { runId: latest.id, runUrl: `https://github.com/${repository}/actions/runs/${latest.id}` };
 }

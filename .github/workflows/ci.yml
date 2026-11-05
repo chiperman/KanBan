@@ -1,6 +1,8 @@
-name: Build main
+name: CI
 
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
   workflow_dispatch:
@@ -8,16 +10,20 @@ on:
 permissions:
   contents: read
 
+# New PR commits replace old checks. Each main push has its own group so that
+# neither running nor pending verification is replaced by a later commit.
 concurrency:
-  group: main-build
-  cancel-in-progress: false
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  build:
-    name: Verify and build main
+  verify:
+    name: Typecheck, design lint, unit tests and build
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
+      CI: "1"
+      NEXT_TELEMETRY_DISABLED: "1"
       KANBAN_CI_HOME: .ci-run
     steps:
       - name: Checkout
@@ -26,21 +32,33 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Select verification scope
+        id: scope
+        run: node scripts/ci-scope.mjs
+
       - name: Setup pnpm
+        if: steps.scope.outputs.app == 'true'
         uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: 11.25.0
 
       - name: Setup Node.js
+        if: steps.scope.outputs.app == 'true'
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24.15.0
           cache: pnpm
 
-      - name: Verify and build
+      - name: Verify and build application
+        if: steps.scope.outputs.app == 'true'
         run: pnpm ci:verify
 
-      - name: Write build metadata
+      - name: Explain reduced verification
+        if: steps.scope.outputs.app != 'true'
+        run: echo "Only documentation or landing content changed; application verification is not required."
+
+      - name: Write main build metadata
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           jq -n --arg sha "$GITHUB_SHA" --arg ref "$GITHUB_REF_NAME" --arg run "$GITHUB_RUN_ID" \
             '{sha:$sha,ref:$ref,run_id:$run,kind:"main-build"}' > "$RUNNER_TEMP/kanban-build.json"
@@ -49,12 +67,13 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: main-evidence-${{ github.run_id }}
+          name: ci-evidence-${{ github.run_id }}
           path: .ci-run
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Upload build metadata
+      - name: Upload main build metadata
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: kanban-main-build-${{ github.sha }}
