@@ -72,7 +72,7 @@ try {
   assert.match(logout.headers()['set-cookie'], /Secure/);
   assert.ok(!(await context.cookies()).some(cookie => cookie.name === 'pad_session_' + appPort));
   await page.reload();
-  await expect(page.getByRole('heading', { name: '看板已锁定' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '使用 Passkey 登录' })).toBeVisible();
   console.info('HTTPS 注册、登录、失败清理、退出与会话删除通过（临时证书和虚拟认证器）');
 } finally {
   await browser?.close();

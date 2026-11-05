@@ -1,10 +1,7 @@
 import { rejectCrossOrigin } from "@/server/auth/request-origin";
 import { consumeChallenge, withOwnerCredentialLock } from "@/server/auth/challenges";
 import { verifyAuthenticationResponse } from "@simplewebauthn/server";
-import type {
-  AuthenticationResponseJSON,
-  AuthenticatorTransportFuture,
-} from "@simplewebauthn/server";
+import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
 
 import { getServices } from "@/server/composition";
 import {
@@ -51,9 +48,7 @@ export async function POST(request: Request) {
             Buffer.from(credential.publicKey, "base64url"),
           ),
           counter: credential.counter,
-          transports: credential.transports as
-            | AuthenticatorTransportFuture[]
-            | undefined,
+          transports: credential.transports,
         },
       });
     } catch {

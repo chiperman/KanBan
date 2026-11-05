@@ -2,7 +2,6 @@ import { rejectCrossOrigin } from "@/server/auth/request-origin";
 import { issueChallenge } from "@/server/auth/challenges";
 import { CHALLENGE_COOKIE } from "@/server/auth/session";
 import { generateAuthenticationOptions } from "@simplewebauthn/server";
-import type { AuthenticatorTransportFuture } from "@simplewebauthn/server";
 
 import { getServices } from "@/server/composition";
 import { challengeCookieHeader, readCookie, relyingParty } from "@/server/auth/cookies";
@@ -24,9 +23,7 @@ export async function POST(request: Request) {
     allowCredentials: [
       {
         id: credential.id,
-        transports: credential.transports as
-          | AuthenticatorTransportFuture[]
-          | undefined,
+        transports: credential.transports,
       },
     ],
     userVerification: "preferred",
