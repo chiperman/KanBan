@@ -19,7 +19,7 @@ importers:
         version: 13.3.2
       next:
         specifier: ^16.4.3
-        version: 16.4.3(@playwright/test@1.61.1)(@types/node@24.13.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        version: 16.4.3(@playwright/test@1.61.1)(@types/node@26.6.6)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -37,8 +37,8 @@ importers:
         specifier: 1.61.1
         version: 1.61.1
       '@types/node':
-        specifier: ^24.0.0
-        version: 24.13.3
+        specifier: ^26.6.6
+        version: 26.6.6
       '@types/react':
         specifier: ^19.2.0
         version: 19.2.17
@@ -379,8 +379,8 @@ packages:
   '@types/d3-timer@3.0.2':
     resolution: {integrity: sha512-Ps3T8E8dZDam6fUyNiMkekK3XUsaUEik+idO9/YjPtfj2qruF8tFBXS7XhtE4iIXBLxhmLjP3SXpLhVf21I9Lw==}
 
-  '@types/node@24.13.3':
-    resolution: {integrity: sha512-Dh8vAsV36ig5wa9OX4pXvMc9D3Veibfw2wix0CUwYODLD8nkj9UsLjASr49nPg+2eKzxhBV+v7L8pXvT4e639Q==}
+  '@types/node@26.6.6':
+    resolution: {integrity: sha512-MzQj+8Kx3XI40OmUAE6Qoh58ZMNstNNMwn2nfd3qWsfe7nDNSqJNzes4njhz6AHwrSHOffSLwXU6yb474Q4aog==}
 
   '@types/react-dom@19.2.3':
     resolution: {integrity: sha512-jp2L/eY6fn+KgVVQAOqYItbF0VY/YApe5Mz2F0aykSO8gx31bYCZyvSeYxCHKvzHG5eZjc+zyaS5BrBWya2+kQ==}
@@ -632,8 +632,8 @@ packages:
     engines: {node: '>=14.17'}
     hasBin: true
 
-  undici-types@7.18.2:
-    resolution: {integrity: sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w==}
+  undici-types@8.9.0:
+    resolution: {integrity: sha512-KTDyRTYX8sWmKXAikPHHSyc63CRPETMctyjKFupcC6OBLXT3xsN0e9aF7m+mIXutFWpUXuedtowG7iLOzp0kQg==}
 
   use-sync-external-store@1.6.0:
     resolution: {integrity: sha512-Pp6GSwGP/NrPIrxVFAIkOQeyw8lFenOHijQWkUTrDvrF4ALqylP2C/KCkeS9dpUM3KvYRQhna5vt7IL95+ZQ9w==}
@@ -950,9 +950,9 @@ snapshots:
 
   '@types/d3-timer@3.0.2': {}
 
-  '@types/node@24.13.3':
+  '@types/node@26.6.6':
     dependencies:
-      undici-types: 7.18.2
+      undici-types: 8.9.0
 
   '@types/react-dom@19.2.3(@types/react@19.2.17)':
     dependencies:
@@ -1036,7 +1036,7 @@ snapshots:
 
   nanoid@3.3.19: {}
 
-  next@16.4.3(@playwright/test@1.61.1)(@types/node@24.13.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
+  next@16.4.3(@playwright/test@1.61.1)(@types/node@26.6.6)(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
     dependencies:
       '@next/env': 16.4.3
       '@swc/helpers': 0.5.23
@@ -1056,7 +1056,7 @@ snapshots:
       '@next/swc-win32-arm64-msvc': 16.4.3
       '@next/swc-win32-x64-msvc': 16.4.3
       '@playwright/test': 1.61.1
-      sharp: 0.35.5(@types/node@24.13.3)
+      sharp: 0.35.5(@types/node@26.6.6)
     transitivePeerDependencies:
       - '@babel/core'
       - '@types/node'
@@ -1137,7 +1137,7 @@ snapshots:
   semver@7.8.5:
     optional: true
 
-  sharp@0.35.5(@types/node@24.13.3):
+  sharp@0.35.5(@types/node@26.6.6):
     dependencies:
       '@img/colour': 1.1.0
       detect-libc: 2.1.2
@@ -1168,7 +1168,7 @@ snapshots:
       '@img/sharp-win32-arm64': 0.35.5
       '@img/sharp-win32-ia32': 0.35.5
       '@img/sharp-win32-x64': 0.35.5
-      '@types/node': 24.13.3
+      '@types/node': 26.6.6
     optional: true
 
   source-map-js@1.2.1: {}
@@ -1190,7 +1190,7 @@ snapshots:
 
   typescript@5.9.3: {}
 
-  undici-types@7.18.2: {}
+  undici-types@8.9.0: {}
 
   use-sync-external-store@1.6.0(react@19.2.8):
     dependencies:
