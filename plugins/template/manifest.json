@@ -2,7 +2,7 @@
   "id": "plugin:my-provider",
   "version": "1.0.0",
   "protocolVersion": 1,
-  "entry": "main.mjs",
+  "entry": "plugins/template/src/main.mjs",
   "capabilities": ["assets.read", "authorization.preview", "authorization.revalidate"],
   "metadata": { "summary": "填写你的只读接入用途。", "publisher": "填写开发者名称" },
   "description": {

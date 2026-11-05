@@ -54,7 +54,7 @@ const environment = { ...process.env, NODE_ENV: "production", NEXT_DIST_DIR: ".n
 // 独立安装依赖、构建；生产副本不引用临时 worktree 的 node_modules 或构建目录。
 try {
   execFileSync(process.execPath, [pnpmCli, "install", "--frozen-lockfile", "--prod=false"], { cwd: destination, env: environment, stdio: "inherit" });
-  execFileSync(process.execPath, [pnpmCli, "exec", "next", "build"], { cwd: destination, env: environment, stdio: "inherit" });
+  execFileSync(process.execPath, [pnpmCli, "run", "build"], { cwd: destination, env: environment, stdio: "inherit" });
 } finally {
   rmSync(buildData, { recursive: true, force: true });
 }

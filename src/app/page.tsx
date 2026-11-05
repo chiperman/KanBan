@@ -63,7 +63,7 @@ export default async function AssetDashboardPage({
             </div>
             <div className="page-header__actions" aria-label="页面操作">
               <VibeLink href="/settings?view=plugins&mode=demo" variant="outline">
-                插件
+                官方集成
               </VibeLink>
               <VibeLink
                 aria-label="退出演示模式"

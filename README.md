@@ -8,50 +8,25 @@
 
 CI/CD 与 Mac mini 手动部署见 [GitHub Actions CI/CD](docs/operations/github-actions.md)。公开仓库的 GitHub Actions 不会自动更新维护者的 Mac mini。
 
-## 集成插件
+## 官方集成
 
-外部接入以独立插件提供，按需安装：Binance、OKX、Bitget、BIT / Matrixport、Ethereum 观察钱包、BNB 观察钱包、长桥和 CoinGecko。
+外部接入按平台分模块维护，但随 KanBan 应用一起提供：Binance、OKX、Bitget、BIT / Matrixport、Ethereum 观察钱包、BNB 观察钱包、长桥和 CoinGecko。
 
-无需设置 Passkey 即可预览：进入演示模式后点击“插件”，或打开 `/settings?view=plugins&mode=demo`。演示使用虚构版本和安装状态，可搜索、筛选，不执行安装或读取本机账户与插件数据。
+无需设置 Passkey 即可预览：进入演示模式后点击“官方集成”，或打开 `/settings?view=plugins&mode=demo`。演示使用虚构版本和状态，不读取本机账户或插件数据。
 
-### 安装与使用
+### 使用官方集成
 
-1. 打开 **设置 → 插件**，浏览或搜索插件，点击“安装”。
-2. 账户插件安装启用后，通过“添加账户”填写只读凭证或完成授权，核对预览后确认。CoinGecko 提供参考价格服务，无需添加账户。
-3. 在插件页管理更新、启停、卸载，或回滚到本机保留的历史版本。停用和卸载会停止后续读取，保留账户、凭证、快照与历史。
+1. 打开 **设置 → 官方集成**，查看当前版本包含的平台、版本和源码仓库。
+2. 账户接入直接点击“添加账户”，填写只读凭证或完成授权，核对预览后确认。CoinGecko 提供参考价格服务，无需添加账户。
+3. 官方集成随 KanBan 版本统一升级，不在正式数据目录中安装、更新、停用或卸载插件。
 
-插件目录由 [plugins/registry.json](plugins/registry.json) 维护，只登记介绍和发布仓库，版本及安装包从各自的 GitHub Release 获取；官方包使用本仓库的稳定 `plugins-v*` Release。目录安装和 GitHub 直接安装均从原仓库检查更新，开发者发布新版无需重复提交上架 PR，用户确认后升级。尚未发布的官方插件仍可查看介绍，安装按钮显示“待发布”。也可选择“导入插件包”，导入开发者提供的 `.tar.gz` 文件，查看用途、版本、开发者与 SHA-256 后确认安装。插件在服务所在机器执行代码，请仅安装可信来源的包。
-
-未上架的插件也能安装：点击“从 GitHub 安装”，粘贴开发者提供的 `owner/repo` 或 Release 地址，查看插件信息后确认。一个仓库可发布多个插件，安装时选择其中一个；后续点击“检查更新”，会从原发布仓库读取新版本。
-
-命令行安装、已有账户升级及维护者发布步骤见 [插件安装与生命周期](docs/operations/asset-sources.md#独立包安装与生命周期)。
+官方版本不会读取第三方商城、GitHub 插件仓库或本地插件包，也不会执行应用运行期间下载的未知代码。官方接入代码和依赖在同一个版本中构建并由 CI 验证。
 
 ### 开发自己的接入
 
-第三方开发者可使用统一协议独立开发，无需修改 KanBan 核心或将源码合入主仓库。先创建模板：
+官方仓库只提供协议、数据结构和源码示例，不提供第三方插件商城、导入入口或在线开发功能。希望维护自定义接入的开发者应在自己的 KanBan Fork 或独立应用中实现，并使用独立数据目录和测试凭证；自定义代码不属于官方发行版的信任范围。
 
-```sh
-pnpm plugin create my-provider ./my-provider
-```
-
-实现生成的 `provider.mjs` 中的只读资产读取与授权函数，并验证真实账户接入后，打包分发：
-
-```sh
-mkdir -p release
-pnpm plugin pack ./my-provider ./release/my-provider-1.0.0.tar.gz \
-  --repository your-name/my-provider --release v1.0.0
-```
-
-将生成的 `.tar.gz` 与 `catalog.json` 一起上传到自己仓库的 `v1.0.0` Release，用户即可从仓库地址直接安装。希望出现在插件目录时，再向 [plugins/registry.json](plugins/registry.json) 提交 PR，审核合入后展示。官方插件集中在本仓库，第三方可自行选择单插件或多插件仓库。清单、协议、快照格式与上架步骤见 [第三方插件开发指南](docs/operations/plugin-development.md)。
-
-同一仓库有多个插件时，每次发行都包含全部插件，包括未改动的插件：
-
-```sh
-pnpm plugin release ./provider-a ./provider-b --output ./release-v1.1.0 \
-  --repository your-name/plugins --release v1.1.0
-```
-
-命令生成完整 `catalog.json` 和各插件压缩包，将输出目录内的所有文件一起上传。未改动的插件保持原版本，输出目录须尚不存在。
+接入协议与代码边界见[集成开发说明](docs/operations/plugin-development.md)。
 
 ## 开发入口
 
@@ -64,9 +39,9 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-本机配置放在已忽略的 `.env.local`，运行时数据保存在 `data/`。仅使用长桥 CLI 时无需编译原生扩展；使用 SDK 前构建原生产物并以 `--with-sdk` 打包长桥插件，具体步骤见 [插件构建与发布](docs/operations/asset-sources.md#维护者构建与发布)。
+本机配置放在已忽略的 `.env.local`，运行时数据保存在 `data/`。仅使用长桥 CLI 时无需编译原生扩展；使用 SDK 前先按[工具链](docs/operations/toolchain.md#原生产物)构建原生产物。
 
-需要 Mac 登录后持续采集时，使用独立生产运行副本和正式数据目录，无需每天手动启动开发服务器；准备、迁移及安装命令见 [后台自动采集](docs/operations/service-composition.md#后台自动采集)。
+需要 Mac 登录后持续采集时，使用独立生产运行副本和正式数据目录，无需每天手动启动开发服务器；准备、迁移及任务命令见 [后台自动采集](docs/operations/service-composition.md#后台自动采集)。
 
 Mac mini 的正式版与公开仓库分离。维护者需要发布时，在 Mac mini 的仓库工作副本执行 `pnpm deploy:manual <main-commit-sha>`；脚本只部署 `main` 上的固定提交，并沿用正式数据与采集周期。构建失败保留旧版，启动检查失败恢复旧任务。流程与回退边界见 [永久运行副本](docs/operations/service-composition.md#永久运行副本)。
 
@@ -88,16 +63,17 @@ pnpm exec tsc --noEmit --incremental false
 | [src/server/](src/server/) | 服务装配、来源接入与同步、外部适配器、持久化和认证 |
 | [src/ui/](src/ui/) | 页面工作区、客户端交互与展示模型；共享 React 组件在 [vibe/](src/ui/vibe/) |
 | [src/shared/](src/shared/) | 跨客户端与服务端共用的基础定义，当前为会话策略 |
-| [plugins/](plugins/) | 独立来源与服务插件；构建、安装与停用见 [来源接入](docs/operations/asset-sources.md) |
-| [plugins/sdk/](plugins/sdk/) | 插件协议、stdio 入口、共享运行时工具与第三方模板；不是独立发布的 npm SDK |
+| [plugins/](plugins/) | 随应用构建的官方来源与服务集成；接入边界见 [来源接入](docs/operations/asset-sources.md) |
+| [plugins/template/](plugins/template/) | 可复制的官方集成骨架；批量构建会跳过此保留目录 |
+| [plugins/sdk/](plugins/sdk/) | 官方集成协议、stdio 入口和共享运行时工具；不是独立发布的 npm SDK |
 | [plugins/longbridge/native/](plugins/longbridge/native/) | 原生扩展源码、Cargo 锁文件与必需的 OAuth 本地补丁；产物说明见 [工具链](docs/operations/toolchain.md#原生产物) |
 | [public/](public/) | 应用运行时静态资源，包括字体及许可证 |
 | [landing/](landing/) | 独立 GitHub Pages 介绍页及其资源，不参与应用构建 |
 | [scripts/](scripts/README.md) | 持续维护的开发、设计与运维脚本；入口、辅助模块和检查范围见索引 |
 | [docs/](docs/README.md) | 现行规范、源码导航与唯一待办入口 |
-| [.github/workflows/](.github/workflows/) | PR 验证、main 构建、介绍页发布与独立插件 Release 工作流 |
+| [.github/workflows/](.github/workflows/) | PR 验证、main 构建、介绍页发布与安全检查工作流 |
 | `data/` | 本机业务数据、凭证和备份，已忽略，不作为临时目录清理 |
-| `dist/plugins/` | 已忽略的独立插件包、发行目录与摘要，由插件构建命令生成 |
+| `dist/plugins/` | 已忽略的官方集成构建产物，由应用构建命令生成 |
 | `tmp/` / `output/` | 已忽略的临时计划、一次性脚本与检查证据 |
 
 服务端内部按职责组织：

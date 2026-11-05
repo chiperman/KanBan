@@ -4,11 +4,11 @@ export const dynamic = "force-dynamic";
 type Context = { params: Promise<{ pluginId: string }> };
 async function handle(method: "POST" | "GET" | "DELETE", request: Request, { params }: Context) {
   const provider = externalPluginProvider((await params).pluginId);
-  if (!provider) return Response.json({ error: "插件来源无效" }, { status: 400 });
+  if (!provider) return Response.json({ error: "官方集成来源无效" }, { status: 400 });
   const route = createPreviewRoute({
     provider,
     parse: (value: unknown) => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null,
-    invalidInput: "只读授权材料格式无效", previewFailed: "插件授权校验失败", previewExpired: "授权预览已失效", readable: true,
+    invalidInput: "只读授权材料格式无效", previewFailed: "官方集成授权校验失败", previewExpired: "授权预览已失效", readable: true,
   });
   return route[method]!(request);
 }

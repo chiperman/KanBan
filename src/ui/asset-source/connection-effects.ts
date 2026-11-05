@@ -55,7 +55,7 @@ export function useSourceProviderCatalog({
         const reauthorizingPlugin = descriptions.find((p) => p.id === reauthorization?.provider);
         if (reauthorizingPlugin) setFields(initialAssetSourceFields(reauthorizingPlugin));
         if (reauthorization && !installed.some((p) => p.id === reauthorization.provider))
-          setError("来源插件不可用，请安装或启用后重新打开接入页面。");
+          setError("官方集成不可用，请升级或重新构建 KanBan 后再打开接入页面。");
       })
       .catch((caught) => {
         if (active) setError(

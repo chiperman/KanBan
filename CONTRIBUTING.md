@@ -19,22 +19,13 @@ PR 会在 GitHub-hosted Runner 中重新安装依赖并执行 Verify。合并到
 
 单人阶段不强制独立审批，外部 PR 仍由维护者审阅。必过检查、安全门禁及合并方式统一见 [合并与部署](docs/operations/github-actions.md#合并与部署)，管理员也不能跳过；默认 Squash merge，禁止 Merge Commit。
 
-修改插件、共享 SDK 或打包逻辑时，提交前运行 `pnpm plugins:verify`，检查全量官方包、目录和隔离安装握手。该命令不访问真实账户；目录中的第三方插件不下载、不执行。
+修改官方集成、共享 SDK 或打包逻辑时，提交前运行 `pnpm plugins:verify`，检查全量官方包和隔离握手。该命令不访问真实账户，也不写入正式数据。
 
-## 插件发布与安装
+## 官方集成
 
-插件发布使用 `plugins-v1.0.0` 格式的标签：
+官方集成源码位于 `plugins/`，清单元数据位于 [`plugins/official.json`](plugins/official.json)。它们会随 KanBan 应用一起构建，用户升级应用即可获得对应版本；不发布独立插件 Release，也不提供第三方包安装、导入、更新、停用或卸载入口。
 
-```sh
-git tag plugins-v1.0.0 <已通过主分支构建的完整SHA>
-git push origin plugins-v1.0.0
-```
-
-GitHub Actions 会验证目标提交、构建试装官方包并发布完整 Release。提交选择、版本、权限和失败重试规则统一见 [官方插件发布](docs/operations/github-actions.md#官方插件发布)。
-
-插件目录只登记介绍和来源；用户可以从目录、插件仓库或 Release 地址安装。
-
-新增官方插件或修改 `plugins/registry.json` 时，请在 PR 中说明协议、权限、数据范围、版本和安装验证。插件会在服务所在机器执行，请不要引入交易写入、隐藏网络请求或未说明的凭证读取。
+新增或修改官方集成时，请在 PR 中说明协议、只读权限、数据范围、版本变化和验证结果。集成会在服务所在机器以独立进程执行，请不要引入交易写入、隐藏网络请求或未说明的凭证读取。构建器会拒绝依赖核心服务运行时代码，CI 会逐个构建并执行初始化握手。
 
 ## Mac mini 部署
 

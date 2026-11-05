@@ -60,10 +60,10 @@ export function serveAssetSourcePlugin(create: (prices: Prices, runtime: PluginR
           persistCredentials: async credentials => { await runtime.host("credentials.persist", { credentials }); },
           notify: event => { if (!controller.signal.aborted) send({ jsonrpc: "2.0", method: "event", params: event, operationId: request.id }); },
         };
-        if (request.method === "assets.read") return plugin.read(p, context);
-        if (request.method === "authorization.preview" && plugin.authorize) return plugin.authorize(p.input, p.observedAt, context);
-        if (request.method === "authorization.revalidate" && plugin.revalidate) return plugin.revalidate(p.authorization, p.observedAt, context);
-        if (request.method === "extension.call" && plugin.call) return plugin.call(p.method, p.input, context);
+        if (request.method === "assets.read" && plugin.manifest.capabilities.includes("assets.read")) return plugin.read(p, context);
+        if (request.method === "authorization.preview" && plugin.manifest.capabilities.includes("authorization.preview") && plugin.authorize) return plugin.authorize(p.input, p.observedAt, context);
+        if (request.method === "authorization.revalidate" && plugin.manifest.capabilities.includes("authorization.revalidate") && plugin.revalidate) return plugin.revalidate(p.authorization, p.observedAt, context);
+        if (request.method === "extension.call" && plugin.manifest.capabilities.includes("extension.call") && plugin.call) return plugin.call(p.method, p.input, context);
         throw new Error("不支持的插件方法");
       })).then(result => send({ jsonrpc: "2.0", id: request.id, result }), error => {
         const diagnostic = diagnoseAssetSyncError(error, "refresh", 0);
