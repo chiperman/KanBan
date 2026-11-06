@@ -11,7 +11,7 @@ crate-type = ["cdylib", "rlib"]
 base64 = "0.22.1"
 time = "0.3"
 keyring = { version = "3.6.2", features = ["apple-native"] }
-longbridge = "4.4.1"
+longbridge = "5.3.0"
 longbridge-oauth = "4.4.1"
 napi = { version = "3.11.0", default-features = false, features = ["dyn-symbols", "napi8", "tokio_rt"] }
 napi-derive = "3.6.0"
