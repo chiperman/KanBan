@@ -78,6 +78,11 @@ The application font licenses remain beside the font files under
 landing page ships its own font files and the same OFL notices under
 [landing/assets/fonts/](../landing/assets/fonts/).
 
+The landing page also bundles monochrome brand artwork from Simple Icons
+`16.0.0` (CC0-1.0) and Longbridge's official site. Per-file sources, trademark
+scope, and the bundled CC0 notice are recorded in
+[landing/assets/brands/](../landing/assets/brands/README.md).
+
 ## Radix Colors
 
 - Source: <https://github.com/radix-ui/colors>

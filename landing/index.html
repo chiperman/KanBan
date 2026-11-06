@@ -5,471 +5,1596 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="KanBan 是一个本地优先、单所有者、只读的个人投资资产看板，用三本投资账统一查看美股、A 股与虚拟货币。"
+      content="KanBan 是本地优先、只读的个人资产看板。在一个界面查看美股、A 股与虚拟货币，数据保存在你自己的设备。"
     />
     <meta name="theme-color" content="#111111" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="KanBan，个人投资资产看板" />
+    <meta property="og:title" content="KanBan — 资产，一眼看全。" />
     <meta
       property="og:description"
-      content="把散落在不同账户里的资产，收进一个只属于你的本地看板。"
+      content="把分散的账户放进一个看板，把数据留在自己的设备。开源、本地优先、只读。"
     />
     <meta property="og:url" content="https://chiperman.github.io/KanBan/" />
     <meta
       property="og:image"
       content="https://chiperman.github.io/KanBan/assets/icon.svg"
     />
-    <title>KanBan，本地优先的个人投资资产看板</title>
+    <title>KanBan — 资产，一眼看全。</title>
     <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="styles.css" />
+    <script type="module" src="script.js"></script>
   </head>
   <body>
+    <svg
+      class="svg-library"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <symbol id="i-arrow" viewBox="0 0 24 24">
+        <path d="M4 12h15m-6-6 6 6-6 6" />
+      </symbol>
+      <symbol id="i-external" viewBox="0 0 24 24">
+        <path d="M7 17 18 6M7 6h11v11" />
+      </symbol>
+      <symbol id="i-overview" viewBox="0 0 24 24">
+        <rect x="3" y="3" width="7" height="7" rx="1" />
+        <rect x="14" y="3" width="7" height="7" rx="1" />
+        <rect x="3" y="14" width="7" height="7" rx="1" />
+        <rect x="14" y="14" width="7" height="7" rx="1" />
+      </symbol>
+      <symbol id="i-assets" viewBox="0 0 24 24">
+        <path d="M4 20V10m8 10V4m8 16v-7M2 20h20" />
+      </symbol>
+      <symbol id="i-book" viewBox="0 0 24 24">
+        <path
+          d="M12 5v15M3 4c4-1 6 0 9 2 3-2 5-3 9-2v14c-4-1-6 0-9 2-3-2-5-3-9-2Z"
+        />
+      </symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24">
+        <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z" />
+        <circle cx="12" cy="12" r="3" />
+      </symbol>
+      <symbol id="i-eye-off" viewBox="0 0 24 24">
+        <path
+          d="m3 3 18 18M10.6 5.1 12 5c6 0 10 7 10 7a21 21 0 0 1-3 3.7M6.5 6.5C3.7 8.6 2 12 2 12s4 7 10 7a12 12 0 0 0 5.5-1.5M9.9 9.9a3 3 0 0 0 4.2 4.2"
+        />
+      </symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24">
+        <rect x="5" y="10" width="14" height="11" rx="2" />
+        <path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2" />
+      </symbol>
+      <symbol id="i-calendar" viewBox="0 0 24 24">
+        <rect x="3" y="5" width="18" height="16" rx="2" />
+        <path d="M7 3v4M17 3v4M3 11h18" />
+      </symbol>
+      <symbol id="i-swap" viewBox="0 0 24 24">
+        <path d="M3 8h17l-4-4M21 16H4l4 4" />
+      </symbol>
+      <symbol id="i-portfolio" viewBox="0 0 24 24">
+        <rect x="3" y="7" width="18" height="14" rx="2" />
+        <path d="M8 7V4h8v3M3 12h18M10 12v3h4v-3" />
+      </symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24">
+        <rect x="8" y="8" width="12" height="13" rx="1" />
+        <path d="M5 16H3V3h12v2" />
+      </symbol>
+      <symbol id="i-github" viewBox="0 0 24 24">
+        <path
+          d="M9 20c-4 1-4-2-6-2m12 4v-4a3.5 3.5 0 0 0-1-3c3-.3 6-1.5 6-6a4.8 4.8 0 0 0-1.3-3.3A4.5 4.5 0 0 0 18.6 2S17.4 1.7 15 3a12 12 0 0 0-6 0C6.6 1.7 5.4 2 5.4 2a4.5 4.5 0 0 0-.1 3.7A4.8 4.8 0 0 0 4 9c0 4.5 3 5.7 6 6a3.5 3.5 0 0 0-1 3v4"
+        />
+      </symbol>
+    </svg>
+    <a class="skip-link" href="#main">跳到主要内容</a>
     <header class="site-header">
-      <div class="site-header__inner">
-        <a class="brand" href="#top" aria-label="KanBan 首页">
-          <img
-            src="assets/icon.svg"
-            width="40"
-            height="40"
-            alt=""
-            aria-hidden="true"
-          />
-          <span class="brand__copy">
-            <span class="brand__name">KANBAN</span>
-          </span>
-        </a>
+      <div class="shell header-inner">
+        <a class="brand" href="#top" aria-label="KanBan 首页"
+          ><img src="assets/icon.svg" width="36" height="36" alt="" /><span
+            >KANBAN</span
+          ></a
+        >
         <nav class="site-nav" aria-label="页面导航">
-          <a href="#preview">界面</a>
-          <a href="#capabilities">能力</a>
-          <a href="#sources">来源</a>
-          <a href="#start">开始使用</a>
+          <a href="#features">功能</a><a href="#sources">资产来源</a
+          ><a href="#start">本地部署</a>
         </nav>
         <a
-          class="button button--outline button--compact header-github"
+          class="github-link"
           href="https://github.com/chiperman/KanBan"
           target="_blank"
           rel="noreferrer"
-          aria-label="GitHub 仓库"
-        >
-          <svg
-            class="icon"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-            focusable="false"
-          >
-            <path
-              d="M12 2.8a9.2 9.2 0 0 0-2.9 17.9c.5.1.7-.2.7-.5v-1.7c-2.6.6-3.2-1.1-3.2-1.1-.4-1.1-1-1.4-1-1.4-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.4 1.1 2.9.8.1-.7.4-1.1.7-1.4-2.1-.2-4.3-1.1-4.3-4.8 0-1.1.4-2 1-2.7-.1-.2-.4-1.3.1-2.6 0 0 .8-.3 2.7 1a9.2 9.2 0 0 1 4.9 0c1.9-1.3 2.7-1 2.7-1 .5 1.3.2 2.4.1 2.6.6.7 1 1.6 1 2.7 0 3.7-2.2 4.6-4.3 4.8.4.3.8 1 .8 2v3c0 .3.2.6.7.5A9.2 9.2 0 0 0 12 2.8Z"
-            />
-          </svg>
-          <span>GitHub</span>
-        </a>
+          ><svg class="icon" aria-hidden="true"><use href="#i-github" /></svg
+          ><span>GitHub</span
+          ><svg class="icon small" aria-hidden="true">
+            <use href="#i-external" /></svg
+        ></a>
       </div>
     </header>
-
-    <main id="top">
-      <section class="hero shell" aria-labelledby="hero-title">
-        <div class="hero__copy">
-          <h1 id="hero-title">
-            个人资产看板
-          </h1>
-          <p class="hero__lede">
-            把美股、A 股与虚拟货币放进同一个看板。
-            三本投资账，保留各自的本金、盈亏与原币种。
-          </p>
-          <div class="hero__actions">
-            <a class="button button--primary" href="#start">
-              <span>开始本地部署</span>
-              <svg
-                class="icon"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-                focusable="false"
-              >
-                <path d="M5 12h13M14 7l5 5-5 5" />
-              </svg>
-            </a>
-            <a
-              class="button button--outline"
-              href="#preview"
-            >
-              <span>先看功能</span>
-            </a>
-          </div>
-        </div>
-
-        <div class="hero__visual">
-          <figure class="device-shell">
-            <div class="device-shell__bar">
-              <span class="window-dots" aria-hidden="true">
-                <i></i><i></i><i></i>
-              </span>
-              <span class="device-shell__label">资产看板</span>
-              <span class="device-shell__time">09:41</span>
-            </div>
-            <div class="dashboard mock-dashboard">
-              <aside class="mock-dashboard__rail">
-                <span class="mock-dashboard__rail-brand">K</span>
-                <span class="mock-dashboard__rail-active">总览</span>
-                <span>资产</span>
-                <span>投资账本</span>
-                <span class="mock-dashboard__rail-bottom">设置</span>
-              </aside>
-              <div class="mock-dashboard__content">
-                <div class="mock-dashboard__heading">
-                  <div>
-
-                    <p class="mock-title">今日总览</p>
-                  </div>
-                </div>
-                <div class="mock-dashboard__main">
-                  <article class="mock-total">
-                    <p class="mock-label">总资产（USD）</p>
-                    <p class="mock-total__value">$248,630<span>.42</span></p>
-                    <p class="mock-total__delta">+ 1,284.60 <span>今日</span></p>
-                    <div class="mock-chart" aria-hidden="true">
-                      <svg viewBox="0 0 520 150" preserveAspectRatio="none">
-                        <path
-                          class="mock-chart__area"
-                          d="M0 133C30 118 42 128 61 116s26-5 39 1 25 27 47 17 22-34 45-31 31 18 53 8 25-30 48-32 31 20 54 11 26-32 47-34 34 24 58 11 33-29 68-34v120H0Z"
-                        />
-                        <path
-                          class="mock-chart__line"
-                          d="M0 133C30 118 42 128 61 116s26-5 39 1 25 27 47 17 22-34 45-31 31 18 53 8 25-30 48-32 31 20 54 11 26-32 47-34 34 24 58 11 33-29 68-34"
-                        />
-                      </svg>
-                      <span class="mock-chart__marker"></span>
-                    </div>
-                    <div class="mock-chart__axis">
-                      <span>07.01</span><span>08.01</span><span>09.01</span
-                      ><span>10.19</span>
-                    </div>
-                  </article>
-                  <div class="mock-side-stack">
-                    <article class="mock-book">
-                      <p class="mock-label">美股账本</p>
-                      <p class="mock-book__value">$124,820<span>.10</span></p>
-                      <p class="mock-book__meta">本金 $96,000.00</p>
-                    </article>
-                    <article class="mock-book">
-                      <p class="mock-label">A 股账本</p>
-                      <p class="mock-book__value">¥531,204<span>.18</span></p>
-                      <p class="mock-book__meta">本金 ¥420,000.00</p>
-                    </article>
-                    <article class="mock-book">
-                      <p class="mock-label">虚拟货币</p>
-                      <p class="mock-book__value">$46,512<span>.08</span></p>
-                      <p class="mock-book__meta">本金 $37,400.00</p>
-                    </article>
-                  </div>
-                </div>
-                <div class="mock-dashboard__sources">
-                  <span class="mock-label">资产来源</span>
-                  <span><i></i>长桥</span>
-                  <span><i></i>Binance</span>
-                  <span><i></i>OKX</span>
-                  <span><i></i>观察钱包</span>
-                  <span class="mock-dashboard__sources-end">已覆盖 8 个来源</span>
-                </div>
+    <main id="main">
+      <section class="hero shell" id="top" aria-labelledby="hero-title">
+        <div class="hero-composition">
+          <div class="hero-copy">
+            <h1 id="hero-title">
+              <span class="hero-title-start">资产，</span>
+              <span>一眼看全<span class="heading-stop">。</span></span>
+            </h1>
+            <div class="hero-intro">
+              <div class="hero-summary">
+                <p class="hero-description">
+                  美股、A 股、虚拟货币。<br />
+                  将分散的资产，收进一个自己的看板。
+                </p>
+              </div>
+              <div class="hero-actions">
+                <a class="button button-primary" href="#start"
+                  >开始本地部署<svg class="icon" aria-hidden="true">
+                    <use href="#i-arrow" /></svg></a
+                ><a class="button button-text" href="#preview"
+                  >体验看板<svg class="icon" aria-hidden="true">
+                    <use href="#i-arrow" /></svg
+                ></a>
               </div>
             </div>
-            <figcaption class="mock-caption">
-              <span>图示为虚构示例，不代表真实账户或在线数据。</span>
-
-            </figcaption>
-          </figure>
+          </div>
+          <div class="observatory" aria-hidden="true">
+            <div class="observatory-sculpture" aria-hidden="true">
+              <img
+                class="observatory-fallback"
+                src="assets/observatory.svg"
+                alt=""
+                width="800"
+                height="800"
+                fetchpriority="high"
+              />
+              <canvas
+                class="observatory-canvas"
+                width="800"
+                height="800"
+              ></canvas>
+            </div>
+            <div class="orbit-label orbit-label-us" aria-hidden="true">
+              <span>美股</span><span>USD</span>
+            </div>
+            <div class="orbit-label orbit-label-cn" aria-hidden="true">
+              <span>A 股</span><span>CNY</span>
+            </div>
+            <div class="orbit-label orbit-label-crypto" aria-hidden="true">
+              <span>虚拟货币</span><span>USD</span>
+            </div>
+            <img
+              class="orbit-center"
+              src="assets/icon.svg"
+              alt=""
+              width="80"
+              height="80"
+            />
+          </div>
         </div>
-      </section>
-
-      <section class="section shell" id="preview" aria-labelledby="preview-title">
-        <div class="section__intro">
-          <h2 id="preview-title">总览与资产记录</h2>
-          <p>
-            总览看全貌，投资账看本金与盈亏，历史趋势看变化。每个数字都能追溯来源，缺失的数据也清楚标明。
-          </p>
-        </div>
-
-        <div class="principles">
-          <article class="principle-card">
-            <h3>总资产与原币种</h3>
-            <p>
-              首页按选定展示币种汇总总资产，同时保留美股、A 股、虚拟货币三本账各自的本金与盈亏。
-            </p>
-            </article>
-          <article class="principle-card">
-            <h3>历史观测</h3>
-            <p>
-              趋势使用真实观测，并标注实际记录覆盖。没有数据时明确显示“数据不足”，不把空白伪装成零。
-            </p>
-            </article>
-          <article class="principle-card">
-            <h3>只读连接</h3>
-            <p>
-              连接用于读取资产，不提供交易、转账或调仓入口。凭证不回显，权限状态在来源管理中可见。
-            </p>
-            </article>
+        <div class="hero-baseline">
+          <ul class="hero-notes" aria-label="产品特点">
+            <li>
+              <svg class="icon small" aria-hidden="true">
+                <use href="#i-lock" /></svg
+              >本地存储
+            </li>
+            <li>
+              <svg class="icon small" aria-hidden="true">
+                <use href="#i-eye" /></svg
+              >只读连接
+            </li>
+            <li>
+              <svg class="icon small" aria-hidden="true">
+                <use href="#i-github" /></svg
+              >开源代码
+            </li>
+          </ul>
         </div>
       </section>
 
       <section
-        class="section section--capabilities shell"
-        id="capabilities"
-        aria-labelledby="capabilities-title"
+        class="product-stage"
+        id="preview"
+        aria-labelledby="preview-title"
       >
-        <div class="section__intro section__intro--split">
-          <div>
-            <h2 id="capabilities-title">主要功能</h2>
+        <div class="shell">
+          <div class="stage-heading">
+            <h2 id="preview-title">
+              分散的数字。<br /><span>完整的视野。</span>
+            </h2>
+            <p>
+              不必在账户之间来回切换。<br />总览、持仓、投资账本，在这里连成一体。
+            </p>
           </div>
-          <p>
-            连接资产来源，查看历史记录，并备份本机数据。
-          </p>
-        </div>
-        <div class="capability-list">
-          <article>
-            <h3>统一资产视图</h3>
-            <p>可切换 USD、CNY、HKD 展示币种，三本投资账仍保留各自原币种。</p>
-          </article>
-          <article>
-            <h3>来源与持仓</h3>
-            <p>查看每个账户的总额、连接状态、同步诊断和持仓明细。</p>
-          </article>
-          <article>
-            <h3>历史趋势</h3>
-            <p>按近期、月度、年度或自定义区间查看变化，也可展开全部历史。</p>
-          </article>
-          <article>
-            <h3>本金与收益</h3>
-            <p>结合资金流与资产记录计算收益，数据不完整时明确标注。</p>
-          </article>
-          <article>
-            <h3>备份与恢复</h3>
-            <p>完整导出本机业务数据，并在需要时恢复和校验。</p>
-          </article>
-          <article>
-            <h3>私有访问</h3>
-            <p>使用 Passkey 登录，可配置 TOTP 备用认证；没有公开注册入口。</p>
-          </article>
+          <div class="hero-product">
+            <div
+              class="product-preview"
+              aria-label="KanBan 交互演示，全部为虚构数据"
+            >
+              <div class="preview-top">
+                <span class="preview-brand"
+                  ><img
+                    src="assets/icon.svg"
+                    alt=""
+                    width="22"
+                    height="22"
+                  />资产看板</span
+                >
+                <div>
+                  <button
+                    class="icon-button"
+                    type="button"
+                    id="privacy-toggle"
+                    aria-label="隐藏演示金额"
+                    aria-pressed="false"
+                    disabled
+                  >
+                    <svg class="icon" aria-hidden="true">
+                      <use href="#i-eye" />
+                    </svg></button
+                  ><span class="preview-time">09:41</span>
+                </div>
+              </div>
+              <div class="preview-body">
+                <div
+                  class="preview-rail"
+                  role="tablist"
+                  aria-label="演示页面"
+                  aria-orientation="vertical"
+                >
+                  <button
+                    id="tab-overview"
+                    class="rail-tab"
+                    role="tab"
+                    aria-selected="true"
+                    aria-controls="panel-overview"
+                    data-view="overview"
+                    disabled
+                  >
+                    <svg class="icon" aria-hidden="true">
+                      <use href="#i-overview" /></svg
+                    ><span>总览</span>
+                  </button>
+                  <button
+                    id="tab-assets"
+                    class="rail-tab"
+                    role="tab"
+                    aria-selected="false"
+                    aria-controls="panel-assets"
+                    tabindex="-1"
+                    data-view="assets"
+                    disabled
+                  >
+                    <svg class="icon" aria-hidden="true">
+                      <use href="#i-assets" /></svg
+                    ><span>资产</span>
+                  </button>
+                  <button
+                    id="tab-books"
+                    class="rail-tab"
+                    role="tab"
+                    aria-selected="false"
+                    aria-controls="panel-books"
+                    tabindex="-1"
+                    data-view="books"
+                    disabled
+                  >
+                    <svg class="icon" aria-hidden="true">
+                      <use href="#i-book" /></svg
+                    ><span>投资账本</span>
+                  </button>
+                  <span class="rail-bottom"
+                    ><svg class="icon" aria-hidden="true">
+                      <use href="#i-lock" /></svg
+                    >仅在本机</span
+                  >
+                </div>
+                <div class="preview-workspace">
+                  <div class="preview-heading">
+                    <h2 id="demo-title">总览</h2>
+                    <label class="currency-picker" for="demo-currency"
+                      ><span class="sr-only">演示计价货币</span
+                      ><select id="demo-currency" disabled>
+                        <option>USD</option>
+                        <option>CNY</option>
+                        <option>HKD</option></select
+                      ><svg
+                        class="icon small"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        <path d="m6 9 6 6 6-6" /></svg
+                    ></label>
+                  </div>
+                  <div
+                    id="panel-overview"
+                    role="tabpanel"
+                    aria-labelledby="tab-overview"
+                  >
+                    <div class="overview-layout">
+                      <section class="balance-panel" aria-label="演示资产概况">
+                        <div class="balance-label">
+                          <h3>总资产</h3>
+                          <span>11-05 09:41</span>
+                        </div>
+                        <p class="balance-amount">
+                          <span class="money" data-value="248630.42"
+                            >248,630.42</span
+                          ><span class="currency-unit" data-currency>USD</span>
+                        </p>
+                        <p class="balance-change">
+                          今日资产变化
+                          <span
+                            class="money positive"
+                            data-value="1284.60"
+                            data-signed
+                            >+1,284.60</span
+                          ><span data-currency>USD</span>
+                        </p>
+                        <div class="chart-heading">
+                          <h3>资产走势</h3>
+                          <span id="chart-period">08.07 — 11.05</span>
+                        </div>
+                        <div class="trend-chart" id="overview-chart">
+                          <svg
+                            viewBox="0 0 500 256"
+                            role="img"
+                            aria-label="虚构总资产走势，按左右方向键查看每日金额"
+                            tabindex="0"
+                          >
+                            <defs></defs>
+                            <g class="chart-grid"></g>
+                            <g class="chart-ticks"></g>
+                            <path class="chart-area" />
+                            <path class="chart-line" />
+                            <line class="chart-latest" hidden />
+                            <line class="chart-crosshair" hidden />
+                            <circle class="chart-point" r="5" />
+                            <circle
+                              class="chart-active chart-point"
+                              r="5"
+                              hidden
+                            />
+                            <g class="chart-funding"></g>
+                          </svg>
+                          <div class="chart-tooltip" hidden>
+                            <span class="tooltip-day"></span
+                            ><strong class="tooltip-value"></strong>
+                          </div>
+                        </div>
+                        <div class="chart-axis">
+                          <span id="chart-first">08.07</span
+                          ><span id="chart-middle">09.21</span
+                          ><span id="chart-last">11.05</span>
+                        </div>
+                        <div
+                          class="range-controls"
+                          role="group"
+                          aria-label="演示分析区间"
+                        >
+                          <button
+                            type="button"
+                            data-range="7"
+                            aria-pressed="false"
+                            disabled
+                          >
+                            1周</button
+                          ><button
+                            type="button"
+                            data-range="30"
+                            aria-pressed="false"
+                            disabled
+                          >
+                            1月</button
+                          ><button
+                            type="button"
+                            data-range="180"
+                            aria-pressed="false"
+                            disabled
+                          >
+                            半年</button
+                          ><button
+                            type="button"
+                            data-range="365"
+                            aria-pressed="false"
+                            disabled
+                          >
+                            1年</button
+                          ><button
+                            type="button"
+                            data-range="all"
+                            aria-pressed="true"
+                            disabled
+                          >
+                            全部</button
+                          ><button
+                            type="button"
+                            class="custom-range"
+                            data-custom-range="overview"
+                            aria-label="自定义总览分析区间"
+                            aria-haspopup="dialog"
+                            aria-pressed="false"
+                            disabled
+                          >
+                            <svg class="icon small" aria-hidden="true">
+                              <use href="#i-calendar" />
+                            </svg>
+                          </button>
+                        </div>
+                      </section>
+                      <div class="preview-books" aria-label="演示投资账本">
+                        <article class="book-card">
+                          <h3>
+                            <button type="button" data-open-book="us" disabled>
+                              美股<svg class="icon small" aria-hidden="true">
+                                <use href="#i-arrow" />
+                              </svg>
+                            </button>
+                          </h3>
+                          <p class="book-total">
+                            <span
+                              class="money"
+                              data-value="124820.10"
+                              data-native="USD"
+                              >124,820.10</span
+                            ><span>USD</span>
+                          </p>
+                          <dl>
+                            <div>
+                              <dt>累计净投入</dt>
+                              <dd
+                                class="money"
+                                data-value="96000"
+                                data-native="USD"
+                              >
+                                96,000.00
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>累计收益</dt>
+                              <dd
+                                class="money positive"
+                                data-value="28820.10"
+                                data-native="USD"
+                                data-signed
+                              >
+                                +28,820.10
+                              </dd>
+                            </div>
+                          </dl>
+                          <p class="book-date">截至 2026-11-05</p>
+                        </article>
+                        <article class="book-card">
+                          <h3>
+                            <button type="button" data-open-book="cn" disabled>
+                              A 股<svg class="icon small" aria-hidden="true">
+                                <use href="#i-arrow" />
+                              </svg>
+                            </button>
+                          </h3>
+                          <p class="book-total">
+                            <span
+                              class="money"
+                              data-value="531204.18"
+                              data-native="CNY"
+                              >531,204.18</span
+                            ><span>CNY</span>
+                          </p>
+                          <dl>
+                            <div>
+                              <dt>累计净投入</dt>
+                              <dd
+                                class="money"
+                                data-value="420000"
+                                data-native="CNY"
+                              >
+                                420,000.00
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>累计收益</dt>
+                              <dd
+                                class="money positive"
+                                data-value="111204.18"
+                                data-native="CNY"
+                                data-signed
+                              >
+                                +111,204.18
+                              </dd>
+                            </div>
+                          </dl>
+                          <p class="book-date">截至 2026-11-05</p>
+                        </article>
+                        <article class="book-card">
+                          <h3>
+                            <button
+                              type="button"
+                              data-open-book="crypto"
+                              disabled
+                            >
+                              虚拟货币<svg
+                                class="icon small"
+                                aria-hidden="true"
+                              >
+                                <use href="#i-arrow" />
+                              </svg>
+                            </button>
+                          </h3>
+                          <p class="book-total">
+                            <span
+                              class="money"
+                              data-value="50031.96"
+                              data-native="USD"
+                              >50,031.96</span
+                            ><span>USD</span>
+                          </p>
+                          <dl>
+                            <div>
+                              <dt>累计净投入</dt>
+                              <dd
+                                class="money"
+                                data-value="37400"
+                                data-native="USD"
+                              >
+                                37,400.00
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>累计收益</dt>
+                              <dd
+                                class="money positive"
+                                data-value="12631.96"
+                                data-native="USD"
+                                data-signed
+                              >
+                                +12,631.96
+                              </dd>
+                            </div>
+                          </dl>
+                          <p class="book-date">截至 2026-11-05</p>
+                        </article>
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    id="panel-assets"
+                    role="tabpanel"
+                    aria-labelledby="tab-assets"
+                    hidden
+                  >
+                    <section class="holdings-panel">
+                      <div class="panel-heading">
+                        <h3>持仓价格与市值观察</h3>
+                        <span>演示持仓</span>
+                      </div>
+                      <div
+                        class="table-scroll"
+                        tabindex="0"
+                        aria-label="演示持仓，可横向滚动"
+                      >
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>资产 / 来源</th>
+                              <th>现价 USD</th>
+                              <th>市值 USD</th>
+                              <th>持仓浮盈亏 USD</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td>
+                                <strong>AAPL</strong><span>Apple / 长桥</span>
+                              </td>
+                              <td
+                                class="money"
+                                data-native="USD"
+                                data-value="225.40"
+                              >
+                                225.40
+                              </td>
+                              <td
+                                class="money"
+                                data-native="USD"
+                                data-value="45080"
+                              >
+                                45,080.00
+                              </td>
+                              <td
+                                class="money positive"
+                                data-native="USD"
+                                data-value="9080"
+                                data-signed
+                              >
+                                +9,080.00
+                              </td>
+                            </tr>
+                            <tr>
+                              <td>
+                                <strong>NVDA</strong><span>NVIDIA / 长桥</span>
+                              </td>
+                              <td
+                                class="money"
+                                data-native="USD"
+                                data-value="138.80"
+                              >
+                                138.80
+                              </td>
+                              <td
+                                class="money"
+                                data-native="USD"
+                                data-value="34700"
+                              >
+                                34,700.00
+                              </td>
+                              <td
+                                class="money positive"
+                                data-native="USD"
+                                data-value="6200"
+                                data-signed
+                              >
+                                +6,200.00
+                              </td>
+                            </tr>
+                            <tr>
+                              <td>
+                                <strong>BTC</strong
+                                ><span>Bitcoin / Binance</span>
+                              </td>
+                              <td
+                                class="money"
+                                data-native="USD"
+                                data-value="94200"
+                              >
+                                94,200.00
+                              </td>
+                              <td
+                                class="money"
+                                data-native="USD"
+                                data-value="23550"
+                              >
+                                23,550.00
+                              </td>
+                              <td
+                                class="money positive"
+                                data-native="USD"
+                                data-value="4850"
+                                data-signed
+                              >
+                                +4,850.00
+                              </td>
+                            </tr>
+                            <tr>
+                              <td>
+                                <strong>ETH</strong
+                                ><span>Ethereum / 观察钱包</span>
+                              </td>
+                              <td
+                                class="money"
+                                data-native="USD"
+                                data-value="3231.20"
+                              >
+                                3,231.20
+                              </td>
+                              <td
+                                class="money"
+                                data-native="USD"
+                                data-value="6462.40"
+                              >
+                                6,462.40
+                              </td>
+                              <td
+                                class="money negative"
+                                data-native="USD"
+                                data-value="-537.60"
+                                data-signed
+                              >
+                                −537.60
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                      <p class="preview-explanation">
+                        仅展示部分虚构持仓，金额列保留原币种 USD。
+                      </p>
+                    </section>
+                  </div>
+                  <div
+                    id="panel-books"
+                    role="tabpanel"
+                    aria-labelledby="tab-books"
+                    hidden
+                  >
+                    <div class="ledger-navigation">
+                      <div
+                        class="book-selectors"
+                        role="group"
+                        aria-label="选择演示账本"
+                      >
+                        <button
+                          type="button"
+                          data-book="us"
+                          aria-pressed="true"
+                          disabled
+                        >
+                          美股</button
+                        ><button
+                          type="button"
+                          data-book="cn"
+                          aria-pressed="false"
+                          disabled
+                        >
+                          A 股</button
+                        ><button
+                          type="button"
+                          data-book="crypto"
+                          aria-pressed="false"
+                          disabled
+                        >
+                          虚拟货币
+                        </button>
+                      </div>
+                      <div
+                        class="ledger-views"
+                        role="group"
+                        aria-label="演示账本视角"
+                      >
+                        <button
+                          type="button"
+                          data-book-view="performance"
+                          aria-pressed="true"
+                          disabled
+                        >
+                          收益表现
+                        </button>
+                        <button
+                          type="button"
+                          data-book-view="records"
+                          aria-pressed="false"
+                          disabled
+                        >
+                          记账记录
+                        </button>
+                      </div>
+                    </div>
+                    <section
+                      class="ledger-panel"
+                      id="book-performance"
+                      aria-label="演示账本收益表现"
+                    >
+                      <header class="ledger-section-heading">
+                        <h3 id="ledger-summary-title">累计表现</h3>
+                        <p id="ledger-period">截至 2026-11-05</p>
+                      </header>
+                      <div class="ledger-summary">
+                        <div>
+                          <p data-metric-label>资产总额</p>
+                          <div class="ledger-metric">
+                            <strong
+                              class="money"
+                              id="ledger-total"
+                              data-value="124820.10"
+                              data-native="USD"
+                              >124,820.10</strong
+                            ><span data-book-currency>USD</span>
+                          </div>
+                        </div>
+                        <div>
+                          <p data-metric-label>累计净投入</p>
+                          <div class="ledger-metric">
+                            <strong
+                              class="money"
+                              id="ledger-investment"
+                              data-value="96000"
+                              data-native="USD"
+                              >96,000.00</strong
+                            ><span data-book-currency>USD</span>
+                          </div>
+                        </div>
+                        <div>
+                          <p data-metric-label>累计收益</p>
+                          <div class="ledger-metric">
+                            <strong
+                              class="money"
+                              id="ledger-profit"
+                              data-value="28820.10"
+                              data-native="USD"
+                              >28,820.10</strong
+                            ><span data-book-currency>USD</span>
+                          </div>
+                        </div>
+                        <div>
+                          <p data-metric-label>累计收益率</p>
+                          <div class="ledger-metric">
+                            <strong
+                              class="money"
+                              id="ledger-return"
+                              data-value="32.55"
+                              data-native="%"
+                              >32.55</strong
+                            ><span>%</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="ledger-chart-heading">
+                        <h3 id="book-chart-title">总资产趋势</h3>
+                        <div
+                          class="ledger-curves"
+                          role="group"
+                          aria-label="演示账本趋势指标"
+                        >
+                          <button
+                            type="button"
+                            data-book-curve="total"
+                            aria-pressed="true"
+                            disabled
+                          >
+                            总资产
+                          </button>
+                          <button
+                            type="button"
+                            data-book-curve="return"
+                            aria-pressed="false"
+                            disabled
+                          >
+                            收益率
+                          </button>
+                        </div>
+                      </div>
+                      <div id="book-benchmark" class="ledger-benchmark" hidden>
+                        <h3>市场对比</h3>
+                        <div
+                          class="ledger-benchmark-controls"
+                          role="group"
+                          aria-label="演示市场指数"
+                        >
+                          <button
+                            type="button"
+                            data-benchmark="spx"
+                            aria-pressed="true"
+                            disabled
+                          >
+                            <i
+                              class="benchmark-swatch benchmark-swatch--spx"
+                              aria-hidden="true"
+                            ></i
+                            >标普500
+                          </button>
+                          <button
+                            type="button"
+                            data-benchmark="ndx"
+                            aria-pressed="true"
+                            disabled
+                          >
+                            <i
+                              class="benchmark-swatch benchmark-swatch--ndx"
+                              aria-hidden="true"
+                            ></i
+                            >纳斯达克100
+                          </button>
+                        </div>
+                        <p id="benchmark-state">
+                          累计收益率　接入长桥行情后可对比。此演示不加载指数行情。
+                        </p>
+                        <div class="benchmark-series">
+                          <i aria-hidden="true"></i
+                          ><span id="benchmark-book">我的美股收益率</span>
+                        </div>
+                      </div>
+                      <div class="trend-chart ledger-chart" id="book-chart">
+                        <svg
+                          viewBox="0 0 500 256"
+                          role="img"
+                          aria-label="虚构美股总资产趋势，按左右方向键查看每日金额"
+                          tabindex="0"
+                        >
+                          <defs></defs>
+                          <g class="chart-grid"></g>
+                          <g class="chart-ticks"></g>
+                          <path class="chart-area" />
+                          <path class="chart-line" />
+                          <line class="chart-latest" hidden />
+                          <line class="chart-crosshair" hidden />
+                          <circle class="chart-point" r="5" />
+                          <circle
+                            class="chart-active chart-point"
+                            r="5"
+                            hidden
+                          />
+                          <g class="chart-funding"></g>
+                        </svg>
+                        <div class="chart-tooltip" hidden>
+                          <span class="tooltip-day"></span
+                          ><strong class="tooltip-value"></strong>
+                        </div>
+                      </div>
+                      <div
+                        class="chart-events"
+                        id="book-chart-events"
+                        aria-label="资金标记"
+                      >
+                        <span
+                          ><svg viewBox="0 0 20 20" aria-hidden="true">
+                            <circle cx="10" cy="10" r="4" /></svg
+                          >入金</span
+                        >
+                        <span
+                          ><svg viewBox="0 0 20 20" aria-hidden="true">
+                            <circle
+                              class="event-withdrawal"
+                              cx="10"
+                              cy="10"
+                              r="4.5"
+                            /></svg
+                          >出金</span
+                        >
+                      </div>
+                      <p
+                        id="book-chart-note"
+                        class="preview-explanation"
+                        hidden
+                      >
+                        计算区间收益需选择至少两个日期。
+                      </p>
+                      <div
+                        class="range-controls"
+                        role="group"
+                        aria-label="演示账本分析区间"
+                      >
+                        <button
+                          type="button"
+                          data-book-range="7"
+                          aria-pressed="false"
+                          disabled
+                        >
+                          1周
+                        </button>
+                        <button
+                          type="button"
+                          data-book-range="30"
+                          aria-pressed="false"
+                          disabled
+                        >
+                          1月
+                        </button>
+                        <button
+                          type="button"
+                          data-book-range="180"
+                          aria-pressed="false"
+                          disabled
+                        >
+                          半年
+                        </button>
+                        <button
+                          type="button"
+                          data-book-range="365"
+                          aria-pressed="false"
+                          disabled
+                        >
+                          1年
+                        </button>
+                        <button
+                          type="button"
+                          data-book-range="all"
+                          aria-pressed="true"
+                          disabled
+                        >
+                          全部</button
+                        ><button
+                          type="button"
+                          class="custom-range"
+                          data-custom-range="books"
+                          aria-label="自定义账本分析区间"
+                          aria-haspopup="dialog"
+                          aria-pressed="false"
+                          disabled
+                        >
+                          <svg class="icon small" aria-hidden="true">
+                            <use href="#i-calendar" />
+                          </svg>
+                        </button>
+                      </div>
+                      <details class="ledger-calculation">
+                        <summary>计算口径</summary>
+                        <p>
+                          累计收益扣除期初本金和出入金；区间收益扣除起点资产与区间净流入。收益率采用
+                          Modified Dietz，按资金在区间内的停留时间加权，不年化。
+                        </p>
+                      </details>
+                    </section>
+                    <section
+                      class="ledger-panel"
+                      id="book-record-view"
+                      aria-label="演示账本记账记录"
+                      hidden
+                    >
+                      <header class="ledger-section-heading">
+                        <h3>记账记录</h3>
+                      </header>
+                      <div
+                        class="record-filters"
+                        role="group"
+                        aria-label="演示记账记录类型"
+                      >
+                        <button
+                          type="button"
+                          data-record-filter="all"
+                          aria-pressed="false"
+                          disabled
+                        >
+                          全部记录
+                        </button>
+                        <button
+                          type="button"
+                          data-record-filter="funds"
+                          aria-pressed="true"
+                          disabled
+                        >
+                          出入金
+                        </button>
+                        <button
+                          type="button"
+                          data-record-filter="valuations"
+                          aria-pressed="false"
+                          disabled
+                        >
+                          资产估值
+                        </button>
+                      </div>
+                      <ol id="book-records" class="book-records">
+                        <li>
+                          <span>2026-09-18<small>入金</small></span
+                          ><strong>16,000.00 USD</strong>
+                        </li>
+                        <li>
+                          <span>2026-08-07<small>期初本金</small></span
+                          ><strong>80,000.00 USD</strong>
+                        </li>
+                      </ol>
+                      <p class="preview-explanation">
+                        原币种记账，出入金与资产估值分开保存。
+                      </p>
+                    </section>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="preview-caption">
+              <span
+                ><i class="demo-dot"></i>交互演示，数据与汇率均为虚构示例</span
+              ><span
+                >试试切换视图、币种与金额显示<svg
+                  class="icon small"
+                  aria-hidden="true"
+                >
+                  <use href="#i-arrow" /></svg
+              ></span>
+            </div>
+            <noscript
+              ><p class="preview-explanation">
+                当前为静态预览。启用 JavaScript 后可体验视图、币种和隐私切换。
+              </p></noscript
+            >
+            <p
+              class="sr-only"
+              id="demo-status"
+              role="status"
+              aria-live="polite"
+            ></p>
+          </div>
+          <div class="source-strip" aria-label="支持证券账户、交易所与观察钱包">
+            <span>连接你的资产来源</span>
+            <div>
+              <strong>Longbridge</strong><strong>BINANCE</strong
+              ><strong>OKX</strong><strong>Bitget</strong
+              ><strong>Ethereum</strong
+              ><a href="#sources"
+                >查看全部<svg class="icon small" aria-hidden="true">
+                  <use href="#i-arrow" /></svg
+              ></a>
+            </div>
+          </div>
         </div>
       </section>
 
-      <section class="section shell" id="sources" aria-labelledby="sources-title">
-        <div class="sources-panel">
-          <div class="sources-panel__intro">
-            <h2 id="sources-title">支持的资产来源</h2>
+      <section
+        class="section shell books-feature"
+        id="features"
+        aria-labelledby="features-title"
+      >
+        <div class="section-heading">
+          <h2 id="features-title">
+            一个全局。<br /><span>三本清晰的账。</span>
+          </h2>
+          <p>
+            一份总览，三本投资账。<br />从全局资产到每一笔投入，保留应有的边界。
+          </p>
+        </div>
+        <div class="book-stories">
+          <article>
+            <div class="book-cover">
+              <div class="story-top">
+                <span class="story-index">01 / 美股</span
+                ><svg class="icon" aria-hidden="true">
+                  <use href="#i-book" />
+                </svg>
+              </div>
+              <p class="story-currency">USD</p>
+              <svg class="cover-art" viewBox="0 0 400 260" aria-hidden="true">
+                <use href="assets/ledger-art.svg#orbit" />
+              </svg>
+              <div class="cover-bottom">
+                <span>本金与收益，各自清楚。</span><span>01</span>
+              </div>
+            </div>
+            <h3>美股</h3>
+            <p>证券资产、资金进出与收益记录，<br />在同一本美元账中查看。</p>
+            <div class="story-foot">
+              <span>累计净投入</span><span>累计收益</span>
+            </div>
+          </article>
+          <article>
+            <div class="book-cover">
+              <div class="story-top">
+                <span class="story-index">02 / A 股</span
+                ><svg class="icon" aria-hidden="true">
+                  <use href="#i-book" />
+                </svg>
+              </div>
+              <p class="story-currency">CNY</p>
+              <svg class="cover-art" viewBox="0 0 400 260" aria-hidden="true">
+                <use href="assets/ledger-art.svg#grid" />
+              </svg>
+              <div class="cover-bottom">
+                <span>原始投入，原币保留。</span><span>02</span>
+              </div>
+            </div>
+            <h3>A 股</h3>
+            <p>用人民币保留原始投入与资产记录，<br />不让展示汇率改写历史。</p>
+            <div class="story-foot">
+              <span>原币种记录</span><span>手工估值</span>
+            </div>
+          </article>
+          <article>
+            <div class="book-cover">
+              <div class="story-top">
+                <span class="story-index">03 / 虚拟货币</span
+                ><svg class="icon" aria-hidden="true">
+                  <use href="#i-book" />
+                </svg>
+              </div>
+              <p class="story-currency">USD</p>
+              <svg class="cover-art" viewBox="0 0 400 260" aria-hidden="true">
+                <use href="assets/ledger-art.svg#network" />
+              </svg>
+              <div class="cover-bottom">
+                <span>多处资产，一本看懂。</span><span>03</span>
+              </div>
+            </div>
+            <h3>虚拟货币</h3>
+            <p>交易所和观察钱包一起看，<br />资产总额与持仓明细分层呈现。</p>
+            <div class="story-foot">
+              <span>账户汇总</span><span>持仓明细</span>
+            </div>
+          </article>
+        </div>
+        <div class="feature-note">
+          <svg class="icon" aria-hidden="true"><use href="#i-assets" /></svg>
+          <p>
+            总览支持 USD、CNY、HKD。账本仍保留各自原币种，缺失数据明确标注。
+          </p>
+        </div>
+      </section>
+
+      <section class="local-section" aria-labelledby="local-title">
+        <div class="shell local-layout">
+          <div class="local-copy">
+            <h2 id="local-title">数据，<br />不必远行。</h2>
             <p>
-              连接证券、数字货币账户与观察钱包，也能手动记录资产。每个来源的权限、同步状态和金额都可单独查看。
+              没有需要托付个人账目的公共云端。<br />KanBan
+              运行在你自己的设备上，<br />从连接到存储，边界清清楚楚。
             </p>
             <a
               class="text-link"
-              href="https://github.com/chiperman/KanBan#readme"
+              href="https://github.com/chiperman/KanBan/blob/main/SECURITY.md"
               target="_blank"
               rel="noreferrer"
+              >了解安全边界<svg class="icon small" aria-hidden="true">
+                <use href="#i-external" /></svg
+            ></a>
+          </div>
+          <div
+            class="local-instrument"
+            aria-label="账户通过只读连接到本机 KanBan，业务数据存储在本机 SQLite，通过 Passkey 访问"
+          >
+            <div class="instrument-sources">
+              <span>证券账户</span><span>交易所</span><span>观察钱包</span>
+            </div>
+            <svg
+              class="instrument-wires"
+              viewBox="0 0 480 64"
+              aria-hidden="true"
             >
-              查看接入说明
-              <svg
-                class="icon"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-                focusable="false"
-              >
-                <path d="M5 12h13M14 7l5 5-5 5" />
+              <path d="M40 0v32h400V0M240 0v64" />
+            </svg>
+            <div class="instrument-readonly">
+              只读连接<svg class="icon small" aria-hidden="true">
+                <use href="#i-arrow" />
               </svg>
-            </a>
+            </div>
+            <div class="local-machine">
+              <div class="machine-top">
+                <img
+                  src="assets/icon.svg"
+                  width="32"
+                  height="32"
+                  alt=""
+                /><strong>KANBAN</strong
+                ><svg class="icon" aria-hidden="true">
+                  <use href="#i-lock" />
+                </svg>
+              </div>
+              <p class="localhost">127.0.0.1</p>
+              <div class="machine-bottom">
+                <span>本机存储 / SQLite</span><span>Passkey 访问</span>
+              </div>
+              <details class="storage-details">
+                <summary>
+                  数据边界<svg
+                    class="icon small"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </summary>
+                <dl>
+                  <div>
+                    <dt>资产与账目</dt>
+                    <dd>保存在本机 SQLite</dd>
+                  </div>
+                  <div>
+                    <dt>账户连接</dt>
+                    <dd>向你配置的供应商读取数据</dd>
+                  </div>
+                  <div>
+                    <dt>访问验证</dt>
+                    <dd>使用 Passkey 登录本机服务</dd>
+                  </div>
+                </dl>
+              </details>
+            </div>
+            <p class="instrument-foot">
+              凭证不回显。不提供交易、转账或调仓入口。
+            </p>
           </div>
-          <div class="source-matrix" role="list" aria-label="支持的资产来源">
-            <div role="listitem">
-              <strong>长桥 Longbridge</strong>
-              <span>证券账户</span>
-            </div>
-            <div role="listitem">
-              <strong>Binance</strong>
-              <span>数字货币账户</span>
-            </div>
-            <div role="listitem">
-              <strong>OKX</strong>
-              <span>数字货币账户</span>
-            </div>
-            <div role="listitem">
-              <strong>Bitget</strong>
-              <span>数字货币账户</span>
-            </div>
-            <div role="listitem">
-              <strong>BIT / Matrixport</strong>
-              <span>数字货币账户</span>
-            </div>
-            <div role="listitem">
-              <strong>Ethereum</strong>
-              <span>观察钱包</span>
-            </div>
-            <div role="listitem">
-              <strong>BNB Smart Chain</strong>
-              <span>观察钱包</span>
-            </div>
-            <div role="listitem">
-              <strong>手工资产记录</strong>
-              <span>维护资产总额</span>
-            </div>
-          </div>
+        </div>
+        <div class="local-signature shell" aria-hidden="true">
+          <span>LOCAL</span>
+          <svg viewBox="0 0 100 100">
+            <path d="M50 8v84M8 50h84M20 20l60 60M20 80l60-60" />
+          </svg>
+          <span>FIRST.</span>
         </div>
       </section>
 
-      <section class="section shell" id="start" aria-labelledby="start-title">
-        <div class="start-grid">
-          <div class="start-copy">
-            <h2 id="start-title">本地部署</h2>
-            <p>
-              KanBan 面向本地运行。首次启动需要 Node.js、pnpm 与 Rust；当前验收基线是
-              macOS arm64。
+      <section
+        class="section shell sources-section"
+        id="sources"
+        aria-labelledby="sources-title"
+      >
+        <div class="section-heading">
+          <h2 id="sources-title">各有来路。<br /><span>在此汇合。</span></h2>
+          <p>
+            官方接入随应用一起提供。<br />接入后独立查看金额、状态与持仓，无需安装插件。
+          </p>
+        </div>
+        <div class="source-directory">
+          <div class="source-group">
+            <h3>证券与数字货币账户</h3>
+            <ul>
+              <li>
+                <i
+                  class="brand-symbol"
+                  style="
+                    --brand-image: url(&quot;assets/brands/longbridge.png&quot;);
+                  "
+                  aria-hidden="true"
+                ></i
+                ><strong>长桥 <span>Longbridge</span></strong
+                ><span>证券</span>
+              </li>
+              <li>
+                <i
+                  class="brand-symbol"
+                  style="
+                    --brand-image: url(&quot;assets/brands/binance.svg&quot;);
+                  "
+                  aria-hidden="true"
+                ></i
+                ><strong>Binance</strong><span>数字货币</span>
+              </li>
+              <li>
+                <i
+                  class="brand-symbol"
+                  style="--brand-image: url(&quot;assets/brands/okx.svg&quot;)"
+                  aria-hidden="true"
+                ></i
+                ><strong>OKX</strong><span>数字货币</span>
+              </li>
+              <li>
+                <svg class="icon source-symbol" aria-hidden="true">
+                  <use href="#i-swap" /></svg
+                ><strong>Bitget</strong><span>数字货币</span>
+              </li>
+              <li>
+                <svg class="icon source-symbol" aria-hidden="true">
+                  <use href="#i-portfolio" /></svg
+                ><strong>BIT / Matrixport</strong><span>数字货币</span>
+              </li>
+            </ul>
+          </div>
+          <div class="source-group">
+            <h3>观察与记录</h3>
+            <ul>
+              <li>
+                <i
+                  class="brand-symbol"
+                  style="
+                    --brand-image: url(&quot;assets/brands/ethereum.svg&quot;);
+                  "
+                  aria-hidden="true"
+                ></i
+                ><strong>Ethereum</strong><span>观察钱包</span>
+              </li>
+              <li>
+                <i
+                  class="brand-symbol"
+                  style="
+                    --brand-image: url(&quot;assets/brands/bnbchain.svg&quot;);
+                  "
+                  aria-hidden="true"
+                ></i
+                ><strong>BNB Smart Chain</strong><span>观察钱包</span>
+              </li>
+              <li>
+                <svg class="icon source-symbol" aria-hidden="true">
+                  <use href="#i-book" /></svg
+                ><strong>手工资产</strong><span>自主记录</span>
+              </li>
+            </ul>
+            <p class="source-note">
+              钱包使用公开地址观察。账户请在供应商处授予只读权限；数据不完整时会明确显示。
             </p>
-            <div class="start-meta">
-              <span>NODE 24.15.0</span>
-              <span>PNPM 11.25.0</span>
-              <span>RUST</span>
-            </div>
             <a
-              class="button button--outline"
-              href="https://github.com/chiperman/KanBan"
+              class="text-link"
+              href="https://github.com/chiperman/KanBan/blob/main/docs/operations/asset-sources.md"
               target="_blank"
               rel="noreferrer"
-            >
-              <span>打开 GitHub 仓库</span>
-            </a>
-          </div>
-          <div class="terminal" aria-label="首次启动命令">
-            <div class="terminal__bar">
-              <span>启动命令</span>
-              <button
-                class="copy-button"
-                type="button"
-                data-copy-target="setup-command"
-                aria-describedby="copy-status"
-              >
-                <svg
-                  class="icon"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                  focusable="false"
-                >
-                  <rect x="8" y="8" width="10" height="11" rx="1" />
-                  <path d="M6 16H4V4h12v2" />
-                </svg>
-                <span>复制</span>
-              </button>
-            </div>
-            <pre id="setup-command" tabindex="0" aria-label="部署命令，可横向滚动"><code><span class="terminal__prompt">$</span> git clone https://github.com/chiperman/KanBan.git
-<span class="terminal__prompt">$</span> cd KanBan
-<span class="terminal__prompt">$</span> pnpm install --frozen-lockfile
-<span class="terminal__prompt">$</span> pnpm native:longbridge:build
-<span class="terminal__prompt">$</span> pnpm dev</code></pre>
-            <div class="terminal__next">
-              <p>
-                打开 <code>http://localhost:3000/setup</code> 预置 Passkey，之后从
-                <code>/</code> 查看资产。
-              </p>
-            </div>
-            <p class="sr-only" id="copy-status" role="status" aria-live="polite"></p>
+              >查看接入说明<svg class="icon small" aria-hidden="true">
+                <use href="#i-external" /></svg
+            ></a>
           </div>
         </div>
       </section>
 
-      <section class="section shell" id="boundaries" aria-labelledby="boundaries-title">
-        <div class="boundary-panel">
-          <div class="boundary-panel__copy">
-            <h2 id="boundaries-title">数据与权限</h2>
+      <section
+        class="section shell start-section"
+        id="start"
+        aria-labelledby="start-title"
+      >
+        <div class="start-copy">
+          <h2 id="start-title">下一站，<br />你的设备。</h2>
+          <p>
+            从本地启动，连接你的第一个账户。<br />当前验证基线为 macOS Apple
+            Silicon。
+          </p>
+          <div class="toolchain">
+            <span
+              ><i
+                class="brand-symbol"
+                style="
+                  --brand-image: url(&quot;assets/brands/nodedotjs.svg&quot;);
+                "
+                aria-hidden="true"
+              ></i
+              >Node 24.15.0</span
+            ><span
+              ><i
+                class="brand-symbol"
+                style="--brand-image: url(&quot;assets/brands/pnpm.svg&quot;)"
+                aria-hidden="true"
+              ></i
+              >pnpm 11.25.0</span
+            >
+          </div>
+          <a
+            class="text-link"
+            href="https://github.com/chiperman/KanBan#开发入口"
+            target="_blank"
+            rel="noreferrer"
+            >完整部署指南<svg class="icon small" aria-hidden="true">
+              <use href="#i-external" /></svg
+          ></a>
+        </div>
+        <div class="terminal">
+          <div class="terminal-bar">
+            <span><i class="demo-dot"></i>首次启动</span
+            ><button
+              class="copy-button"
+              type="button"
+              data-copy-target="setup-command"
+              aria-describedby="copy-status"
+              disabled
+            >
+              <svg class="icon small" aria-hidden="true">
+                <use href="#i-copy" /></svg
+              ><span>复制命令</span>
+            </button>
+          </div>
+          <pre
+            id="setup-command"
+            tabindex="0"
+            aria-label="首次启动命令，可横向滚动"
+          ><code><span class="prompt">$</span> git clone https://github.com/chiperman/KanBan.git
+<span class="prompt">$</span> cd KanBan
+<span class="prompt">$</span> pnpm install --frozen-lockfile
+<span class="prompt">$</span> pnpm dev</code></pre>
+          <div class="terminal-footer">
+            <svg class="icon small" aria-hidden="true">
+              <use href="#i-lock" />
+            </svg>
             <p>
-              KanBan 专注个人投资资产的查看与记录。它不是交易终端，也不是完整的个人财务或税务系统。
+              访问 <code>localhost:3000/setup</code> 注册 Passkey，<br />再连接你的资产来源。使用长桥原生
+              SDK 时另需 Rust 构建。
             </p>
           </div>
-          <div class="boundary-grid">
-            <article>
-              <span class="boundary-grid__mark">×</span>
-              <h3>不交易</h3>
-              <p>不提供下单、转账、调仓或自动投资。</p>
-            </article>
-            <article>
-              <span class="boundary-grid__mark">×</span>
-              <h3>不代管资产</h3>
-              <p>只读取已授权来源，不持有资金或私钥。</p>
-            </article>
-            <article>
-              <span class="boundary-grid__mark">×</span>
-              <h3>不伪造完整</h3>
-              <p>缺失估值明确显示，不用零或估算值补齐。</p>
-            </article>
-            <article>
-              <span class="boundary-grid__mark">×</span>
-              <h3>不公开数据</h3>
-              <p>业务数据保存在本机，认证后才可访问。</p>
-            </article>
-          </div>
+          <p
+            class="copy-status"
+            id="copy-status"
+            role="status"
+            aria-live="polite"
+          ></p>
         </div>
       </section>
 
-      <section class="section shell faq" id="faq" aria-labelledby="faq-title">
-        <div class="section__intro">
-          <h2 id="faq-title">常见问题</h2>
-        </div>
+      <section class="section shell faq" aria-labelledby="faq-title">
+        <h2 id="faq-title">再了解一点。</h2>
         <div class="faq-list">
           <details>
-            <summary><span>KanBan 会进行自动交易吗？</span><i aria-hidden="true"></i></summary>
+            <summary>
+              这个页面能直接查看我的资产吗？<span aria-hidden="true"></span>
+            </summary>
             <p>
-              不会。KanBan 是纯粹的只读看板，不提供任何下单、转账或调仓功能。所有 API 凭证仅用于读取资产与同步快照。
+              这里是独立的产品介绍页，演示全部使用固定虚构数据，不会连接你的账户。先在自己的设备启动
+              KanBan，再通过本机服务登录并接入资产来源。
             </p>
           </details>
           <details>
-            <summary><span>数据会上传到云端吗？</span><i aria-hidden="true"></i></summary>
+            <summary>
+              KanBan 会替我交易吗？<span aria-hidden="true"></span>
+            </summary>
             <p>
-              资产与账目数据保存在运行 KanBan 的本机。同步时会请求你配置的账户供应商、行情或链上服务；KanBan 不提供集中归集个人数据的云端服务。
+              不会。KanBan
+              用于只读查看与记录，不提供下单、转账、调仓或自动投资入口。请在账户供应商处授予只读权限，不授予交易或提现权限。
             </p>
           </details>
           <details>
-            <summary><span>为什么采用 Passkey 登录？</span><i aria-hidden="true"></i></summary>
+            <summary>
+              数据会发送到哪里？<span aria-hidden="true"></span>
+            </summary>
             <p>
-              首次启动在 /setup 注册所有者 Passkey，之后使用设备或密码管理器中的 Passkey 登录。可配置 TOTP 备用登录，没有公开注册入口。
+              资产与账目数据保存在运行 KanBan
+              的本机。同步时会请求你配置的账户供应商、行情或链上服务；KanBan
+              不提供集中归集个人资产数据的云端服务。你仍需妥善保护运行设备、凭证与备份。
             </p>
           </details>
           <details>
-            <summary><span>目前支持哪些操作系统？</span><i aria-hidden="true"></i></summary>
+            <summary>
+              支持哪些系统？可以持续在后台运行吗？<span
+                aria-hidden="true"
+              ></span>
+            </summary>
             <p>
-              官方验证并推荐 macOS (Apple Silicon)。Windows 与 Linux 开发者可基于开源源码自行构建与适配。
+              当前验证基线为 macOS Apple
+              Silicon。可准备独立的生产运行副本和数据目录，通过 macOS
+              后台任务持续采集；具体命令与迁移边界见仓库文档。Windows 和 Linux
+              尚未完成验收。
             </p>
           </details>
           <details>
-            <summary><span>这个网页可以直接查看我的资产吗？</span><i aria-hidden="true"></i></summary>
+            <summary>
+              能添加第三方插件吗？<span aria-hidden="true"></span>
+            </summary>
             <p>
-              当前网页仅作产品展示，图中的数据是虚构示例。先在本机启动 KanBan 服务，再通过浏览器访问本地地址，即可登录并接入自己的资产来源。
+              官方版本仅提供随应用构建的官方接入，不提供插件商城、导入或运行时下载安装。新接入通过源码
+              PR 审核后随应用提供；自定义开发请在自己的 Fork 和隔离环境中进行。
             </p>
           </details>
         </div>
       </section>
     </main>
-
-    <footer class="site-footer">
-      <div class="site-footer__inner">
-        <div class="site-footer__brand">
-          <img
-            src="assets/icon.svg"
-            width="32"
-            height="32"
-            alt=""
-            aria-hidden="true"
-          />
-          <strong>KANBAN</strong>
-
+    <dialog
+      class="demo-range-dialog"
+      id="demo-range-dialog"
+      aria-labelledby="range-dialog-title"
+    >
+      <form id="demo-range-form">
+        <header>
+          <h2 id="range-dialog-title">自定义分析区间</h2>
+          <button
+            class="icon-button"
+            type="button"
+            data-close-range
+            aria-label="关闭日期选择"
+          >
+            ×
+          </button>
+        </header>
+        <p>演示可选日期：2026-08-07 至 2026-11-05。</p>
+        <div class="demo-range-fields">
+          <label for="demo-range-start"
+            >开始日期<input
+              id="demo-range-start"
+              type="date"
+              min="2026-08-07"
+              max="2026-11-05"
+              required
+          /></label>
+          <label for="demo-range-end"
+            >结束日期<input
+              id="demo-range-end"
+              type="date"
+              min="2026-08-07"
+              max="2026-11-05"
+              required
+          /></label>
         </div>
-
-        <div class="site-footer__links">
+        <p class="range-error" id="range-error" role="status"></p>
+        <footer>
+          <button type="button" data-close-range>取消</button
+          ><button type="submit">应用区间</button>
+        </footer>
+      </form>
+    </dialog>
+    <footer class="site-footer shell">
+      <div class="footer-top">
+        <a class="brand" href="#top"
+          ><img src="assets/icon.svg" width="32" height="32" alt="" /><span
+            >个人资产看板</span
+          ></a
+        >
+        <nav aria-label="更多信息">
           <a
             href="https://github.com/chiperman/KanBan"
             target="_blank"
             rel="noreferrer"
-            >GitHub</a
-          >
-          <a href="#start">开始使用</a>
-          <a href="#faq">常见问题</a>
-        </div>
+            >GitHub<svg class="icon small" aria-hidden="true">
+              <use href="#i-external" /></svg></a
+          ><a
+            href="https://github.com/chiperman/KanBan/issues"
+            target="_blank"
+            rel="noreferrer"
+            >问题反馈<svg class="icon small" aria-hidden="true">
+              <use href="#i-external" /></svg></a
+          ><a href="#start"
+            >开始使用<svg class="icon small" aria-hidden="true">
+              <use href="#i-arrow" /></svg
+          ></a>
+        </nav>
+      </div>
+      <p class="footer-wordmark" aria-hidden="true">
+        <span class="wordmark-base">KANBAN</span>
+        <span class="wordmark-light">KANBAN</span>
+      </p>
+      <div class="footer-bottom">
+        <span>数据归你，代码开源。</span
+        ><a
+          href="https://github.com/chiperman/KanBan/blob/main/LICENSE"
+          target="_blank"
+          rel="noreferrer"
+          >MIT License</a
+        ><span>图示为虚构示例，不构成投资建议。</span>
       </div>
     </footer>
-
-    <script src="script.js"></script>
   </body>
 </html>
