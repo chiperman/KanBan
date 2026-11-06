@@ -31,6 +31,7 @@ import { useTablePagination } from "@/ui/vibe/vibe-table-pagination";
 import { useWorkbenchDisplayPreferences } from "@/ui/workbench-display-preferences";
 import { WorkbenchPageHeader } from "@/ui/workbench-page-header";
 import { WorkspaceViewNavigation } from "@/ui/workspace-view-navigation";
+import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { ActionDialog } from "./investment-books/action-dialog";
@@ -43,7 +44,7 @@ import {
   buildBookTimeline,
 } from "./investment-books/model";
 import { BookPerformanceView } from "./investment-books/performance-view";
-import { BookRecordsView } from "./investment-books/records-view";
+import { BookRecordsView, type BookRecordFilter } from "./investment-books/records-view";
 import { MemberDialog, ResolveDialog } from "./investment-books/scope-dialogs";
 import { bookMoney, labels, type InvestmentBookSource } from "./investment-books/shared";
 
@@ -52,7 +53,6 @@ export { bookMoney, type InvestmentBookSource } from "./investment-books/shared"
 export function InvestmentBooksWorkspace({
   state,
   initialBookId = "us-stocks",
-  initialRecordFilter = "funds",
   initialRecordDay,
   checkSourceId,
   view = "performance",
@@ -64,7 +64,6 @@ export function InvestmentBooksWorkspace({
 }: {
   state: InvestmentBookState;
   initialBookId?: InvestmentBookId;
-  initialRecordFilter?: "all" | "funds" | "valuations";
   initialRecordDay?: string;
   checkSourceId?: string;
   view?: "performance" | "records";
@@ -75,7 +74,16 @@ export function InvestmentBooksWorkspace({
   currentDay: string;
 }) {
   const bookId = initialBookId;
-  const [recordFilter, setRecordFilter] = useState(initialRecordFilter);
+  const searchParams = useSearchParams();
+  const filter = searchParams.get("recordFilter");
+  const recordFilter: BookRecordFilter =
+    filter === "all" || filter === "valuations" ? filter : "funds";
+  function setRecordFilter(value: BookRecordFilter) {
+    // 记录已随页面读取；只更新浏览状态，不为本地筛选重新请求账本。
+    const url = new URL(window.location.href);
+    url.searchParams.set("recordFilter", value);
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  }
   const [curve, setCurve] = useState<"return" | "total">("total");
   const [enabledSymbols, setEnabledSymbols] = useState<MarketBenchmarkSymbol[]>([
     ...DEFAULT_MARKET_BENCHMARK_SYMBOLS,
@@ -135,7 +143,7 @@ export function InvestmentBooksWorkspace({
     state.unassignedLegacyIds.includes(flow.id),
   );
   const bookHref = (id: InvestmentBookId, section = view) =>
-    `/performance?book=${id}&view=${section}`;
+    `/performance?book=${id}&view=${section}&recordFilter=${recordFilter}`;
   return (
     <div className="investment-books">
       <WorkbenchPageHeader

@@ -12,15 +12,16 @@ export function longbridgeOriginalFundingAmount(record: BookRecord) {
   return { amount: match[1].replace(/^-/, ""), currency: "HKD" as const };
 }
 
-export function InvestmentBookRecordAmount({ amount, currency, record }: {
+export function InvestmentBookRecordAmount({ amount, currency, record, masked = false }: {
   amount: string | null;
   currency: string;
   record?: BookRecord;
+  masked?: boolean;
 }) {
   if (amount === null) return <>数据不足</>;
   const original = record ? longbridgeOriginalFundingAmount(record) : null;
   return <>
-    <AssetFinancialValue unit={original?.currency ?? currency}>{formatAssetAmount(original?.amount ?? amount)}</AssetFinancialValue>
-    {original ? <small className="investment-books__basis">折合 <AssetFinancialValue unit={currency}>{formatAssetAmount(amount)}</AssetFinancialValue></small> : null}
+    <AssetFinancialValue unit={original?.currency ?? currency}>{masked ? "••••••" : formatAssetAmount(original?.amount ?? amount)}</AssetFinancialValue>
+    {original ? <small className="investment-books__basis">折合 <AssetFinancialValue unit={currency}>{masked ? "••••••" : formatAssetAmount(amount)}</AssetFinancialValue></small> : null}
   </>;
 }

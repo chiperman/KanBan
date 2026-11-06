@@ -231,6 +231,31 @@
   font-variant-numeric: tabular-nums;
 }
 
+.investment-books__record-note {
+  grid-column: 1 / -1;
+  min-width: 0;
+  color: var(--secondary);
+  font-size: var(--vibe-type-body-sm);
+}
+
+.investment-books__record-note > summary {
+  align-content: center;
+  min-height: var(--vibe-control-height);
+  cursor: pointer;
+}
+
+.investment-books__record-note > summary:focus-visible {
+  outline: 0.5px solid var(--primary);
+  outline-offset: 3px;
+}
+
+.investment-books__record-note > p {
+  margin: 0;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 @media (min-width: 1024px) {
   .investment-books__pending {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -308,29 +333,29 @@
   }
 
   .investment-books__record-filters > .vibe-button {
-    min-width: 0;
     padding-inline: var(--vibe-space-2);
   }
 
   .investment-books .investment-books__record-list > li {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
-    grid-template-areas: "identity amount" "identity actions";
+    display: flex;
+    flex-wrap: wrap;
     align-items: start;
     gap: var(--vibe-space-1) var(--vibe-space-3);
   }
 
   .investment-books__record-identity {
-    grid-area: identity;
+    flex: 1 1 auto;
     grid-template-columns: minmax(0, 1fr);
     gap: var(--vibe-space-2);
   }
 
   .investment-books__record-list > li > strong {
-    grid-area: amount;
+    flex: 1 1 auto;
   }
 
-  .investment-books__record-list .source-performance__record-actions {
-    grid-area: actions;
+  .investment-books__record-list .source-performance__record-actions,
+  .investment-books__record-note {
+    flex: 1 1 100%;
   }
 
   .investment-books__member-list > li > div,
