@@ -91,7 +91,7 @@ export function BookRecordsView({
           ))}
         </div>
       </div>
-      {showSensitiveInfo && filteredTimeline.length === 0 ? (
+      {filteredTimeline.length === 0 ? (
         <div className="investment-books__empty">
           <p className="trend-note">
             暂无
@@ -104,83 +104,84 @@ export function BookRecordsView({
           </p>
         </div>
       ) : null}
-      {showSensitiveInfo ? (
-        <ol className="manual-asset-history-list investment-books__record-list">
-          {recordPagination.visibleItems.map((row) => (
-            <li key={row.key} title={row.record?.note}>
-              <div className="investment-books__record-identity">
-                <time dateTime={row.day}>{row.day}</time>
-                <span>
-                  {row.label}
-                  <small className="investment-books__basis">{row.basis}</small>
-                </span>
-              </div>
-              <strong className="investment-books__record-amount">
-                <InvestmentBookRecordAmount
-                  amount={row.amount}
-                  currency={row.record?.currency ?? analysis.book.currency}
-                  record={row.record}
-                />
-                {row.kind === "deposit" ? (
-                  <small className="investment-books__basis investment-books__record-total">
-                    <span>累计净投入</span>
-                    <span>
-                      {depositTotals.get(row.key) == null ? (
-                        "数据不足"
-                      ) : (
-                        <AssetFinancialValue unit={analysis.book.currency}>
-                          {bookMoney(depositTotals.get(row.key)!)}
-                        </AssetFinancialValue>
-                      )}
-                    </span>
-                  </small>
-                ) : null}
-              </strong>
-              <div className="source-performance__record-actions">
-                {row.record ? (
-                  <>
-                    {row.record.currency === analysis.book.currency ? (
-                      <VibeButton
-                        type="button"
-                        variant="text"
-                        onClick={() => setEditing(row.record!)}
-                        aria-label={`更正 ${row.day} ${row.label}`}
-                      >
-                        更正
-                      </VibeButton>
-                    ) : null}
+      <ol className="manual-asset-history-list investment-books__record-list">
+        {recordPagination.visibleItems.map((row) => (
+          <li key={row.key}>
+            <div className="investment-books__record-identity">
+              <time dateTime={row.day}>{row.day}</time>
+              <span>
+                {row.label}
+                <small className="investment-books__basis">{row.basis}</small>
+              </span>
+            </div>
+            <strong className="investment-books__record-amount">
+              <InvestmentBookRecordAmount
+                amount={row.amount}
+                currency={row.record?.currency ?? analysis.book.currency}
+                record={row.record}
+                masked={!showSensitiveInfo}
+              />
+              {row.kind === "deposit" ? (
+                <small className="investment-books__basis investment-books__record-total">
+                  <span>累计净投入</span>
+                  <span>
+                    {depositTotals.get(row.key) == null ? (
+                      "数据不足"
+                    ) : (
+                      <AssetFinancialValue unit={analysis.book.currency}>
+                        {showSensitiveInfo ? bookMoney(depositTotals.get(row.key)!) : "••••••"}
+                      </AssetFinancialValue>
+                    )}
+                  </span>
+                </small>
+              ) : null}
+            </strong>
+            <div className="source-performance__record-actions">
+              {row.record ? (
+                <>
+                  {row.record.currency === analysis.book.currency ? (
                     <VibeButton
                       type="button"
                       variant="text"
-                      tone="danger"
-                      onClick={() => setVoiding(row.record!)}
-                      aria-label={`作废 ${row.day} ${row.label}`}
+                      onClick={() => setEditing(row.record!)}
+                      aria-label={`更正 ${row.day} ${row.label}`}
                     >
-                      作废
+                      更正
                     </VibeButton>
-                  </>
-                ) : row.basis === "手动资产金额" ? (
+                  ) : null}
                   <VibeButton
                     type="button"
                     variant="text"
-                    onClick={() => {
-                      setAssetDay(row.day);
-                      setDialog("asset");
-                    }}
+                    tone="danger"
+                    onClick={() => setVoiding(row.record!)}
+                    aria-label={`作废 ${row.day} ${row.label}`}
                   >
-                    更新资产
+                    作废
                   </VibeButton>
-                ) : null}
-              </div>
-            </li>
-          ))}
-        </ol>
-      ) : (
-        <p className="trend-note">金额及记录已隐藏。</p>
-      )}
-      {showSensitiveInfo ? (
-        <VibeTablePagination label="记账记录分页" pagination={recordPagination.controls} />
-      ) : null}
+                </>
+              ) : row.basis === "手动资产金额" ? (
+                <VibeButton
+                  type="button"
+                  variant="text"
+                  onClick={() => {
+                    setAssetDay(row.day);
+                    setDialog("asset");
+                  }}
+                >
+                  更新资产
+                </VibeButton>
+              ) : null}
+            </div>
+            {row.record?.note ? (
+              <details className="investment-books__record-note">
+                <summary>备注</summary>
+                <p>{showSensitiveInfo ? row.record.note : "••••••"}</p>
+              </details>
+            ) : null}
+          </li>
+        ))}
+      </ol>
+      <VibeTablePagination label="记账记录分页" pagination={recordPagination.controls} />
     </section>
   );
 }

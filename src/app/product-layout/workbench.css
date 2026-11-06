@@ -1227,7 +1227,11 @@
 
   .workbench-sidebar > .workbench-utilities {
     display: flex;
-    flex: 0 0 auto;
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    min-width: 0;
+    max-width: 100%;
     width: auto;
     gap: var(--vibe-space-1);
     margin: 0;

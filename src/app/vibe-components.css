@@ -1632,11 +1632,12 @@ body:has(.page-locked)::before {
 .vibe-table-pagination__actions,
 .vibe-table-pagination__jump {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
 }
 
 .vibe-table-pagination__summary {
-  white-space: nowrap;
+  min-width: 0;
 }
 
 .vibe-table-pagination__actions {
@@ -1646,6 +1647,8 @@ body:has(.page-locked)::before {
 }
 
 .vibe-table-pagination__jump {
+  min-width: 0;
+  justify-content: center;
   gap: var(--vibe-space-2);
   white-space: nowrap;
 }

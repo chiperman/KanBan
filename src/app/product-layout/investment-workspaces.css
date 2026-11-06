@@ -247,6 +247,7 @@
 }
 
 .investment-books > .source-performance {
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--vibe-space-4);
   margin-block: 0;
   padding: var(--vibe-space-6);
@@ -364,9 +365,13 @@
 }
 
 .investment-books__record-filters {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--vibe-space-2);
+}
+
+.investment-books__record-filters > .vibe-button {
+  flex: 1;
 }
 
 .investment-books__record-range {
