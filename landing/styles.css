@@ -53,7 +53,6 @@
   --type-section: clamp(40px, 5.2vw, 80px);
   --type-currency: clamp(64px, 8.2vw, 120px);
   --type-address: clamp(40px, 4.8vw, 72px);
-  --type-local-wordmark: clamp(32px, 13.8vw, 208px);
   --type-faq: clamp(24px, 2.6vw, 40px);
   --type-wordmark: calc((min(100vw, var(--shell)) - var(--gutter) * 2) / 3.3);
   --radius: 8px;
@@ -1625,27 +1624,6 @@ h2 {
   background: var(--ink);
   color: var(--bg);
 }
-.local-signature {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 24px;
-  overflow: clip;
-  font-family: var(--dots);
-  font-size: var(--type-local-wordmark);
-  font-weight: 600;
-  font-variation-settings: "ROND" 100;
-  letter-spacing: -0.08em;
-  line-height: 1.15;
-  padding-bottom: 40px;
-}
-.local-signature svg {
-  width: 9%;
-  flex-shrink: 0;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 0.5;
-}
 .local-layout {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -2506,10 +2484,6 @@ h2 {
     margin-top: 32px;
     align-items: start;
     gap: 12px;
-  }
-  .local-signature {
-    gap: 8px;
-    padding-bottom: 32px;
   }
   .local-layout {
     grid-template-columns: 1fr;
