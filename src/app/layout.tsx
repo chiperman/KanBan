@@ -8,6 +8,7 @@ import "./command-menu.css";
 import "./product-layout.css";
 import "./vibe-components.css";
 import { ThemeInitializer } from "@/ui/theme-switcher";
+import { THEME_BOOTSTRAP_SCRIPT } from "@/ui/theme-bootstrap";
 import { AssetRefreshProvider } from "@/ui/asset-refresh-provider";
 import { DisplayFontPreload } from "@/ui/display-font-preload";
 import {
@@ -30,6 +31,12 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
 
   return (
     <html lang="zh-CN" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }}
+          id="theme-bootstrap"
+        />
+      </head>
       <body>
         <DisplayFontPreload />
         <WorkbenchDisplayPreferencesProvider
