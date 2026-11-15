@@ -1,6 +1,6 @@
 import { execFileSync, spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -12,7 +12,7 @@ if (args.length > 1 || (args.length === 1 && !["--check", "--help"].includes(arg
   throw new Error("用法：pnpm runtime:update [--check|--help]");
 }
 if (args[0] === "--help") {
-  console.log("pnpm runtime:update：将当前开发目录构建并更新到已安装的 3001 正式版。\n--check：只检查安装配置并显示更新目标，不构建或切换服务。");
+  console.log("pnpm runtime:update：将当前开发目录构建并更新到已安装的 3001 正式版，成功后仅保留当前版和上一版。\n--check：只检查安装配置并显示更新目标，不构建或切换服务。");
   process.exit(0);
 }
 checkToolchain();
@@ -52,6 +52,26 @@ console.log(`开发源码：${source}\n当前正式版：${previous}\n正式入�
 if (args[0] === "--check") process.exit(0);
 
 const parent = path.dirname(previous);
+const runtimeNamePattern = /^runtime-\d{14}-[0-9a-f]{8}$/;
+function pruneRuntimes(keep) {
+  const dataDir = realpathSync(settings.dataDir);
+  const protectedPaths = [...keep, source, dataDir].map(directory => realpathSync(directory));
+  const removed = [];
+  for (const entry of readdirSync(parent, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !runtimeNamePattern.test(entry.name)) continue;
+    const candidate = path.join(parent, entry.name);
+    const candidatePath = realpathSync(candidate);
+    if (protectedPaths.some(directory => directory === candidatePath || directory.startsWith(candidatePath + path.sep))) continue;
+    try {
+      const metadata = JSON.parse(readFileSync(path.join(candidate, ".kanban-runtime.json"), "utf8"));
+      if (typeof metadata.dataDir !== "string" || !path.isAbsolute(metadata.dataDir) ||
+          realpathSync(metadata.dataDir) !== dataDir) continue;
+    } catch { continue; }
+    rmSync(candidate, { recursive: true, force: true });
+    removed.push(entry.name);
+  }
+  return removed;
+}
 const lock = path.join(parent, ".runtime-update.lock");
 try { mkdirSync(lock, { mode: 0o700 }); }
 catch (error) {
@@ -170,7 +190,9 @@ try {
   if (!afterCheck?.completedAt || afterCheck.checkedAt === beforeCheck || afterCheck.error) throw new Error("新版后台未完成一次有效检查");
   if (!jobState(0).running) throw new Error("新版网页任务未运行");
   assertActive();
+  const removed = pruneRuntimes([next, previous]);
   console.log(`正式版已更新：${settings.origin}\n运行副本：${next}\n旧版保留：${previous}\n正式数据及采集周期沿用。`);
+  if (removed.length > 0) console.log(`已清理更早运行副本：${removed.length} 个`);
 } catch (failure) {
   error = failure;
   if (switched) {
@@ -194,7 +216,10 @@ try {
     } catch (recoveryError) {
       console.error(`自动恢复失败：${recoveryError.message}\n旧版副本：${previous}\n原任务与切换前数据库备份：${path.join(next, ".runtime-rollback")}`);
     }
-  } else console.error("更新未切换，旧版继续运行。");
+  } else {
+    try { rmSync(next, { recursive: true, force: true }); } catch { /* 旧版未受影响。 */ }
+    console.error("更新未切换，旧版继续运行。");
+  }
 } finally {
   if (paused) rmSync(pause, { force: true });
   rmSync(lock, { recursive: true, force: true });
