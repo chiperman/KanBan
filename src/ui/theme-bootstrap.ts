@@ -1,0 +1,3 @@
+export const THEME_STORAGE_KEY = "pad-theme";
+
+export const THEME_BOOTSTRAP_SCRIPT = `(function(){var root=document.documentElement;var choice="system";try{var saved=window.localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});if(new URLSearchParams(window.location.search).get("mode")!=="demo"&&(saved==="light"||saved==="dark"||saved==="system")){choice=saved;}}catch(error){}var resolved=choice==="system"?(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):choice;root.dataset.theme=resolved;root.dataset.themeChoice=choice;root.classList.toggle("dark",resolved==="dark");})();`;

@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useState } from "react";
 
+import { THEME_STORAGE_KEY } from "@/ui/theme-bootstrap";
 import {
   VibeIcon,
   type VibeIconName,
@@ -11,7 +12,6 @@ import { VibeTooltip } from "@/ui/vibe/vibe-tooltip";
 
 type ThemeChoice = "light" | "dark" | "system";
 
-const STORAGE_KEY = "pad-theme";
 const THEME_ORDER: ThemeChoice[] = ["system", "light", "dark"];
 const THEME_LABELS: Record<ThemeChoice, string> = {
   light: "浅色",
@@ -35,7 +35,7 @@ function applyTheme(choice: ThemeChoice): void {
 
 function readSavedChoice(): ThemeChoice {
   try {
-    const saved = window.localStorage.getItem(STORAGE_KEY);
+    const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
     return saved === "light" || saved === "dark" || saved === "system"
       ? saved
       : "system";
@@ -104,7 +104,7 @@ export function ThemeSwitcher({
   function selectTheme(nextChoice: ThemeChoice) {
     if (persist) {
       try {
-        window.localStorage.setItem(STORAGE_KEY, nextChoice);
+        window.localStorage.setItem(THEME_STORAGE_KEY, nextChoice);
       } catch {
         // The current page can still use the selected theme when storage is unavailable.
       }
