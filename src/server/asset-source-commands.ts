@@ -9,6 +9,7 @@ import {
   parseManualAssetRecordInput,
 } from "@/domain/manual-asset-records";
 import { InvalidAssetSourceDisplayNameError } from "@/domain/asset-source-display-name";
+import { InvestmentBookCommandError } from "@/server/investment-book-errors";
 
 export interface AssetSourceCommandBody {
   action?: unknown;
@@ -23,6 +24,7 @@ export interface AssetSourceCommandBody {
   addresses?: unknown;
   recordId?: unknown;
   confirmation?: unknown;
+  valuationChoices?: unknown;
 }
 
 export class AssetSourceCommandError extends Error {
@@ -94,9 +96,14 @@ export async function executeAssetSourcePatch(
       const state = await context.services.investmentBooks.readInvestmentBooks();
       const member = state.members.find(row => row.sourceId === context.id);
       if (member?.bookId === "a-shares") {
-        const cutoff = state.historyThroughDay[member.bookId];
-        if (cutoff && input.day <= cutoff) throw new AssetSourceCommandError("该日期已由导入历史覆盖，请到投资记账更正历史资产记录");
         if (input.currency !== "CNY") throw new AssetSourceCommandError("A股账本使用 CNY 记账");
+        if (member.confirmed && (!member.fromDay || member.fromDay <= input.day) &&
+            (!member.toDay || input.day < member.toDay)) {
+          await context.services.investmentBooks.saveBookAsset(
+            context.id, input, context.services.clock.now().toISOString(), body.valuationChoices,
+          );
+          return true;
+        }
       }
     }
     await context.services.manualAssetRecords.record(
@@ -206,6 +213,7 @@ export async function executeAssetSourceDelete(
 
 export function isAssetSourceCommandInputError(error: unknown): boolean {
   return error instanceof AssetSourceCommandError ||
+    error instanceof InvestmentBookCommandError ||
     error instanceof InvalidAssetSourceDisplayNameError ||
     error instanceof InvalidEvmTokenPreferenceError ||
     error instanceof InvalidManualAssetRecordError ||

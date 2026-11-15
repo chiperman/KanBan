@@ -1,4 +1,5 @@
 import type { ManualAssetRecordInput } from "@/domain/manual-asset-records";
+import { isBookValuationConflict, type BookValuationChoice, type BookValuationConflict } from "@/domain/investment-books";
 import {
   lockOnUnauthorizedResponse,
   OWNER_SESSION_EXPIRED_MESSAGE,
@@ -8,6 +9,12 @@ import {
 export class RecordSaveOutcomeUnknown extends Error {
   constructor() {
     super("尚未确认保存结果。请在新标签页核对最新记录，确认未保存后再重试；当前输入已保留。");
+  }
+}
+
+export class RecordValuationConflict extends Error {
+  constructor(readonly conflicts: BookValuationConflict[]) {
+    super("同一天有不同的资产金额，请选择采用哪一条。");
   }
 }
 
@@ -42,6 +49,10 @@ async function saveRecordRequest(
     ? result as Record<string, unknown>
     : null;
   if (response.status >= 400 && response.status < 500) {
+    if (response.status === 409 && Array.isArray(payload?.valuationConflicts) &&
+        payload.valuationConflicts.length > 0 && payload.valuationConflicts.every(isBookValuationConflict)) {
+      throw new RecordValuationConflict(payload.valuationConflicts);
+    }
     const message = typeof payload?.error === "string" ? payload.error.trim() : "";
     throw new Error(message || failureMessage);
   }
@@ -58,10 +69,12 @@ export function bookRequest(body: object, cancellation: AbortSignal) {
   });
 }
 
-export function manualAssetRecordRequest(sourceId: string, input: ManualAssetRecordInput, cancellation: AbortSignal) {
+export function manualAssetRecordRequest(
+  sourceId: string, input: ManualAssetRecordInput, cancellation: AbortSignal, valuationChoices?: BookValuationChoice[],
+) {
   return saveRecordRequest(`/api/asset-sources/${encodeURIComponent(sourceId)}`, {
     method: "PATCH",
-    body: { action: "manual-record", ...input },
+    body: { action: "manual-record", ...input, valuationChoices },
     failureMessage: "保存记录失败",
     cancellation,
   });

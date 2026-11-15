@@ -61,13 +61,15 @@ export class InMemoryInvestmentBooks implements InvestmentBookStore {
     private readonly sources: AssetSources,
     private readonly cashflows: InvestmentCashflows,
     private readonly details: AssetSourceDetails,
+    private readonly manualRecords: ManualAssetRecords,
   ) {}
 
-  private run<T>(operation: (ledger: InvestmentBookLedger) => T): Promise<T> {
+  private run<T>(operation: (ledger: InvestmentBookLedger) => T | Promise<T>): Promise<T> {
     const result = this.pending.then(async () => {
-      const [sources, cashflows, histories, sourceRecords] = await Promise.all([
+      const [sources, cashflows, histories, sourceRecords, manualRecords] = await Promise.all([
         this.sources.list(), this.cashflows.list(),
         this.details.listSourceInvestmentHistories(), this.details.listSourceInvestmentRecords(),
+        this.manualRecords.list(),
       ]);
       let state = structuredClone(this.state);
       const ledger = new InvestmentBookLedger({
@@ -78,9 +80,10 @@ export class InMemoryInvestmentBooks implements InvestmentBookStore {
         listInvestmentCashflowsSync: () => cashflows,
         listSourceInvestmentHistories: () => histories,
         listSourceInvestmentRecordsSync: () => sourceRecords,
+        listManualAssetRecordsSync: () => manualRecords,
       });
       // 与 SQLite 事务一致：串行执行，失败时不提交本次状态。
-      const value = operation(ledger);
+      const value = await operation(ledger);
       this.state = state;
       return value;
     });
@@ -92,11 +95,17 @@ export class InMemoryInvestmentBooks implements InvestmentBookStore {
   saveBookRecord(bookId: InvestmentBookId, value: unknown, capturedAt: string) {
     return this.run(ledger => ledger.save(bookId, value, capturedAt));
   }
+  saveBookAsset(sourceId: string, value: unknown, capturedAt: string, choices?: unknown) {
+    return this.run(async ledger => {
+      const input = ledger.saveAsset(sourceId, value, capturedAt, choices);
+      if (input) await this.manualRecords.record(sourceId, input);
+    });
+  }
   voidBookRecord(bookId: InvestmentBookId, id: string, capturedAt: string) {
     return this.run(ledger => ledger.void(bookId, id, capturedAt));
   }
-  importBookHistory(bookId: InvestmentBookId, value: unknown) {
-    return this.run(ledger => ledger.import(bookId, value));
+  importBookHistory(bookId: InvestmentBookId, value: unknown, choices?: unknown, capturedAt?: string) {
+    return this.run(ledger => ledger.import(bookId, value, choices, capturedAt));
   }
   confirmBookMember(sourceId: string, fromDay: string, toDay: string | null) {
     return this.run(ledger => ledger.confirmMember(sourceId, fromDay, toDay));

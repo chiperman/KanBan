@@ -1,9 +1,7 @@
 import { investmentBook } from "@/domain/investment-books";
-import { assertManualAssetRecordNotFuture, parseManualAssetRecordInput } from "@/domain/manual-asset-records";
-import { shanghaiDay } from "@/domain/daily-asset-snapshots";
 import { getServices } from "@/server/composition";
 import { rejectCrossOrigin } from "@/server/auth/request-origin";
-import { InvestmentBookCommandError, parseInvestmentBookCommandInput } from "@/server/investment-book-errors";
+import { InvestmentBookCommandError, isInvestmentBookValuationConflict, parseInvestmentBookCommandInput } from "@/server/investment-book-errors";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +34,7 @@ export async function POST(request: Request) {
         await store.voidBookRecord(book.id, body.id, capturedAt);
         break;
       case "import":
-        await store.importBookHistory(book.id, body.history);
+        await store.importBookHistory(book.id, body.history, body.valuationChoices, capturedAt);
         break;
       case "member": {
         const state = await store.readInvestmentBooks();
@@ -51,23 +49,17 @@ export async function POST(request: Request) {
         break;
       case "asset": {
         if (book.automatic) throw new InvestmentBookCommandError("本账资产通过自动同步更新");
-        const input = parseInvestmentBookCommandInput(() => {
-          const parsed = parseManualAssetRecordInput(body);
-          assertManualAssetRecordNotFuture(parsed.day, shanghaiDay(capturedAt));
-          return parsed;
-        });
-        const state = await store.readInvestmentBooks();
-        const member = state.members.find(row => row.sourceId === body.sourceId && row.bookId === book.id);
-        if (!member?.confirmed || (member.fromDay && member.fromDay > input.day) || (member.toDay && input.day >= member.toDay)) throw new InvestmentBookCommandError("所选来源不在当天账本范围内");
-        if (input.currency !== book.currency) throw new InvestmentBookCommandError("资产币种与账本不一致");
-        if (state.historyThroughDay[book.id] && input.day <= state.historyThroughDay[book.id]!) throw new InvestmentBookCommandError("该日期由导入历史覆盖，请核对原始记录；新资产记录请选历史截止日之后");
-        await services.manualAssetRecords.record(member.sourceId, input);
+        if (typeof body.sourceId !== "string") throw new InvestmentBookCommandError("资产来源无效");
+        await store.saveBookAsset(body.sourceId, body, capturedAt, body.valuationChoices);
         break;
       }
       default: throw new InvestmentBookCommandError("账本操作无效");
     }
     return Response.json({ ok: true });
   } catch (error) {
+    if (isInvestmentBookValuationConflict(error)) {
+      return Response.json({ error: error.message, valuationConflicts: error.conflicts }, { status: 409 });
+    }
     const rejected = error instanceof InvestmentBookCommandError;
     return Response.json(
       { error: rejected ? error.message : "尚未确认账本保存结果，请先核对最新记录" },

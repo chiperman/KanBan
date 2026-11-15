@@ -1,5 +1,6 @@
 import { getServices } from "@/server/composition";
 import { rejectCrossOrigin } from "@/server/auth/request-origin";
+import { isInvestmentBookValuationConflict } from "@/server/investment-book-errors";
 import {
   executeAssetSourceDelete,
   executeAssetSourcePatch,
@@ -38,6 +39,9 @@ export async function PATCH(
       return Response.json({ error: "来源操作无效" }, { status: 400 });
     }
   } catch (error) {
+    if (isInvestmentBookValuationConflict(error)) {
+      return Response.json({ error: error.message, valuationConflicts: error.conflicts }, { status: 409 });
+    }
     return Response.json(
       { error: error instanceof Error ? error.message : "来源操作失败" },
       {

@@ -17,3 +17,62 @@
 .financial-record-dialog__fields > .trend-note {
   margin: 0;
 }
+
+.financial-record-dialog__conflicts {
+  display: grid;
+  gap: var(--vibe-space-6);
+  margin-top: var(--vibe-space-6);
+}
+
+.financial-record-dialog__conflict {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.financial-record-dialog__conflict > legend {
+  padding: 0;
+  color: var(--primary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-body-sm);
+}
+
+.financial-record-dialog__options {
+  display: grid;
+  gap: var(--vibe-space-3);
+  margin-top: var(--vibe-space-3);
+}
+
+.financial-record-dialog__option {
+  align-items: center;
+  min-width: 0;
+}
+
+.financial-record-dialog__option-copy {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: var(--vibe-space-2);
+  overflow-wrap: anywhere;
+}
+
+.financial-record-dialog__option input {
+  flex-shrink: 0;
+}
+
+.financial-record-dialog__amount {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--vibe-space-2);
+  color: var(--display);
+  font-size: var(--vibe-type-heading);
+}
+
+.financial-record-dialog__progress {
+  align-self: center;
+  color: var(--secondary);
+  font-family: var(--f-mono);
+  font-size: var(--vibe-type-micro);
+}

@@ -82,12 +82,12 @@ export function AssetDialog({
       checkBookId="a-shares"
       checkHref={`/performance?book=a-shares&view=records&recordFilter=valuations&recordDay=${encodeURIComponent(day)}&recordSource=${encodeURIComponent(sourceId)}`}
       title="更新A股资产"
-      description="每周日填写当天的资产总额，包含持仓和账户现金。同日保存会更新已有金额。"
+      description="填写所选日期的资产总额，包含持仓和账户现金。"
       dirty={dirty}
       onClose={onClose}
       disabled={!selectedMember}
-      submit={(signal) =>
-        bookRequest({ action: "asset", bookId: "a-shares", sourceId, day, amount, currency: "CNY" }, signal)
+      submit={(signal, valuationChoices) =>
+        bookRequest({ action: "asset", bookId: "a-shares", sourceId, day, amount, currency: "CNY", valuationChoices }, signal)
       }
     >
       <VibeSelectField
