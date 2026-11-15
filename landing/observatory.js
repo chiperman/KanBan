@@ -1,6 +1,13 @@
 // A finite, decorative point sculpture. It never represents account data.
 // The same geometry produces the static SVG fallback and the live canvas.
 const TAU = Math.PI * 2;
+const ORBIT = {
+  centerX: 405,
+  centerY: 410,
+  radiusX: 340,
+  radiusY: 235,
+  rotation: -0.48,
+};
 const points = [];
 for (let ring = 0; ring < 192; ring += 1) {
   const u = (ring / 192) * TAU;
@@ -21,7 +28,7 @@ for (let ring = 0; ring < 192; ring += 1) {
 function rotate(x, y, z, tilt, turn) {
   const a = 0.96 + tilt;
   const b = -0.3 + turn;
-  const c = -0.48;
+  const c = ORBIT.rotation;
   const y1 = y * Math.cos(a) - z * Math.sin(a);
   const z1 = y * Math.sin(a) + z * Math.cos(a);
   const x2 = x * Math.cos(b) + z1 * Math.sin(b);
@@ -33,16 +40,25 @@ function rotate(x, y, z, tilt, turn) {
   };
 }
 
-const orbit = [];
-for (let step = 0; step <= 240; step += 1) {
-  const angle = (step / 240) * TAU;
-  const x = Math.cos(angle) * 356;
-  const y = Math.sin(angle) * 182;
-  orbit.push({
-    x: 400 + x * Math.cos(-0.48) - y * Math.sin(-0.48),
-    y: 400 + x * Math.sin(-0.48) + y * Math.cos(-0.48),
-  });
+function orbitPoint(degrees) {
+  const angle = (degrees / 180) * Math.PI;
+  const x = Math.cos(angle) * ORBIT.radiusX;
+  const y = Math.sin(angle) * ORBIT.radiusY;
+  return {
+    x:
+      ORBIT.centerX +
+      x * Math.cos(ORBIT.rotation) -
+      y * Math.sin(ORBIT.rotation),
+    y:
+      ORBIT.centerY +
+      x * Math.sin(ORBIT.rotation) +
+      y * Math.cos(ORBIT.rotation),
+  };
 }
+
+const orbit = Array.from({ length: 241 }, (_, step) =>
+  orbitPoint((step / 240) * 360),
+);
 
 export function sculptureGeometry(tilt = 0, turn = 0, spin = 0) {
   // Spin around the torus's own axis before projecting it into the fixed view.
@@ -85,8 +101,6 @@ export function initObservatory() {
   const canvas = root.querySelector("canvas");
   let context = canvas?.getContext("2d");
   const reduce = matchMedia("(prefers-reduced-motion: reduce)");
-  const fine = matchMedia("(hover: hover) and (pointer: fine)");
-  let pointer = { x: 0, y: 0 };
   let frame = null;
   let visible = false;
   let contextAvailable = Boolean(context);
@@ -95,16 +109,28 @@ export function initObservatory() {
   let spin = 0;
   let lastFrameTime = null;
   let lastPaintTime = null;
-  let view = { tilt: 0, turn: 0 };
   const style = getComputedStyle(root);
   const color = style.getPropertyValue("--ink").trim();
   const background = style.getPropertyValue("--bg").trim();
   const revolutionMs =
     parseFloat(style.getPropertyValue("--sculpture-duration")) * 1000;
-  const allowMotion = () => !reduce.matches && fine.matches;
   const canPaint = () =>
     visible && !document.hidden && contextAvailable && size > 0;
   const isRunning = () => canPaint() && !reduce.matches;
+  const labels = [
+    [".orbit-label-us", 250],
+    [".orbit-label-cn", 10],
+    [".orbit-label-crypto", 75],
+  ];
+
+  for (const [selector, degrees] of labels) {
+    const label = root.querySelector(selector);
+    if (!label) continue;
+    const point = orbitPoint(degrees);
+    label.style.setProperty("--anchor-x", `${point.x / 8}%`);
+    label.style.setProperty("--anchor-y", `${point.y / 8}%`);
+  }
+  root.dataset.labels = "ready";
 
   // Keep one animation clock; suspension preserves the last rendered phase.
   const syncMotion = () => {
@@ -128,26 +154,17 @@ export function initObservatory() {
       schedule();
       return;
     }
+    const elapsed = running && lastFrameTime !== null
+      ? Math.min(time - lastFrameTime, 100)
+      : 1000 / 30;
     if (running && lastFrameTime !== null) {
       spin =
-        (spin + (Math.min(time - lastFrameTime, 100) / revolutionMs) * TAU) %
+        (spin + (elapsed / revolutionMs) * TAU) %
         TAU;
     }
     lastFrameTime = running ? time : null;
     lastPaintTime = time;
-    if (allowMotion()) {
-      const scroll = Math.max(
-        -1,
-        Math.min(0, root.getBoundingClientRect().top / innerHeight),
-      );
-      view = {
-        tilt: pointer.y * 0.13 + scroll * 0.08,
-        turn: pointer.x * 0.16,
-      };
-    } else if (reduce.matches || !fine.matches) {
-      view = { tilt: 0, turn: 0 };
-    }
-    const scene = sculptureGeometry(view.tilt, view.turn, spin);
+    const scene = sculptureGeometry(0, 0, spin);
     context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
     context.globalAlpha = 1;
     context.fillStyle = background;
@@ -197,38 +214,15 @@ export function initObservatory() {
     syncMotion();
     schedule();
   }).observe(root);
-  root.addEventListener("pointermove", (event) => {
-    if (!allowMotion()) return;
-    const bounds = root.getBoundingClientRect();
-    pointer = {
-      x: ((event.clientX - bounds.left) / bounds.width - 0.5) * 2,
-      y: ((event.clientY - bounds.top) / bounds.height - 0.5) * 2,
-    };
-    schedule();
-  });
-  root.addEventListener("pointerleave", () => {
-    if (!allowMotion()) return;
-    pointer = { x: 0, y: 0 };
-    schedule();
-  });
   document.addEventListener("visibilitychange", () => {
     syncMotion();
     schedule();
   });
-  addEventListener(
-    "scroll",
-    () => {
-      if (allowMotion()) schedule();
-    },
-    { passive: true },
-  );
   const reset = () => {
-    pointer = { x: 0, y: 0 };
     syncMotion();
     schedule();
   };
   reduce.addEventListener("change", reset);
-  fine.addEventListener("change", reset);
   canvas?.addEventListener("contextlost", () => {
     contextAvailable = false;
     root.dataset.ready = "false";
