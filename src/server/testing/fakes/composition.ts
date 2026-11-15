@@ -131,7 +131,7 @@ export function createTestServices(): TestServices {
     clock,
   );
   const assetSourceDetails = new InMemoryAssetSourceDetails(assetSources, manualAssetRecords, dailyAssetSnapshots);
-  const investmentBooks = new InMemoryInvestmentBooks(assetSources, investmentCashflows, assetSourceDetails);
+  const investmentBooks = new InMemoryInvestmentBooks(assetSources, investmentCashflows, assetSourceDetails, manualAssetRecords);
   const assetSourceOnboarding = new AssetSourceOnboarding(
     createAssetSourceProviderAdapters({
       longbridge,

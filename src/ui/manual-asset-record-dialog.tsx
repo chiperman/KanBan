@@ -40,11 +40,11 @@ export function ManualAssetRecordDialog({sourceId,sourceName,currentDay,defaultC
   const dirty = day !== initial.day || amount !== initial.amount || currency !== initial.currency;
   return <FinancialRecordDialog ariaLabel={`记录 ${sourceName} 数据`} title={`${record ? "编辑记录" : "添加记录"}，${sourceName}`} titleId="investment-record-title"
     dirty={dirty} onClose={onClose} checkHref={checkHref} button="保存数据"
-    submit={signal => manualAssetRecordRequest(sourceId, {day,amount,currency}, signal)}>
+    submit={(signal, choices) => manualAssetRecordRequest(sourceId, {day,amount,currency}, signal, choices)}>
     <VibeSelectField disabled fieldId="investment-record-kind" label="记录类型" value="valuation" onValueChange={() => {}} options={[{value:"valuation",label:"资产总额"}]} />
     <VibeDateField disabled={record !== undefined} fieldId="investment-record-day" label="记录日期" max={currentDay} value={day} onValueChange={setDay} />
     <VibeAmountField fieldId="investment-record-amount" label="资产总额" kind="balance" value={amount} onValueChange={setAmount} />
     <VibeSelectField fieldId="investment-record-currency" label="币种" value={currency} onValueChange={value=>setCurrency(value as typeof currency)} options={CURRENCY_OPTIONS} />
-    <p className="trend-note">每日仅记录一条总额，同日保存会更新已有总额；最新记录同时更新来源当前金额。历史截止日及以前请到投资账本核对导入历史，入金出金另行记录。</p>
+    <p className="trend-note">每日仅记录一条总额，同日保存会更新已有总额；最新记录同时更新来源当前金额。历史空白日期也可补录，与账本同日金额不一致时可选择采用哪一条。入金出金另行记录。</p>
   </FinancialRecordDialog>;
 }

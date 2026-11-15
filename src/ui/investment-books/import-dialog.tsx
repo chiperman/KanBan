@@ -38,7 +38,7 @@ export function ImportDialog({ bookId, onClose }: { bookId: InvestmentBookId; on
       onClose={onClose}
       disabled={!preview}
       button="确认导入"
-      submit={(signal) => bookRequest({ action: "import", bookId, history: preview }, signal)}
+      submit={(signal, valuationChoices) => bookRequest({ action: "import", bookId, history: preview, valuationChoices }, signal)}
     >
       <VibeTextAreaField
         fieldId="book-import-json"
@@ -79,8 +79,10 @@ export function ImportDialog({ bookId, onClose }: { bookId: InvestmentBookId; on
       <p className="trend-note">
         {bookId === "crypto"
           ? "有导入资产记录的日期优先采用历史总额，其余日期采用当天完整自动同步，不跨日补值或叠加。"
-          : "历史总额与后续同步按截止日衔接，不叠加。"}
-        发现原件被改写、缺失或账本冲突时会拒绝导入。
+          : bookId === "a-shares"
+            ? "历史与手工资产按日期合并，同日金额不一致时由你选择，只计一个总额。"
+            : "历史总额与后续同步按截止日衔接，不叠加。"}
+        已有导入原件被改写或缺失时仍会拒绝导入。
       </p>
     </ActionDialog>
   );

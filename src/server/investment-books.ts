@@ -1,7 +1,9 @@
 import {
-  activeBookRecords, bookHistoryPrefix, bookHistoryRecords, investmentBook, migrateInvestmentBooks, sourceBookId,
-  validateBookLegacyCoverage, validateInvestmentBookState, type BookRecord, type InvestmentBookId, type InvestmentBookState,
+  activeBookRecords, bookHistoryPrefix, bookHistoryRecords, investmentBook, manualBookAssetAmount, migrateInvestmentBooks, sourceBookId,
+  validateBookLegacyCoverage, validateInvestmentBookState, type BookRecord, type BookValuationConflict, type InvestmentBookId, type InvestmentBookState,
 } from "@/domain/investment-books";
+import { randomUUID } from "node:crypto";
+import { assertManualAssetRecordNotFuture, parseManualAssetRecordInput, type ManualAssetRecord, type ManualAssetRecordInput } from "@/domain/manual-asset-records";
 import { parseSourceInvestmentRecordInput } from "@/domain/source-investment-records";
 import { parseSourceInvestmentHistory } from "@/domain/source-investment-history";
 import { decimalCompare } from "@/domain/decimal";
@@ -9,7 +11,7 @@ import { shanghaiDay } from "@/domain/daily-asset-snapshots";
 import type { AssetSourceSummary, InvestmentCashflow } from "@/server/ports";
 import type { SourceInvestmentHistory } from "@/domain/source-investment-history";
 import type { SourceInvestmentRecord } from "@/domain/source-investment-records";
-import { InvestmentBookCommandError, parseInvestmentBookCommandInput } from "@/server/investment-book-errors";
+import { InvestmentBookCommandError, parseInvestmentBookCommandInput, requireValuationChoices } from "@/server/investment-book-errors";
 
 export interface InvestmentBookStateStore {
   read(): InvestmentBookState | undefined;
@@ -21,6 +23,18 @@ export interface InvestmentBookFacts {
   listSourceInvestmentHistories(): SourceInvestmentHistory[];
   listSourceInvestmentRecordsSync(): SourceInvestmentRecord[];
   listInvestmentCashflowsSync(): InvestmentCashflow[];
+  listManualAssetRecordsSync(): ManualAssetRecord[];
+}
+
+function valuationConflict(
+  bookId: InvestmentBookId, day: string, existingAmount: string, incomingAmount: string,
+  existingLabel: string, incomingLabel: string, evidence: unknown,
+): BookValuationConflict {
+  return {
+    key: JSON.stringify([bookId, day, existingAmount, incomingAmount, evidence]),
+    day, currency: investmentBook(bookId).currency,
+    existingAmount, incomingAmount, existingLabel, incomingLabel,
+  };
 }
 
 /** SQLite 与内存适配器共用同一套账本迁移、校验和更正规则。 */
@@ -95,6 +109,41 @@ export class InvestmentBookLedger {
     state.records.push({ ...input, currency: book.currency, bookId, note, recordedAt: capturedAt, origin: "manual", originKey: `manual:${input.id}`, ...(replacedId ? { replacesId: replacedId } : {}) });
     this.writeCommand(state);
   }
+  /** 返回核验后的来源余额；选择保留已有金额时，整次资产更新不写入。 */
+  saveAsset(sourceId: string, value: unknown, capturedAt: string, choices?: unknown): ManualAssetRecordInput | null {
+    const input = parseInvestmentBookCommandInput(() => {
+      const parsed = parseManualAssetRecordInput(value);
+      assertManualAssetRecordNotFuture(parsed.day, shanghaiDay(capturedAt));
+      return parsed;
+    });
+    const state = this.read();
+    const member = state.members.find(row => row.sourceId === sourceId && row.bookId === "a-shares");
+    const source = this.readModel.listSourcesSync().find(row => row.id === sourceId);
+    if (source?.kind !== "manual" || sourceBookId(source) !== "a-shares" || !member?.confirmed ||
+        (member.fromDay && member.fromDay > input.day) || (member.toDay && input.day >= member.toDay)) {
+      throw new InvestmentBookCommandError("所选来源不在当天账本范围内");
+    }
+    if (input.currency !== "CNY") throw new InvestmentBookCommandError("A股账本使用 CNY 记账");
+    const records = this.readModel.listManualAssetRecordsSync();
+    const proposed = [
+      ...records.filter(row => row.sourceId !== sourceId || row.day !== input.day),
+      { sourceId, ...input, recordedAt: capturedAt },
+    ];
+    const total = manualBookAssetAmount(state, "a-shares", proposed, input.day);
+    const existing = activeBookRecords(state, "a-shares").find(row => row.kind === "valuation" && row.day === input.day);
+    const conflict = existing && total !== null && decimalCompare(existing.amount, total) !== 0
+      ? valuationConflict("a-shares", input.day, existing.amount, total, "账本已有总额", "本次更新后的账本总额", [existing.id, sourceId, input])
+      : null;
+    const resolved = requireValuationChoices(conflict ? [conflict] : [], choices);
+    if (conflict && existing) {
+      if (resolved.get(conflict.key) === "existing") return null;
+      this.save("a-shares", {
+        id: randomUUID(), replacesId: existing.id, day: input.day, kind: "valuation",
+        amount: total, currency: "CNY", note: "按手工来源资产更正",
+      }, capturedAt);
+    }
+    return input;
+  }
   void(bookId: InvestmentBookId, id: string, capturedAt: string): void {
     const state = this.read();
     const row = state.records.find(row => row.id === id && row.bookId === bookId && !row.voidedAt);
@@ -102,7 +151,7 @@ export class InvestmentBookLedger {
     row.voidedAt = capturedAt;
     this.writeCommand(state);
   }
-  import(bookId: InvestmentBookId, value: unknown): void {
+  import(bookId: InvestmentBookId, value: unknown, choices?: unknown, capturedAt = new Date().toISOString()): void {
     const history = parseInvestmentBookCommandInput(() => parseSourceInvestmentHistory(value));
     const book = parseInvestmentBookCommandInput(() => investmentBook(bookId));
     if (history.currency !== book.currency) throw new InvestmentBookCommandError("导入币种与账本不一致");
@@ -111,9 +160,28 @@ export class InvestmentBookLedger {
     const rows = bookHistoryRecords(history, bookId);
     const existing = state.records.filter(row => row.originKey.startsWith(`${prefix}:`));
     if (existing.some(row => row.bookId !== bookId || !rows.some(next => next.id === row.id && next.day === row.day && next.kind === row.kind && next.currency === row.currency && decimalCompare(next.amount, row.amount) === 0))) throw new InvestmentBookCommandError("导入包含历史删除、改写或账本冲突");
-    for (const row of rows) if (!state.records.some(old => old.id === row.id)) state.records.push(row);
+    if (history.reconciliation.asOf > shanghaiDay(capturedAt)) throw new InvestmentBookCommandError("不能导入未来记录");
+    const additions = rows.filter(row => !state.records.some(old => old.id === row.id));
+    const manualRecords = bookId === "a-shares" ? this.readModel.listManualAssetRecordsSync() : [];
+    const overlaps = additions.filter(row => row.kind === "valuation").map(row => {
+      const current = activeBookRecords(state, bookId).find(old => old.kind === "valuation" && old.day === row.day);
+      const sameDayManual = manualRecords.filter(manual => manual.day === row.day &&
+        state.members.some(member => member.bookId === bookId && member.sourceId === manual.sourceId &&
+          (member.fromDay === null || member.fromDay <= row.day) && (member.toDay === null || row.day < member.toDay)));
+      const amount = current?.amount ?? (sameDayManual.length ? manualBookAssetAmount(state, bookId, manualRecords, row.day) : null);
+      const conflict = amount !== null && decimalCompare(amount, row.amount) !== 0
+        ? valuationConflict(bookId, row.day, amount, row.amount, current ? "账本已有总额" : "已记录的手工资产总额",
+          "本次导入总额", [current?.id ?? sameDayManual, row.id])
+        : null;
+      return { row, current, conflict };
+    });
+    const resolved = requireValuationChoices(overlaps.flatMap(row => row.conflict ? [row.conflict] : []), choices);
+    for (const { row, current, conflict } of overlaps) {
+      if (conflict ? resolved.get(conflict.key) === "existing" : current !== undefined) row.voidedAt = capturedAt;
+      else if (current) current.voidedAt = capturedAt;
+    }
+    state.records.push(...additions);
     if (!state.imports.some(old => JSON.stringify(old) === JSON.stringify(history))) state.imports.push(history);
-    if (history.reconciliation.asOf > shanghaiDay(new Date())) throw new InvestmentBookCommandError("不能导入未来记录");
     state.historyThroughDay[bookId] = [state.historyThroughDay[bookId] ?? "", history.reconciliation.asOf].sort().at(-1)!;
     this.writeCommand(state);
   }

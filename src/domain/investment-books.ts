@@ -49,11 +49,34 @@ export interface InvestmentBookState {
 export interface InvestmentBookStore {
   readInvestmentBooks(): Promise<InvestmentBookState>;
   saveBookRecord(bookId: InvestmentBookId, value: unknown, capturedAt: string): Promise<void>;
+  saveBookAsset(sourceId: string, value: unknown, capturedAt: string, choices?: unknown): Promise<void>;
   voidBookRecord(bookId: InvestmentBookId, id: string, capturedAt: string): Promise<void>;
-  importBookHistory(bookId: InvestmentBookId, value: unknown): Promise<void>;
+  importBookHistory(bookId: InvestmentBookId, value: unknown, choices?: unknown, capturedAt?: string): Promise<void>;
   confirmBookMember(sourceId: string, fromDay: string, toDay: string | null): Promise<void>;
   resolveLegacyCashflow(bookId: InvestmentBookId, cashflowId: string, recordId: string | null): Promise<void>;
 }
+export type BookValuationConflict = {
+  key: string;
+  day: string;
+  currency: "USD" | "CNY";
+  existingAmount: string;
+  incomingAmount: string;
+  existingLabel: string;
+  incomingLabel: string;
+};
+export type BookValuationChoice = {
+  key: string;
+  choice: "existing" | "incoming";
+};
+
+/** 冲突是跨服务与请求边界的结构化结果，不依赖错误类的模块身份。 */
+export function isBookValuationConflict(value: unknown): value is BookValuationConflict {
+  if (!value || typeof value !== "object") return false;
+  const row = value as Record<string, unknown>;
+  return ["key", "day", "existingAmount", "incomingAmount", "existingLabel", "incomingLabel"]
+    .every(key => typeof row[key] === "string") && (row.currency === "CNY" || row.currency === "USD");
+}
+
 export class InvalidInvestmentBookError extends Error {}
 
 export function investmentBook(id: unknown) {
@@ -62,6 +85,21 @@ export function investmentBook(id: unknown) {
   return book;
 }
 export const sourceBookId = sourceInvestmentBookId;
+/** 手工账本按当天来源范围汇总余额；缺少任一必要来源时不能拿部分金额对账。 */
+export function manualBookAssetAmount(
+  state: InvestmentBookState,
+  bookId: InvestmentBookId,
+  records: readonly ManualAssetRecord[],
+  day: string,
+): string | null {
+  const members = state.members.filter(member => member.bookId === bookId &&
+    (member.fromDay === null || member.fromDay <= day) && (member.toDay === null || day < member.toDay));
+  const rows = members.map(member => records.filter(row => row.sourceId === member.sourceId && row.day <= day)
+    .toSorted((a, b) => b.day.localeCompare(a.day))[0]);
+  return members.length && members.every(member => member.confirmed) &&
+    rows.every(row => row?.currency === investmentBook(bookId).currency)
+    ? decimalAdd(...rows.map(row => row.amount)) : null;
+}
 export function activeBookRecords(state: InvestmentBookState, bookId: InvestmentBookId) {
   return state.records.filter(row => row.bookId === bookId && !row.voidedAt);
 }
@@ -352,10 +390,7 @@ export function analyzeInvestmentBook(input: {
   if (!book.automatic) {
     const days = [...new Set(input.manualRecords.filter(row => members.some(member => member.sourceId === row.sourceId)).map(row => row.day))];
     for (const day of days) {
-      if (historyThrough && day <= historyThrough) continue;
-      const roster = required(day);
-      const rows = roster.map(member => input.manualRecords.filter(row => row.sourceId === member.sourceId && row.day <= day).toSorted((a,b) => b.day.localeCompare(a.day))[0]);
-      values.set(day, { day, amount: roster.length && roster.every(member => member.confirmed) && rows.every(row => row?.currency === book.currency) ? decimalAdd(...rows.map(row => row.amount)) : null, basis: "手动资产金额" });
+      values.set(day, { day, amount: manualBookAssetAmount(input.state, book.id, input.manualRecords, day), basis: "手动资产金额" });
     }
   }
   // Canonical explicit totals replace the day's automatic/manual evidence; never add them together.

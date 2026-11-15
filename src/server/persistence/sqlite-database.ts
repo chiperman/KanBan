@@ -132,11 +132,17 @@ export class SqliteDashboardDatabase
   async saveBookRecord(bookId: InvestmentBookId, value: unknown, capturedAt: string): Promise<void> {
     this.transaction(() => this.stores.investmentBooks.save(bookId, value, capturedAt));
   }
+  async saveBookAsset(sourceId: string, value: unknown, capturedAt: string, choices?: unknown): Promise<void> {
+    this.transaction(() => {
+      const input = this.stores.investmentBooks.saveAsset(sourceId, value, capturedAt, choices);
+      if (input) this.stores.manualSources.recordManual(sourceId, input, capturedAt);
+    });
+  }
   async voidBookRecord(bookId: InvestmentBookId, id: string, capturedAt: string): Promise<void> {
     this.transaction(() => this.stores.investmentBooks.void(bookId, id, capturedAt));
   }
-  async importBookHistory(bookId: InvestmentBookId, value: unknown): Promise<void> {
-    this.transaction(() => this.stores.investmentBooks.import(bookId, value));
+  async importBookHistory(bookId: InvestmentBookId, value: unknown, choices?: unknown, capturedAt?: string): Promise<void> {
+    this.transaction(() => this.stores.investmentBooks.import(bookId, value, choices, capturedAt));
   }
   async confirmBookMember(sourceId: string, fromDay: string, toDay: string | null): Promise<void> {
     this.transaction(() => this.stores.investmentBooks.confirmMember(sourceId, fromDay, toDay));
