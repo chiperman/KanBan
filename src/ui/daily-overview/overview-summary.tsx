@@ -38,6 +38,7 @@ export function OverviewSummary({
   recordedSources,
   todayChangeIssueSources,
   remainingChangeIssueSources,
+  failedSourceNames,
   hasSyncFailures,
   demoMode,
   realtimeState,
@@ -54,6 +55,7 @@ export function OverviewSummary({
   recordedSources: OverviewSource[];
   todayChangeIssueSources: ReturnType<typeof buildOverviewSourceIssues>;
   remainingChangeIssueSources: ReturnType<typeof buildOverviewSourceIssues>;
+  failedSourceNames: string[];
   hasSyncFailures: boolean;
   demoMode: boolean;
   realtimeState: LongbridgeRealtimeState;
@@ -81,6 +83,13 @@ export function OverviewSummary({
     : todayChangeIssueSources.length > 0
       ? `${todayChangeIssueSources.length} 个来源待更新`
       : "部分来源待更新";
+  const failureLabel = failedSourceNames.length === 1 && showSensitiveInfo
+    ? `${failedSourceNames[0]} 未更新`
+    : failedSourceNames.length > 1 && showSensitiveInfo
+      ? `${failedSourceNames.length} 个来源未更新`
+      : failedSourceNames.length === 1
+        ? "1 个来源未更新"
+        : "部分来源未更新";
   const reportingRate =
     currency === "USD"
       ? null
@@ -137,30 +146,34 @@ export function OverviewSummary({
           data-testid="overview-confidence"
         >
           <summary>
-            <span>{hasSyncFailures ? "部分来源未更新" : dataStatusLabel}</span>
+            <span>{hasSyncFailures ? failureLabel : dataStatusLabel}</span>
             {usesRecordedTodayObservation && changeEndpoint !== null ? (
               <span className="daily-overview__confidence-context">
                 {"，"}资产变化截至 {formatShanghaiShortDateTime(changeEndpoint.observedAt)}
               </span>
             ) : currentValuationComplete ? (
               <span className="daily-overview__confidence-context">{"，"}总额含最近成功值</span>
+            ) : hasSyncFailures ? (
+              <span className="daily-overview__confidence-context">{"，"}总额不完整</span>
             ) : null}
           </summary>
           <div className="daily-overview__confidence-details">
             {hasSyncFailures ? <AssetRefreshIssues hideSourceNames={!showSensitiveInfo} /> : null}
-            {demoMode ? null : (
+            {hasSyncFailures && !showSensitiveInfo ? (
               <VibeLink href="/settings?view=data#source-checks-title" variant="text">
                 检查资产来源
               </VibeLink>
-            )}
-            {!hasSyncFailures || !currentValuationComplete ? (
-              <p>{currentReason ?? `已覆盖 ${recordedSources.length} 个来源`}</p>
             ) : null}
-            {usesRecordedTodayObservation ? (
-              <p>当前刷新有失败，资产变化使用上述时间的已记录观测。</p>
+            {!hasSyncFailures ? (
+              <p>{currentReason ?? `已覆盖 ${recordedSources.length} 个来源`}</p>
             ) : null}
             {!hasSyncFailures && usdValuation.expiredCount > 0 ? (
               <p>过期来源 {usdValuation.expiredCount} 个；可在顶部刷新资产。</p>
+            ) : null}
+            {!hasSyncFailures && !demoMode ? (
+              <VibeLink href="/settings?view=data#source-checks-title" variant="text">
+                检查资产来源
+              </VibeLink>
             ) : null}
             {remainingChangeIssueSources.length > 0 ? (
               <div className="daily-overview__change-issues" data-testid="overview-data-issues">

@@ -36,7 +36,6 @@ export function AssetGlobalRefreshControl({ showRecoveryDetails = true }: { show
 
   const global = refresh.globalStatus;
   const failed = refresh.failedSources;
-  const retryable = failed.filter(source => sourceRecoveryAction(source).href === undefined);
   const pending = global.state === "refreshing";
   const terminal = global.state === "success" ||
     global.state === "partial" || global.state === "error";
@@ -55,20 +54,16 @@ export function AssetGlobalRefreshControl({ showRecoveryDetails = true }: { show
     >
       <VibeButton
         aria-busy={pending}
-        aria-label={retryable.length > 0 ? "重试失败来源" : "立即刷新资产"}
+        aria-label="立即刷新资产"
         className="asset-refresh-button"
         disabled={pending}
-        onClick={() => {
-          if (retryable.length > 0) {
-            void Promise.all(retryable.map(source => refresh.request({ reason: "manual-source", sourceId: source.id })));
-          } else void refresh.request({ reason: "manual-global" });
-        }}
+        onClick={() => void refresh.request({ reason: "manual-global" })}
         type="button"
-        title={retryable.length > 0 ? "仅重试可恢复的失败来源" : "刷新全部已连接的自动来源"}
+        title="刷新全部已连接的自动来源"
         variant="outline"
       >
         <AssetRefreshIcon className="asset-global-refresh-icon" />
-        <span>{pending ? "刷新中…" : retryable.length > 0 ? "重试失败来源" : "刷新资产"}</span>
+        <span>{pending ? "刷新中…" : "刷新资产"}</span>
       </VibeButton>
       {showStatus ? (
         <VibeStatusTag
@@ -82,7 +77,7 @@ export function AssetGlobalRefreshControl({ showRecoveryDetails = true }: { show
       ) : null}
       {showRecoveryDetails && failed.length > 0 ? (
         <details className="asset-refresh-recovery">
-          <summary>查看失败来源</summary>
+          <summary>{failed.length === 1 ? "查看未更新来源" : `查看 ${failed.length} 个未更新来源`}</summary>
           <AssetRefreshIssues />
         </details>
       ) : showStatus && global.state === "error" && failed.length === 0 ? (
