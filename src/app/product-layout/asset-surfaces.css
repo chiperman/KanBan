@@ -697,6 +697,21 @@ body {
   gap: var(--vibe-space-3);
 }
 
+/* 曲线绘制完成后再显示端点与资金标记，避免标记悬空。 */
+.asset-trend-comparison g.recharts-reference-dot {
+  animation: asset-trend-marker-in var(--vibe-duration-fast) var(--ease) 480ms both;
+}
+
+@keyframes asset-trend-marker-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
 .asset-trend-event-legend {
   display: flex;
   align-items: center;
@@ -704,6 +719,12 @@ body {
   color: var(--secondary);
   font-family: var(--f-mono);
   font-size: var(--vibe-type-caption);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .asset-trend-comparison g.recharts-reference-dot {
+    animation: none;
+  }
 }
 
 .asset-trend-event-legend > span {

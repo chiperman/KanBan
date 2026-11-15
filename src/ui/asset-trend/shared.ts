@@ -42,7 +42,7 @@ export type AssetTrendBenchmark = {
   returnComparison?: boolean;
 };
 
-export const TREND_CHART_ANIMATION_DURATION = 200;
+export const TREND_CHART_ANIMATION_DURATION = 600;
 // Recharts rounds measured axis widths; leave room for fractional glyph bounds.
 export const TREND_CHART_AXIS_INSET = 4;
 // Keep event shapes above the cursor and active dot.
