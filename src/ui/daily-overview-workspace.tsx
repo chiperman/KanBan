@@ -8,6 +8,7 @@ import {
   analyzeCurrentInvestmentPerformance,
   longbridgeReferenceRates,
 } from "@/domain/investment-performance";
+import { assetSourceDisplayName } from "@/domain/asset-source-display-name";
 import { hasManualAssetRecord } from "@/domain/manual-asset-records";
 import { projectTotalAssetTrendObservations } from "@/domain/total-asset-trend";
 import { buildTotalValuation } from "@/domain/valuation";
@@ -157,8 +158,15 @@ export function DailyOverviewWorkspace({
     [currency, recordedSources, sourceSummaries],
   );
   const remainingChangeIssueSources = todayChangeIssueSources.filter(
-    (source) => !source.syncOnly || !failedSources.some((failed) => failed.id === source.id),
+    (source) => !failedSources.some((failed) => failed.id === source.id),
   );
+  const failedSourceNames = recordedSources
+    .filter((source) =>
+      source.lifecycle !== "disconnected" &&
+      (source.sync.error !== null ||
+        failedSources.some((failed) => failed.id === source.id)),
+    )
+    .map(assetSourceDisplayName);
   const overviewEmpty = !demoMode && recordedSources.length === 0;
   return (
     <div className="daily-overview" data-testid="portfolio-overview-workspace">
@@ -217,6 +225,7 @@ export function DailyOverviewWorkspace({
                 comparison={comparison}
                 todayChangeIssueSources={todayChangeIssueSources}
                 remainingChangeIssueSources={remainingChangeIssueSources}
+                failedSourceNames={failedSourceNames}
                 hasSyncFailures={hasSyncFailures}
                 demoMode={demoMode}
                 realtimeState={realtimeState}

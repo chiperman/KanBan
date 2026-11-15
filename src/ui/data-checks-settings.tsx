@@ -13,22 +13,7 @@ export function DataChecksSettings({ currentDay, history, sources }: {
 }) {
   const diagnostics = diagnoseSources(sources);
   const attention = diagnostics.filter(({ reasons }) => reasons.length > 0);
-  const sourcesByReason = new Map<string, {
-    label: string;
-    tone: (typeof diagnostics)[number]["reasons"][number]["tone"];
-    recovery?: boolean;
-    affected: typeof diagnostics;
-  }>();
-  for (const diagnostic of attention) {
-    for (const reason of diagnostic.reasons) {
-      const key = `${reason.tone}:${reason.label}`;
-      const affected = sourcesByReason.get(key)?.affected ?? [];
-      if (!affected.includes(diagnostic)) {
-        sourcesByReason.set(key, { ...reason, affected: [...affected, diagnostic] });
-      }
-    }
-  }
-  const reasons = [...sourcesByReason.values()];
+  const reasons = attention.flatMap(({ reasons }) => reasons);
   const tone = reasons.some(reason => reason.tone === "error")
     ? "error"
     : reasons.some(reason => reason.tone === "warning")
@@ -46,18 +31,20 @@ export function DataChecksSettings({ currentDay, history, sources }: {
         </header>
         {attention.length > 0 ? (
           <ul className="data-checks__issues" aria-label="数据异常">
-            {[...sourcesByReason].map(([key, { label, tone, recovery, affected }]) => (
-              <li key={key}>
-                <p data-vibe-tone={tone}>{label}</p>
-                <div>
-                  {affected.map(({ source, name }) => (
-                    <span className="data-checks__source-action" key={source.id}>
-                      <VibeEntityLink href={`/asset-sources/${encodeURIComponent(source.id)}?view=manage`}>{name}</VibeEntityLink>
-                      {recovery
-                        ? <AssetSourceRecoveryAction source={{ ...source, displayName: name }} /> : null}
-                    </span>
-                  ))}
+            {attention.map(({ name, reasons, source }) => (
+              <li className="data-checks__issue" key={source.id}>
+                <div className="data-checks__source-action">
+                  <VibeEntityLink href={`/asset-sources/${encodeURIComponent(source.id)}?view=manage`}>{name}</VibeEntityLink>
+                  {reasons.some(reason => reason.recovery)
+                    ? <AssetSourceRecoveryAction source={{ ...source, displayName: name }} /> : null}
                 </div>
+                <ul className="data-checks__issue-reasons">
+                  {reasons.map(reason => (
+                    <li key={`${reason.tone}:${reason.label}`}>
+                      <p data-vibe-tone={reason.tone}>{reason.label}</p>
+                    </li>
+                  ))}
+                </ul>
               </li>
             ))}
           </ul>
