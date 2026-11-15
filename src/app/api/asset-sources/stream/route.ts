@@ -96,7 +96,7 @@ export async function GET(request: Request): Promise<Response> {
       keepAlive = setInterval(() => {
         if (!sessionValid()) return;
         try {
-          controller.enqueue(encoder.encode(": keep-alive\n\n"));
+          controller.enqueue(event(encoder, "heartbeat", {}));
         } catch {
           close();
         }

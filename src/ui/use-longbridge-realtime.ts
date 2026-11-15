@@ -35,6 +35,8 @@ export function useLongbridgeRealtime<T extends RealtimeSource>(
   const [retryKey, setRetryKey] = useState(0);
   const [batch, setBatch] = useState<QuoteBatch>(() => ({ key: "", quotes: new Map() }));
   const latest = useRef<QuoteBatch>({ key: "", quotes: new Map() });
+  const stateRef = useRef(state);
+  stateRef.current = state;
   const { subscriptionKey, symbolsKey } = useMemo(() => {
     const connected = sources.filter((source) =>
       enabled && source.kind === "longbridge" && source.lifecycle !== "disconnected",
@@ -59,6 +61,7 @@ export function useLongbridgeRealtime<T extends RealtimeSource>(
     }
     const symbols = new Set(symbolsKey.split(","));
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let lastMessageAt = Date.now();
     setState("connecting");
     const stream = new EventSource("/api/asset-sources/stream");
     const handleQuote = (event: Event) => {
@@ -66,6 +69,7 @@ export function useLongbridgeRealtime<T extends RealtimeSource>(
         let quote = JSON.parse((event as MessageEvent<string>).data) as LongbridgeRealtimeQuote;
         if (!quote || !symbols.has(quote.symbol) || typeof quote.last_done !== "string" ||
           !/^\d+(?:\.\d+)?$/.test(quote.last_done) || longbridgeQuoteTime(quote.timestamp) === null) return;
+        lastMessageAt = Date.now();
         const previous = latest.current.quotes.get(quote.symbol)?.quote;
         if (previous) {
           const previousAt = longbridgeQuoteTime(previous.timestamp);
@@ -98,9 +102,13 @@ export function useLongbridgeRealtime<T extends RealtimeSource>(
         // 单条异常消息不影响后续行情。
       }
     };
+    const handleHeartbeat = () => {
+      lastMessageAt = Date.now();
+    };
     const handleStatus = (event: Event) => {
       try {
         const status = JSON.parse((event as MessageEvent<string>).data) as { state?: string; code?: string };
+        lastMessageAt = Date.now();
         if (status.state === "connecting") setState("connecting");
         else if (status.state === "ready") setState("ready");
         else if (status.state === "error") {
@@ -117,16 +125,46 @@ export function useLongbridgeRealtime<T extends RealtimeSource>(
         ? current : "reconnecting",
     );
     stream.addEventListener("quote", handleQuote);
+    stream.addEventListener("heartbeat", handleHeartbeat);
     stream.addEventListener("stream-status", handleStatus);
     stream.addEventListener("error", handleError);
+    const watchdog = window.setInterval(() => {
+      if (stateRef.current !== "ready" && stateRef.current !== "connecting") return;
+      if (Date.now() - lastMessageAt < 45_000) return;
+      setState("reconnecting");
+      setRetryKey((current) => current + 1);
+    }, 15_000);
     return () => {
       if (timer !== undefined) clearTimeout(timer);
+      window.clearInterval(watchdog);
       stream.removeEventListener("quote", handleQuote);
+      stream.removeEventListener("heartbeat", handleHeartbeat);
       stream.removeEventListener("stream-status", handleStatus);
       stream.removeEventListener("error", handleError);
       stream.close();
     };
   }, [subscriptionKey, symbolsKey, retryKey, immediateInitialQuotes]);
+
+  useEffect(() => {
+    if (!subscriptionKey) return;
+    let lastAttempt = 0;
+    const reconnect = () => {
+      if (document.visibilityState === "hidden") return;
+      if (stateRef.current !== "reconnecting" && stateRef.current !== "unavailable") return;
+      if (Date.now() - lastAttempt < 5_000) return;
+      lastAttempt = Date.now();
+      setState("connecting");
+      setRetryKey((current) => current + 1);
+    };
+    document.addEventListener("visibilitychange", reconnect);
+    window.addEventListener("focus", reconnect);
+    window.addEventListener("online", reconnect);
+    return () => {
+      document.removeEventListener("visibilitychange", reconnect);
+      window.removeEventListener("focus", reconnect);
+      window.removeEventListener("online", reconnect);
+    };
+  }, [subscriptionKey]);
 
   const liveSources = useMemo(() => {
     if (batch.key !== subscriptionKey || batch.quotes.size === 0) return sources;

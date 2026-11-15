@@ -1,4 +1,5 @@
 import {
+  decimalAdd,
   decimalCompare,
   decimalDivide,
   decimalMultiply,
@@ -113,11 +114,30 @@ export function applyLongbridgeRealtimeQuote<T extends Pick<AssetSourceSummary, 
   };
   const holdings = [...source.snapshot.holdings];
   holdings[index] = nextHolding;
+  const snapshot = revalueLongbridgeSnapshot({ ...source.snapshot, holdings });
+  const previousSourceValue = current.sourceMarketValue;
+  const nextSourceValue = nextHolding.sourceMarketValue;
+  const canAdjustTotal = previousSourceValue !== null &&
+    nextSourceValue !== null &&
+    previousSourceValue.currency === source.snapshot.total.currency &&
+    nextSourceValue.currency === source.snapshot.total.currency;
+  const totalDelta = previousSourceValue !== null && nextSourceValue !== null && canAdjustTotal
+    ? decimalSubtract(nextSourceValue.amount, previousSourceValue.amount)
+    : "0";
   return {
     ...source,
-    snapshot: revalueLongbridgeSnapshot({
-      ...revalueLongbridgeSnapshot(source.snapshot),
-      holdings,
-    }),
+    snapshot: {
+      ...snapshot,
+      total: {
+        ...source.snapshot.total,
+        amount: decimalAdd(source.snapshot.total.amount, totalDelta),
+      },
+      ...(snapshot.longbridgeValuation === undefined ? {} : {
+        longbridgeValuation: {
+          ...snapshot.longbridgeValuation,
+          basis: canAdjustTotal ? "latest-quotes" as const : snapshot.longbridgeValuation.basis,
+        },
+      }),
+    },
   };
 }
