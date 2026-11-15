@@ -112,7 +112,7 @@ export function FundingEventOverlay({
       />
       <ZIndexLayer zIndex={FUNDING_EVENT_Z_INDEX}>
         {markers.map((marker) => (
-          <g className="recharts-reference-dot" key={`funding-event:${marker.day}`}>
+          <g className="recharts-reference-dot" key={`funding-event:${marker.day}:${marker.cx}:${marker.cy}`}>
             <FundingEventMarker {...marker} />
           </g>
         ))}

@@ -48,7 +48,7 @@ export function CurveLine({
       filter={filter}
       animationDuration={TREND_CHART_ANIMATION_DURATION}
       animationEasing="ease-out"
-      isAnimationActive={false}
+      isAnimationActive="auto"
       name={name}
       stroke={stroke}
       strokeDasharray={strokeDasharray}

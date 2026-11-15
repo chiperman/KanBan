@@ -165,7 +165,7 @@ export function renderBenchmarkPlot({
                 fillOpacity={1}
                 animationDuration={TREND_CHART_ANIMATION_DURATION}
                 animationEasing="ease-out"
-                isAnimationActive={false}
+                isAnimationActive="auto"
                 stroke="none"
                 type={lineType}
               />
