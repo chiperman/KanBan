@@ -34,6 +34,8 @@ PR 和 main 共用 [CI workflow](../../.github/workflows/ci.yml)。PR 在干净�
 
 纯文档或 `landing/` 内容的 PR 会跳过应用安装、测试和构建，但保留成功的必过检查，避免分支保护一直等待。其他改动默认完整检查。影响范围由 [ci-scope.mjs](../../scripts/ci-scope.mjs) 统一判定；事件、比较基线或 Git diff 无法确认时，执行完整检查，不猜测跳过。手动运行也执行完整检查。
 
+PR、main push 和手动触发的 `CI` workflow 都先执行 `node scripts/release.mjs`，检查应用版本与更新日志一致；纯文档或介绍页改动也不跳过这项检查。它不安装依赖，也不执行发版操作。
+
 同一 PR 有新提交时，取消旧的 CI、CodeQL、Dependency review 和 Native SDK 运行；不同 PR 互不取消。PR 检查失败时不能合并。CodeQL 保留所有 PR 扫描及每周扫描，以满足安全告警门禁和持续检查。
 
 修改官方集成、共享 SDK 或构建逻辑时，本地可先运行 `pnpm plugins:verify`。它不读取正式数据、不调用真实账户 API，也不发布插件产物；它只验证官方源码构建结果和协议边界。
@@ -58,6 +60,61 @@ CI 验证失败时上传 `.ci-run/verification.json`，记录步骤、退出状�
 - `plugins/` 中的官方集成由 `pnpm build` 编译到 `dist/plugins/packages/`，并随应用构建一起验证。
 
 官方集成不单独发布插件 Release。用户升级整个 KanBan 应用即可获得新的平台接入版本；应用不会从 GitHub、插件目录或本地压缩包加载新的可执行代码。希望增加新平台的开发者应提交源码 PR，经过 CI 和维护者审核后随应用发布。
+
+## 版本发布
+
+应用版本以 [package.json](../../package.json) 为准，使用 `X.Y.Z`；应用 Tag 和 GitHub Release 使用 `vX.Y.Z`。[CHANGELOG.md](../../CHANGELOG.md) 是发布说明的唯一来源，Release 正文复用对应章节，不另外维护一份。
+
+日常完成功能或修复时，同步维护已有的“未发布”章节，不需要另行要求修改 Changelog；如果最新版本已经发布，先保留可追溯的提交记录，在下一批发布准备时统一汇总，保持已发布章节不变。
+
+完成一组可交付功能，或修复影响日常使用、安全与数据正确性的问题时，评估发布新版本；只有文档、内部重构或构建次数变化时，通常无需单独发版。版本幅度按本批实际变更判断，不要求维护者逐项指定版本号或 Tag 命令。
+
+维护者说“发布一版”时，执行完整应用发布流程：整理版本和 Changelog、提交发布 PR、等待合并后主分支检查通过、为固定提交打 Tag 并创建 GitHub Release。该指令不包含 Mac mini 部署；“更新到 3001”按已确认版本的固定 SHA 执行部署，不额外升级版本号。“提交代码”只执行验证与本地 Git 提交，推送、发布和部署按各自明确指令执行。
+
+### 选择版本与准备记录
+
+- 按实际交付批次升版，同一批次只升一次；日常提交、合并和重复构建不自动升级版本。
+- 从上一个应用 `vX.Y.Z` 发布基线汇总本批全部变化，按最高兼容影响决定版本，不按提交数量或单个提交前缀推断。首次建立应用发布记录时明确基线，不借用历史 `plugins-*` Tag，不补造发版历史。
+- 兼容修复升 patch，新增功能升 minor。当前 `0.x` 阶段，不兼容的接口、配置或数据格式变化也升 minor，并单列兼容性变化、迁移与恢复要求。进入 `1.0.0` 后，不兼容变化升 major。
+- 准备发版时一起修改应用版本和更新日志。最新章节格式为 `## [X.Y.Z] - 未发布`，按新增、改进、修复及兼容性变化记录实际交付内容；空分类不保留。正式发布前将“未发布”改为实际发布日期 `YYYY-MM-DD`。
+- 回补没有正式发版日期的既有开发版本时，历史章节使用 `## [X.Y.Z] - 历史开发版本`，依据 Git 历史按功能主题归纳并写明源码边界，不按提交日期分段；仅记录已确认的正式发布日期，不补造版本号或日期。此标记不能用于当前最新版本，也不作为应用发布 Tag 基线。
+- 后续开发可先补充当前“未发布”章节；已发布章节保持不变。下一批交付确定时才建立新版本，不能在旧版本下记录新的发布内容。
+
+准备完成后执行：
+
+```sh
+pnpm release:check
+```
+
+版本号和完整 Changelog（包括最终日期）通过同一 PR 合入 `main`。延期导致发布日期变化时，更新日期并重新通过 CI。
+
+### Tag 与 GitHub Release
+
+在干净的 `main` 工作副本执行 `git pull --ff-only`，确认包含版本号与最终更新日志的提交已经合入，并且该 SHA 的主分支 CI、CodeQL 和 Native SDK 检查通过。记录固定 SHA 后不再混入其他改动：
+
+```sh
+release_version=$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json", "utf8")).version') &&
+release_tag="v$release_version" &&
+release_sha=$(git rev-parse HEAD) &&
+pnpm release:check &&
+pnpm deploy:manual "$release_sha" --check &&
+mkdir -p tmp/release &&
+pnpm --silent release:notes > tmp/release/notes.md
+```
+
+`release:check` 只验证本地版本记录；`deploy:manual --check` 另行确认固定提交属于远端 main 且主分支应用构建成功，不能替代其他安全检查。发布说明导出失败时停止，补齐日志或日期后重新提交并验证，不能继续打 Tag。
+
+确认待发布 SHA 和导出的说明后，创建附注 Tag，只推送这个 Tag，再创建 Release：
+
+```sh
+git tag -a "$release_tag" "$release_sha" -m "KanBan $release_tag" &&
+git push origin "refs/tags/$release_tag" &&
+gh release create "$release_tag" --verify-tag --title "$release_tag" --notes-file tmp/release/notes.md
+```
+
+`--verify-tag` 要求远端已经存在该 Tag，避免 Release 自动从默认分支新建 Tag。已发布的 Tag 不移动、不覆盖；后续修复发布新版本。若 Tag 已推送但创建 Release 失败，先核对远端 Tag 的提交与现有 Release 状态，仅重试缺失步骤，不重新打 Tag。发布后核对远端 Tag 的提交、Release 版本及正文。
+
+应用发布不自动切换 Mac mini。需要更新正式副本时，按下节部署同一 `release_sha`，再核对运行副本的来源 SHA 和服务健康状态。
 
 ## Mac mini 手动部署
 

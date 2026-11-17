@@ -19,6 +19,15 @@
 
 范围与新增测试约束见 [测试纪律](../AGENTS.md#测试纪律)。公开仓库由同一份 [CI workflow](../.github/workflows/ci.yml) 负责 PR 门禁与 main 构建。
 
+## 应用发版
+
+| 命令 | 入口与作用 |
+| --- | --- |
+| `pnpm release:check` | [release.mjs](release.mjs)：只读校验应用版本与 Changelog 最新版本一致、历史版本唯一且递减、日期及更新条目有效；最新版本可标为“未发布”，仅旧版本可标为“历史开发版本” |
+| `pnpm --silent release:notes` | 同一脚本从 Changelog 导出当前版本的完整章节到标准输出；未填写发布日期时拒绝导出，不创建 Tag、GitHub Release 或部署 |
+
+版本选择、PR、Tag 与 Release 的操作顺序统一见 [版本发布](../docs/operations/github-actions.md#版本发布)。CI 在判定是否跳过应用构建前执行同一版本检查，纯文档 PR 也需通过。
+
 ## 原生扩展与本机授权
 
 | 命令 | 入口与作用 |
