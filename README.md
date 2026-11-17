@@ -6,7 +6,7 @@
 
 项目代码采用 [MIT License](LICENSE)；第三方资源的原有许可见 [第三方声明](docs/third-party-notices.md)。
 
-CI/CD 与 Mac mini 手动部署见 [GitHub Actions CI/CD](docs/operations/github-actions.md)。公开仓库的 GitHub Actions 不会自动更新维护者的 Mac mini。
+应用更新见 [Changelog](CHANGELOG.md)，版本号、Tag 和 Release 的维护见 [版本发布](docs/operations/github-actions.md#版本发布)。CI/CD 与 Mac mini 手动部署见 [GitHub Actions CI/CD](docs/operations/github-actions.md)。公开仓库的 GitHub Actions 不会自动更新维护者的 Mac mini。
 
 ## 官方集成
 
@@ -88,7 +88,7 @@ pnpm exec tsc --noEmit --incremental false
 | [backup/](src/server/backup/) | 业务备份文档编解码 |
 | [testing/](src/server/testing/) / [src/app/test-doubles/](src/app/test-doubles/) | 独立测试装配、替身、fixture 与受环境门禁保护的 HTTP 辅助入口；Next.js 仅在测试环境通过 [instrumentation.ts](src/instrumentation.ts) 初始化 |
 
-页面到工作区的具体导航在 [当前能力与源码导航](docs/current-baseline.md) 维护。根目录保留工程配置及 `README.md`、`AGENTS.md`、`CONTEXT.md`、`DESIGN.md` 四个文档入口；历史报告和一次性脚本不散放根目录。单测与对应模块同目录保存。
+页面到工作区的具体导航在 [当前能力与源码导航](docs/current-baseline.md) 维护。根目录保留工程配置及 `README.md`、`AGENTS.md`、`CONTEXT.md`、`DESIGN.md` 四个文档入口，以及应用 `CHANGELOG.md`；历史报告和一次性脚本不散放根目录。单测与对应模块同目录保存。
 
 应用和独立介绍页分别保留字体资源及许可证，使两套发布入口都能独立提供字体；共享来源与授权见 [第三方声明](docs/third-party-notices.md)。
 
